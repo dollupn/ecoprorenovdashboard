@@ -1,0 +1,127 @@
+import React from "react";
+import { NavLink, useLocation } from "react-router-dom";
+import {
+  BarChart3,
+  Users,
+  FolderOpen,
+  FileText,
+  Receipt,
+  Building2,
+  Settings,
+  Home,
+  Calendar,
+  TrendingUp,
+} from "lucide-react";
+
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  useSidebar,
+} from "@/components/ui/sidebar";
+
+const mainItems = [
+  { title: "Tableau de Bord", url: "/", icon: BarChart3 },
+  { title: "Leads", url: "/leads", icon: Users },
+  { title: "Projets", url: "/projects", icon: FolderOpen },
+  { title: "Devis", url: "/quotes", icon: FileText },
+  { title: "Factures", url: "/invoices", icon: Receipt },
+  { title: "Chantiers", url: "/sites", icon: Building2 },
+];
+
+const businessItems = [
+  { title: "Planning RDV", url: "/calendar", icon: Calendar },
+  { title: "Reporting", url: "/reports", icon: TrendingUp },
+  { title: "Paramètres", url: "/settings", icon: Settings },
+];
+
+export function AppSidebar() {
+  const { state } = useSidebar();
+  const location = useLocation();
+  const currentPath = location.pathname;
+  const isCollapsed = state === "collapsed";
+
+  const isActive = (path: string) => {
+    if (path === "/") return currentPath === "/";
+    return currentPath.startsWith(path);
+  };
+
+  const getNavClassName = (active: boolean) =>
+    active 
+      ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-r-2 border-primary font-medium" 
+      : "hover:bg-muted/50 text-muted-foreground hover:text-foreground";
+
+  return (
+    <Sidebar className={isCollapsed ? "w-14" : "w-64"} collapsible="icon">
+      <SidebarContent className="bg-gradient-to-b from-background to-muted/20">
+        {/* Logo */}
+        <div className="p-4 border-b">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center">
+              <Home className="w-4 h-4 text-white" />
+            </div>
+            {!isCollapsed && (
+              <div>
+                <h1 className="font-bold text-lg text-primary">EcoProRenov</h1>
+                <p className="text-xs text-muted-foreground">CRM Professionnel</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Main Navigation */}
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-xs text-muted-foreground px-4">
+            {!isCollapsed && "GESTION PRINCIPALE"}
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu className="px-2 space-y-1">
+              {mainItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild className="h-11">
+                    <NavLink
+                      to={item.url}
+                      className={getNavClassName(isActive(item.url))}
+                    >
+                      <item.icon className="w-5 h-5 flex-shrink-0" />
+                      {!isCollapsed && <span className="ml-3">{item.title}</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Business Tools */}
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-xs text-muted-foreground px-4">
+            {!isCollapsed && "OUTILS MÉTIER"}
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu className="px-2 space-y-1">
+              {businessItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild className="h-11">
+                    <NavLink
+                      to={item.url}
+                      className={getNavClassName(isActive(item.url))}
+                    >
+                      <item.icon className="w-5 h-5 flex-shrink-0" />
+                      {!isCollapsed && <span className="ml-3">{item.title}</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+    </Sidebar>
+  );
+}

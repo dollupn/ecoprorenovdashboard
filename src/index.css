@@ -1,0 +1,151 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* EcoProRenov CRM Design System - Professional eco-friendly theme
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 215 25% 27%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 215 25% 27%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 27%;
+
+    /* Eco-friendly primary green */
+    --primary: 142 71% 45%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 142 71% 38%;
+    --primary-glow: 142 71% 55%;
+
+    /* Professional secondary */
+    --secondary: 210 20% 96%;
+    --secondary-foreground: 215 25% 27%;
+
+    --muted: 210 20% 95%;
+    --muted-foreground: 215 13% 65%;
+
+    /* Teal accent */
+    --accent: 174 62% 47%;
+    --accent-foreground: 0 0% 100%;
+    --accent-hover: 174 62% 40%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 142 71% 45%;
+
+    /* CRM-specific colors */
+    --lead-new: 47 96% 64%;
+    --lead-qualified: 38 92% 50%;
+    --lead-rdv: 174 62% 47%;
+    --lead-converted: 142 71% 45%;
+
+    --project-draft: 215 13% 65%;
+    --project-active: 174 62% 47%;
+    --project-completed: 142 71% 45%;
+
+    /* Gradients for professional look */
+    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-glow)));
+    --gradient-accent: linear-gradient(135deg, hsl(var(--accent)), hsl(var(--accent-hover)));
+    --gradient-card: linear-gradient(145deg, hsl(var(--background)), hsl(var(--muted)));
+    --gradient-dashboard: linear-gradient(135deg, hsl(var(--primary) / 0.05), hsl(var(--accent) / 0.05));
+
+    /* Professional shadows */
+    --shadow-card: 0 2px 10px hsl(var(--foreground) / 0.1);
+    --shadow-elevated: 0 8px 25px hsl(var(--foreground) / 0.15);
+    --shadow-glow: 0 0 20px hsl(var(--primary) / 0.2);
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 215 28% 17%;
+    --foreground: 210 20% 98%;
+
+    --card: 215 28% 17%;
+    --card-foreground: 210 20% 98%;
+
+    --popover: 215 28% 17%;
+    --popover-foreground: 210 20% 98%;
+
+    --primary: 142 71% 45%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 142 71% 38%;
+    --primary-glow: 142 71% 55%;
+
+    --secondary: 215 25% 25%;
+    --secondary-foreground: 210 20% 98%;
+
+    --muted: 215 25% 25%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 174 62% 47%;
+    --accent-foreground: 0 0% 100%;
+    --accent-hover: 174 62% 40%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 215 25% 25%;
+    --input: 215 25% 25%;
+    --ring: 142 71% 45%;
+
+    /* Dark mode gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-glow)));
+    --gradient-accent: linear-gradient(135deg, hsl(var(--accent)), hsl(var(--accent-hover)));
+    --gradient-card: linear-gradient(145deg, hsl(var(--card)), hsl(var(--muted)));
+    --gradient-dashboard: linear-gradient(135deg, hsl(var(--primary) / 0.1), hsl(var(--accent) / 0.1));
+
+    --shadow-card: 0 2px 10px hsl(0 0% 0% / 0.3);
+    --shadow-elevated: 0 8px 25px hsl(0 0% 0% / 0.4);
+    --shadow-glow: 0 0 20px hsl(var(--primary) / 0.3);
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
