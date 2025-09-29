@@ -3,6 +3,7 @@ import { AppSidebar } from "./Sidebar";
 import { Bell, Search, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ModeToggle } from "@/components/theme/ModeToggle";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -30,6 +31,7 @@ export function Layout({ children }: LayoutProps) {
             </div>
 
             <div className="flex items-center gap-3">
+              <ModeToggle />
               <Button variant="ghost" size="icon">
                 <Bell className="w-4 h-4" />
               </Button>
