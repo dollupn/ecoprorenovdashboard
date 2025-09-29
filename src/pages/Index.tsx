@@ -2,12 +2,12 @@ import { Layout } from "@/components/layout/Layout";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
-import { 
-  Users, 
-  FolderOpen, 
-  FileText, 
-  Euro, 
-  Building2, 
+import {
+  Users,
+  FolderOpen,
+  FileText,
+  Euro,
+  Building2,
   TrendingUp,
   Calendar,
   Target
