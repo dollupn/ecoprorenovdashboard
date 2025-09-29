@@ -10,6 +10,7 @@ import Index from "./pages/Index";
 import Leads from "./pages/Leads";
 import Projects from "./pages/Projects";
 import Sites from "./pages/Sites";
+import Products from "./pages/Products";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -31,6 +32,7 @@ const App = () => (
               <Route path="/quotes" element={<ProtectedRoute><Index /></ProtectedRoute>} />
               <Route path="/invoices" element={<ProtectedRoute><Index /></ProtectedRoute>} />
               <Route path="/sites" element={<ProtectedRoute><Sites /></ProtectedRoute>} />
+              <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
               <Route path="/calendar" element={<ProtectedRoute><Index /></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute><Index /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><Index /></ProtectedRoute>} />
