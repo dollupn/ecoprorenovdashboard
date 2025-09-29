@@ -3,8 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { AddProjectDialog } from "@/components/projects/AddProjectDialog";
 import { 
-  Plus, 
   Search, 
   Filter, 
   Calendar, 
@@ -124,10 +124,7 @@ const Projects = () => {
               Suivi et gestion de vos projets de rénovation énergétique
             </p>
           </div>
-          <Button>
-            <Plus className="w-4 h-4 mr-2" />
-            Nouveau Projet
-          </Button>
+          <AddProjectDialog />
         </div>
 
         {/* Filters */}

@@ -3,8 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { AddLeadDialog } from "@/components/leads/AddLeadDialog";
 import { 
-  Plus, 
   Search, 
   Filter, 
   Calendar, 
@@ -123,10 +123,7 @@ const Leads = () => {
               <FileX className="w-4 h-4 mr-2" />
               Importer CSV
             </Button>
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              Nouveau Lead
-            </Button>
+            <AddLeadDialog />
           </div>
         </div>
 
