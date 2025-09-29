@@ -11,7 +11,9 @@ import {
   Home,
   Calendar,
   TrendingUp,
+  LogOut,
 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 import {
   Sidebar,
@@ -45,6 +47,7 @@ export function AppSidebar() {
   const location = useLocation();
   const currentPath = location.pathname;
   const isCollapsed = state === "collapsed";
+  const { signOut } = useAuth();
 
   const isActive = (path: string) => {
     if (path === "/") return currentPath === "/";
@@ -121,6 +124,21 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {/* Logout */}
+        <div className="mt-auto border-t pt-4">
+          <SidebarMenu className="px-2">
+            <SidebarMenuItem>
+              <SidebarMenuButton 
+                onClick={signOut}
+                className="h-11 hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+              >
+                <LogOut className="w-5 h-5 flex-shrink-0" />
+                {!isCollapsed && <span className="ml-3">Déconnexion</span>}
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </div>
       </SidebarContent>
     </Sidebar>
   );

@@ -14,7 +14,348 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      invoices: {
+        Row: {
+          amount: number
+          client_name: string
+          created_at: string
+          due_date: string | null
+          id: string
+          invoice_ref: string
+          notes: string | null
+          paid_date: string | null
+          project_id: string | null
+          quote_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          client_name: string
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          invoice_ref: string
+          notes?: string | null
+          paid_date?: string | null
+          project_id?: string | null
+          quote_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          client_name?: string
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          invoice_ref?: string
+          notes?: string | null
+          paid_date?: string | null
+          project_id?: string | null
+          quote_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "quotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leads: {
+        Row: {
+          city: string
+          commentaire: string | null
+          company: string | null
+          created_at: string
+          date_rdv: string | null
+          email: string
+          full_name: string
+          heure_rdv: string | null
+          id: string
+          phone_raw: string
+          postal_code: string
+          product_name: string | null
+          status: string
+          surface_m2: number | null
+          updated_at: string
+          user_id: string
+          utm_source: string | null
+        }
+        Insert: {
+          city: string
+          commentaire?: string | null
+          company?: string | null
+          created_at?: string
+          date_rdv?: string | null
+          email: string
+          full_name: string
+          heure_rdv?: string | null
+          id?: string
+          phone_raw: string
+          postal_code: string
+          product_name?: string | null
+          status?: string
+          surface_m2?: number | null
+          updated_at?: string
+          user_id: string
+          utm_source?: string | null
+        }
+        Update: {
+          city?: string
+          commentaire?: string | null
+          company?: string | null
+          created_at?: string
+          date_rdv?: string | null
+          email?: string
+          full_name?: string
+          heure_rdv?: string | null
+          id?: string
+          phone_raw?: string
+          postal_code?: string
+          product_name?: string | null
+          status?: string
+          surface_m2?: number | null
+          updated_at?: string
+          user_id?: string
+          utm_source?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          full_name: string | null
+          id: string
+          role: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          role?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          role?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      projects: {
+        Row: {
+          assigned_to: string
+          city: string
+          client_name: string
+          company: string | null
+          created_at: string
+          date_debut_prevue: string | null
+          date_fin_prevue: string | null
+          estimated_value: number | null
+          id: string
+          lead_id: string | null
+          postal_code: string
+          product_name: string
+          project_ref: string
+          status: string
+          surface_batiment_m2: number | null
+          surface_isolee_m2: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          assigned_to: string
+          city: string
+          client_name: string
+          company?: string | null
+          created_at?: string
+          date_debut_prevue?: string | null
+          date_fin_prevue?: string | null
+          estimated_value?: number | null
+          id?: string
+          lead_id?: string | null
+          postal_code: string
+          product_name: string
+          project_ref: string
+          status?: string
+          surface_batiment_m2?: number | null
+          surface_isolee_m2?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          assigned_to?: string
+          city?: string
+          client_name?: string
+          company?: string | null
+          created_at?: string
+          date_debut_prevue?: string | null
+          date_fin_prevue?: string | null
+          estimated_value?: number | null
+          id?: string
+          lead_id?: string | null
+          postal_code?: string
+          product_name?: string
+          project_ref?: string
+          status?: string
+          surface_batiment_m2?: number | null
+          surface_isolee_m2?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quotes: {
+        Row: {
+          amount: number
+          client_name: string
+          created_at: string
+          id: string
+          notes: string | null
+          product_name: string
+          project_id: string | null
+          quote_ref: string
+          status: string
+          updated_at: string
+          user_id: string
+          valid_until: string | null
+        }
+        Insert: {
+          amount: number
+          client_name: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          product_name: string
+          project_id?: string | null
+          quote_ref: string
+          status?: string
+          updated_at?: string
+          user_id: string
+          valid_until?: string | null
+        }
+        Update: {
+          amount?: number
+          client_name?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          product_name?: string
+          project_id?: string | null
+          quote_ref?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quotes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sites: {
+        Row: {
+          address: string
+          city: string
+          client_name: string
+          created_at: string
+          date_debut: string
+          date_fin_prevue: string | null
+          id: string
+          postal_code: string
+          product_name: string
+          progress_percentage: number | null
+          project_id: string | null
+          project_ref: string
+          site_ref: string
+          status: string
+          team_members: string[] | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          address: string
+          city: string
+          client_name: string
+          created_at?: string
+          date_debut: string
+          date_fin_prevue?: string | null
+          id?: string
+          postal_code: string
+          product_name: string
+          progress_percentage?: number | null
+          project_id?: string | null
+          project_ref: string
+          site_ref: string
+          status?: string
+          team_members?: string[] | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          address?: string
+          city?: string
+          client_name?: string
+          created_at?: string
+          date_debut?: string
+          date_fin_prevue?: string | null
+          id?: string
+          postal_code?: string
+          product_name?: string
+          progress_percentage?: number | null
+          project_id?: string | null
+          project_ref?: string
+          site_ref?: string
+          status?: string
+          team_members?: string[] | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sites_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
