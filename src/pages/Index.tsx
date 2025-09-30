@@ -35,14 +35,6 @@ const Index = () => {
           </div>
         </div>
 
-        <Alert className="border-emerald-200 bg-emerald-50 text-emerald-900">
-          <Package className="h-4 w-4" />
-          <AlertTitle>Vente en gros uniquement</AlertTitle>
-          <AlertDescription className="space-y-1">
-            <p>Nos offres sont réservées au grossiste avec un minimum de commande de 10 pièces.</p>
-            <p>Utilisez WhatsApp pour demander un devis personnalisé adapté à vos besoins.</p>
-          </AlertDescription>
-        </Alert>
 
         {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
