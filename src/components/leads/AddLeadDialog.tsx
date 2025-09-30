@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import * as z from "zod";
+import { leadStatusEnum } from "./status";
 import {
   Dialog,
   DialogContent,
@@ -43,14 +44,14 @@ const leadSchema = z.object({
   product_name: z.string().optional(),
   surface_m2: z.coerce.number().optional(),
   utm_source: z.string().optional(),
-  status: z.enum(["NEW", "QUALIFIED", "RDV_PLANIFIE", "CONVERTED", "ARCHIVED"]),
+  status: leadStatusEnum,
   commentaire: z.string().optional(),
 });
 
 type LeadFormValues = z.infer<typeof leadSchema>;
 
 interface AddLeadDialogProps {
-  onLeadAdded?: () => void;
+  onLeadAdded?: () => void | Promise<void>;
 }
 
 export const AddLeadDialog = ({ onLeadAdded }: AddLeadDialogProps) => {
@@ -69,6 +70,7 @@ export const AddLeadDialog = ({ onLeadAdded }: AddLeadDialogProps) => {
       city: "",
       postal_code: "",
       product_name: "",
+      surface_m2: undefined,
       utm_source: "",
       status: "NEW",
       commentaire: "",
@@ -111,11 +113,12 @@ export const AddLeadDialog = ({ onLeadAdded }: AddLeadDialogProps) => {
 
       form.reset();
       setOpen(false);
-      onLeadAdded?.();
-    } catch (error: any) {
+      await onLeadAdded?.();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Une erreur inattendue est survenue";
       toast({
         title: "Erreur",
-        description: error.message,
+        description: message,
         variant: "destructive",
       });
     } finally {
