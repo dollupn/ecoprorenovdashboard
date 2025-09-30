@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import * as z from "zod";
 import {
   Dialog,
   DialogContent,
@@ -46,15 +46,39 @@ const projectSchema = z.object({
   date_debut_prevue: z.string().optional(),
   date_fin_prevue: z.string().optional(),
   estimated_value: z.coerce.number().optional(),
+  lead_id: z.string().optional(),
 });
 
-type ProjectFormValues = z.infer<typeof projectSchema>;
+export type ProjectFormValues = z.infer<typeof projectSchema>;
 
 interface AddProjectDialogProps {
-  onProjectAdded?: () => void;
+  onProjectAdded?: () => void | Promise<void>;
+  trigger?: ReactNode;
+  initialValues?: Partial<ProjectFormValues>;
 }
 
-export const AddProjectDialog = ({ onProjectAdded }: AddProjectDialogProps) => {
+const baseDefaultValues: ProjectFormValues = {
+  project_ref: "",
+  client_name: "",
+  company: "",
+  product_name: "",
+  city: "",
+  postal_code: "",
+  surface_batiment_m2: undefined,
+  surface_isolee_m2: undefined,
+  status: "PROSPECTION",
+  assigned_to: "",
+  date_debut_prevue: "",
+  date_fin_prevue: "",
+  estimated_value: undefined,
+  lead_id: undefined,
+};
+
+export const AddProjectDialog = ({
+  onProjectAdded,
+  trigger,
+  initialValues,
+}: AddProjectDialogProps) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
@@ -63,16 +87,23 @@ export const AddProjectDialog = ({ onProjectAdded }: AddProjectDialogProps) => {
   const form = useForm<ProjectFormValues>({
     resolver: zodResolver(projectSchema),
     defaultValues: {
-      project_ref: "",
-      client_name: "",
-      company: "",
-      product_name: "",
-      city: "",
-      postal_code: "",
-      status: "PROSPECTION",
-      assigned_to: "",
+      ...baseDefaultValues,
+      ...initialValues,
     },
   });
+
+  const resetWithInitialValues = useCallback(() => {
+    form.reset({
+      ...baseDefaultValues,
+      ...initialValues,
+    });
+  }, [form, initialValues]);
+
+  useEffect(() => {
+    if (open) {
+      resetWithInitialValues();
+    }
+  }, [open, resetWithInitialValues]);
 
   const onSubmit = async (data: ProjectFormValues) => {
     if (!user) {
@@ -101,6 +132,7 @@ export const AddProjectDialog = ({ onProjectAdded }: AddProjectDialogProps) => {
         date_debut_prevue: data.date_debut_prevue || undefined,
         date_fin_prevue: data.date_fin_prevue || undefined,
         estimated_value: data.estimated_value || undefined,
+        lead_id: data.lead_id || undefined,
       }]);
 
       if (error) throw error;
@@ -110,13 +142,14 @@ export const AddProjectDialog = ({ onProjectAdded }: AddProjectDialogProps) => {
         description: "Le projet a été ajouté avec succès",
       });
 
-      form.reset();
+      resetWithInitialValues();
       setOpen(false);
-      onProjectAdded?.();
-    } catch (error: any) {
+      await onProjectAdded?.();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Une erreur inattendue est survenue";
       toast({
         title: "Erreur",
-        description: error.message,
+        description: message,
         variant: "destructive",
       });
     } finally {
@@ -127,10 +160,12 @@ export const AddProjectDialog = ({ onProjectAdded }: AddProjectDialogProps) => {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>
-          <Plus className="w-4 h-4 mr-2" />
-          Nouveau Projet
-        </Button>
+        {trigger ?? (
+          <Button>
+            <Plus className="w-4 h-4 mr-2" />
+            Nouveau Projet
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
