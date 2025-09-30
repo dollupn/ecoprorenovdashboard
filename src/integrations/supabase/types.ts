@@ -169,30 +169,42 @@ export type Database = {
           category: string | null
           code: string | null
           created_at: string
+          default_params: Json | null
+          description: string | null
           id: string
           is_active: boolean
           name: string
           owner_id: string
+          params_schema: Json | null
+          schema_version: number | null
           updated_at: string
         }
         Insert: {
           category?: string | null
           code?: string | null
           created_at?: string
+          default_params?: Json | null
+          description?: string | null
           id?: string
           is_active?: boolean
           name: string
           owner_id: string
+          params_schema?: Json | null
+          schema_version?: number | null
           updated_at?: string
         }
         Update: {
           category?: string | null
           code?: string | null
           created_at?: string
+          default_params?: Json | null
+          description?: string | null
           id?: string
           is_active?: boolean
           name?: string
           owner_id?: string
+          params_schema?: Json | null
+          schema_version?: number | null
           updated_at?: string
         }
         Relationships: [
