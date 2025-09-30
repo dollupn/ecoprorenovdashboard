@@ -7,6 +7,7 @@ import {
   FileText,
   Receipt,
   Building2,
+  Package,
   Settings,
   Home,
   Calendar,
@@ -34,6 +35,7 @@ const mainItems = [
   { title: "Devis", url: "/quotes", icon: FileText },
   { title: "Factures", url: "/invoices", icon: Receipt },
   { title: "Chantiers", url: "/sites", icon: Building2 },
+  { title: "Produits", url: "/products", icon: Package },
 ];
 
 const businessItems = [
