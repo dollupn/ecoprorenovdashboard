@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,11 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
+import { formatDistanceToNow, parseISO } from "date-fns";
+import { fr } from "date-fns/locale";
 import {
   Users,
   Building2,
@@ -32,14 +37,22 @@ import {
   KeyRound,
   MonitorSmartphone,
   Clock,
+  AlertCircle,
 } from "lucide-react";
+
+const ROLE_OPTIONS = ["Administrateur", "Manager", "Commercial", "Technicien"] as const;
+
+type RoleOption = (typeof ROLE_OPTIONS)[number];
+
+type ProfileRecord = Tables<"profiles">;
 
 interface TeamMember {
   id: string;
   name: string;
-  role: "Administrateur" | "Manager" | "Commercial" | "Technicien";
-  email: string;
-  phone: string;
+  role: RoleOption;
+  identifier: string;
+  email: string | null;
+  phone: string | null;
   active: boolean;
   lastConnection: string;
 }
@@ -77,44 +90,82 @@ interface SecuritySettings {
   sessionDuration: string;
 }
 
-const initialMembers: TeamMember[] = [
-  {
-    id: "1",
-    name: "Camille Dupont",
-    role: "Administrateur",
-    email: "camille.dupont@ecoprorenov.fr",
-    phone: "+33 6 45 89 12 34",
-    active: true,
-    lastConnection: "Il y a 2 heures",
-  },
-  {
-    id: "2",
-    name: "Léo Martin",
-    role: "Manager",
-    email: "leo.martin@ecoprorenov.fr",
-    phone: "+33 6 54 23 78 90",
-    active: true,
-    lastConnection: "Hier",
-  },
-  {
-    id: "3",
-    name: "Sophie Bernard",
-    role: "Commercial",
-    email: "sophie.bernard@ecoprorenov.fr",
-    phone: "+33 7 12 98 45 67",
-    active: true,
-    lastConnection: "Il y a 3 jours",
-  },
-  {
-    id: "4",
-    name: "Antoine Leroy",
-    role: "Technicien",
-    email: "antoine.leroy@ecoprorenov.fr",
-    phone: "+33 6 88 76 45 12",
-    active: false,
-    lastConnection: "Il y a 12 jours",
-  },
-];
+const INACTIVE_KEYWORDS = new Set(["inactif", "inactive", "désactivé", "desactive", "disabled"]);
+
+const ROLE_NORMALIZATION_MAP: Record<string, RoleOption> = {
+  admin: "Administrateur",
+  administrator: "Administrateur",
+  administrateur: "Administrateur",
+  manager: "Manager",
+  responsable: "Manager",
+  commercial: "Commercial",
+  sales: "Commercial",
+  technicien: "Technicien",
+  technician: "Technicien",
+};
+
+const normalizeRole = (role: string | null): RoleOption => {
+  if (!role) {
+    return "Commercial";
+  }
+
+  const lowerRole = role.toLowerCase();
+  const directMatch = ROLE_OPTIONS.find((option) => option.toLowerCase() === lowerRole);
+  if (directMatch) {
+    return directMatch;
+  }
+
+  return ROLE_NORMALIZATION_MAP[lowerRole] ?? "Commercial";
+};
+
+const isProfileActive = (role: string | null) => {
+  if (!role) {
+    return true;
+  }
+
+  return !INACTIVE_KEYWORDS.has(role.toLowerCase());
+};
+
+const formatLastActivity = (timestamp: string | null) => {
+  if (!timestamp) {
+    return "Activité inconnue";
+  }
+
+  try {
+    const formatted = formatDistanceToNow(parseISO(timestamp), {
+      addSuffix: true,
+      locale: fr,
+    });
+
+    return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+  } catch (error) {
+    console.error("Erreur de formatage de date", error);
+    return "Activité récente";
+  }
+};
+
+const mapProfileToMember = (profile: ProfileRecord): TeamMember => {
+  const extendedProfile = profile as ProfileRecord & {
+    email?: string | null;
+    phone?: string | null;
+    last_sign_in_at?: string | null;
+  };
+
+  const identifier = profile.user_id ?? profile.id;
+  const lastActivity =
+    extendedProfile.last_sign_in_at ?? profile.updated_at ?? profile.created_at;
+
+  return {
+    id: profile.id,
+    name: profile.full_name ?? "Utilisateur sans nom",
+    role: normalizeRole(profile.role),
+    identifier,
+    email: extendedProfile.email ?? null,
+    phone: extendedProfile.phone ?? null,
+    active: isProfileActive(profile.role),
+    lastConnection: formatLastActivity(lastActivity),
+  };
+};
 
 const initialIntegrations: Integration[] = [
   {
@@ -149,7 +200,11 @@ const sessionOptions = [
 
 export default function Settings() {
   const { toast } = useToast();
-  const [teamMembers, setTeamMembers] = useState(initialMembers);
+  const { user } = useAuth();
+  const isMounted = useRef(true);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(true);
+  const [memberError, setMemberError] = useState<string | null>(null);
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>({
     name: "EcoProRenov",
     legalName: "EcoProRenov SAS",
@@ -175,28 +230,144 @@ export default function Settings() {
   });
   const [integrations, setIntegrations] = useState(initialIntegrations);
 
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  const fetchTeamMembers = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!isMounted.current) {
+        return false;
+      }
+
+      if (!user) {
+        if (isMounted.current) {
+          setTeamMembers([]);
+          setMemberError(null);
+          setLoadingMembers(false);
+        }
+        return false;
+      }
+
+      if (!options?.silent && isMounted.current) {
+        setLoadingMembers(true);
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("id, full_name, role, user_id, updated_at, created_at")
+          .order("full_name", { ascending: true });
+
+        if (error) {
+          throw error;
+        }
+
+        if (!isMounted.current) {
+          return false;
+        }
+
+        const members = (data ?? []).map((profile) =>
+          mapProfileToMember(profile as ProfileRecord)
+        );
+
+        setTeamMembers(members);
+        setMemberError(null);
+        return true;
+      } catch (error) {
+        console.error("Erreur lors du chargement des membres", error);
+        if (isMounted.current) {
+          setMemberError("Impossible de charger les membres depuis Supabase.");
+          if (!options?.silent) {
+            toast({
+              variant: "destructive",
+              title: "Erreur lors du chargement des utilisateurs",
+              description: "Veuillez réessayer dans quelques instants.",
+            });
+          }
+        }
+        return false;
+      } finally {
+        if (!options?.silent && isMounted.current) {
+          setLoadingMembers(false);
+        }
+      }
+    },
+    [toast, user]
+  );
+
+  useEffect(() => {
+    if (!user) {
+      setLoadingMembers(false);
+      return;
+    }
+
+    void fetchTeamMembers();
+
+    const channel = supabase
+      .channel("public:profiles_settings")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "profiles" },
+        () => {
+          void fetchTeamMembers({ silent: true });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, fetchTeamMembers]);
+
+  const formatIdentifier = useCallback((identifier: string) => {
+    if (identifier.length <= 12) {
+      return identifier;
+    }
+
+    return `${identifier.slice(0, 8)}…${identifier.slice(-4)}`;
+  }, []);
+
   const activeMembers = useMemo(() => teamMembers.filter((member) => member.active).length, [teamMembers]);
 
-  const handleRoleChange = (id: string, role: TeamMember["role"]) => {
+  const handleRoleChange = async (id: string, role: RoleOption) => {
+    const previousMembers = teamMembers.map((member) => ({ ...member }));
+
     setTeamMembers((prev) =>
       prev.map((member) => (member.id === id ? { ...member, role } : member))
     );
+
+    const { error } = await supabase.from("profiles").update({ role }).eq("id", id);
+
+    if (error) {
+      console.error("Erreur lors de la mise à jour du rôle", error);
+      setTeamMembers(previousMembers);
+      toast({
+        variant: "destructive",
+        title: "Impossible de mettre à jour le rôle",
+        description: "Supabase n'a pas accepté la modification. Réessayez plus tard.",
+      });
+      return;
+    }
+
     toast({
       title: "Rôle mis à jour",
-      description: "Le rôle du collaborateur a été modifié avec succès.",
+      description: "Le profil Supabase a été synchronisé.",
     });
+
+    void fetchTeamMembers({ silent: true });
   };
 
-  const handleToggleMember = (id: string, active: boolean) => {
-    setTeamMembers((prev) =>
-      prev.map((member) => (member.id === id ? { ...member, active } : member))
-    );
-    toast({
-      title: active ? "Collaborateur activé" : "Collaborateur désactivé",
-      description: active
-        ? "Le collaborateur aura accès à la plateforme dès maintenant."
-        : "Le collaborateur ne pourra plus se connecter tant qu'il n'est pas réactivé.",
-    });
+  const handleManualRefresh = async () => {
+    const success = await fetchTeamMembers();
+    if (success) {
+      toast({
+        title: "Membres synchronisés",
+        description: "La liste a été mise à jour avec les dernières données Supabase.",
+      });
+    }
   };
 
   const handleInviteMember = () => {
@@ -261,6 +432,126 @@ export default function Settings() {
 
   const handleSessionDurationChange = (value: string) => {
     setSecuritySettings((prev) => ({ ...prev, sessionDuration: value }));
+  };
+
+  const renderTeamMembers = () => {
+    if (loadingMembers) {
+      return (
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div
+              key={index}
+              className="h-[116px] rounded-2xl border border-dashed border-border/60 bg-muted/20"
+            />
+          ))}
+        </div>
+      );
+    }
+
+    if (memberError) {
+      return (
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-destructive/40 bg-destructive/5 p-6 text-center text-sm text-destructive">
+          <AlertCircle className="h-6 w-6" />
+          <p>{memberError}</p>
+          <Button size="sm" variant="outline" onClick={() => void fetchTeamMembers()}>
+            Réessayer
+          </Button>
+        </div>
+      );
+    }
+
+    if (teamMembers.length === 0) {
+      return (
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-border/60 bg-background/40 p-6 text-center text-sm text-muted-foreground">
+          <Users className="h-6 w-6 text-muted-foreground" />
+          <p>Aucun collaborateur trouvé dans Supabase.</p>
+          <Button variant="secondary" size="sm" onClick={handleInviteMember}>
+            Inviter votre premier membre
+          </Button>
+        </div>
+      );
+    }
+
+    return teamMembers.map((member) => (
+      <div
+        key={member.id}
+        className="flex flex-col gap-4 rounded-2xl border border-border/60 bg-background/60 p-4 transition hover:border-primary/40 md:flex-row md:items-center md:justify-between"
+      >
+        <div className="flex items-center gap-4">
+          <Avatar className="h-12 w-12">
+            <AvatarFallback className="bg-primary/10 text-primary">
+              {member.name
+                .split(" ")
+                .map((part) => part[0])
+                .join("")}
+            </AvatarFallback>
+          </Avatar>
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-medium text-foreground">{member.name}</p>
+              <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+                ID {formatIdentifier(member.identifier)}
+              </Badge>
+              {!member.active && (
+                <Badge variant="destructive" className="text-xs font-normal">
+                  Désactivé
+                </Badge>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-x-4 text-sm text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <Mail className="h-3.5 w-3.5" />
+                {member.email ?? "Email non renseigné"}
+              </span>
+              <span className="flex items-center gap-1">
+                <Phone className="h-3.5 w-3.5" />
+                {member.phone ?? "Téléphone non renseigné"}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-6">
+          <div className="space-y-1">
+            <Label htmlFor={`role-${member.id}`} className="text-xs uppercase tracking-wide text-muted-foreground">
+              Rôle
+            </Label>
+            <Select
+              value={member.role}
+              onValueChange={(value: RoleOption) => {
+                void handleRoleChange(member.id, value);
+              }}
+            >
+              <SelectTrigger id={`role-${member.id}`} className="w-[180px]">
+                <SelectValue placeholder="Sélectionner" />
+              </SelectTrigger>
+              <SelectContent>
+                {ROLE_OPTIONS.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+              Dernière activité
+            </Label>
+            <p className="text-sm text-foreground">{member.lastConnection}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Label
+              htmlFor={`active-${member.id}`}
+              className="text-sm text-muted-foreground"
+              title="Statut synchronisé automatiquement depuis Supabase"
+            >
+              {member.active ? "Actif" : "Inactif"}
+            </Label>
+            <Switch id={`active-${member.id}`} checked={member.active} disabled />
+          </div>
+        </div>
+      </div>
+    ));
   };
 
   const activeSessions = [
@@ -335,78 +626,24 @@ export default function Settings() {
                     Administrez les accès, les rôles et le statut d&apos;activité de vos collaborateurs.
                   </p>
                 </div>
-                <Button onClick={handleInviteMember} variant="secondary">
-                  Inviter un membre
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={handleManualRefresh}
+                    disabled={loadingMembers}
+                    className="h-9 w-9 border-border/60"
+                    aria-label="Rafraîchir la liste des membres"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${loadingMembers ? "animate-spin" : ""}`} />
+                  </Button>
+                  <Button onClick={handleInviteMember} variant="secondary">
+                    Inviter un membre
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {teamMembers.map((member) => (
-                  <div
-                    key={member.id}
-                    className="flex flex-col gap-4 rounded-2xl border border-border/60 bg-background/60 p-4 transition hover:border-primary/40 md:flex-row md:items-center md:justify-between"
-                  >
-                    <div className="flex items-center gap-4">
-                      <Avatar className="h-12 w-12">
-                        <AvatarFallback className="bg-primary/10 text-primary">
-                          {member.name
-                            .split(" ")
-                            .map((part) => part[0])
-                            .join("")}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="font-medium text-foreground">{member.name}</p>
-                        <div className="flex flex-wrap items-center gap-x-4 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Mail className="h-3.5 w-3.5" />
-                            {member.email}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Phone className="h-3.5 w-3.5" />
-                            {member.phone}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-6">
-                      <div className="space-y-1">
-                        <Label htmlFor={`role-${member.id}`} className="text-xs uppercase tracking-wide text-muted-foreground">
-                          Rôle
-                        </Label>
-                        <Select
-                          value={member.role}
-                          onValueChange={(value: TeamMember["role"]) => handleRoleChange(member.id, value)}
-                        >
-                          <SelectTrigger id={`role-${member.id}`} className="w-[180px]">
-                            <SelectValue placeholder="Sélectionner" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Administrateur">Administrateur</SelectItem>
-                            <SelectItem value="Manager">Manager</SelectItem>
-                            <SelectItem value="Commercial">Commercial</SelectItem>
-                            <SelectItem value="Technicien">Technicien</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-                          Dernière connexion
-                        </Label>
-                        <p className="text-sm text-foreground">{member.lastConnection}</p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <Label htmlFor={`active-${member.id}`} className="text-sm text-muted-foreground">
-                          {member.active ? "Actif" : "Inactif"}
-                        </Label>
-                        <Switch
-                          id={`active-${member.id}`}
-                          checked={member.active}
-                          onCheckedChange={(checked) => handleToggleMember(member.id, checked)}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                {renderTeamMembers()}
               </CardContent>
             </Card>
 
