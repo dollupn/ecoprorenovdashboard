@@ -1,3 +1,5 @@
+import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,7 +9,6 @@ import { AddProjectDialog } from "@/components/projects/AddProjectDialog";
 import { useToast } from "@/components/ui/use-toast";
 import { mockProjects, type Project } from "@/data/projects";
 import { getStatusColor, getStatusLabel } from "@/lib/projects";
-import { useNavigate } from "react-router-dom";
 import {
   Search,
   Filter,
@@ -24,6 +25,31 @@ import {
 const Projects = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const filteredProjects = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
+    if (!normalizedSearch) {
+      return mockProjects;
+    }
+
+    return mockProjects.filter((project) => {
+      const searchable = [
+        project.project_ref,
+        project.client_name,
+        project.company ?? "",
+        project.city,
+        project.postal_code,
+        project.product_name,
+        project.assigned_to
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return searchable.includes(normalizedSearch);
+    });
+  }, [searchTerm]);
 
   const handleViewProject = (projectId: string) => {
     navigate(`/projects/${projectId}`);
@@ -73,9 +99,11 @@ const Projects = () => {
             <div className="flex flex-col md:flex-row gap-4">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input 
-                  placeholder="Rechercher par référence, client, ville..." 
+                <Input
+                  placeholder="Rechercher par référence, client, ville..."
                   className="pl-10"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
                 />
               </div>
               <Button variant="outline">
@@ -88,7 +116,7 @@ const Projects = () => {
 
         {/* Projects Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {mockProjects.map((project) => (
+          {filteredProjects.map((project) => (
             <Card key={project.id} className="shadow-card bg-gradient-card border border-black/10 transition-all duration-300 hover:shadow-elevated dark:border-white/10">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
@@ -222,6 +250,17 @@ const Projects = () => {
             </Card>
           ))}
         </div>
+
+        {filteredProjects.length === 0 && (
+          <Card className="shadow-card bg-gradient-card border border-dashed border-muted">
+            <CardContent className="py-10 text-center space-y-2">
+              <CardTitle className="text-lg">Aucun projet trouvé</CardTitle>
+              <p className="text-muted-foreground">
+                Essayez d'élargir votre recherche ou de réinitialiser vos filtres.
+              </p>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </Layout>
   );
