@@ -1,10 +1,12 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+
 import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import {
   Table,
   TableBody,
@@ -14,8 +16,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
+
 import {
   Search,
   Filter,
@@ -28,10 +32,11 @@ import {
   AlertCircle,
   Loader2,
   TrendingUp,
+  Send,
 } from "lucide-react";
 
+/** ---- Status & Types ---- */
 const INVOICE_STATUSES = ["DRAFT", "SENT", "PAID", "OVERDUE", "CANCELLED"] as const;
-
 type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
 
 type InvoiceRecord = Tables<"invoices"> & {
@@ -62,6 +67,7 @@ const statusMeta: Record<InvoiceStatus, { label: string; className: string }> = 
   },
 };
 
+/** ---- Utils ---- */
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("fr-FR", {
     style: "currency",
@@ -78,6 +84,7 @@ const formatDate = (value: string | null) => {
   }).format(new Date(value));
 };
 
+/** ---- Data ---- */
 const fetchInvoices = async (): Promise<InvoiceRecord[]> => {
   const { data, error } = await supabase
     .from("invoices")
@@ -107,19 +114,18 @@ const Invoices = () => {
   const metrics = useMemo(() => {
     const totalPaid = invoices
       .filter((invoice) => invoice.status === "PAID")
-      .reduce((sum, invoice) => sum + Number(invoice.amount), 0);
+      .reduce((sum, invoice) => sum + Number(invoice.amount || 0), 0);
 
     const outstanding = invoices
-      .filter((invoice) => ["SENT", "OVERDUE"].includes(invoice.status))
-      .reduce((sum, invoice) => sum + Number(invoice.amount), 0);
+      .filter((invoice) => ["SENT", "OVERDUE"].includes((invoice.status || "").toUpperCase()))
+      .reduce((sum, invoice) => sum + Number(invoice.amount || 0), 0);
 
     const overdue = invoices.filter((invoice) => invoice.status === "OVERDUE");
     const draft = invoices.filter((invoice) => invoice.status === "DRAFT");
     const paidCount = invoices.filter((invoice) => invoice.status === "PAID");
 
-    const collectionRate = invoices.length
-      ? Math.round((paidCount.length / invoices.length) * 100)
-      : 0;
+    const totalBilled = invoices.reduce((sum, inv) => sum + Number(inv.amount || 0), 0);
+    const collectionRate = totalBilled ? Math.round((totalPaid / totalBilled) * 100) : 0;
 
     return {
       totalPaid,
@@ -127,23 +133,20 @@ const Invoices = () => {
       overdueCount: overdue.length,
       draftCount: draft.length,
       collectionRate,
+      totalBilled,
     };
   }, [invoices]);
 
   const renderStatus = (status: string) => {
-    const normalizedStatus = (status?.toUpperCase() as InvoiceStatus) || "DRAFT";
-    const meta = statusMeta[normalizedStatus];
-
-    if (!meta) {
-      return <Badge className={statusMeta.DRAFT.className}>{status}</Badge>;
-    }
-
+    const normalized = (status?.toUpperCase() as InvoiceStatus) || "DRAFT";
+    const meta = statusMeta[normalized] ?? statusMeta.DRAFT;
     return <Badge className={meta.className}>{meta.label}</Badge>;
   };
 
   return (
     <Layout>
       <div className="space-y-6">
+        {/* Header */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
@@ -162,6 +165,10 @@ const Invoices = () => {
               <FileDown className="w-4 h-4 mr-2" />
               Exporter
             </Button>
+            <Button variant="outline">
+              <Send className="w-4 h-4 mr-2" />
+              Relance email
+            </Button>
             <Button>
               <PlusCircle className="w-4 h-4 mr-2" />
               Nouvelle Facture
@@ -169,7 +176,17 @@ const Invoices = () => {
           </div>
         </div>
 
+        {/* KPIs */}
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <Card className="shadow-card border-0 bg-gradient-card">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-muted-foreground">Total facturé</CardTitle>
+            </CardHeader>
+            <CardContent className="text-2xl font-semibold">
+              {formatCurrency(metrics.totalBilled)}
+            </CardContent>
+          </Card>
+
           <Card className="shadow-card border-0 bg-gradient-card">
             <CardHeader>
               <CardTitle>Encaissements</CardTitle>
@@ -179,6 +196,7 @@ const Invoices = () => {
               {formatCurrency(metrics.totalPaid)}
             </CardContent>
           </Card>
+
           <Card className="shadow-card border-0 bg-gradient-card">
             <CardHeader>
               <CardTitle>En attente</CardTitle>
@@ -188,41 +206,43 @@ const Invoices = () => {
               {formatCurrency(metrics.outstanding)}
             </CardContent>
           </Card>
-          <Card className="shadow-card border-0 bg-gradient-card">
-            <CardHeader>
-              <CardTitle>En retard</CardTitle>
-            </CardHeader>
-            <CardContent className="text-2xl font-semibold flex items-center gap-2">
-              <RefreshCw className="w-5 h-5 text-red-500" />
-              {metrics.overdueCount}
-            </CardContent>
-          </Card>
+
           <Card className="shadow-card border-0 bg-gradient-card">
             <CardHeader>
               <CardTitle>Taux d'encaissement</CardTitle>
             </CardHeader>
-            <CardContent className="text-2xl font-semibold flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-emerald-500" />
-              {metrics.collectionRate}%
+            <CardContent>
+              <div className="text-2xl font-semibold flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-emerald-500" />
+                {metrics.collectionRate}%
+              </div>
+              <div className="mt-2">
+                <Progress value={metrics.collectionRate} className="h-2" />
+              </div>
             </CardContent>
           </Card>
         </div>
 
+        {/* Search / Filters */}
         <Card className="shadow-card bg-gradient-card border-0">
           <CardContent className="pt-6">
             <div className="flex flex-col md:flex-row gap-4">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input placeholder="Rechercher par client, référence, devis..." className="pl-10" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Rechercher par client, référence, devis ou chantier"
+                  className="pl-10"
+                />
               </div>
               <Button variant="outline">
                 <Filter className="w-4 h-4 mr-2" />
-                Filtres
+                Filtres avancés
               </Button>
             </div>
           </CardContent>
         </Card>
 
+        {/* Error state */}
         {isError && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
@@ -238,6 +258,7 @@ const Invoices = () => {
           </Alert>
         )}
 
+        {/* Table */}
         <Card className="shadow-card bg-gradient-card border-0">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
@@ -253,7 +274,7 @@ const Invoices = () => {
               <div className="text-center py-12">
                 <Timer className="mx-auto h-10 w-10 text-muted-foreground/60" />
                 <p className="mt-4 text-muted-foreground">
-                  Aucune facture n'est encore enregistrée. Créez votre première facture ou synchronisez vos devis acceptés.
+                  Aucune facture enregistrée. Créez votre première facture ou synchronisez vos devis acceptés.
                 </p>
               </div>
             ) : (
@@ -278,8 +299,10 @@ const Invoices = () => {
                         <TableCell>{invoice.client_name}</TableCell>
                         <TableCell>{invoice.projects?.project_ref ?? "—"}</TableCell>
                         <TableCell>{invoice.quotes?.quote_ref ?? "—"}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(Number(invoice.amount))}</TableCell>
-                        <TableCell>{renderStatus(invoice.status)}</TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(Number(invoice.amount || 0))}
+                        </TableCell>
+                        <TableCell>{renderStatus(invoice.status || "DRAFT")}</TableCell>
                         <TableCell>{formatDate(invoice.due_date)}</TableCell>
                         <TableCell>{formatDate(invoice.paid_date)}</TableCell>
                       </TableRow>
