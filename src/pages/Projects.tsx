@@ -44,11 +44,7 @@ const Projects = () => {
   };
 
   const handleCreateSite = (project: Project) => {
-    navigate(`/sites`, { state: { projectId: project.id } });
-    toast({
-      title: "Création de chantier",
-      description: `Nouveau chantier initialisé pour ${project.project_ref}.`
-    });
+    navigate(`/sites`, { state: { createSite: { projectId: project.id } } });
   };
 
   return (
