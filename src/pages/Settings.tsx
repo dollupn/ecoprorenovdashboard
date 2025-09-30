@@ -41,7 +41,6 @@ import {
 } from "lucide-react";
 
 const ROLE_OPTIONS = ["Administrateur", "Manager", "Commercial", "Technicien"] as const;
-
 type RoleOption = (typeof ROLE_OPTIONS)[number];
 
 type ProfileRecord = Tables<"profiles">;
@@ -105,41 +104,26 @@ const ROLE_NORMALIZATION_MAP: Record<string, RoleOption> = {
 };
 
 const normalizeRole = (role: string | null): RoleOption => {
-  if (!role) {
-    return "Commercial";
-  }
-
+  if (!role) return "Commercial";
   const lowerRole = role.toLowerCase();
-  const directMatch = ROLE_OPTIONS.find((option) => option.toLowerCase() === lowerRole);
-  if (directMatch) {
-    return directMatch;
-  }
-
-  return ROLE_NORMALIZATION_MAP[lowerRole] ?? "Commercial";
+  const directMatch = ROLE_OPTIONS.find((o) => o.toLowerCase() === lowerRole);
+  return directMatch ?? ROLE_NORMALIZATION_MAP[lowerRole] ?? "Commercial";
 };
 
 const isProfileActive = (role: string | null) => {
-  if (!role) {
-    return true;
-  }
-
+  if (!role) return true;
   return !INACTIVE_KEYWORDS.has(role.toLowerCase());
 };
 
 const formatLastActivity = (timestamp: string | null) => {
-  if (!timestamp) {
-    return "Activité inconnue";
-  }
-
+  if (!timestamp) return "Activité inconnue";
   try {
     const formatted = formatDistanceToNow(parseISO(timestamp), {
       addSuffix: true,
       locale: fr,
     });
-
     return formatted.charAt(0).toUpperCase() + formatted.slice(1);
-  } catch (error) {
-    console.error("Erreur de formatage de date", error);
+  } catch {
     return "Activité récente";
   }
 };
@@ -152,8 +136,7 @@ const mapProfileToMember = (profile: ProfileRecord): TeamMember => {
   };
 
   const identifier = profile.user_id ?? profile.id;
-  const lastActivity =
-    extendedProfile.last_sign_in_at ?? profile.updated_at ?? profile.created_at;
+  const lastActivity = extendedProfile.last_sign_in_at ?? profile.updated_at ?? profile.created_at;
 
   return {
     id: profile.id,
@@ -202,9 +185,11 @@ export default function Settings() {
   const { toast } = useToast();
   const { user } = useAuth();
   const isMounted = useRef(true);
+
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [memberError, setMemberError] = useState<string | null>(null);
+
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>({
     name: "EcoProRenov",
     legalName: "EcoProRenov SAS",
@@ -215,6 +200,7 @@ export default function Settings() {
     description:
       "Entreprise spécialisée dans les rénovations énergétiques globales pour les particuliers et les copropriétés.",
   });
+
   const [notifications, setNotifications] = useState<NotificationSettings>({
     commercialEmails: true,
     operationalEmails: true,
@@ -222,12 +208,14 @@ export default function Settings() {
     pushNotifications: false,
     weeklyDigest: true,
   });
+
   const [securitySettings, setSecuritySettings] = useState<SecuritySettings>({
     twoFactor: true,
     passwordRotation: true,
     loginAlerts: false,
     sessionDuration: "60",
   });
+
   const [integrations, setIntegrations] = useState(initialIntegrations);
 
   useEffect(() => {
@@ -238,9 +226,7 @@ export default function Settings() {
 
   const fetchTeamMembers = useCallback(
     async (options?: { silent?: boolean }) => {
-      if (!isMounted.current) {
-        return false;
-      }
+      if (!isMounted.current) return false;
 
       if (!user) {
         if (isMounted.current) {
@@ -251,9 +237,7 @@ export default function Settings() {
         return false;
       }
 
-      if (!options?.silent && isMounted.current) {
-        setLoadingMembers(true);
-      }
+      if (!options?.silent && isMounted.current) setLoadingMembers(true);
 
       try {
         const { data, error } = await supabase
@@ -261,23 +245,15 @@ export default function Settings() {
           .select("id, full_name, role, user_id, updated_at, created_at")
           .order("full_name", { ascending: true });
 
-        if (error) {
-          throw error;
-        }
+        if (error) throw error;
+        if (!isMounted.current) return false;
 
-        if (!isMounted.current) {
-          return false;
-        }
-
-        const members = (data ?? []).map((profile) =>
-          mapProfileToMember(profile as ProfileRecord)
-        );
-
+        const members = (data ?? []).map((p) => mapProfileToMember(p as ProfileRecord));
         setTeamMembers(members);
         setMemberError(null);
         return true;
-      } catch (error) {
-        console.error("Erreur lors du chargement des membres", error);
+      } catch (err) {
+        console.error("Erreur lors du chargement des membres", err);
         if (isMounted.current) {
           setMemberError("Impossible de charger les membres depuis Supabase.");
           if (!options?.silent) {
@@ -290,9 +266,7 @@ export default function Settings() {
         }
         return false;
       } finally {
-        if (!options?.silent && isMounted.current) {
-          setLoadingMembers(false);
-        }
+        if (!options?.silent && isMounted.current) setLoadingMembers(false);
       }
     },
     [toast, user]
@@ -323,24 +297,20 @@ export default function Settings() {
   }, [user, fetchTeamMembers]);
 
   const formatIdentifier = useCallback((identifier: string) => {
-    if (identifier.length <= 12) {
-      return identifier;
-    }
-
+    if (identifier.length <= 12) return identifier;
     return `${identifier.slice(0, 8)}…${identifier.slice(-4)}`;
   }, []);
 
-  const activeMembers = useMemo(() => teamMembers.filter((member) => member.active).length, [teamMembers]);
+  const activeMembers = useMemo(
+    () => teamMembers.filter((member) => member.active).length,
+    [teamMembers]
+  );
 
   const handleRoleChange = async (id: string, role: RoleOption) => {
-    const previousMembers = teamMembers.map((member) => ({ ...member }));
-
-    setTeamMembers((prev) =>
-      prev.map((member) => (member.id === id ? { ...member, role } : member))
-    );
+    const previousMembers = teamMembers.map((m) => ({ ...m }));
+    setTeamMembers((prev) => prev.map((m) => (m.id === id ? { ...m, role } : m)));
 
     const { error } = await supabase.from("profiles").update({ role }).eq("id", id);
-
     if (error) {
       console.error("Erreur lors de la mise à jour du rôle", error);
       setTeamMembers(previousMembers);
@@ -386,10 +356,7 @@ export default function Settings() {
   };
 
   const toggleNotification = (key: keyof NotificationSettings) => {
-    setNotifications((prev) => {
-      const updated = { ...prev, [key]: !prev[key] };
-      return updated;
-    });
+    setNotifications((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const handleSaveNotifications = () => {
@@ -406,7 +373,10 @@ export default function Settings() {
           ? {
               ...item,
               status: item.status === "connected" ? "disconnected" : "connected",
-              lastSync: item.status === "connected" ? "Connexion interrompue" : "Synchronisation programmée",
+              lastSync:
+                item.status === "connected"
+                  ? "Connexion interrompue"
+                  : "Synchronisation programmée",
             }
           : item
       )
@@ -512,7 +482,10 @@ export default function Settings() {
         </div>
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-6">
           <div className="space-y-1">
-            <Label htmlFor={`role-${member.id}`} className="text-xs uppercase tracking-wide text-muted-foreground">
+            <Label
+              htmlFor={`role-${member.id}`}
+              className="text-xs uppercase tracking-wide text-muted-foreground"
+            >
               Rôle
             </Label>
             <Select
@@ -642,9 +615,7 @@ export default function Settings() {
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {renderTeamMembers()}
-              </CardContent>
+              <CardContent className="space-y-4">{renderTeamMembers()}</CardContent>
             </Card>
 
             <Card className="border border-border/60 bg-card/70 shadow-sm">
@@ -665,7 +636,7 @@ export default function Settings() {
                       <Input
                         id="company-name"
                         value={companyInfo.name}
-                        onChange={(event) => setCompanyInfo((prev) => ({ ...prev, name: event.target.value }))}
+                        onChange={(e) => setCompanyInfo((p) => ({ ...p, name: e.target.value }))}
                       />
                     </div>
                     <div className="space-y-2">
@@ -673,7 +644,7 @@ export default function Settings() {
                       <Input
                         id="company-legal"
                         value={companyInfo.legalName}
-                        onChange={(event) => setCompanyInfo((prev) => ({ ...prev, legalName: event.target.value }))}
+                        onChange={(e) => setCompanyInfo((p) => ({ ...p, legalName: e.target.value }))}
                       />
                     </div>
                     <div className="space-y-2">
@@ -681,7 +652,9 @@ export default function Settings() {
                       <Input
                         id="company-registration"
                         value={companyInfo.registration}
-                        onChange={(event) => setCompanyInfo((prev) => ({ ...prev, registration: event.target.value }))}
+                        onChange={(e) =>
+                          setCompanyInfo((p) => ({ ...p, registration: e.target.value }))
+                        }
                       />
                     </div>
                     <div className="space-y-2">
@@ -689,7 +662,7 @@ export default function Settings() {
                       <Input
                         id="company-phone"
                         value={companyInfo.phone}
-                        onChange={(event) => setCompanyInfo((prev) => ({ ...prev, phone: event.target.value }))}
+                        onChange={(e) => setCompanyInfo((p) => ({ ...p, phone: e.target.value }))}
                       />
                     </div>
                     <div className="space-y-2">
@@ -698,7 +671,7 @@ export default function Settings() {
                         id="company-email"
                         type="email"
                         value={companyInfo.email}
-                        onChange={(event) => setCompanyInfo((prev) => ({ ...prev, email: event.target.value }))}
+                        onChange={(e) => setCompanyInfo((p) => ({ ...p, email: e.target.value }))}
                       />
                     </div>
                     <div className="md:col-span-2 space-y-2">
@@ -706,7 +679,7 @@ export default function Settings() {
                       <Textarea
                         id="company-address"
                         value={companyInfo.address}
-                        onChange={(event) => setCompanyInfo((prev) => ({ ...prev, address: event.target.value }))}
+                        onChange={(e) => setCompanyInfo((p) => ({ ...p, address: e.target.value }))}
                       />
                     </div>
                     <div className="md:col-span-2 space-y-2">
@@ -714,7 +687,9 @@ export default function Settings() {
                       <Textarea
                         id="company-description"
                         value={companyInfo.description}
-                        onChange={(event) => setCompanyInfo((prev) => ({ ...prev, description: event.target.value }))}
+                        onChange={(e) =>
+                          setCompanyInfo((p) => ({ ...p, description: e.target.value }))
+                        }
                         rows={3}
                       />
                     </div>
@@ -741,27 +716,38 @@ export default function Settings() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-4">
-                  {[{
-                    key: "commercialEmails" as const,
-                    title: "Suivi commercial",
-                    description: "Alertes sur les nouveaux leads, rappels de relance et devis en attente.",
-                  }, {
-                    key: "operationalEmails" as const,
-                    title: "Opérations & chantiers",
-                    description: "Notifications de planification, pointages d'équipes et suivi de chantier.",
-                  }, {
-                    key: "smsReminders" as const,
-                    title: "SMS automatiques",
-                    description: "Rappels de rendez-vous clients et confirmations d'interventions.",
-                  }, {
-                    key: "pushNotifications" as const,
-                    title: "Notifications mobiles",
-                    description: "Alertes en temps réel sur mobile pour les demandes critiques.",
-                  }, {
-                    key: "weeklyDigest" as const,
-                    title: "Rapport hebdomadaire",
-                    description: "Synthèse des indicateurs clés envoyée chaque lundi matin.",
-                  }].map((item) => (
+                  {[
+                    {
+                      key: "commercialEmails" as const,
+                      title: "Suivi commercial",
+                      description:
+                        "Alertes sur les nouveaux leads, rappels de relance et devis en attente.",
+                    },
+                    {
+                      key: "operationalEmails" as const,
+                      title: "Opérations & chantiers",
+                      description:
+                        "Notifications de planification, pointages d'équipes et suivi de chantier.",
+                    },
+                    {
+                      key: "smsReminders" as const,
+                      title: "SMS automatiques",
+                      description:
+                        "Rappels de rendez-vous clients et confirmations d'interventions.",
+                    },
+                    {
+                      key: "pushNotifications" as const,
+                      title: "Notifications mobiles",
+                      description:
+                        "Alertes en temps réel sur mobile pour les demandes critiques.",
+                    },
+                    {
+                      key: "weeklyDigest" as const,
+                      title: "Rapport hebdomadaire",
+                      description:
+                        "Synthèse des indicateurs clés envoyée chaque lundi matin.",
+                    },
+                  ].map((item) => (
                     <div
                       key={item.key}
                       className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-background/60 p-4 md:flex-row md:items-center md:justify-between"
@@ -805,12 +791,15 @@ export default function Settings() {
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="font-medium text-foreground">{integration.name}</p>
-                          <Badge className={integrationStatusStyles[integration.status]} variant="outline">
+                          <Badge
+                            className={integrationStatusStyles[integration.status]}
+                            variant="outline"
+                          >
                             {integration.status === "connected"
                               ? "Connecté"
                               : integration.status === "pending"
-                                ? "En attente"
-                                : "Déconnecté"}
+                              ? "En attente"
+                              : "Déconnecté"}
                           </Badge>
                         </div>
                         <p className="text-sm text-muted-foreground">{integration.description}</p>
@@ -825,11 +814,14 @@ export default function Settings() {
                       </Button>
                     </div>
                     <Separator className="bg-border/60" />
-                    <p className="text-xs text-muted-foreground">Dernière synchronisation : {integration.lastSync}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Dernière synchronisation : {integration.lastSync}
+                    </p>
                   </div>
                 ))}
                 <div className="rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-4 text-sm text-muted-foreground">
-                  Besoin d&apos;une intégration personnalisée ? Contactez notre équipe pour accéder à l&apos;API et aux webhooks sécurisés.
+                  Besoin d&apos;une intégration personnalisée ? Contactez notre équipe pour accéder à l&apos;API et aux
+                  webhooks sécurisés.
                 </div>
               </CardContent>
             </Card>
@@ -846,22 +838,28 @@ export default function Settings() {
               </CardHeader>
               <CardContent className="space-y-5">
                 <div className="space-y-4">
-                  {[{
-                    key: "twoFactor" as const,
-                    title: "Double authentification",
-                    description: "Obliger l&apos;activation de la double authentification pour tous les comptes.",
-                    icon: KeyRound,
-                  }, {
-                    key: "passwordRotation" as const,
-                    title: "Rotation des mots de passe",
-                    description: "Demander un renouvellement de mot de passe tous les 90 jours.",
-                    icon: RefreshCw,
-                  }, {
-                    key: "loginAlerts" as const,
-                    title: "Alertes de connexion",
-                    description: "Notifier l&apos;équipe sécurité des connexions depuis de nouveaux appareils.",
-                    icon: MonitorSmartphone,
-                  }].map((setting) => (
+                  {[
+                    {
+                      key: "twoFactor" as const,
+                      title: "Double authentification",
+                      description:
+                        "Obliger l&apos;activation de la double authentification pour tous les comptes.",
+                      icon: KeyRound,
+                    },
+                    {
+                      key: "passwordRotation" as const,
+                      title: "Rotation des mots de passe",
+                      description: "Demander un renouvellement de mot de passe tous les 90 jours.",
+                      icon: RefreshCw,
+                    },
+                    {
+                      key: "loginAlerts" as const,
+                      title: "Alertes de connexion",
+                      description:
+                        "Notifier l&apos;équipe sécurité des connexions depuis de nouveaux appareils.",
+                      icon: MonitorSmartphone,
+                    },
+                  ].map((setting) => (
                     <div
                       key={setting.key}
                       className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-background/60 p-4 md:flex-row md:items-center md:justify-between"
@@ -894,7 +892,10 @@ export default function Settings() {
                         </p>
                       </div>
                     </div>
-                    <Select value={securitySettings.sessionDuration} onValueChange={handleSessionDurationChange}>
+                    <Select
+                      value={securitySettings.sessionDuration}
+                      onValueChange={handleSessionDurationChange}
+                    >
                       <SelectTrigger className="w-[180px]">
                         <SelectValue placeholder="Durée" />
                       </SelectTrigger>
@@ -922,7 +923,10 @@ export default function Settings() {
                           <p>{session.browser}</p>
                         </div>
                         <div className="flex items-center gap-3">
-                          <Badge variant="outline" className="border-emerald-200/60 bg-emerald-500/10 text-emerald-700">
+                          <Badge
+                            variant="outline"
+                            className="border-emerald-200/60 bg-emerald-500/10 text-emerald-700"
+                          >
                             Sécurisé
                           </Badge>
                           <span>{session.lastActive}</span>
