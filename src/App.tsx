@@ -15,6 +15,7 @@ import Sites from "./pages/Sites";
 import Products from "./pages/Products";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
+import Settings from "./pages/Settings";
 
 const queryClient = new QueryClient();
 
@@ -37,7 +38,7 @@ const App = () => (
               <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
               <Route path="/calendar" element={<ProtectedRoute><Index /></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-              <Route path="/settings" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+              <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
