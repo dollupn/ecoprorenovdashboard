@@ -54,24 +54,6 @@ export function Layout({ children }: LayoutProps) {
           </main>
         </div>
       </div>
-
-      <div className="fixed bottom-6 right-6 z-50">
-        <Button
-          asChild
-          size="lg"
-          className="bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/30 rounded-full px-5"
-        >
-          <a
-            href="https://wa.me/33612345678?text=Bonjour%2C%20je%20souhaite%20obtenir%20un%20devis%20personnalis%C3%A9."
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Demander un devis personnalisé via WhatsApp"
-          >
-            <MessageCircle className="h-5 w-5" />
-            <span className="hidden sm:inline">WhatsApp</span>
-          </a>
-        </Button>
-      </div>
     </SidebarProvider>
   );
 }
