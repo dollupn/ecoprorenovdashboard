@@ -3,7 +3,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { BentoDemo } from "@/components/ui/demo";
 import { AddProjectDialog } from "@/components/projects/AddProjectDialog";
 import { useToast } from "@/components/ui/use-toast";
 import { mockProjects, type Project } from "@/data/projects";
@@ -86,19 +85,6 @@ const Projects = () => {
             </div>
           </CardContent>
         </Card>
-
-        {/* Vue rapide */}
-        <section className="rounded-2xl border border-black/10 bg-gradient-card p-6 shadow-card dark:border-white/10">
-          <div className="flex flex-col gap-2 pb-6 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h2 className="text-xl font-semibold text-foreground">Vue rapide des dossiers</h2>
-              <p className="text-sm text-muted-foreground">
-                Accédez aux raccourcis clés pour suivre vos projets et coordonner les équipes.
-              </p>
-            </div>
-          </div>
-          <BentoDemo />
-        </section>
 
         {/* Projects Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
