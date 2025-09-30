@@ -50,6 +50,13 @@ const projectSchema = z.object({
   product_name: z.string().min(2, "Le produit est requis"),
   city: z.string().min(2, "La ville est requise"),
   postal_code: z.string().min(5, "Code postal invalide"),
+  building_type: z.string().optional(),
+  usage: z.string().optional(),
+  prime_cee: z.coerce.number().optional(),
+  discount: z.coerce.number().optional(),
+  unit_price: z.coerce.number().optional(),
+  signatory_name: z.string().optional(),
+  signatory_title: z.string().optional(),
   surface_batiment_m2: z.coerce.number().optional(),
   surface_isolee_m2: z.coerce.number().optional(),
   status: z.enum(["PROSPECTION", "ETUDE", "DEVIS_ENVOYE", "ACCEPTE", "A_PLANIFIER", "EN_COURS", "LIVRE", "CLOTURE"]),
@@ -75,6 +82,13 @@ const baseDefaultValues: ProjectFormValues = {
   product_name: "",
   city: "",
   postal_code: "",
+  building_type: "",
+  usage: "",
+  prime_cee: undefined,
+  discount: undefined,
+  unit_price: undefined,
+  signatory_name: "",
+  signatory_title: "",
   surface_batiment_m2: undefined,
   surface_isolee_m2: undefined,
   status: "PROSPECTION",
@@ -342,6 +356,13 @@ export const AddProjectDialog = ({
         status: data.status,
         assigned_to: data.assigned_to,
         company: data.company || undefined,
+        building_type: data.building_type || undefined,
+        usage: data.usage || undefined,
+        prime_cee: data.prime_cee || undefined,
+        discount: data.discount || undefined,
+        unit_price: data.unit_price || undefined,
+        signatory_name: data.signatory_name || undefined,
+        signatory_title: data.signatory_title || undefined,
         surface_batiment_m2: data.surface_batiment_m2 || undefined,
         surface_isolee_m2: data.surface_isolee_m2 || undefined,
         date_debut_prevue: data.date_debut_prevue || undefined,
@@ -466,6 +487,35 @@ export const AddProjectDialog = ({
               />
             </div>
 
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="building_type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Type de bâtiment</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="usage"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Usage</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
             <FormField
               control={form.control}
               name="product_name"
@@ -578,6 +628,48 @@ export const AddProjectDialog = ({
               />
             </div>
 
+            <div className="grid grid-cols-3 gap-4">
+              <FormField
+                control={form.control}
+                name="prime_cee"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Prime CEE (€)</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.01" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="discount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Remise (€)</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.01" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="unit_price"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Prix unitaire (€)</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.01" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
             <FormField
               control={form.control}
               name="assigned_to"
@@ -674,6 +766,35 @@ export const AddProjectDialog = ({
                 </FormItem>
               )}
             />
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="signatory_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nom du signataire</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="signatory_title"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Fonction du signataire</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <div className="flex justify-end gap-2">
               <Button

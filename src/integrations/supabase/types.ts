@@ -215,61 +215,82 @@ export type Database = {
       projects: {
         Row: {
           assigned_to: string
+          building_type: string | null
           city: string
           client_name: string
           company: string | null
           created_at: string
           date_debut_prevue: string | null
           date_fin_prevue: string | null
+          discount: number | null
           estimated_value: number | null
           id: string
           lead_id: string | null
+          prime_cee: number | null
           postal_code: string
           product_name: string
           project_ref: string
+          signatory_name: string | null
+          signatory_title: string | null
           status: string
           surface_batiment_m2: number | null
           surface_isolee_m2: number | null
+          unit_price: number | null
+          usage: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           assigned_to: string
+          building_type?: string | null
           city: string
           client_name: string
           company?: string | null
           created_at?: string
           date_debut_prevue?: string | null
           date_fin_prevue?: string | null
+          discount?: number | null
           estimated_value?: number | null
           id?: string
           lead_id?: string | null
+          prime_cee?: number | null
           postal_code: string
           product_name: string
           project_ref: string
+          signatory_name?: string | null
+          signatory_title?: string | null
           status?: string
           surface_batiment_m2?: number | null
           surface_isolee_m2?: number | null
+          unit_price?: number | null
+          usage?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
           assigned_to?: string
+          building_type?: string | null
           city?: string
           client_name?: string
           company?: string | null
           created_at?: string
           date_debut_prevue?: string | null
           date_fin_prevue?: string | null
+          discount?: number | null
           estimated_value?: number | null
           id?: string
           lead_id?: string | null
+          prime_cee?: number | null
           postal_code?: string
           product_name?: string
           project_ref?: string
+          signatory_name?: string | null
+          signatory_title?: string | null
           status?: string
           surface_batiment_m2?: number | null
           surface_isolee_m2?: number | null
+          unit_price?: number | null
+          usage?: string | null
           updated_at?: string
           user_id?: string
         }
