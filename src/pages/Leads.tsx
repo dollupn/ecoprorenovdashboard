@@ -7,6 +7,18 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@/components/ui/toggle-group";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { AddLeadDialog } from "@/components/leads/AddLeadDialog";
 import { ScheduleLeadDialog } from "@/components/leads/ScheduleLeadDialog";
 import { AddProjectDialog } from "@/components/projects/AddProjectDialog";
@@ -41,6 +53,8 @@ import {
   FileX,
   AlertCircle,
   Loader2,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 
 const CARD_SKELETON_COUNT = 4;
@@ -266,6 +280,7 @@ const Leads = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState<LeadStatus[]>([]);
   const [importing, setImporting] = useState(false);
+  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
 
   const {
     data: leads = [],
@@ -536,14 +551,31 @@ const Leads = () => {
 
         {/* Leads Table */}
         <Card className="shadow-card bg-gradient-card border-0">
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <CardTitle>Leads Récents ({filteredLeads.length})</CardTitle>
               <p className="text-sm text-muted-foreground">
                 {hasActiveFilters ? `${leads.length} leads au total` : "Données à jour depuis Supabase"}
               </p>
             </div>
-            {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+            <div className="flex items-center justify-between gap-2 md:justify-end">
+              {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+              <ToggleGroup
+                type="single"
+                value={viewMode}
+                onValueChange={(value) => value && setViewMode(value as "cards" | "table")}
+                className="border rounded-md"
+              >
+                <ToggleGroupItem value="cards" className="px-3 py-1" aria-label="Vue cartes">
+                  <LayoutGrid className="mr-2 h-4 w-4" />
+                  Cartes
+                </ToggleGroupItem>
+                <ToggleGroupItem value="table" className="px-3 py-1" aria-label="Vue tableau">
+                  <List className="mr-2 h-4 w-4" />
+                  Tableau
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -561,7 +593,7 @@ const Leads = () => {
                   ? "Aucun lead ne correspond aux filtres sélectionnés."
                   : "Aucun lead pour le moment. Ajoutez-en un nouveau ou importez un fichier CSV."}
               </div>
-            ) : (
+            ) : viewMode === "cards" ? (
               <div className="space-y-4">
                 {filteredLeads.map((lead) => (
                   <div
@@ -666,6 +698,122 @@ const Leads = () => {
                     </div>
                   </div>
                 ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Lead</TableHead>
+                      <TableHead>Contact</TableHead>
+                      <TableHead>Localisation</TableHead>
+                      <TableHead>Produit</TableHead>
+                      <TableHead>Statut</TableHead>
+                      <TableHead>RDV</TableHead>
+                      <TableHead>Source</TableHead>
+                      <TableHead>Commentaire</TableHead>
+                      <TableHead className="text-right">Créé / Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredLeads.map((lead) => (
+                      <TableRow key={lead.id}>
+                        <TableCell>
+                          <div className="font-semibold text-foreground">{lead.full_name}</div>
+                          {lead.company && (
+                            <div className="text-sm text-muted-foreground flex items-center gap-1">
+                              <Building className="h-3 w-3" />
+                              {lead.company}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1 text-sm">
+                            <div className="flex items-center gap-2">
+                              <Phone className="h-4 w-4 text-muted-foreground" />
+                              {lead.phone_raw}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Mail className="h-4 w-4 text-muted-foreground" />
+                              {lead.email}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4 text-muted-foreground" />
+                            <span>
+                              {lead.city} ({lead.postal_code})
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {lead.product_name ? (
+                            <div>
+                              <span className="font-medium">{lead.product_name}</span>
+                              {lead.surface_m2 && (
+                                <span className="text-muted-foreground"> • {lead.surface_m2} m²</span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={getLeadStatusColor(lead.status)}>
+                            {getLeadStatusLabel(lead.status)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {lead.date_rdv && lead.heure_rdv ? (
+                            <div className="flex items-center gap-2 text-primary font-medium">
+                              <Calendar className="h-4 w-4" />
+                              <span>
+                                {new Date(lead.date_rdv).toLocaleDateString("fr-FR")} à {lead.heure_rdv}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {lead.utm_source ? lead.utm_source : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                        <TableCell className="max-w-[200px] text-sm">
+                          {lead.commentaire ? (
+                            <span className="line-clamp-2">{lead.commentaire}</span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right text-sm">
+                          <div className="flex flex-col items-end gap-2">
+                            <span className="text-xs text-muted-foreground">
+                              Créé le {new Date(lead.created_at).toLocaleDateString("fr-FR")}
+                            </span>
+                            <div className="flex gap-2">
+                              <ScheduleLeadDialog lead={lead} onScheduled={handleLeadScheduled} />
+                              <AddProjectDialog
+                                trigger={<Button size="sm">Créer Projet</Button>}
+                                initialValues={{
+                                  project_ref: generateProjectRef(lead),
+                                  client_name: lead.full_name,
+                                  company: lead.company ?? "",
+                                  product_name: lead.product_name ?? "",
+                                  city: lead.city,
+                                  postal_code: lead.postal_code,
+                                  surface_isolee_m2: lead.surface_m2 ?? undefined,
+                                  lead_id: lead.id,
+                                }}
+                                onProjectAdded={() => handleProjectCreated(lead)}
+                              />
+                            </div>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             )}
           </CardContent>
