@@ -265,24 +265,29 @@ type EditableParamField = {
   helpText?: string;
 };
 
+const defaultParamFields: EditableParamField[] = [
+  {
+    key: "surface_m2",
+    label: "Surface à traiter",
+    type: "number",
+    unit: "m²",
+    required: true,
+    options: "",
+    defaultValue: "100",
+    helpText: "Surface totale des travaux.",
+  },
+];
+
 const Products = () => {
+  const [products, setProducts] = useState<Product[]>(mockProducts);
   const [search, setSearch] = useState("");
   const [isActive, setIsActive] = useState(true);
   const [category, setCategory] = useState("Chauffage");
   const [schemaVersion, setSchemaVersion] = useState(1);
   const [isAddProductOpen, setIsAddProductOpen] = useState(false);
-  const [paramFields, setParamFields] = useState<EditableParamField[]>([
-    {
-      key: "surface_m2",
-      label: "Surface à traiter",
-      type: "number",
-      unit: "m²",
-      required: true,
-      options: "",
-      defaultValue: "100",
-      helpText: "Surface totale des travaux.",
-    },
-  ]);
+  const [paramFields, setParamFields] = useState<EditableParamField[]>(() =>
+    defaultParamFields.map((field) => ({ ...field })),
+  );
 
   const addParamField = () => {
     setParamFields((prev) => [
@@ -313,9 +318,9 @@ const Products = () => {
   };
 
   const filteredProducts = useMemo(() => {
-    if (!search) return mockProducts;
+    if (!search) return products;
 
-    return mockProducts.filter((product) => {
+    return products.filter((product) => {
       const haystack = [
         product.name,
         product.code,
@@ -325,60 +330,105 @@ const Products = () => {
       ]
         .join(" ")
         .toLowerCase();
-
       return haystack.includes(search.toLowerCase());
     });
-  }, [search]);
+  }, [products, search]);
 
   const totalActive = useMemo(
-    () => mockProducts.filter((product) => product.is_active).length,
-    [],
+    () => products.filter((product) => product.is_active).length,
+    [products],
   );
 
   const totalDynamicFields = useMemo(
     () =>
-      mockProducts.reduce(
+      products.reduce(
         (acc, product) => acc + product.params_schema.fields.length,
         0,
       ),
-    [],
+    [products],
   );
 
   const schemaDiversity = useMemo(
-    () => new Set(mockProducts.map((product) => product.schema_version)).size,
-    [],
+    () => new Set(products.map((product) => product.schema_version)).size,
+    [products],
   );
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const formData = new FormData(event.currentTarget);
-    const payload = {
-      name: formData.get('name') as string,
-      code: formData.get('code') as string,
-      description: formData.get('description') as string,
-      category,
+    const categoryValue = (formData.get("category") as string) || category;
+    const name = (formData.get("name") as string)?.trim();
+    const code = (formData.get("code") as string)?.trim();
+    const description = (formData.get("description") as string)?.trim();
+
+    if (!name || !code) {
+      return;
+    }
+
+    const paramsSchemaFields = paramFields.map((field, index) => ({
+      key: field.key,
+      label: field.label,
+      type: field.type,
+      unit: field.unit || undefined,
+      required: field.required,
+      options: field.options
+        ?.split(",")
+        .map((option) => option.trim())
+        .filter(Boolean),
+      default: field.defaultValue,
+      order: index + 1,
+      helpText: field.helpText,
+    }));
+
+    const defaultParams = paramFields.reduce<Record<string, unknown>>(
+      (acc, field) => {
+        if (!field.defaultValue) {
+          return acc;
+        }
+
+        let value: unknown = field.defaultValue;
+
+        if (field.type === "number") {
+          const numericValue = Number(field.defaultValue);
+          value = Number.isNaN(numericValue) ? field.defaultValue : numericValue;
+        } else if (field.type === "boolean") {
+          value = field.defaultValue === "true";
+        } else if (field.type === "multiselect") {
+          value = field.defaultValue
+            .split(",")
+            .map((option) => option.trim())
+            .filter(Boolean);
+        }
+
+        return {
+          ...acc,
+          [field.key]: value,
+        };
+      },
+      {},
+    );
+
+    const payload: Product = {
+      id: `prod-${Date.now()}`,
+      name,
+      code,
+      description: description || "",
+      category: categoryValue,
       is_active: isActive,
       schema_version: schemaVersion,
       params_schema: {
-        fields: paramFields.map((field, index) => ({
-          key: field.key,
-          label: field.label,
-          type: field.type,
-          unit: field.unit || undefined,
-          required: field.required,
-          options: field.options
-            ?.split(",")
-            .map((option) => option.trim())
-            .filter(Boolean),
-          default: field.defaultValue,
-          order: index + 1,
-          helpText: field.helpText,
-        })),
+        fields: paramsSchemaFields,
       },
+      default_params: Object.keys(defaultParams).length ? defaultParams : undefined,
     };
 
-    console.table(payload);
+    setProducts((previous) => [payload, ...previous]);
+    event.currentTarget.reset();
+    setCategory("Chauffage");
+    setIsActive(true);
+    setSchemaVersion(1);
+    setParamFields(defaultParamFields.map((field) => ({ ...field })));
     setIsAddProductOpen(false);
   };
 
@@ -436,6 +486,7 @@ const Products = () => {
                           <SelectItem value="Menuiserie">Menuiserie</SelectItem>
                         </SelectContent>
                       </Select>
+                      <input type="hidden" name="category" value={category} />
                     </div>
                   </div>
                   <div className="space-y-2">
