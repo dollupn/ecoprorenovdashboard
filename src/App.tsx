@@ -9,6 +9,8 @@ import { ThemeProvider } from "@/components/theme-provider";
 import Index from "./pages/Index";
 import Leads from "./pages/Leads";
 import Projects from "./pages/Projects";
+import Quotes from "./pages/Quotes";
+import Invoices from "./pages/Invoices";
 import Sites from "./pages/Sites";
 import Products from "./pages/Products";
 import Auth from "./pages/Auth";
@@ -29,8 +31,8 @@ const App = () => (
               <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
               <Route path="/leads" element={<ProtectedRoute><Leads /></ProtectedRoute>} />
               <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
-              <Route path="/quotes" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-              <Route path="/invoices" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+              <Route path="/quotes" element={<ProtectedRoute><Quotes /></ProtectedRoute>} />
+              <Route path="/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
               <Route path="/sites" element={<ProtectedRoute><Sites /></ProtectedRoute>} />
               <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
               <Route path="/calendar" element={<ProtectedRoute><Index /></ProtectedRoute>} />
