@@ -352,10 +352,11 @@ const Products = () => {
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    const formData = new FormData(event.currentTarget);
     const payload = {
-      name: event.currentTarget.name.value,
-      code: event.currentTarget.code.value,
-      description: event.currentTarget.description.value,
+      name: formData.get('name') as string,
+      code: formData.get('code') as string,
+      description: formData.get('description') as string,
       category,
       is_active: isActive,
       schema_version: schemaVersion,

@@ -2,6 +2,7 @@ import { Layout } from "@/components/layout/Layout";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import {
   Users,
   FolderOpen,
