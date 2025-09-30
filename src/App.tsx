@@ -13,6 +13,7 @@ import Quotes from "./pages/Quotes";
 import Invoices from "./pages/Invoices";
 import Sites from "./pages/Sites";
 import Products from "./pages/Products";
+import CalendarPage from "./pages/Calendar";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import Settings from "./pages/Settings";
@@ -36,7 +37,7 @@ const App = () => (
               <Route path="/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
               <Route path="/sites" element={<ProtectedRoute><Sites /></ProtectedRoute>} />
               <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
-              <Route path="/calendar" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+              <Route path="/calendar" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute><Index /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
