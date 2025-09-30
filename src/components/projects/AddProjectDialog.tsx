@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import * as z from "zod";
@@ -31,6 +33,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
+
+type SalesRepresentative = Tables<"sales_representatives">;
+type ProductCatalogEntry = Tables<"product_catalog">;
+type Profile = Tables<"profiles">;
+type SelectOption = {
+  value: string;
+  label: string;
+  description?: string;
+};
 
 const projectSchema = z.object({
   project_ref: z.string().min(3, "La référence est requise"),
@@ -84,11 +95,194 @@ export const AddProjectDialog = ({
   const { user } = useAuth();
   const { toast } = useToast();
 
+  const { data: profile } = useQuery({
+    queryKey: ["profile", user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("full_name, user_id")
+        .eq("user_id", user.id)
+        .maybeSingle<Profile>();
+
+      if (error) throw error;
+      return data ?? null;
+    },
+    enabled: Boolean(user?.id),
+  });
+
+  const {
+    data: salesRepsData,
+    isLoading: salesRepsLoading,
+    error: salesRepsError,
+  } = useQuery({
+    queryKey: ["sales-representatives", user?.id],
+    queryFn: async () => {
+      if (!user) return [] as SalesRepresentative[];
+
+      const { data, error } = await supabase
+        .from("sales_representatives")
+        .select("id, name, email, phone, is_active, owner_id")
+        .eq("owner_id", user.id)
+        .order("name", { ascending: true });
+
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: Boolean(user?.id),
+  });
+
+  const {
+    data: productsData,
+    isLoading: productsLoading,
+    error: productsError,
+  } = useQuery({
+    queryKey: ["product-catalog", user?.id],
+    queryFn: async () => {
+      if (!user) return [] as ProductCatalogEntry[];
+
+      const { data, error } = await supabase
+        .from("product_catalog")
+        .select("id, name, code, category, is_active, owner_id")
+        .eq("owner_id", user.id)
+        .order("name", { ascending: true });
+
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: Boolean(user?.id),
+  });
+
+  useEffect(() => {
+    if (salesRepsError) {
+      const message =
+        salesRepsError instanceof Error
+          ? salesRepsError.message
+          : "Impossible de charger les commerciaux";
+      toast({
+        title: "Erreur",
+        description: message,
+        variant: "destructive",
+      });
+    }
+  }, [salesRepsError, toast]);
+
+  useEffect(() => {
+    if (productsError) {
+      const message =
+        productsError instanceof Error
+          ? productsError.message
+          : "Impossible de charger les produits";
+      toast({
+        title: "Erreur",
+        description: message,
+        variant: "destructive",
+      });
+    }
+  }, [productsError, toast]);
+
+  const rawCommercialOptions = useMemo(() => {
+    if (!salesRepsData) return [] as SelectOption[];
+
+    return salesRepsData
+      .filter((rep) => rep.is_active !== false)
+      .map((rep) => ({
+        value: rep.name,
+        label: rep.name,
+        description: rep.email ?? undefined,
+      })) as SelectOption[];
+  }, [salesRepsData]);
+
+  const rawProductOptions = useMemo(() => {
+    if (!productsData) return [] as SelectOption[];
+
+    return productsData
+      .filter((product) => product.is_active !== false)
+      .map((product) => ({
+        value: product.name,
+        label: product.name,
+        description: product.code ?? undefined,
+      })) as SelectOption[];
+  }, [productsData]);
+
+  const defaultAssignee = useMemo(() => {
+    if (initialValues?.assigned_to) {
+      return initialValues.assigned_to;
+    }
+
+    if (salesRepsData && salesRepsData.length > 0) {
+      const email = user?.email?.toLowerCase();
+      if (email) {
+        const byEmail = salesRepsData.find(
+          (rep) => rep.is_active && rep.email?.toLowerCase() === email,
+        );
+        if (byEmail) {
+          return byEmail.name;
+        }
+      }
+
+      const firstActive = salesRepsData.find((rep) => rep.is_active);
+      if (firstActive) {
+        return firstActive.name;
+      }
+    }
+
+    if (profile?.full_name && profile.full_name.trim().length > 0) {
+      return profile.full_name;
+    }
+
+    const metadataName =
+      typeof user?.user_metadata?.full_name === "string"
+        ? user.user_metadata.full_name.trim()
+        : "";
+
+    if (metadataName) {
+      return metadataName;
+    }
+
+    return user?.email ?? "";
+  }, [initialValues?.assigned_to, profile?.full_name, salesRepsData, user?.email, user?.user_metadata?.full_name]);
+
+  const commercialOptions = useMemo(() => {
+    if (!defaultAssignee) {
+      return rawCommercialOptions;
+    }
+
+    const exists = rawCommercialOptions.some((option) => option.value === defaultAssignee);
+    if (exists) {
+      return rawCommercialOptions;
+    }
+
+    return [
+      {
+        value: defaultAssignee,
+        label: defaultAssignee,
+        description: user?.email ?? undefined,
+      },
+      ...rawCommercialOptions,
+    ];
+  }, [defaultAssignee, rawCommercialOptions, user?.email]);
+
+  const productOptions = useMemo(() => {
+    const options = [...rawProductOptions];
+    const initialProductName = initialValues?.product_name?.trim();
+
+    if (initialProductName && !options.some((option) => option.value === initialProductName)) {
+      options.unshift({ value: initialProductName, label: initialProductName });
+    }
+
+    return options;
+  }, [initialValues?.product_name, rawProductOptions]);
+
   const form = useForm<ProjectFormValues>({
     resolver: zodResolver(projectSchema),
     defaultValues: {
       ...baseDefaultValues,
       ...initialValues,
+      assigned_to: initialValues?.assigned_to ?? defaultAssignee ?? "",
+      product_name:
+        initialValues?.product_name ??
+        (productOptions.length > 0 ? productOptions[0].value : ""),
     },
   });
 
@@ -96,8 +290,29 @@ export const AddProjectDialog = ({
     form.reset({
       ...baseDefaultValues,
       ...initialValues,
+      assigned_to: initialValues?.assigned_to ?? defaultAssignee ?? "",
+      product_name:
+        initialValues?.product_name ??
+        (productOptions.length > 0 ? productOptions[0].value : ""),
     });
-  }, [form, initialValues]);
+  }, [defaultAssignee, form, initialValues, productOptions]);
+
+  useEffect(() => {
+    if (defaultAssignee && form.getValues("assigned_to") !== defaultAssignee) {
+      form.setValue("assigned_to", defaultAssignee);
+    }
+  }, [defaultAssignee, form]);
+
+  useEffect(() => {
+    if (productOptions.length === 0) {
+      return;
+    }
+
+    const currentValue = form.getValues("product_name");
+    if (!currentValue) {
+      form.setValue("product_name", productOptions[0].value);
+    }
+  }, [form, productOptions]);
 
   useEffect(() => {
     if (open) {
@@ -257,9 +472,49 @@ export const AddProjectDialog = ({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Produit *</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value}
+                    disabled={productsLoading && productOptions.length === 0}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={
+                            productsLoading && productOptions.length === 0
+                              ? "Chargement..."
+                              : productOptions.length > 0
+                                ? "Sélectionnez un produit"
+                                : "Aucun produit disponible"
+                          }
+                        />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {productsLoading && productOptions.length === 0 ? (
+                        <SelectItem value="__loading" disabled>
+                          Chargement...
+                        </SelectItem>
+                      ) : productOptions.length > 0 ? (
+                        productOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            <div className="flex flex-col">
+                              <span>{option.label}</span>
+                              {option.description ? (
+                                <span className="text-xs text-muted-foreground">
+                                  {option.description}
+                                </span>
+                              ) : null}
+                            </div>
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="__empty" disabled>
+                          Aucun produit configuré
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
@@ -329,9 +584,49 @@ export const AddProjectDialog = ({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Assigné à *</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value}
+                    disabled={salesRepsLoading && commercialOptions.length === 0}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={
+                            salesRepsLoading && commercialOptions.length === 0
+                              ? "Chargement..."
+                              : commercialOptions.length > 0
+                                ? "Sélectionnez un commercial"
+                                : "Aucun commercial configuré"
+                          }
+                        />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {salesRepsLoading && commercialOptions.length === 0 ? (
+                        <SelectItem value="__loading" disabled>
+                          Chargement...
+                        </SelectItem>
+                      ) : commercialOptions.length > 0 ? (
+                        commercialOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            <div className="flex flex-col">
+                              <span>{option.label}</span>
+                              {option.description ? (
+                                <span className="text-xs text-muted-foreground">
+                                  {option.description}
+                                </span>
+                              ) : null}
+                            </div>
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="__empty" disabled>
+                          Aucun commercial configuré
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}

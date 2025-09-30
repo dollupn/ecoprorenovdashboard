@@ -221,6 +221,56 @@ CREATE POLICY "Users can delete their own sites"
   ON public.sites FOR DELETE
   USING (auth.uid() = user_id);
 
+-- Create sales representatives table for commercial assignments
+CREATE TABLE public.sales_representatives (
+  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  owner_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  email TEXT,
+  phone TEXT,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+);
+
+-- Enable RLS on sales representatives
+ALTER TABLE public.sales_representatives ENABLE ROW LEVEL SECURITY;
+
+-- Sales representatives policies
+CREATE POLICY "Users can view their own sales representatives"
+  ON public.sales_representatives FOR SELECT
+  USING (auth.uid() = owner_id);
+
+CREATE POLICY "Users can manage their own sales representatives"
+  ON public.sales_representatives FOR ALL
+  USING (auth.uid() = owner_id)
+  WITH CHECK (auth.uid() = owner_id);
+
+-- Create product catalog table to store configurable products
+CREATE TABLE public.product_catalog (
+  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  owner_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  code TEXT,
+  category TEXT,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+);
+
+-- Enable RLS on product catalog
+ALTER TABLE public.product_catalog ENABLE ROW LEVEL SECURITY;
+
+-- Product catalog policies
+CREATE POLICY "Users can view their own product catalog"
+  ON public.product_catalog FOR SELECT
+  USING (auth.uid() = owner_id);
+
+CREATE POLICY "Users can manage their own product catalog"
+  ON public.product_catalog FOR ALL
+  USING (auth.uid() = owner_id)
+  WITH CHECK (auth.uid() = owner_id);
+
 -- Create function to update timestamps
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -258,6 +308,16 @@ CREATE TRIGGER update_invoices_updated_at
 
 CREATE TRIGGER update_sites_updated_at
   BEFORE UPDATE ON public.sites
+  FOR EACH ROW
+  EXECUTE FUNCTION public.update_updated_at_column();
+
+CREATE TRIGGER update_sales_representatives_updated_at
+  BEFORE UPDATE ON public.sales_representatives
+  FOR EACH ROW
+  EXECUTE FUNCTION public.update_updated_at_column();
+
+CREATE TRIGGER update_product_catalog_updated_at
+  BEFORE UPDATE ON public.product_catalog
   FOR EACH ROW
   EXECUTE FUNCTION public.update_updated_at_column();
 
