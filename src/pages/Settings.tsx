@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,11 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
+import { formatDistanceToNow, parseISO } from "date-fns";
+import { fr } from "date-fns/locale";
 import {
   Users,
   Building2,
@@ -32,14 +37,21 @@ import {
   KeyRound,
   MonitorSmartphone,
   Clock,
+  AlertCircle,
 } from "lucide-react";
+
+const ROLE_OPTIONS = ["Administrateur", "Manager", "Commercial", "Technicien"] as const;
+type RoleOption = (typeof ROLE_OPTIONS)[number];
+
+type ProfileRecord = Tables<"profiles">;
 
 interface TeamMember {
   id: string;
   name: string;
-  role: "Administrateur" | "Manager" | "Commercial" | "Technicien";
-  email: string;
-  phone: string;
+  role: RoleOption;
+  identifier: string;
+  email: string | null;
+  phone: string | null;
   active: boolean;
   lastConnection: string;
 }
@@ -77,44 +89,66 @@ interface SecuritySettings {
   sessionDuration: string;
 }
 
-const initialMembers: TeamMember[] = [
-  {
-    id: "1",
-    name: "Camille Dupont",
-    role: "Administrateur",
-    email: "camille.dupont@ecoprorenov.fr",
-    phone: "+33 6 45 89 12 34",
-    active: true,
-    lastConnection: "Il y a 2 heures",
-  },
-  {
-    id: "2",
-    name: "Léo Martin",
-    role: "Manager",
-    email: "leo.martin@ecoprorenov.fr",
-    phone: "+33 6 54 23 78 90",
-    active: true,
-    lastConnection: "Hier",
-  },
-  {
-    id: "3",
-    name: "Sophie Bernard",
-    role: "Commercial",
-    email: "sophie.bernard@ecoprorenov.fr",
-    phone: "+33 7 12 98 45 67",
-    active: true,
-    lastConnection: "Il y a 3 jours",
-  },
-  {
-    id: "4",
-    name: "Antoine Leroy",
-    role: "Technicien",
-    email: "antoine.leroy@ecoprorenov.fr",
-    phone: "+33 6 88 76 45 12",
-    active: false,
-    lastConnection: "Il y a 12 jours",
-  },
-];
+const INACTIVE_KEYWORDS = new Set(["inactif", "inactive", "désactivé", "desactive", "disabled"]);
+
+const ROLE_NORMALIZATION_MAP: Record<string, RoleOption> = {
+  admin: "Administrateur",
+  administrator: "Administrateur",
+  administrateur: "Administrateur",
+  manager: "Manager",
+  responsable: "Manager",
+  commercial: "Commercial",
+  sales: "Commercial",
+  technicien: "Technicien",
+  technician: "Technicien",
+};
+
+const normalizeRole = (role: string | null): RoleOption => {
+  if (!role) return "Commercial";
+  const lowerRole = role.toLowerCase();
+  const directMatch = ROLE_OPTIONS.find((o) => o.toLowerCase() === lowerRole);
+  return directMatch ?? ROLE_NORMALIZATION_MAP[lowerRole] ?? "Commercial";
+};
+
+const isProfileActive = (role: string | null) => {
+  if (!role) return true;
+  return !INACTIVE_KEYWORDS.has(role.toLowerCase());
+};
+
+const formatLastActivity = (timestamp: string | null) => {
+  if (!timestamp) return "Activité inconnue";
+  try {
+    const formatted = formatDistanceToNow(parseISO(timestamp), {
+      addSuffix: true,
+      locale: fr,
+    });
+    return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+  } catch {
+    return "Activité récente";
+  }
+};
+
+const mapProfileToMember = (profile: ProfileRecord): TeamMember => {
+  const extendedProfile = profile as ProfileRecord & {
+    email?: string | null;
+    phone?: string | null;
+    last_sign_in_at?: string | null;
+  };
+
+  const identifier = profile.user_id ?? profile.id;
+  const lastActivity = extendedProfile.last_sign_in_at ?? profile.updated_at ?? profile.created_at;
+
+  return {
+    id: profile.id,
+    name: profile.full_name ?? "Utilisateur sans nom",
+    role: normalizeRole(profile.role),
+    identifier,
+    email: extendedProfile.email ?? null,
+    phone: extendedProfile.phone ?? null,
+    active: isProfileActive(profile.role),
+    lastConnection: formatLastActivity(lastActivity),
+  };
+};
 
 const initialIntegrations: Integration[] = [
   {
@@ -149,7 +183,13 @@ const sessionOptions = [
 
 export default function Settings() {
   const { toast } = useToast();
-  const [teamMembers, setTeamMembers] = useState(initialMembers);
+  const { user } = useAuth();
+  const isMounted = useRef(true);
+
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(true);
+  const [memberError, setMemberError] = useState<string | null>(null);
+
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>({
     name: "EcoProRenov",
     legalName: "EcoProRenov SAS",
@@ -160,6 +200,7 @@ export default function Settings() {
     description:
       "Entreprise spécialisée dans les rénovations énergétiques globales pour les particuliers et les copropriétés.",
   });
+
   const [notifications, setNotifications] = useState<NotificationSettings>({
     commercialEmails: true,
     operationalEmails: true,
@@ -167,36 +208,136 @@ export default function Settings() {
     pushNotifications: false,
     weeklyDigest: true,
   });
+
   const [securitySettings, setSecuritySettings] = useState<SecuritySettings>({
     twoFactor: true,
     passwordRotation: true,
     loginAlerts: false,
     sessionDuration: "60",
   });
+
   const [integrations, setIntegrations] = useState(initialIntegrations);
 
-  const activeMembers = useMemo(() => teamMembers.filter((member) => member.active).length, [teamMembers]);
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
-  const handleRoleChange = (id: string, role: TeamMember["role"]) => {
-    setTeamMembers((prev) =>
-      prev.map((member) => (member.id === id ? { ...member, role } : member))
-    );
+  const fetchTeamMembers = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!isMounted.current) return false;
+
+      if (!user) {
+        if (isMounted.current) {
+          setTeamMembers([]);
+          setMemberError(null);
+          setLoadingMembers(false);
+        }
+        return false;
+      }
+
+      if (!options?.silent && isMounted.current) setLoadingMembers(true);
+
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("id, full_name, role, user_id, updated_at, created_at")
+          .order("full_name", { ascending: true });
+
+        if (error) throw error;
+        if (!isMounted.current) return false;
+
+        const members = (data ?? []).map((p) => mapProfileToMember(p as ProfileRecord));
+        setTeamMembers(members);
+        setMemberError(null);
+        return true;
+      } catch (err) {
+        console.error("Erreur lors du chargement des membres", err);
+        if (isMounted.current) {
+          setMemberError("Impossible de charger les membres depuis Supabase.");
+          if (!options?.silent) {
+            toast({
+              variant: "destructive",
+              title: "Erreur lors du chargement des utilisateurs",
+              description: "Veuillez réessayer dans quelques instants.",
+            });
+          }
+        }
+        return false;
+      } finally {
+        if (!options?.silent && isMounted.current) setLoadingMembers(false);
+      }
+    },
+    [toast, user]
+  );
+
+  useEffect(() => {
+    if (!user) {
+      setLoadingMembers(false);
+      return;
+    }
+
+    void fetchTeamMembers();
+
+    const channel = supabase
+      .channel("public:profiles_settings")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "profiles" },
+        () => {
+          void fetchTeamMembers({ silent: true });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, fetchTeamMembers]);
+
+  const formatIdentifier = useCallback((identifier: string) => {
+    if (identifier.length <= 12) return identifier;
+    return `${identifier.slice(0, 8)}…${identifier.slice(-4)}`;
+  }, []);
+
+  const activeMembers = useMemo(
+    () => teamMembers.filter((member) => member.active).length,
+    [teamMembers]
+  );
+
+  const handleRoleChange = async (id: string, role: RoleOption) => {
+    const previousMembers = teamMembers.map((m) => ({ ...m }));
+    setTeamMembers((prev) => prev.map((m) => (m.id === id ? { ...m, role } : m)));
+
+    const { error } = await supabase.from("profiles").update({ role }).eq("id", id);
+    if (error) {
+      console.error("Erreur lors de la mise à jour du rôle", error);
+      setTeamMembers(previousMembers);
+      toast({
+        variant: "destructive",
+        title: "Impossible de mettre à jour le rôle",
+        description: "Supabase n'a pas accepté la modification. Réessayez plus tard.",
+      });
+      return;
+    }
+
     toast({
       title: "Rôle mis à jour",
-      description: "Le rôle du collaborateur a été modifié avec succès.",
+      description: "Le profil Supabase a été synchronisé.",
     });
+
+    void fetchTeamMembers({ silent: true });
   };
 
-  const handleToggleMember = (id: string, active: boolean) => {
-    setTeamMembers((prev) =>
-      prev.map((member) => (member.id === id ? { ...member, active } : member))
-    );
-    toast({
-      title: active ? "Collaborateur activé" : "Collaborateur désactivé",
-      description: active
-        ? "Le collaborateur aura accès à la plateforme dès maintenant."
-        : "Le collaborateur ne pourra plus se connecter tant qu'il n'est pas réactivé.",
-    });
+  const handleManualRefresh = async () => {
+    const success = await fetchTeamMembers();
+    if (success) {
+      toast({
+        title: "Membres synchronisés",
+        description: "La liste a été mise à jour avec les dernières données Supabase.",
+      });
+    }
   };
 
   const handleInviteMember = () => {
@@ -215,10 +356,7 @@ export default function Settings() {
   };
 
   const toggleNotification = (key: keyof NotificationSettings) => {
-    setNotifications((prev) => {
-      const updated = { ...prev, [key]: !prev[key] };
-      return updated;
-    });
+    setNotifications((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const handleSaveNotifications = () => {
@@ -235,7 +373,10 @@ export default function Settings() {
           ? {
               ...item,
               status: item.status === "connected" ? "disconnected" : "connected",
-              lastSync: item.status === "connected" ? "Connexion interrompue" : "Synchronisation programmée",
+              lastSync:
+                item.status === "connected"
+                  ? "Connexion interrompue"
+                  : "Synchronisation programmée",
             }
           : item
       )
@@ -261,6 +402,129 @@ export default function Settings() {
 
   const handleSessionDurationChange = (value: string) => {
     setSecuritySettings((prev) => ({ ...prev, sessionDuration: value }));
+  };
+
+  const renderTeamMembers = () => {
+    if (loadingMembers) {
+      return (
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div
+              key={index}
+              className="h-[116px] rounded-2xl border border-dashed border-border/60 bg-muted/20"
+            />
+          ))}
+        </div>
+      );
+    }
+
+    if (memberError) {
+      return (
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-destructive/40 bg-destructive/5 p-6 text-center text-sm text-destructive">
+          <AlertCircle className="h-6 w-6" />
+          <p>{memberError}</p>
+          <Button size="sm" variant="outline" onClick={() => void fetchTeamMembers()}>
+            Réessayer
+          </Button>
+        </div>
+      );
+    }
+
+    if (teamMembers.length === 0) {
+      return (
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-border/60 bg-background/40 p-6 text-center text-sm text-muted-foreground">
+          <Users className="h-6 w-6 text-muted-foreground" />
+          <p>Aucun collaborateur trouvé dans Supabase.</p>
+          <Button variant="secondary" size="sm" onClick={handleInviteMember}>
+            Inviter votre premier membre
+          </Button>
+        </div>
+      );
+    }
+
+    return teamMembers.map((member) => (
+      <div
+        key={member.id}
+        className="flex flex-col gap-4 rounded-2xl border border-border/60 bg-background/60 p-4 transition hover:border-primary/40 md:flex-row md:items-center md:justify-between"
+      >
+        <div className="flex items-center gap-4">
+          <Avatar className="h-12 w-12">
+            <AvatarFallback className="bg-primary/10 text-primary">
+              {member.name
+                .split(" ")
+                .map((part) => part[0])
+                .join("")}
+            </AvatarFallback>
+          </Avatar>
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-medium text-foreground">{member.name}</p>
+              <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+                ID {formatIdentifier(member.identifier)}
+              </Badge>
+              {!member.active && (
+                <Badge variant="destructive" className="text-xs font-normal">
+                  Désactivé
+                </Badge>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-x-4 text-sm text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <Mail className="h-3.5 w-3.5" />
+                {member.email ?? "Email non renseigné"}
+              </span>
+              <span className="flex items-center gap-1">
+                <Phone className="h-3.5 w-3.5" />
+                {member.phone ?? "Téléphone non renseigné"}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-6">
+          <div className="space-y-1">
+            <Label
+              htmlFor={`role-${member.id}`}
+              className="text-xs uppercase tracking-wide text-muted-foreground"
+            >
+              Rôle
+            </Label>
+            <Select
+              value={member.role}
+              onValueChange={(value: RoleOption) => {
+                void handleRoleChange(member.id, value);
+              }}
+            >
+              <SelectTrigger id={`role-${member.id}`} className="w-[180px]">
+                <SelectValue placeholder="Sélectionner" />
+              </SelectTrigger>
+              <SelectContent>
+                {ROLE_OPTIONS.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+              Dernière activité
+            </Label>
+            <p className="text-sm text-foreground">{member.lastConnection}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Label
+              htmlFor={`active-${member.id}`}
+              className="text-sm text-muted-foreground"
+              title="Statut synchronisé automatiquement depuis Supabase"
+            >
+              {member.active ? "Actif" : "Inactif"}
+            </Label>
+            <Switch id={`active-${member.id}`} checked={member.active} disabled />
+          </div>
+        </div>
+      </div>
+    ));
   };
 
   const activeSessions = [
@@ -335,79 +599,23 @@ export default function Settings() {
                     Administrez les accès, les rôles et le statut d&apos;activité de vos collaborateurs.
                   </p>
                 </div>
-                <Button onClick={handleInviteMember} variant="secondary">
-                  Inviter un membre
-                </Button>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {teamMembers.map((member) => (
-                  <div
-                    key={member.id}
-                    className="flex flex-col gap-4 rounded-2xl border border-border/60 bg-background/60 p-4 transition hover:border-primary/40 md:flex-row md:items-center md:justify-between"
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={handleManualRefresh}
+                    disabled={loadingMembers}
+                    className="h-9 w-9 border-border/60"
+                    aria-label="Rafraîchir la liste des membres"
                   >
-                    <div className="flex items-center gap-4">
-                      <Avatar className="h-12 w-12">
-                        <AvatarFallback className="bg-primary/10 text-primary">
-                          {member.name
-                            .split(" ")
-                            .map((part) => part[0])
-                            .join("")}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="font-medium text-foreground">{member.name}</p>
-                        <div className="flex flex-wrap items-center gap-x-4 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Mail className="h-3.5 w-3.5" />
-                            {member.email}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Phone className="h-3.5 w-3.5" />
-                            {member.phone}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-6">
-                      <div className="space-y-1">
-                        <Label htmlFor={`role-${member.id}`} className="text-xs uppercase tracking-wide text-muted-foreground">
-                          Rôle
-                        </Label>
-                        <Select
-                          value={member.role}
-                          onValueChange={(value: TeamMember["role"]) => handleRoleChange(member.id, value)}
-                        >
-                          <SelectTrigger id={`role-${member.id}`} className="w-[180px]">
-                            <SelectValue placeholder="Sélectionner" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Administrateur">Administrateur</SelectItem>
-                            <SelectItem value="Manager">Manager</SelectItem>
-                            <SelectItem value="Commercial">Commercial</SelectItem>
-                            <SelectItem value="Technicien">Technicien</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-                          Dernière connexion
-                        </Label>
-                        <p className="text-sm text-foreground">{member.lastConnection}</p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <Label htmlFor={`active-${member.id}`} className="text-sm text-muted-foreground">
-                          {member.active ? "Actif" : "Inactif"}
-                        </Label>
-                        <Switch
-                          id={`active-${member.id}`}
-                          checked={member.active}
-                          onCheckedChange={(checked) => handleToggleMember(member.id, checked)}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
+                    <RefreshCw className={`h-4 w-4 ${loadingMembers ? "animate-spin" : ""}`} />
+                  </Button>
+                  <Button onClick={handleInviteMember} variant="secondary">
+                    Inviter un membre
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">{renderTeamMembers()}</CardContent>
             </Card>
 
             <Card className="border border-border/60 bg-card/70 shadow-sm">
@@ -428,7 +636,7 @@ export default function Settings() {
                       <Input
                         id="company-name"
                         value={companyInfo.name}
-                        onChange={(event) => setCompanyInfo((prev) => ({ ...prev, name: event.target.value }))}
+                        onChange={(e) => setCompanyInfo((p) => ({ ...p, name: e.target.value }))}
                       />
                     </div>
                     <div className="space-y-2">
@@ -436,7 +644,7 @@ export default function Settings() {
                       <Input
                         id="company-legal"
                         value={companyInfo.legalName}
-                        onChange={(event) => setCompanyInfo((prev) => ({ ...prev, legalName: event.target.value }))}
+                        onChange={(e) => setCompanyInfo((p) => ({ ...p, legalName: e.target.value }))}
                       />
                     </div>
                     <div className="space-y-2">
@@ -444,7 +652,9 @@ export default function Settings() {
                       <Input
                         id="company-registration"
                         value={companyInfo.registration}
-                        onChange={(event) => setCompanyInfo((prev) => ({ ...prev, registration: event.target.value }))}
+                        onChange={(e) =>
+                          setCompanyInfo((p) => ({ ...p, registration: e.target.value }))
+                        }
                       />
                     </div>
                     <div className="space-y-2">
@@ -452,7 +662,7 @@ export default function Settings() {
                       <Input
                         id="company-phone"
                         value={companyInfo.phone}
-                        onChange={(event) => setCompanyInfo((prev) => ({ ...prev, phone: event.target.value }))}
+                        onChange={(e) => setCompanyInfo((p) => ({ ...p, phone: e.target.value }))}
                       />
                     </div>
                     <div className="space-y-2">
@@ -461,7 +671,7 @@ export default function Settings() {
                         id="company-email"
                         type="email"
                         value={companyInfo.email}
-                        onChange={(event) => setCompanyInfo((prev) => ({ ...prev, email: event.target.value }))}
+                        onChange={(e) => setCompanyInfo((p) => ({ ...p, email: e.target.value }))}
                       />
                     </div>
                     <div className="md:col-span-2 space-y-2">
@@ -469,7 +679,7 @@ export default function Settings() {
                       <Textarea
                         id="company-address"
                         value={companyInfo.address}
-                        onChange={(event) => setCompanyInfo((prev) => ({ ...prev, address: event.target.value }))}
+                        onChange={(e) => setCompanyInfo((p) => ({ ...p, address: e.target.value }))}
                       />
                     </div>
                     <div className="md:col-span-2 space-y-2">
@@ -477,7 +687,9 @@ export default function Settings() {
                       <Textarea
                         id="company-description"
                         value={companyInfo.description}
-                        onChange={(event) => setCompanyInfo((prev) => ({ ...prev, description: event.target.value }))}
+                        onChange={(e) =>
+                          setCompanyInfo((p) => ({ ...p, description: e.target.value }))
+                        }
                         rows={3}
                       />
                     </div>
@@ -504,27 +716,38 @@ export default function Settings() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-4">
-                  {[{
-                    key: "commercialEmails" as const,
-                    title: "Suivi commercial",
-                    description: "Alertes sur les nouveaux leads, rappels de relance et devis en attente.",
-                  }, {
-                    key: "operationalEmails" as const,
-                    title: "Opérations & chantiers",
-                    description: "Notifications de planification, pointages d'équipes et suivi de chantier.",
-                  }, {
-                    key: "smsReminders" as const,
-                    title: "SMS automatiques",
-                    description: "Rappels de rendez-vous clients et confirmations d'interventions.",
-                  }, {
-                    key: "pushNotifications" as const,
-                    title: "Notifications mobiles",
-                    description: "Alertes en temps réel sur mobile pour les demandes critiques.",
-                  }, {
-                    key: "weeklyDigest" as const,
-                    title: "Rapport hebdomadaire",
-                    description: "Synthèse des indicateurs clés envoyée chaque lundi matin.",
-                  }].map((item) => (
+                  {[
+                    {
+                      key: "commercialEmails" as const,
+                      title: "Suivi commercial",
+                      description:
+                        "Alertes sur les nouveaux leads, rappels de relance et devis en attente.",
+                    },
+                    {
+                      key: "operationalEmails" as const,
+                      title: "Opérations & chantiers",
+                      description:
+                        "Notifications de planification, pointages d'équipes et suivi de chantier.",
+                    },
+                    {
+                      key: "smsReminders" as const,
+                      title: "SMS automatiques",
+                      description:
+                        "Rappels de rendez-vous clients et confirmations d'interventions.",
+                    },
+                    {
+                      key: "pushNotifications" as const,
+                      title: "Notifications mobiles",
+                      description:
+                        "Alertes en temps réel sur mobile pour les demandes critiques.",
+                    },
+                    {
+                      key: "weeklyDigest" as const,
+                      title: "Rapport hebdomadaire",
+                      description:
+                        "Synthèse des indicateurs clés envoyée chaque lundi matin.",
+                    },
+                  ].map((item) => (
                     <div
                       key={item.key}
                       className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-background/60 p-4 md:flex-row md:items-center md:justify-between"
@@ -568,12 +791,15 @@ export default function Settings() {
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="font-medium text-foreground">{integration.name}</p>
-                          <Badge className={integrationStatusStyles[integration.status]} variant="outline">
+                          <Badge
+                            className={integrationStatusStyles[integration.status]}
+                            variant="outline"
+                          >
                             {integration.status === "connected"
                               ? "Connecté"
                               : integration.status === "pending"
-                                ? "En attente"
-                                : "Déconnecté"}
+                              ? "En attente"
+                              : "Déconnecté"}
                           </Badge>
                         </div>
                         <p className="text-sm text-muted-foreground">{integration.description}</p>
@@ -588,11 +814,14 @@ export default function Settings() {
                       </Button>
                     </div>
                     <Separator className="bg-border/60" />
-                    <p className="text-xs text-muted-foreground">Dernière synchronisation : {integration.lastSync}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Dernière synchronisation : {integration.lastSync}
+                    </p>
                   </div>
                 ))}
                 <div className="rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-4 text-sm text-muted-foreground">
-                  Besoin d&apos;une intégration personnalisée ? Contactez notre équipe pour accéder à l&apos;API et aux webhooks sécurisés.
+                  Besoin d&apos;une intégration personnalisée ? Contactez notre équipe pour accéder à l&apos;API et aux
+                  webhooks sécurisés.
                 </div>
               </CardContent>
             </Card>
@@ -609,22 +838,28 @@ export default function Settings() {
               </CardHeader>
               <CardContent className="space-y-5">
                 <div className="space-y-4">
-                  {[{
-                    key: "twoFactor" as const,
-                    title: "Double authentification",
-                    description: "Obliger l&apos;activation de la double authentification pour tous les comptes.",
-                    icon: KeyRound,
-                  }, {
-                    key: "passwordRotation" as const,
-                    title: "Rotation des mots de passe",
-                    description: "Demander un renouvellement de mot de passe tous les 90 jours.",
-                    icon: RefreshCw,
-                  }, {
-                    key: "loginAlerts" as const,
-                    title: "Alertes de connexion",
-                    description: "Notifier l&apos;équipe sécurité des connexions depuis de nouveaux appareils.",
-                    icon: MonitorSmartphone,
-                  }].map((setting) => (
+                  {[
+                    {
+                      key: "twoFactor" as const,
+                      title: "Double authentification",
+                      description:
+                        "Obliger l&apos;activation de la double authentification pour tous les comptes.",
+                      icon: KeyRound,
+                    },
+                    {
+                      key: "passwordRotation" as const,
+                      title: "Rotation des mots de passe",
+                      description: "Demander un renouvellement de mot de passe tous les 90 jours.",
+                      icon: RefreshCw,
+                    },
+                    {
+                      key: "loginAlerts" as const,
+                      title: "Alertes de connexion",
+                      description:
+                        "Notifier l&apos;équipe sécurité des connexions depuis de nouveaux appareils.",
+                      icon: MonitorSmartphone,
+                    },
+                  ].map((setting) => (
                     <div
                       key={setting.key}
                       className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-background/60 p-4 md:flex-row md:items-center md:justify-between"
@@ -657,7 +892,10 @@ export default function Settings() {
                         </p>
                       </div>
                     </div>
-                    <Select value={securitySettings.sessionDuration} onValueChange={handleSessionDurationChange}>
+                    <Select
+                      value={securitySettings.sessionDuration}
+                      onValueChange={handleSessionDurationChange}
+                    >
                       <SelectTrigger className="w-[180px]">
                         <SelectValue placeholder="Durée" />
                       </SelectTrigger>
@@ -685,7 +923,10 @@ export default function Settings() {
                           <p>{session.browser}</p>
                         </div>
                         <div className="flex items-center gap-3">
-                          <Badge variant="outline" className="border-emerald-200/60 bg-emerald-500/10 text-emerald-700">
+                          <Badge
+                            variant="outline"
+                            className="border-emerald-200/60 bg-emerald-500/10 text-emerald-700"
+                          >
                             Sécurisé
                           </Badge>
                           <span>{session.lastActive}</span>
