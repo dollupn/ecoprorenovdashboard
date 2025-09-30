@@ -1,3 +1,6 @@
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+
 import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,81 +15,36 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
+import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
+
 import {
   Search,
   Filter,
   PlusCircle,
   FileDown,
-  Mail,
-  FileCheck,
-  AlarmClock,
-  Euro,
-  Eye,
+  FileSpreadsheet,
+  Timer,
+  CheckCircle2,
+  RefreshCw,
+  AlertCircle,
+  Loader2,
+  TrendingUp,
   Send,
 } from "lucide-react";
 
-interface Invoice {
-  id: string;
-  reference: string;
-  client: string;
-  project?: string;
-  amount: number;
-  status: "DRAFT" | "SENT" | "PAID" | "OVERDUE";
-  dueDate: string;
-  issueDate: string;
-  facturx: boolean;
-  paymentMethod?: string;
-}
+/** ---- Status & Types ---- */
+const INVOICE_STATUSES = ["DRAFT", "SENT", "PAID", "OVERDUE", "CANCELLED"] as const;
+type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
 
-const mockInvoices: Invoice[] = [
-  {
-    id: "f1",
-    reference: "FAC-2024-0098",
-    client: "Sophie Bernard",
-    project: "Isolation Façade",
-    amount: 18500,
-    status: "PAID",
-    dueDate: "2024-03-15",
-    issueDate: "2024-03-01",
-    facturx: true,
-    paymentMethod: "Virement SEPA",
-  },
-  {
-    id: "f2",
-    reference: "FAC-2024-0099",
-    client: "Jean Martin",
-    project: "Pompe à chaleur",
-    amount: 14200,
-    status: "SENT",
-    dueDate: "2024-03-30",
-    issueDate: "2024-03-05",
-    facturx: true,
-  },
-  {
-    id: "f3",
-    reference: "FAC-2024-0100",
-    client: "Marie Dupont",
-    project: "Isolation combles",
-    amount: 6200,
-    status: "DRAFT",
-    dueDate: "2024-04-05",
-    issueDate: "2024-03-12",
-    facturx: false,
-  },
-  {
-    id: "f4",
-    reference: "FAC-2024-0101",
-    client: "SARL Les Halles",
-    project: "Rénovation éclairage",
-    amount: 9800,
-    status: "OVERDUE",
-    dueDate: "2024-03-10",
-    issueDate: "2024-02-25",
-    facturx: true,
-  },
-];
+type InvoiceRecord = Tables<"invoices"> & {
+  quotes: Pick<Tables<"quotes">, "quote_ref"> | null;
+  projects: Pick<Tables<"projects">, "project_ref" | "client_name"> | null;
+};
 
-const statusMeta: Record<Invoice["status"], { label: string; className: string }> = {
+const statusMeta: Record<InvoiceStatus, { label: string; className: string }> = {
   DRAFT: {
     label: "Brouillon",
     className: "bg-gray-500/10 text-gray-700 border-gray-200",
@@ -103,8 +61,13 @@ const statusMeta: Record<Invoice["status"], { label: string; className: string }
     label: "En retard",
     className: "bg-red-500/10 text-red-700 border-red-200",
   },
+  CANCELLED: {
+    label: "Annulée",
+    className: "bg-orange-500/10 text-orange-700 border-orange-200",
+  },
 };
 
+/** ---- Utils ---- */
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("fr-FR", {
     style: "currency",
@@ -112,38 +75,95 @@ const formatCurrency = (value: number) =>
     maximumFractionDigits: 0,
   }).format(value);
 
-const getTotals = () => {
-  const totalBilled = mockInvoices.reduce((acc, invoice) => acc + invoice.amount, 0);
-  const totalPaid = mockInvoices
-    .filter((invoice) => invoice.status === "PAID")
-    .reduce((acc, invoice) => acc + invoice.amount, 0);
-  const totalOverdue = mockInvoices
-    .filter((invoice) => invoice.status === "OVERDUE")
-    .reduce((acc, invoice) => acc + invoice.amount, 0);
+const formatDate = (value: string | null) => {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("fr-FR", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+  }).format(new Date(value));
+};
 
-  return { totalBilled, totalPaid, totalOverdue };
+/** ---- Data ---- */
+const fetchInvoices = async (): Promise<InvoiceRecord[]> => {
+  const { data, error } = await supabase
+    .from("invoices")
+    .select("*, quotes(quote_ref), projects(project_ref, client_name)")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching invoices", error);
+    throw error;
+  }
+
+  return (data ?? []) as InvoiceRecord[];
 };
 
 const Invoices = () => {
-  const { totalBilled, totalPaid, totalOverdue } = getTotals();
-  const collectionRate = Math.round((totalPaid / totalBilled) * 100);
+  const {
+    data: invoices = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ["invoices"],
+    queryFn: fetchInvoices,
+  });
+
+  const metrics = useMemo(() => {
+    const totalPaid = invoices
+      .filter((invoice) => invoice.status === "PAID")
+      .reduce((sum, invoice) => sum + Number(invoice.amount || 0), 0);
+
+    const outstanding = invoices
+      .filter((invoice) => ["SENT", "OVERDUE"].includes((invoice.status || "").toUpperCase()))
+      .reduce((sum, invoice) => sum + Number(invoice.amount || 0), 0);
+
+    const overdue = invoices.filter((invoice) => invoice.status === "OVERDUE");
+    const draft = invoices.filter((invoice) => invoice.status === "DRAFT");
+    const paidCount = invoices.filter((invoice) => invoice.status === "PAID");
+
+    const totalBilled = invoices.reduce((sum, inv) => sum + Number(inv.amount || 0), 0);
+    const collectionRate = totalBilled ? Math.round((totalPaid / totalBilled) * 100) : 0;
+
+    return {
+      totalPaid,
+      outstanding,
+      overdueCount: overdue.length,
+      draftCount: draft.length,
+      collectionRate,
+      totalBilled,
+    };
+  }, [invoices]);
+
+  const renderStatus = (status: string) => {
+    const normalized = (status?.toUpperCase() as InvoiceStatus) || "DRAFT";
+    const meta = statusMeta[normalized] ?? statusMeta.DRAFT;
+    return <Badge className={meta.className}>{meta.label}</Badge>;
+  };
 
   return (
     <Layout>
       <div className="space-y-6">
+        {/* Header */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
               Gestion des Factures
             </h1>
             <p className="text-muted-foreground mt-1">
-              Pilotage des encaissements et conformité Factur-X 2026
+              Suivi des encaissements et conformité Factur-X avec données Supabase
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline">
+              <FileSpreadsheet className="w-4 h-4 mr-2" />
+              Importer Factur-X
+            </Button>
+            <Button variant="outline">
               <FileDown className="w-4 h-4 mr-2" />
-              Exporter Factur-X
+              Exporter
             </Button>
             <Button variant="outline">
               <Send className="w-4 h-4 mr-2" />
@@ -156,59 +176,63 @@ const Invoices = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          <Card className="shadow-card border-0 bg-gradient-to-br from-primary/10 to-primary/5">
+        {/* KPIs */}
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <Card className="shadow-card border-0 bg-gradient-card">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-muted-foreground">Total facturé</CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold text-primary">{formatCurrency(totalBilled)}</p>
-              <p className="text-xs text-muted-foreground">Montant cumulé toutes factures</p>
+            <CardContent className="text-2xl font-semibold">
+              {formatCurrency(metrics.totalBilled)}
             </CardContent>
           </Card>
-          <Card className="shadow-card border-0 bg-gradient-to-br from-green-500/10 via-green-500/5 to-transparent">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">Total encaissé</CardTitle>
+
+          <Card className="shadow-card border-0 bg-gradient-card">
+            <CardHeader>
+              <CardTitle>Encaissements</CardTitle>
+            </CardHeader>
+            <CardContent className="text-2xl font-semibold flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-green-500" />
+              {formatCurrency(metrics.totalPaid)}
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-card border-0 bg-gradient-card">
+            <CardHeader>
+              <CardTitle>En attente</CardTitle>
+            </CardHeader>
+            <CardContent className="text-2xl font-semibold flex items-center gap-2">
+              <Timer className="w-5 h-5 text-blue-500" />
+              {formatCurrency(metrics.outstanding)}
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-card border-0 bg-gradient-card">
+            <CardHeader>
+              <CardTitle>Taux d'encaissement</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold text-green-600">{formatCurrency(totalPaid)}</p>
-              <div className="mt-2 space-y-2">
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Taux d'encaissement</span>
-                  <span>{collectionRate}%</span>
-                </div>
-                <Progress value={collectionRate} className="h-2" />
+              <div className="text-2xl font-semibold flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-emerald-500" />
+                {metrics.collectionRate}%
               </div>
-            </CardContent>
-          </Card>
-          <Card className="shadow-card border-0 bg-gradient-to-br from-red-500/10 via-red-500/5 to-transparent">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">Montant en retard</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold text-red-600">{formatCurrency(totalOverdue)}</p>
-              <p className="text-xs text-muted-foreground">Relances prioritaires à effectuer</p>
-            </CardContent>
-          </Card>
-          <Card className="shadow-card border-0 bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">Factures Factur-X</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold text-blue-600">
-                {mockInvoices.filter((invoice) => invoice.facturx).length}/{mockInvoices.length}
-              </p>
-              <p className="text-xs text-muted-foreground">Prêtes pour l'obligation 2026</p>
+              <div className="mt-2">
+                <Progress value={metrics.collectionRate} className="h-2" />
+              </div>
             </CardContent>
           </Card>
         </div>
 
+        {/* Search / Filters */}
         <Card className="shadow-card bg-gradient-card border-0">
           <CardContent className="pt-6">
             <div className="flex flex-col md:flex-row gap-4">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input placeholder="Rechercher par client, référence ou chantier" className="pl-10" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Rechercher par client, référence, devis ou chantier"
+                  className="pl-10"
+                />
               </div>
               <Button variant="outline">
                 <Filter className="w-4 h-4 mr-2" />
@@ -218,118 +242,77 @@ const Invoices = () => {
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          <Card className="shadow-card bg-gradient-card border-0 xl:col-span-2">
-            <CardHeader>
-              <CardTitle>Liste des factures ({mockInvoices.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Référence</TableHead>
-                    <TableHead>Client</TableHead>
-                    <TableHead>Projet</TableHead>
-                    <TableHead>Montant</TableHead>
-                    <TableHead>Échéance</TableHead>
-                    <TableHead>Statut</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {mockInvoices.map((invoice) => (
-                    <TableRow key={invoice.id}>
-                      <TableCell className="font-medium">
-                        <div className="flex flex-col">
-                          <span>{invoice.reference}</span>
-                          <span className="text-xs text-muted-foreground">Émise le {invoice.issueDate}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-medium">{invoice.client}</span>
-                          {invoice.paymentMethod && (
-                            <span className="text-xs text-muted-foreground">{invoice.paymentMethod}</span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Euro className="w-4 h-4 text-muted-foreground" />
-                          <span>{invoice.project ?? "-"}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-semibold">{formatCurrency(invoice.amount)}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2 text-sm">
-                          <AlarmClock className="w-4 h-4 text-muted-foreground" />
-                          <span>{invoice.dueDate}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          <Badge variant="outline" className={statusMeta[invoice.status].className}>
-                            {statusMeta[invoice.status].label}
-                          </Badge>
-                          {invoice.facturx && (
-                            <Badge variant="outline" className="w-fit bg-blue-500/10 text-blue-700 border-blue-200">
-                              Factur-X
-                            </Badge>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="icon">
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon">
-                            <Mail className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+        {/* Error state */}
+        {isError && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Impossible de charger les factures</AlertTitle>
+            <AlertDescription>
+              {error?.message || "Vérifiez votre connexion Supabase puis réessayez."}
+            </AlertDescription>
+            <div className="mt-4">
+              <Button variant="outline" onClick={() => refetch()}>
+                Réessayer
+              </Button>
+            </div>
+          </Alert>
+        )}
 
-          <Card className="shadow-card bg-gradient-card border-0">
-            <CardHeader>
-              <CardTitle>Relances & conformité</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex gap-3 p-3 rounded-lg border bg-background/60">
-                <AlarmClock className="w-5 h-5 text-orange-500 mt-1" />
-                <div>
-                  <p className="font-medium">Factures à relancer</p>
-                  <p className="text-sm text-muted-foreground">
-                    {mockInvoices.filter((invoice) => invoice.status === "OVERDUE").length} factures dépassent l'échéance
-                  </p>
-                </div>
+        {/* Table */}
+        <Card className="shadow-card bg-gradient-card border-0">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Factures ({invoices.length})</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Dernière mise à jour {formatDate(new Date().toISOString())}
+              </p>
+            </div>
+            {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+          </CardHeader>
+          <CardContent>
+            {invoices.length === 0 && !isLoading ? (
+              <div className="text-center py-12">
+                <Timer className="mx-auto h-10 w-10 text-muted-foreground/60" />
+                <p className="mt-4 text-muted-foreground">
+                  Aucune facture enregistrée. Créez votre première facture ou synchronisez vos devis acceptés.
+                </p>
               </div>
-              <div className="flex gap-3 p-3 rounded-lg border bg-background/60">
-                <FileCheck className="w-5 h-5 text-green-500 mt-1" />
-                <div>
-                  <p className="font-medium">Factur-X généré</p>
-                  <p className="text-sm text-muted-foreground">
-                    {mockInvoices.filter((invoice) => invoice.facturx).length} factures prêtes au format hybride XML/PDF
-                  </p>
-                </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Référence</TableHead>
+                      <TableHead>Client</TableHead>
+                      <TableHead>Projet</TableHead>
+                      <TableHead>Devis associé</TableHead>
+                      <TableHead className="text-right">Montant</TableHead>
+                      <TableHead>Statut</TableHead>
+                      <TableHead>Échéance</TableHead>
+                      <TableHead>Paiement</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {invoices.map((invoice) => (
+                      <TableRow key={invoice.id}>
+                        <TableCell className="font-medium">{invoice.invoice_ref}</TableCell>
+                        <TableCell>{invoice.client_name}</TableCell>
+                        <TableCell>{invoice.projects?.project_ref ?? "—"}</TableCell>
+                        <TableCell>{invoice.quotes?.quote_ref ?? "—"}</TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(Number(invoice.amount || 0))}
+                        </TableCell>
+                        <TableCell>{renderStatus(invoice.status || "DRAFT")}</TableCell>
+                        <TableCell>{formatDate(invoice.due_date)}</TableCell>
+                        <TableCell>{formatDate(invoice.paid_date)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
-              <div className="flex gap-3 p-3 rounded-lg border bg-background/60">
-                <Mail className="w-5 h-5 text-blue-500 mt-1" />
-                <div>
-                  <p className="font-medium">Envoyer par email</p>
-                  <p className="text-sm text-muted-foreground">
-                    Synchronisation SMTP OVH pour l'envoi direct aux clients
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </Layout>
   );
