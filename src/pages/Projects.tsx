@@ -4,113 +4,53 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { AddProjectDialog } from "@/components/projects/AddProjectDialog";
-import { 
-  Search, 
-  Filter, 
-  Calendar, 
+import { useToast } from "@/components/ui/use-toast";
+import { mockProjects, type Project } from "@/data/projects";
+import { getStatusColor, getStatusLabel } from "@/lib/projects";
+import { useNavigate } from "react-router-dom";
+import {
+  Search,
+  Filter,
+  Calendar,
   MapPin,
   Euro,
   FileText,
   Settings,
-  Eye
+  Eye,
+  Phone,
+  Hammer
 } from "lucide-react";
 
-interface Project {
-  id: string;
-  project_ref: string;
-  client_name: string;
-  company?: string;
-  product_name: string;
-  city: string;
-  postal_code: string;
-  surface_batiment_m2?: number;
-  surface_isolee_m2?: number;
-  status: "PROSPECTION" | "ETUDE" | "DEVIS_ENVOYE" | "ACCEPTE" | "A_PLANIFIER" | "EN_COURS" | "LIVRE" | "CLOTURE";
-  assigned_to: string;
-  date_debut_prevue?: string;
-  date_fin_prevue?: string;
-  estimated_value?: number;
-  created_at: string;
-}
-
-const mockProjects: Project[] = [
-  {
-    id: "1",
-    project_ref: "PRJ-2024-0089",
-    client_name: "Sophie Bernard",
-    company: "Cabinet Bernard",
-    product_name: "Isolation Façade",
-    city: "Toulouse",
-    postal_code: "31000",
-    surface_batiment_m2: 200,
-    surface_isolee_m2: 150,
-    status: "ACCEPTE",
-    assigned_to: "Jean Commercial",
-    date_debut_prevue: "2024-04-01",
-    date_fin_prevue: "2024-04-15",
-    estimated_value: 45000,
-    created_at: "2024-03-10T09:00:00Z"
-  },
-  {
-    id: "2",
-    project_ref: "PRJ-2024-0090",
-    client_name: "Marie Dupont",
-    product_name: "Pompe à Chaleur",
-    city: "Paris",
-    postal_code: "75015",
-    surface_batiment_m2: 120,
-    status: "DEVIS_ENVOYE",
-    assigned_to: "Sophie Commercial",
-    date_debut_prevue: "2024-04-10",
-    estimated_value: 18000,
-    created_at: "2024-03-12T14:30:00Z"
-  },
-  {
-    id: "3",
-    project_ref: "PRJ-2024-0091",
-    client_name: "Jean Martin",
-    product_name: "Panneaux Solaires",
-    city: "Lyon",
-    postal_code: "69003",
-    surface_batiment_m2: 85,
-    status: "EN_COURS",
-    assigned_to: "Marc Technicien",
-    date_debut_prevue: "2024-03-20",
-    date_fin_prevue: "2024-03-25",
-    estimated_value: 25000,
-    created_at: "2024-03-08T11:15:00Z"
-  }
-];
-
-const getStatusLabel = (status: Project["status"]) => {
-  const labels = {
-    PROSPECTION: "Prospection",
-    ETUDE: "Étude",
-    DEVIS_ENVOYE: "Devis Envoyé",
-    ACCEPTE: "Accepté",
-    A_PLANIFIER: "À Planifier",
-    EN_COURS: "En Cours",
-    LIVRE: "Livré",
-    CLOTURE: "Clôturé"
-  };
-  return labels[status];
-};
-
-const getStatusColor = (status: Project["status"]) => {
-  const colors = {
-    PROSPECTION: "bg-blue-500/10 text-blue-700 border-blue-200",
-    ETUDE: "bg-purple-500/10 text-purple-700 border-purple-200",
-    DEVIS_ENVOYE: "bg-orange-500/10 text-orange-700 border-orange-200",
-    ACCEPTE: "bg-green-500/10 text-green-700 border-green-200",
-    A_PLANIFIER: "bg-yellow-500/10 text-yellow-700 border-yellow-200",
-    EN_COURS: "bg-primary/10 text-primary border-primary/20",
-    LIVRE: "bg-teal-500/10 text-teal-700 border-teal-200",
-    CLOTURE: "bg-gray-500/10 text-gray-700 border-gray-200"
-  };
-  return colors[status];
-};
-
 const Projects = () => {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+
+  const handleViewProject = (projectId: string) => {
+    navigate(`/projects/${projectId}`);
+  };
+
+  const handleCreateQuote = (project: Project) => {
+    toast({
+      title: "Création de devis",
+      description: `Préparez un devis pour ${project.client_name}.`
+    });
+  };
+
+  const handleManageProject = (project: Project) => {
+    toast({
+      title: "Paramètres du projet",
+      description: `Accédez aux paramètres de ${project.project_ref}.`
+    });
+  };
+
+  const handleCreateSite = (project: Project) => {
+    navigate(`/sites`, { state: { projectId: project.id } });
+    toast({
+      title: "Création de chantier",
+      description: `Nouveau chantier initialisé pour ${project.project_ref}.`
+    });
+  };
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -156,11 +96,17 @@ const Projects = () => {
                     <CardTitle className="text-lg font-bold text-primary">
                       {project.project_ref}
                     </CardTitle>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {project.client_name}
-                      {project.company && (
-                        <span className="block text-xs">{project.company}</span>
-                      )}
+                    <p className="text-sm text-muted-foreground mt-1 space-y-1">
+                      <span className="block">
+                        {project.client_name}
+                        {project.company && (
+                          <span className="block text-xs">{project.company}</span>
+                        )}
+                      </span>
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground/80">
+                        <Phone className="w-3.5 h-3.5" />
+                        {project.phone}
+                      </span>
                     </p>
                   </div>
                   <Badge className={getStatusColor(project.status)}>
@@ -238,21 +184,38 @@ const Projects = () => {
                 </div>
 
                 {/* Actions */}
-                <div className="flex gap-2 pt-2">
-                  <Button 
-                    size="sm" 
-                    variant="outline" 
+                <div className="flex gap-2 pt-2 flex-wrap">
+                  <Button
+                    size="sm"
+                    variant="outline"
                     className="flex-1"
-                    onClick={() => window.open(`/projects/${project.id}`, '_blank')}
+                    onClick={() => handleViewProject(project.id)}
                   >
                     <Eye className="w-4 h-4 mr-1" />
                     Voir
                   </Button>
-                  <Button size="sm" variant="outline">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleCreateQuote(project)}
+                  >
                     <FileText className="w-4 h-4" />
                   </Button>
-                  <Button size="sm" variant="outline">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleManageProject(project)}
+                  >
                     <Settings className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="flex-1"
+                    onClick={() => handleCreateSite(project)}
+                  >
+                    <Hammer className="w-4 h-4 mr-1" />
+                    Créer chantier
                   </Button>
                 </div>
               </CardContent>
