@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { InvoicePreview } from "@/components/invoices/InvoicePreview";
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -311,6 +312,19 @@ const Invoices = () => {
                 </Table>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Design preview */}
+        <Card className="shadow-card border-0">
+          <CardHeader>
+            <CardTitle>Aperçu Facture (gabarit)</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Modèle visuel de référence pour la génération PDF.
+            </p>
+          </CardHeader>
+          <CardContent className="bg-slate-100">
+            <InvoicePreview />
           </CardContent>
         </Card>
       </div>
