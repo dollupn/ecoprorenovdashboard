@@ -347,7 +347,7 @@ const Products = () => {
           validation: typeof field.validation === "string" ? field.validation : undefined,
           order: typeof field.order === "number" ? field.order : index + 1,
           helpText: typeof field.helpText === "string" ? field.helpText : undefined,
-        } satisfies ProductParamField;
+        } as ProductParamField;
       })
       .filter((field): field is ProductParamField => field !== null)
       .sort((a, b) => a.order - b.order);
@@ -609,8 +609,8 @@ const Products = () => {
           category: editCategory,
           is_active: editIsActive,
           schema_version: editSchemaVersion,
-          params_schema: { fields: paramsSchemaFields },
-          default_params: Object.keys(defaultParams).length ? defaultParams : null,
+          params_schema: { fields: paramsSchemaFields } as any,
+          default_params: Object.keys(defaultParams).length ? (defaultParams as any) : null,
         })
         .eq("id", editingProduct.id)
         .select()
@@ -799,8 +799,8 @@ const Products = () => {
           description: description || "",
           is_active: isActive,
           schema_version: schemaVersion,
-          params_schema: { fields: paramsSchemaFields },
-          default_params: Object.keys(defaultParams).length ? defaultParams : null,
+          params_schema: { fields: paramsSchemaFields } as any,
+          default_params: Object.keys(defaultParams).length ? (defaultParams as any) : null,
           owner_id: user.id,
         })
         .select()
