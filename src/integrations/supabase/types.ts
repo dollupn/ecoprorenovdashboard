@@ -137,6 +137,51 @@ export type Database = {
         }
         Relationships: []
       }
+      product_catalog: {
+        Row: {
+          category: string | null
+          code: string
+          created_at: string
+          default_params: Json | null
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          owner_id: string
+          params_schema: Json | null
+          schema_version: number
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          code: string
+          created_at?: string
+          default_params?: Json | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          owner_id: string
+          params_schema?: Json | null
+          schema_version?: number
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          code?: string
+          created_at?: string
+          default_params?: Json | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          owner_id?: string
+          params_schema?: Json | null
+          schema_version?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -164,145 +209,64 @@ export type Database = {
         }
         Relationships: []
       }
-      product_catalog: {
-        Row: {
-          category: string | null
-          code: string | null
-          created_at: string
-          default_params: Json | null
-          description: string | null
-          id: string
-          is_active: boolean
-          name: string
-          owner_id: string
-          params_schema: Json | null
-          schema_version: number | null
-          updated_at: string
-        }
-        Insert: {
-          category?: string | null
-          code?: string | null
-          created_at?: string
-          default_params?: Json | null
-          description?: string | null
-          id?: string
-          is_active?: boolean
-          name: string
-          owner_id: string
-          params_schema?: Json | null
-          schema_version?: number | null
-          updated_at?: string
-        }
-        Update: {
-          category?: string | null
-          code?: string | null
-          created_at?: string
-          default_params?: Json | null
-          description?: string | null
-          id?: string
-          is_active?: boolean
-          name?: string
-          owner_id?: string
-          params_schema?: Json | null
-          schema_version?: number | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "product_catalog_owner_id_fkey"
-            columns: ["owner_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["user_id"]
-          },
-          {
-            foreignKeyName: "product_catalog_owner_id_fkey"
-            columns: ["owner_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
       projects: {
         Row: {
           assigned_to: string
-          building_type: string | null
           city: string
           client_name: string
           company: string | null
           created_at: string
           date_debut_prevue: string | null
           date_fin_prevue: string | null
-          discount: number | null
           estimated_value: number | null
           id: string
           lead_id: string | null
-          prime_cee: number | null
           postal_code: string
           product_name: string
           project_ref: string
-          signatory_name: string | null
-          signatory_title: string | null
           status: string
           surface_batiment_m2: number | null
           surface_isolee_m2: number | null
-          unit_price: number | null
-          usage: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           assigned_to: string
-          building_type?: string | null
           city: string
           client_name: string
           company?: string | null
           created_at?: string
           date_debut_prevue?: string | null
           date_fin_prevue?: string | null
-          discount?: number | null
           estimated_value?: number | null
           id?: string
           lead_id?: string | null
-          prime_cee?: number | null
           postal_code: string
           product_name: string
           project_ref: string
-          signatory_name?: string | null
-          signatory_title?: string | null
           status?: string
           surface_batiment_m2?: number | null
           surface_isolee_m2?: number | null
-          unit_price?: number | null
-          usage?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
           assigned_to?: string
-          building_type?: string | null
           city?: string
           client_name?: string
           company?: string | null
           created_at?: string
           date_debut_prevue?: string | null
           date_fin_prevue?: string | null
-          discount?: number | null
           estimated_value?: number | null
           id?: string
           lead_id?: string | null
-          prime_cee?: number | null
           postal_code?: string
           product_name?: string
           project_ref?: string
-          signatory_name?: string | null
-          signatory_title?: string | null
           status?: string
           surface_batiment_m2?: number | null
           surface_isolee_m2?: number | null
-          unit_price?: number | null
-          usage?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -314,54 +278,6 @@ export type Database = {
             referencedRelation: "leads"
             referencedColumns: ["id"]
           },
-        ]
-      }
-      sales_representatives: {
-        Row: {
-          created_at: string
-          email: string | null
-          id: string
-          is_active: boolean
-          name: string
-          owner_id: string
-          phone: string | null
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          email?: string | null
-          id?: string
-          is_active?: boolean
-          name: string
-          owner_id: string
-          phone?: string | null
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          email?: string | null
-          id?: string
-          is_active?: boolean
-          name?: string
-          owner_id?: string
-          phone?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sales_representatives_owner_id_fkey"
-            columns: ["owner_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["user_id"]
-          },
-          {
-            foreignKeyName: "sales_representatives_owner_id_fkey"
-            columns: ["owner_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          }
         ]
       }
       quotes: {
