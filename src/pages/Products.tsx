@@ -147,7 +147,7 @@ const ParamFieldsConfigurator = ({
 
     <div className="space-y-4">
       {fields.map((field, index) => (
-        <div key={`${field.key}-${index}`} className="rounded-lg border bg-background/40 p-4">
+        <div key={index} className="rounded-lg border bg-background/40 p-4">
           <div className="flex items-center justify-between">
             <div className="text-sm font-medium">Champ #{index + 1}</div>
             {fields.length > 1 && (
@@ -820,7 +820,6 @@ const Products = () => {
         description: "Le produit a été ajouté avec succès au catalogue.",
       });
 
-      event.currentTarget.reset();
       setCategory("Chauffage");
       setIsActive(true);
       setSchemaVersion(1);

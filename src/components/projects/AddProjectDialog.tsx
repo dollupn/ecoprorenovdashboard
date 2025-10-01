@@ -34,7 +34,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 
-type SalesRepresentative = Tables<"sales_representatives">;
 type ProductCatalogEntry = Tables<"product_catalog">;
 type Profile = Tables<"profiles">;
 type SelectOption = {
@@ -130,15 +129,14 @@ export const AddProjectDialog = ({
     isLoading: salesRepsLoading,
     error: salesRepsError,
   } = useQuery({
-    queryKey: ["sales-representatives", user?.id],
+    queryKey: ["profiles-sales-reps", user?.id],
     queryFn: async () => {
-      if (!user) return [] as SalesRepresentative[];
+      if (!user) return [] as Profile[];
 
       const { data, error } = await supabase
-        .from("sales_representatives")
-        .select("id, name, email, phone, is_active, owner_id")
-        .eq("owner_id", user.id)
-        .order("name", { ascending: true });
+        .from("profiles")
+        .select("id, user_id, full_name")
+        .order("full_name", { ascending: true });
 
       if (error) throw error;
       return data ?? [];
@@ -199,11 +197,11 @@ export const AddProjectDialog = ({
     if (!salesRepsData) return [] as SelectOption[];
 
     return salesRepsData
-      .filter((rep) => rep.is_active !== false)
+      .filter((rep) => rep.full_name)
       .map((rep) => ({
-        value: rep.name,
-        label: rep.name,
-        description: rep.email ?? undefined,
+        value: rep.full_name!,
+        label: rep.full_name!,
+        description: undefined,
       })) as SelectOption[];
   }, [salesRepsData]);
 
@@ -225,19 +223,9 @@ export const AddProjectDialog = ({
     }
 
     if (salesRepsData && salesRepsData.length > 0) {
-      const email = user?.email?.toLowerCase();
-      if (email) {
-        const byEmail = salesRepsData.find(
-          (rep) => rep.is_active && rep.email?.toLowerCase() === email,
-        );
-        if (byEmail) {
-          return byEmail.name;
-        }
-      }
-
-      const firstActive = salesRepsData.find((rep) => rep.is_active);
-      if (firstActive) {
-        return firstActive.name;
+      const firstProfile = salesRepsData.find((rep) => rep.full_name);
+      if (firstProfile?.full_name) {
+        return firstProfile.full_name;
       }
     }
 
