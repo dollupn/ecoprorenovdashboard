@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { SiteDialog, type SiteFormValues } from "@/components/sites/SiteDialog";
 import { useToast } from "@/components/ui/use-toast";
-import { mockProjects } from "@/data/projects";
+import type { Tables } from "@/integrations/supabase/types";
 import {
   Plus,
   Search,
@@ -35,123 +38,7 @@ import {
 type SiteStatus = "PLANIFIE" | "EN_PREPARATION" | "EN_COURS" | "SUSPENDU" | "TERMINE" | "LIVRE";
 type CofracStatus = "EN_ATTENTE" | "CONFORME" | "NON_CONFORME" | "A_PLANIFIER";
 
-interface AdditionalCost {
-  label: string;
-  amount: number;
-}
-
-interface Site {
-  id: string;
-  site_ref: string;
-  project_ref: string;
-  client_name: string;
-  product_name: string;
-  address: string;
-  city: string;
-  postal_code: string;
-  status: SiteStatus;
-  cofrac_status: CofracStatus;
-  team_members: string[];
-  date_debut: string;
-  date_fin_prevue?: string;
-  progress_percentage: number;
-  revenue: number;
-  profit_margin: number;
-  surface_facturee: number;
-  cout_main_oeuvre_m2_ht: number;
-  cout_isolation_m2: number;
-  isolation_utilisee_m2: number;
-  montant_commission: number;
-  valorisation_cee: number;
-  additional_costs: AdditionalCost[];
-  notes?: string;
-  created_at: string;
-}
-
-const mockSites: Site[] = [
-  {
-    id: "1",
-    site_ref: "SITE-2024-0034",
-    project_ref: "PRJ-2024-0089",
-    client_name: "Sophie Bernard",
-    product_name: "Isolation Façade",
-    address: "45 Avenue de la République",
-    city: "Toulouse",
-    postal_code: "31000",
-    status: "EN_COURS",
-    cofrac_status: "EN_ATTENTE",
-    team_members: ["Marc Technicien", "Paul Ouvrier"],
-    date_debut: "2024-04-01",
-    date_fin_prevue: "2024-04-15",
-    progress_percentage: 65,
-    revenue: 24800,
-    profit_margin: 28,
-    surface_facturee: 180,
-    cout_main_oeuvre_m2_ht: 45,
-    cout_isolation_m2: 32,
-    isolation_utilisee_m2: 180,
-    montant_commission: 1200,
-    valorisation_cee: 5200,
-    additional_costs: [
-      { label: "Location nacelle", amount: 650 },
-      { label: "Gestion des déchets", amount: 280 },
-    ],
-    notes: "Suivi rapproché avec le bureau de contrôle.",
-    created_at: "2024-03-25T10:00:00Z",
-  },
-  {
-    id: "2",
-    site_ref: "SITE-2024-0035",
-    project_ref: "PRJ-2024-0091",
-    client_name: "Jean Martin",
-    product_name: "Panneaux Solaires",
-    address: "12 Rue de la Paix",
-    city: "Lyon",
-    postal_code: "69003",
-    status: "TERMINE",
-    cofrac_status: "CONFORME",
-    team_members: ["Marc Technicien"],
-    date_debut: "2024-03-20",
-    date_fin_prevue: "2024-03-25",
-    progress_percentage: 100,
-    revenue: 31200,
-    profit_margin: 33,
-    surface_facturee: 96,
-    cout_main_oeuvre_m2_ht: 38,
-    cout_isolation_m2: 0,
-    isolation_utilisee_m2: 0,
-    montant_commission: 1500,
-    valorisation_cee: 4100,
-    additional_costs: [{ label: "Renforcement charpente", amount: 950 }],
-    created_at: "2024-03-18T09:30:00Z",
-  },
-  {
-    id: "3",
-    site_ref: "SITE-2024-0036",
-    project_ref: "PRJ-2024-0087",
-    client_name: "Pierre Dubois",
-    product_name: "Pompe à Chaleur",
-    address: "78 Boulevard Voltaire",
-    city: "Paris",
-    postal_code: "75011",
-    status: "PLANIFIE",
-    cofrac_status: "A_PLANIFIER",
-    team_members: ["Sophie Technicien", "Luc Ouvrier"],
-    date_debut: "2024-04-20",
-    date_fin_prevue: "2024-04-22",
-    progress_percentage: 0,
-    revenue: 18400,
-    profit_margin: 24,
-    surface_facturee: 65,
-    cout_main_oeuvre_m2_ht: 42,
-    cout_isolation_m2: 18,
-    isolation_utilisee_m2: 65,
-    montant_commission: 980,
-    valorisation_cee: 3600,
-    additional_costs: [{ label: "Déplacement longue distance", amount: 320 }],
-    created_at: "2024-04-10T14:20:00Z",
-  },
-];
+type Site = Tables<"sites">;
 
 const getStatusLabel = (status: SiteStatus) => {
   const labels: Record<SiteStatus, string> = {
@@ -210,57 +97,49 @@ const formatCurrency = (value: number) =>
 const formatPercent = (value: number) =>
   `${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 }).format(value)} %`;
 
-const createFormValuesFromSite = (site: Site): SiteFormValues => ({
-  site_ref: site.site_ref,
-  project_ref: site.project_ref,
-  client_name: site.client_name,
-  product_name: site.product_name,
-  address: site.address,
-  city: site.city,
-  postal_code: site.postal_code,
-  status: site.status,
-  cofrac_status: site.cofrac_status,
-  date_debut: site.date_debut,
-  date_fin_prevue: site.date_fin_prevue ?? "",
-  progress_percentage: site.progress_percentage,
-  revenue: site.revenue,
-  profit_margin: site.profit_margin,
-  surface_facturee: site.surface_facturee,
-  cout_main_oeuvre_m2_ht: site.cout_main_oeuvre_m2_ht,
-  cout_isolation_m2: site.cout_isolation_m2,
-  isolation_utilisee_m2: site.isolation_utilisee_m2,
-  montant_commission: site.montant_commission,
-  valorisation_cee: site.valorisation_cee,
-  notes: site.notes ?? "",
-  team_members: site.team_members.map((member) => ({ name: member })),
-  additional_costs: site.additional_costs.map((cost) => ({ ...cost })),
-});
-
-const siteStatuses: SiteStatus[] = [
-  "PLANIFIE",
-  "EN_PREPARATION",
-  "EN_COURS",
-  "SUSPENDU",
-  "TERMINE",
-  "LIVRE",
-];
-
-type SitesLocationState = {
-  createSite?: {
-    projectId: string;
-  };
-};
-
 const Sites = () => {
-  const [sites, setSites] = useState<Site[]>(mockSites);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<"create" | "edit">("create");
   const [activeSiteId, setActiveSiteId] = useState<string | null>(null);
-  const [dialogInitialValues, setDialogInitialValues] =
-    useState<Partial<SiteFormValues>>();
+  const [dialogInitialValues, setDialogInitialValues] = useState<Partial<SiteFormValues>>();
+  
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
+
+  const { data: sites = [], isLoading, refetch } = useQuery({
+    queryKey: ["sites", user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      
+      const { data, error } = await supabase
+        .from("sites")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const { data: projects = [] } = useQuery({
+    queryKey: ["projects", user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      
+      const { data, error } = await supabase
+        .from("projects")
+        .select("*")
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
 
   const handleDialogOpenChange = (open: boolean) => {
     setDialogOpen(open);
