@@ -221,6 +221,7 @@ export type Database = {
           estimated_value: number | null
           id: string
           lead_id: string | null
+          phone: string | null
           postal_code: string
           product_name: string
           project_ref: string
@@ -241,6 +242,7 @@ export type Database = {
           estimated_value?: number | null
           id?: string
           lead_id?: string | null
+          phone?: string | null
           postal_code: string
           product_name: string
           project_ref: string
@@ -261,6 +263,7 @@ export type Database = {
           estimated_value?: number | null
           id?: string
           lead_id?: string | null
+          phone?: string | null
           postal_code?: string
           product_name?: string
           project_ref?: string

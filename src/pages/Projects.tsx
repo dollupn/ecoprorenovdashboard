@@ -1,5 +1,8 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { AddProjectDialog } from "@/components/projects/AddProjectDialog";
 import { useToast } from "@/components/ui/use-toast";
-import { mockProjects, type Project } from "@/data/projects";
+import type { Tables } from "@/integrations/supabase/types";
 import { getStatusColor, getStatusLabel } from "@/lib/projects";
 import {
   Search,
@@ -22,19 +25,39 @@ import {
   Hammer
 } from "lucide-react";
 
+type Project = Tables<"projects">;
+
 const Projects = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
+
+  const { data: projects = [], isLoading, refetch } = useQuery({
+    queryKey: ["projects", user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      
+      const { data, error } = await supabase
+        .from("projects")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
 
   const filteredProjects = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
     if (!normalizedSearch) {
-      return mockProjects;
+      return projects;
     }
 
-    return mockProjects.filter((project) => {
+    return projects.filter((project) => {
       const searchable = [
         project.project_ref,
         project.client_name,
@@ -49,7 +72,7 @@ const Projects = () => {
 
       return searchable.includes(normalizedSearch);
     });
-  }, [searchTerm]);
+  }, [searchTerm, projects]);
 
   const handleViewProject = (projectId: string) => {
     navigate(`/projects/${projectId}`);
@@ -73,6 +96,16 @@ const Projects = () => {
     navigate(`/sites`, { state: { createSite: { projectId: project.id } } });
   };
 
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center h-96">
+          <p className="text-muted-foreground">Chargement des projets...</p>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -86,7 +119,7 @@ const Projects = () => {
               Suivi et gestion de vos projets de rénovation énergétique
             </p>
           </div>
-          <AddProjectDialog />
+          <AddProjectDialog onProjectAdded={() => void refetch()} />
         </div>
 
         {/* Filters */}
@@ -127,14 +160,16 @@ const Projects = () => {
                           <span className="block text-xs">{project.company}</span>
                         )}
                       </span>
-                      <span className="flex items-center gap-1 text-xs text-muted-foreground/80">
-                        <Phone className="w-3.5 h-3.5" />
-                        {project.phone}
-                      </span>
+                      {project.phone && (
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground/80">
+                          <Phone className="w-3.5 h-3.5" />
+                          {project.phone}
+                        </span>
+                      )}
                     </p>
                   </div>
-                  <Badge className={getStatusColor(project.status)}>
-                    {getStatusLabel(project.status)}
+                  <Badge className={getStatusColor(project.status as any)}>
+                    {getStatusLabel(project.status as any)}
                   </Badge>
                 </div>
               </CardHeader>

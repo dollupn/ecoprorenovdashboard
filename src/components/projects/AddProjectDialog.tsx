@@ -46,6 +46,7 @@ const projectSchema = z.object({
   project_ref: z.string().min(3, "La référence est requise"),
   client_name: z.string().min(2, "Le nom du client est requis"),
   company: z.string().optional(),
+  phone: z.string().optional(),
   product_name: z.string().min(2, "Le produit est requis"),
   city: z.string().min(2, "La ville est requise"),
   postal_code: z.string().min(5, "Code postal invalide"),
@@ -78,6 +79,7 @@ const baseDefaultValues: ProjectFormValues = {
   project_ref: "",
   client_name: "",
   company: "",
+  phone: "",
   product_name: "",
   city: "",
   postal_code: "",
@@ -344,6 +346,7 @@ export const AddProjectDialog = ({
         status: data.status,
         assigned_to: data.assigned_to,
         company: data.company || undefined,
+        phone: data.phone || undefined,
         building_type: data.building_type || undefined,
         usage: data.usage || undefined,
         prime_cee: data.prime_cee || undefined,
@@ -474,6 +477,20 @@ export const AddProjectDialog = ({
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="phone"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Téléphone</FormLabel>
+                  <FormControl>
+                    <Input type="tel" placeholder="+33 6 12 34 56 78" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <div className="grid grid-cols-2 gap-4">
               <FormField
