@@ -38,7 +38,19 @@ import {
 type SiteStatus = "PLANIFIE" | "EN_PREPARATION" | "EN_COURS" | "SUSPENDU" | "TERMINE" | "LIVRE";
 type CofracStatus = "EN_ATTENTE" | "CONFORME" | "NON_CONFORME" | "A_PLANIFIER";
 
-type Site = Tables<"sites">;
+type Site = Tables<"sites"> & {
+  revenue?: number | null;
+  profit_margin?: number | null;
+  surface_facturee?: number | null;
+  cout_main_oeuvre_m2_ht?: number | null;
+  cout_isolation_m2?: number | null;
+  isolation_utilisee_m2?: number | null;
+  montant_commission?: number | null;
+  valorisation_cee?: number | null;
+  cofrac_status?: string | null;
+  notes?: string | null;
+  additional_costs?: any;
+};
 
 const getStatusLabel = (status: SiteStatus) => {
   const labels: Record<SiteStatus, string> = {
@@ -120,7 +132,7 @@ const Sites = () => {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return data;
+      return data as Site[];
     },
     enabled: !!user,
   });
@@ -180,17 +192,47 @@ const Sites = () => {
   const handleEditSite = (site: Site) => {
     setDialogMode("edit");
     setActiveSiteId(site.id);
-    setDialogInitialValues(createFormValuesFromSite(site));
+    setDialogInitialValues({
+      site_ref: site.site_ref,
+      project_ref: site.project_ref,
+      client_name: site.client_name,
+      product_name: site.product_name,
+      address: site.address,
+      city: site.city,
+      postal_code: site.postal_code,
+      status: site.status as SiteStatus,
+      cofrac_status: (site.cofrac_status || "EN_ATTENTE") as CofracStatus,
+      date_debut: site.date_debut,
+      date_fin_prevue: site.date_fin_prevue || "",
+      progress_percentage: site.progress_percentage || 0,
+      revenue: site.revenue || 0,
+      profit_margin: site.profit_margin || 0,
+      surface_facturee: site.surface_facturee || 0,
+      cout_main_oeuvre_m2_ht: site.cout_main_oeuvre_m2_ht || 0,
+      cout_isolation_m2: site.cout_isolation_m2 || 0,
+      isolation_utilisee_m2: site.isolation_utilisee_m2 || 0,
+      montant_commission: site.montant_commission || 0,
+      valorisation_cee: site.valorisation_cee || 0,
+      notes: site.notes || "",
+      team_members: (site.team_members && site.team_members.length > 0) 
+        ? site.team_members.map(name => ({ name }))
+        : [{ name: "" }],
+      additional_costs: Array.isArray(site.additional_costs) && site.additional_costs.length > 0
+        ? site.additional_costs as { label: string; amount: number }[]
+        : [{ label: "", amount: 0 }],
+    });
     setDialogOpen(true);
   };
 
-  const handleSubmitSite = (values: SiteFormValues) => {
+  const handleSubmitSite = async (values: SiteFormValues) => {
+    if (!user) return;
+
     const sanitizedTeam = values.team_members.map((member) => member.name.trim()).filter(Boolean);
     const sanitizedCosts = values.additional_costs
       .filter((cost) => cost.label.trim().length > 0)
       .map((cost) => ({ label: cost.label.trim(), amount: cost.amount }));
 
-    const updatedFields = {
+    const siteData = {
       site_ref: values.site_ref,
       project_ref: values.project_ref,
       client_name: values.client_name,
@@ -201,7 +243,7 @@ const Sites = () => {
       status: values.status,
       cofrac_status: values.cofrac_status,
       date_debut: values.date_debut,
-      date_fin_prevue: values.date_fin_prevue || undefined,
+      date_fin_prevue: values.date_fin_prevue || null,
       progress_percentage: values.progress_percentage,
       revenue: values.revenue,
       profit_margin: values.profit_margin,
@@ -211,77 +253,109 @@ const Sites = () => {
       isolation_utilisee_m2: values.isolation_utilisee_m2,
       montant_commission: values.montant_commission,
       valorisation_cee: values.valorisation_cee,
-      notes: values.notes?.trim() ? values.notes.trim() : undefined,
-      team_members: sanitizedTeam,
+      notes: values.notes?.trim() || null,
+      team_members: sanitizedTeam.length > 0 ? sanitizedTeam : null,
       additional_costs: sanitizedCosts,
+      user_id: user.id,
     };
 
-    if (dialogMode === "create") {
-      const newSite: Site = {
-        id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2),
-        ...updatedFields,
-        team_members: updatedFields.team_members.length > 0 ? updatedFields.team_members : ["Équipe chantier"],
-        created_at: new Date().toISOString(),
-      };
-      setSites((prev) => [...prev, newSite]);
+    try {
+      if (dialogMode === "create") {
+        const { error } = await supabase
+          .from("sites")
+          .insert([siteData]);
+
+        if (error) throw error;
+
+        toast({
+          title: "Chantier créé",
+          description: `${siteData.site_ref} a été ajouté à la liste des chantiers.`,
+        });
+      } else if (dialogMode === "edit" && activeSiteId) {
+        const { error } = await supabase
+          .from("sites")
+          .update(siteData)
+          .eq("id", activeSiteId);
+
+        if (error) throw error;
+
+        toast({
+          title: "Chantier mis à jour",
+          description: `${values.site_ref} a été mis à jour avec succès.`,
+        });
+      }
+
+      refetch();
+      setDialogOpen(false);
+    } catch (error) {
+      console.error("Error saving site:", error);
       toast({
-        title: "Chantier créé",
-        description: `${newSite.site_ref} a été ajouté à la liste des chantiers.`,
-      });
-    } else if (dialogMode === "edit" && activeSiteId) {
-      setSites((prev) =>
-        prev.map((site) =>
-          site.id === activeSiteId
-            ? {
-                ...site,
-                ...updatedFields,
-                team_members:
-                  updatedFields.team_members.length > 0
-                    ? updatedFields.team_members
-                    : site.team_members,
-                additional_costs: updatedFields.additional_costs,
-              }
-            : site,
-        ),
-      );
-      toast({
-        title: "Chantier mis à jour",
-        description: `${values.site_ref} a été mis à jour avec succès.`,
+        title: "Erreur",
+        description: "Impossible de sauvegarder le chantier.",
+        variant: "destructive",
       });
     }
-
-    setDialogOpen(false);
   };
 
-  const handleStatusChange = (siteId: string, status: SiteStatus) => {
-    setSites((prev) =>
-      prev.map((site) => (site.id === siteId ? { ...site, status } : site)),
-    );
-    toast({
-      title: "Statut mis à jour",
-      description: `Le chantier est maintenant ${getStatusLabel(status)}.`,
-    });
+  const handleStatusChange = async (siteId: string, status: SiteStatus) => {
+    try {
+      const { error } = await supabase
+        .from("sites")
+        .update({ status })
+        .eq("id", siteId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Statut mis à jour",
+        description: `Le chantier est maintenant ${getStatusLabel(status)}.`,
+      });
+      refetch();
+    } catch (error) {
+      console.error("Error updating status:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de mettre à jour le statut.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleMarkAsDone = (siteId: string) => {
-    setSites((prev) =>
-      prev.map((site) =>
-        site.id === siteId
-          ? { ...site, status: "TERMINE", progress_percentage: 100 }
-          : site,
-      ),
-    );
-    toast({
-      title: "Chantier terminé",
-      description: "Le chantier est marqué comme terminé.",
-    });
+  const handleMarkAsDone = async (siteId: string) => {
+    try {
+      const { error } = await supabase
+        .from("sites")
+        .update({ status: "TERMINE", progress_percentage: 100 })
+        .eq("id", siteId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Chantier terminé",
+        description: "Le chantier est marqué comme terminé.",
+      });
+      refetch();
+    } catch (error) {
+      console.error("Error marking site as done:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de marquer le chantier comme terminé.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  type SitesLocationState = {
+    createSite?: {
+      projectId: string;
+    };
   };
 
   const locationState = (location.state as SitesLocationState | undefined) ?? undefined;
 
   useEffect(() => {
     if (locationState?.createSite?.projectId) {
-      const project = mockProjects.find((item) => item.id === locationState.createSite?.projectId);
+      const project = projects.find((item) => item.id === locationState.createSite?.projectId);
 
       if (project) {
         handleOpenCreate({
@@ -305,7 +379,7 @@ const Sites = () => {
 
       navigate(location.pathname, { replace: true });
     }
-  }, [locationState, handleOpenCreate, navigate, location.pathname, toast]);
+  }, [locationState, handleOpenCreate, navigate, location.pathname, toast, projects]);
 
   return (
     <Layout>
@@ -360,8 +434,8 @@ const Sites = () => {
                     </p>
                     <p className="text-sm font-medium">{site.client_name}</p>
                   </div>
-                  <Badge className={getStatusColor(site.status)}>
-                    {getStatusLabel(site.status)}
+                  <Badge className={getStatusColor(site.status as SiteStatus)}>
+                    {getStatusLabel(site.status as SiteStatus)}
                   </Badge>
                 </div>
               </CardHeader>
@@ -381,41 +455,41 @@ const Sites = () => {
                     <Euro className="w-4 h-4 text-primary" />
                     <div>
                       <p className="text-xs uppercase text-muted-foreground">CA</p>
-                      <p className="font-semibold">{formatCurrency(site.revenue)}</p>
+                      <p className="font-semibold">{formatCurrency(site.revenue || 0)}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <TrendingUp className="w-4 h-4 text-emerald-600" />
                     <div>
                       <p className="text-xs uppercase text-muted-foreground">Marge</p>
-                      <p className="font-semibold">{formatPercent(site.profit_margin)}</p>
+                      <p className="font-semibold">{formatPercent(site.profit_margin || 0)}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="w-4 h-4 text-sky-600" />
-                    <Badge className={getCofracStatusColor(site.cofrac_status)}>
-                      {getCofracStatusLabel(site.cofrac_status)}
+                    <Badge className={getCofracStatusColor((site.cofrac_status || "EN_ATTENTE") as CofracStatus)}>
+                      {getCofracStatusLabel((site.cofrac_status || "EN_ATTENTE") as CofracStatus)}
                     </Badge>
                   </div>
                   <div className="flex items-center gap-2">
                     <Ruler className="w-4 h-4 text-amber-600" />
                     <div>
                       <p className="text-xs uppercase text-muted-foreground">Surface facturée</p>
-                      <p className="font-semibold">{site.surface_facturee} m²</p>
+                      <p className="font-semibold">{site.surface_facturee || 0} m²</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <HandCoins className="w-4 h-4 text-purple-600" />
                     <div>
                       <p className="text-xs uppercase text-muted-foreground">Commission</p>
-                      <p className="font-semibold">{formatCurrency(site.montant_commission)}</p>
+                      <p className="font-semibold">{formatCurrency(site.montant_commission || 0)}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <Euro className="w-4 h-4 text-primary" />
                     <div>
                       <p className="text-xs uppercase text-muted-foreground">Valorisation CEE</p>
-                      <p className="font-semibold">{formatCurrency(site.valorisation_cee)}</p>
+                      <p className="font-semibold">{formatCurrency(site.valorisation_cee || 0)}</p>
                     </div>
                   </div>
                 </div>
@@ -457,7 +531,7 @@ const Sites = () => {
                     <span className="text-muted-foreground">Équipe :</span>
                   </div>
                   <div className="flex flex-wrap gap-1 ml-6">
-                    {site.team_members.map((member, index) => (
+                    {(site.team_members || []).map((member, index) => (
                       <Badge key={index} variant="secondary" className="text-xs">
                         {member}
                       </Badge>
@@ -476,7 +550,7 @@ const Sites = () => {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      {siteStatuses.map((status) => (
+                      {(["PLANIFIE", "EN_PREPARATION", "EN_COURS", "SUSPENDU", "TERMINE", "LIVRE"] as SiteStatus[]).map((status) => (
                         <DropdownMenuItem
                           key={status}
                           onClick={() => handleStatusChange(site.id, status)}
