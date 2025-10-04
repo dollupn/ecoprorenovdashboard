@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { InvoicePreview } from "@/components/invoices/InvoicePreview";
+import { AddInvoiceDialog } from "@/components/invoices/AddInvoiceDialog";
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -170,10 +171,7 @@ const Invoices = () => {
               <Send className="w-4 h-4 mr-2" />
               Relance email
             </Button>
-            <Button>
-              <PlusCircle className="w-4 h-4 mr-2" />
-              Nouvelle Facture
-            </Button>
+            <AddInvoiceDialog onInvoiceAdded={async () => { await refetch(); }} />
           </div>
         </div>
 
