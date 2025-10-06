@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -222,109 +223,146 @@ const Invoices = () => {
           </Card>
         </div>
 
-        {/* Search / Filters */}
-        <Card className="shadow-card bg-gradient-card border-0">
-          <CardContent className="pt-6">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="Rechercher par client, référence, devis ou chantier"
-                  className="pl-10"
-                />
-              </div>
-              <Button variant="outline">
-                <Filter className="w-4 h-4 mr-2" />
-                Filtres avancés
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Tabs */}
+        <Tabs defaultValue="client" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="client">Facture Client/Délégataire</TabsTrigger>
+            <TabsTrigger value="subcontractor">Facture Sous-traitant</TabsTrigger>
+            <TabsTrigger value="supplier">Facture Fournisseur</TabsTrigger>
+          </TabsList>
 
-        {/* Error state */}
-        {isError && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Impossible de charger les factures</AlertTitle>
-            <AlertDescription>
-              {error?.message || "Vérifiez votre connexion Supabase puis réessayez."}
-            </AlertDescription>
-            <div className="mt-4">
-              <Button variant="outline" onClick={() => refetch()}>
-                Réessayer
-              </Button>
-            </div>
-          </Alert>
-        )}
+          <TabsContent value="client" className="space-y-6">
+            {/* Search / Filters */}
+            <Card className="shadow-card bg-gradient-card border-0">
+              <CardContent className="pt-6">
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Rechercher par client, référence, devis ou chantier"
+                      className="pl-10"
+                    />
+                  </div>
+                  <Button variant="outline">
+                    <Filter className="w-4 h-4 mr-2" />
+                    Filtres avancés
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
 
-        {/* Table */}
-        <Card className="shadow-card bg-gradient-card border-0">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>Factures ({invoices.length})</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Dernière mise à jour {formatDate(new Date().toISOString())}
-              </p>
-            </div>
-            {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-          </CardHeader>
-          <CardContent>
-            {invoices.length === 0 && !isLoading ? (
-              <div className="text-center py-12">
-                <Timer className="mx-auto h-10 w-10 text-muted-foreground/60" />
-                <p className="mt-4 text-muted-foreground">
-                  Aucune facture enregistrée. Créez votre première facture ou synchronisez vos devis acceptés.
-                </p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Référence</TableHead>
-                      <TableHead>Client</TableHead>
-                      <TableHead>Projet</TableHead>
-                      <TableHead>Devis associé</TableHead>
-                      <TableHead className="text-right">Montant</TableHead>
-                      <TableHead>Statut</TableHead>
-                      <TableHead>Échéance</TableHead>
-                      <TableHead>Paiement</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {invoices.map((invoice) => (
-                      <TableRow key={invoice.id}>
-                        <TableCell className="font-medium">{invoice.invoice_ref}</TableCell>
-                        <TableCell>{invoice.client_name}</TableCell>
-                        <TableCell>{invoice.projects?.project_ref ?? "—"}</TableCell>
-                        <TableCell>{invoice.quotes?.quote_ref ?? "—"}</TableCell>
-                        <TableCell className="text-right">
-                          {formatCurrency(Number(invoice.amount || 0))}
-                        </TableCell>
-                        <TableCell>{renderStatus(invoice.status || "DRAFT")}</TableCell>
-                        <TableCell>{formatDate(invoice.due_date)}</TableCell>
-                        <TableCell>{formatDate(invoice.paid_date)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+            {/* Error state */}
+            {isError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Impossible de charger les factures</AlertTitle>
+                <AlertDescription>
+                  {error?.message || "Vérifiez votre connexion Supabase puis réessayez."}
+                </AlertDescription>
+                <div className="mt-4">
+                  <Button variant="outline" onClick={() => refetch()}>
+                    Réessayer
+                  </Button>
+                </div>
+              </Alert>
             )}
-          </CardContent>
-        </Card>
 
-        {/* Design preview */}
-        <Card className="shadow-card border-0">
-          <CardHeader>
-            <CardTitle>Aperçu Facture (gabarit)</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Modèle visuel de référence pour la génération PDF.
-            </p>
-          </CardHeader>
-          <CardContent className="bg-slate-100">
-            <InvoicePreview />
-          </CardContent>
-        </Card>
+            {/* Table */}
+            <Card className="shadow-card bg-gradient-card border-0">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Factures Client ({invoices.length})</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Dernière mise à jour {formatDate(new Date().toISOString())}
+                  </p>
+                </div>
+                {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+              </CardHeader>
+              <CardContent>
+                {invoices.length === 0 && !isLoading ? (
+                  <div className="text-center py-12">
+                    <Timer className="mx-auto h-10 w-10 text-muted-foreground/60" />
+                    <p className="mt-4 text-muted-foreground">
+                      Aucune facture enregistrée. Créez votre première facture ou synchronisez vos devis acceptés.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Référence</TableHead>
+                          <TableHead>Client</TableHead>
+                          <TableHead>Projet</TableHead>
+                          <TableHead>Devis associé</TableHead>
+                          <TableHead className="text-right">Montant</TableHead>
+                          <TableHead>Statut</TableHead>
+                          <TableHead>Échéance</TableHead>
+                          <TableHead>Paiement</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {invoices.map((invoice) => (
+                          <TableRow key={invoice.id}>
+                            <TableCell className="font-medium">{invoice.invoice_ref}</TableCell>
+                            <TableCell>{invoice.client_name}</TableCell>
+                            <TableCell>{invoice.projects?.project_ref ?? "—"}</TableCell>
+                            <TableCell>{invoice.quotes?.quote_ref ?? "—"}</TableCell>
+                            <TableCell className="text-right">
+                              {formatCurrency(Number(invoice.amount || 0))}
+                            </TableCell>
+                            <TableCell>{renderStatus(invoice.status || "DRAFT")}</TableCell>
+                            <TableCell>{formatDate(invoice.due_date)}</TableCell>
+                            <TableCell>{formatDate(invoice.paid_date)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Design preview */}
+            <Card className="shadow-card border-0">
+              <CardHeader>
+                <CardTitle>Aperçu Facture (gabarit)</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Modèle visuel de référence pour la génération PDF.
+                </p>
+              </CardHeader>
+              <CardContent className="bg-slate-100">
+                <InvoicePreview />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="subcontractor" className="space-y-6">
+            <Card className="shadow-card bg-gradient-card border-0">
+              <CardContent className="py-12">
+                <div className="text-center">
+                  <Timer className="mx-auto h-10 w-10 text-muted-foreground/60" />
+                  <p className="mt-4 text-muted-foreground">
+                    Gestion des factures sous-traitants à venir.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="supplier" className="space-y-6">
+            <Card className="shadow-card bg-gradient-card border-0">
+              <CardContent className="py-12">
+                <div className="text-center">
+                  <Timer className="mx-auto h-10 w-10 text-muted-foreground/60" />
+                  <p className="mt-4 text-muted-foreground">
+                    Gestion des factures fournisseurs à venir.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </Layout>
   );
