@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
+import { useOrg } from "@/features/organizations/OrgContext";
 import { useToast } from "@/hooks/use-toast";
 import * as z from "zod";
 import {
@@ -108,6 +109,7 @@ export const AddProjectDialog = ({
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
+  const { currentOrgId } = useOrg();
   const { toast } = useToast();
 
   const { data: profile } = useQuery({
@@ -151,20 +153,21 @@ export const AddProjectDialog = ({
     isLoading: productsLoading,
     error: productsError,
   } = useQuery({
-    queryKey: ["product-catalog", user?.id],
+    queryKey: ["product-catalog", currentOrgId],
     queryFn: async () => {
-      if (!user) return [] as ProductCatalogEntry[];
+      if (!currentOrgId) return [] as ProductCatalogEntry[];
 
       const { data, error } = await supabase
         .from("product_catalog")
-        .select("id, name, code, category, is_active, owner_id")
-        .eq("owner_id", user.id)
+        .select("id, name, sku, category, enabled")
+        .eq("org_id", currentOrgId)
+        .eq("enabled", true)
         .order("name", { ascending: true });
 
       if (error) throw error;
       return data ?? [];
     },
-    enabled: Boolean(user?.id),
+    enabled: Boolean(currentOrgId),
   });
 
   useEffect(() => {
@@ -211,11 +214,11 @@ export const AddProjectDialog = ({
     if (!productsData) return [] as SelectOption[];
 
     return productsData
-      .filter((product) => product.is_active !== false)
+      .filter((product) => product.enabled !== false)
       .map((product) => ({
-        value: product.name,
-        label: product.name,
-        description: product.code ?? undefined,
+        value: product.name ?? "",
+        label: product.name ?? "Produit",
+        description: product.sku ?? undefined,
       })) as SelectOption[];
   }, [productsData]);
 
