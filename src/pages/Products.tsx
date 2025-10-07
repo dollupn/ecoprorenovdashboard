@@ -50,6 +50,7 @@ import {
   Eye,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useOrg } from "@/features/organizations/OrgContext";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -287,6 +288,7 @@ const defaultParamFields: EditableParamField[] = [
 const Products = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { currentOrgId } = useOrg();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -399,11 +401,18 @@ const Products = () => {
   }, []);
 
   const fetchProducts = useCallback(async () => {
+    if (!currentOrgId) {
+      setProducts([]);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     try {
       const { data, error } = await supabase
         .from("product_catalog")
         .select("*")
+        .eq("org_id", currentOrgId)
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -423,7 +432,7 @@ const Products = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [normalizeProduct, toast]);
+  }, [currentOrgId, normalizeProduct, toast]);
 
   useEffect(() => {
     fetchProducts();
@@ -544,6 +553,15 @@ const Products = () => {
       return;
     }
 
+    if (!currentOrgId) {
+      toast({
+        title: "Organisation requise",
+        description: "Sélectionnez une organisation avant de modifier un produit.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const formData = new FormData(event.currentTarget);
     const name = (formData.get("edit-name") as string)?.trim();
     const codeValue = (formData.get("edit-code") as string)?.trim();
@@ -613,6 +631,7 @@ const Products = () => {
           default_params: Object.keys(defaultParams).length ? (defaultParams as any) : null,
         })
         .eq("id", editingProduct.id)
+        .eq("org_id", currentOrgId)
         .select()
         .single();
 
@@ -730,6 +749,15 @@ const Products = () => {
       return;
     }
 
+    if (!currentOrgId) {
+      toast({
+        title: "Organisation requise",
+        description: "Sélectionnez une organisation avant d'ajouter un produit.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const formData = new FormData(event.currentTarget);
     const categoryValue = (formData.get("category") as string) || category;
     const name = (formData.get("name") as string)?.trim();
@@ -802,6 +830,7 @@ const Products = () => {
           params_schema: { fields: paramsSchemaFields } as any,
           default_params: Object.keys(defaultParams).length ? (defaultParams as any) : null,
           owner_id: user.id,
+          org_id: currentOrgId,
         })
         .select()
         .single();
