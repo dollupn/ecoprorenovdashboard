@@ -1,50 +1,74 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 
 interface KPICardProps {
   title: string;
-  value: string | number;
+  value?: string | number;
   change?: string;
   changeType?: "positive" | "negative" | "neutral";
   icon: LucideIcon;
   gradient?: string;
+  isLoading?: boolean;
+  error?: string;
+  badgeLabel?: string;
 }
 
-export function KPICard({ 
-  title, 
-  value, 
-  change, 
-  changeType = "neutral", 
+export function KPICard({
+  title,
+  value,
+  change,
+  changeType = "neutral",
   icon: Icon,
-  gradient = "from-primary to-primary-glow"
+  gradient = "from-primary to-primary-glow",
+  isLoading = false,
+  error,
+  badgeLabel,
 }: KPICardProps) {
+  const changeColor = cn(
+    "text-xs flex items-center gap-1",
+    changeType === "positive" && "text-success",
+    changeType === "negative" && "text-destructive",
+    changeType === "neutral" && "text-muted-foreground"
+  );
+
   return (
     <Card className="relative overflow-hidden border-0 shadow-card hover:shadow-elevated transition-all duration-300 bg-gradient-card">
-      <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-5`} />
-      
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-10`} />
+
+      <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2 relative z-10">
         <CardTitle className="text-sm font-medium text-muted-foreground">
           {title}
         </CardTitle>
-        <div className={`p-2 rounded-lg bg-gradient-to-br ${gradient}`}>
-          <Icon className="w-4 h-4 text-white" />
+        <div className="flex items-center gap-2">
+          {badgeLabel && !isLoading && !error && (
+            <Badge variant="outline" className="text-xs border-primary/30 text-primary bg-primary/10">
+              {badgeLabel}
+            </Badge>
+          )}
+          <div className={`p-2 rounded-lg bg-gradient-to-br ${gradient}`}>
+            <Icon className="w-4 h-4 text-white" />
+          </div>
         </div>
       </CardHeader>
-      
-      <CardContent>
-        <div className="text-2xl font-bold text-foreground mb-1">
-          {value}
-        </div>
-        {change && (
-          <p className={cn(
-            "text-xs flex items-center gap-1",
-            changeType === "positive" && "text-success",
-            changeType === "negative" && "text-destructive",
-            changeType === "neutral" && "text-muted-foreground"
-          )}>
-            {change}
-          </p>
+
+      <CardContent className="relative z-10">
+        {isLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-24" />
+            {change && <Skeleton className="h-3 w-32" />}
+          </div>
+        ) : error ? (
+          <p className="text-sm text-destructive">{error}</p>
+        ) : (
+          <>
+            <div className="text-2xl font-bold text-foreground mb-1">
+              {value}
+            </div>
+            {change && <p className={changeColor}>{change}</p>}
+          </>
         )}
       </CardContent>
     </Card>
