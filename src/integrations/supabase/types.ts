@@ -229,55 +229,97 @@ export type Database = {
         }
         Relationships: []
       }
-      product_catalog: {
+      categories: {
         Row: {
-          category: string | null
-          code: string
-          created_at: string
-          default_params: Json | null
+          created_at: string | null
           description: string | null
           id: string
-          is_active: boolean
           name: string
-          org_id: string | null
-          owner_id: string
-          params_schema: Json | null
-          schema_version: number
-          updated_at: string
+          org_id: string
         }
         Insert: {
-          category?: string | null
-          code: string
-          created_at?: string
-          default_params?: Json | null
+          created_at?: string | null
           description?: string | null
           id?: string
-          is_active?: boolean
           name: string
-          org_id?: string | null
-          owner_id: string
-          params_schema?: Json | null
-          schema_version?: number
-          updated_at?: string
+          org_id: string
         }
         Update: {
-          category?: string | null
-          code?: string
-          created_at?: string
-          default_params?: Json | null
+          created_at?: string | null
           description?: string | null
           id?: string
-          is_active?: boolean
           name?: string
-          org_id?: string | null
-          owner_id?: string
-          params_schema?: Json | null
-          schema_version?: number
-          updated_at?: string
+          org_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "product_catalog_org_id_fkey"
+            foreignKeyName: "categories_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      products: {
+        Row: {
+          category_id: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          enabled: boolean | null
+          id: string
+          name: string
+          org_id: string
+          price_ref: number | null
+          product_type: string
+          quantity_default: number | null
+          sku: string | null
+          unit: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          category_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          enabled?: boolean | null
+          id?: string
+          name: string
+          org_id: string
+          price_ref?: number | null
+          product_type: string
+          quantity_default?: number | null
+          sku?: string | null
+          unit?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          category_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          enabled?: boolean | null
+          id?: string
+          name?: string
+          org_id?: string
+          price_ref?: number | null
+          product_type?: string
+          quantity_default?: number | null
+          sku?: string | null
+          unit?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -593,7 +635,25 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      product_catalog: {
+        Row: {
+          category: string | null
+          category_id: string | null
+          created_at: string
+          description: string | null
+          enabled: boolean
+          id: string
+          name: string
+          org_id: string
+          price_ref: number | null
+          product_type: string
+          quantity_default: number
+          sku: string | null
+          unit: string | null
+          updated_at: string
+        }
+        Relationships: []
+      }
     }
     Functions: {
       [_ in never]: never
