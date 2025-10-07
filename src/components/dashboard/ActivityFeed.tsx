@@ -11,6 +11,7 @@ interface ActivityFeedProps {
   enabled?: boolean;
 }
 
+// 🔹 Type → Icône
 const getActivityIcon = (type: ActivityItem["type"]) => {
   switch (type) {
     case "lead":
@@ -27,25 +28,7 @@ const getActivityIcon = (type: ActivityItem["type"]) => {
   }
 };
 
-const getStatusBadgeClasses = (status?: string | null) => {
-  if (!status) return "bg-muted text-muted-foreground";
-
-  switch (status.toUpperCase()) {
-    case "NEW":
-      return "bg-blue-500/10 text-blue-300 border-blue-400/40";
-    case "SENT":
-      return "bg-orange-500/10 text-orange-300 border-orange-400/40";
-    case "ACCEPTED":
-      return "bg-green-500/10 text-green-300 border-green-400/40";
-    case "PAID":
-      return "bg-emerald-500/10 text-emerald-300 border-emerald-400/40";
-    case "CLOTURE":
-      return "bg-primary/10 text-primary border-primary/30";
-    default:
-      return "bg-muted text-muted-foreground";
-  }
-};
-
+// 🔹 Format du temps relatif (FR)
 const formatRelativeTime = (date: string) => {
   try {
     return formatDistanceToNow(new Date(date), { addSuffix: true, locale: fr })
@@ -53,6 +36,34 @@ const formatRelativeTime = (date: string) => {
       .replace("moins d'", "moins d' ");
   } catch (error) {
     return "À l'instant";
+  }
+};
+
+// 🔹 Couleurs de badges selon statut
+const getStatusBadgeClasses = (status?: string | null) => {
+  if (!status) return "bg-muted text-muted-foreground";
+
+  switch (status.toLowerCase()) {
+    case "nouveau":
+      return "bg-blue-500/10 text-blue-300 border-blue-400/40";
+    case "qualifié":
+      return "bg-purple-500/10 text-purple-300 border-purple-400/40";
+    case "converti":
+      return "bg-green-500/10 text-green-300 border-green-400/40";
+    case "perdu":
+      return "bg-red-500/10 text-red-300 border-red-400/40";
+    case "clôturé":
+      return "bg-primary/10 text-primary border-primary/30";
+    case "sent":
+      return "bg-orange-500/10 text-orange-300 border-orange-400/40";
+    case "accepted":
+      return "bg-green-500/10 text-green-300 border-green-400/40";
+    case "paid":
+      return "bg-emerald-500/10 text-emerald-300 border-emerald-400/40";
+    case "completed":
+      return "bg-primary/10 text-primary border-primary/30";
+    default:
+      return "bg-muted text-muted-foreground";
   }
 };
 
@@ -104,7 +115,10 @@ export function ActivityFeed({ orgId, enabled = true }: ActivityFeedProps) {
                       {activity.title}
                     </h4>
                     {activity.status && (
-                      <Badge variant="secondary" className={getStatusBadgeClasses(activity.status)}>
+                      <Badge
+                        variant="secondary"
+                        className={getStatusBadgeClasses(activity.status)}
+                      >
                         {activity.status}
                       </Badge>
                     )}

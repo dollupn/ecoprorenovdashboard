@@ -1,5 +1,4 @@
 import { useMemo, useRef, useState, type ChangeEvent } from "react";
-import { useQuery } from "@tanstack/react-query";
 
 import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,13 +18,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { AddLeadDialog } from "@/components/leads/AddLeadDialog";
+import { LeadFormDialog } from "@/features/leads/LeadFormDialog";
 import { ScheduleLeadDialog } from "@/components/leads/ScheduleLeadDialog";
 import { AddProjectDialog } from "@/components/projects/AddProjectDialog";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { useLeadsList, useUpdateLead } from "@/features/leads/api";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -69,6 +69,7 @@ type CsvLead = {
   postal_code: string;
   company?: string;
   product_name?: string;
+  product_type?: string;
   surface_m2?: number;
   utm_source?: string;
   status?: LeadStatus;
@@ -80,20 +81,6 @@ type CsvLead = {
 type CsvParseResult = {
   rows: CsvLead[];
   skipped: number;
-};
-
-const fetchLeads = async (): Promise<LeadRecord[]> => {
-  const { data, error } = await supabase
-    .from("leads")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.error("Erreur lors du chargement des leads", error);
-    throw error;
-  }
-
-  return data ?? [];
 };
 
 const detectDelimiter = (line: string) => {
@@ -161,6 +148,8 @@ const HEADER_MAPPINGS: Record<string, keyof CsvLead> = {
   product: "product_name",
   produit: "product_name",
   productname: "product_name",
+  producttype: "product_type",
+  product_type: "product_type",
   surface: "surface_m2",
   surfacehabitable: "surface_m2",
   surfacem2: "surface_m2",
@@ -177,6 +166,40 @@ const HEADER_MAPPINGS: Record<string, keyof CsvLead> = {
   date: "date_rdv",
   heure: "heure_rdv",
   heurerdv: "heure_rdv",
+};
+
+const normalizeCsvStatus = (value: string): LeadStatus | undefined => {
+  const cleaned = value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  switch (cleaned) {
+    case "nouveau":
+    case "new":
+      return "Nouveau";
+    case "qualifie":
+    case "qualifiee":
+    case "qualified":
+      return "Qualifié";
+    case "converti":
+    case "converted":
+      return "Converti";
+    case "perdu":
+    case "lost":
+      return "Perdu";
+    case "cloture":
+    case "cloturee":
+    case "clos":
+    case "closed":
+    case "archive":
+    case "archivee":
+    case "archived":
+      return "Clôturé";
+    default:
+      return undefined;
+  }
 };
 
 const parseCsv = (text: string): CsvParseResult => {
@@ -219,11 +242,8 @@ const parseCsv = (text: string): CsvParseResult => {
           break;
         }
         case "status": {
-          const normalized = rawValue
-            .trim()
-            .toUpperCase()
-            .replace(/\s+/g, "_");
-          if (isLeadStatus(normalized)) {
+          const normalized = normalizeCsvStatus(rawValue);
+          if (normalized) {
             record.status = normalized;
           }
           break;
@@ -233,6 +253,7 @@ const parseCsv = (text: string): CsvParseResult => {
         case "utm_source":
         case "company":
         case "product_name":
+        case "product_type":
         case "commentaire": {
           // Preserve raw text
           record[key] = rawValue;
@@ -243,6 +264,10 @@ const parseCsv = (text: string): CsvParseResult => {
         }
       }
     });
+
+    if (record.product_name && !record.product_type) {
+      record.product_type = record.product_name;
+    }
 
     if (
       record.full_name &&
@@ -281,6 +306,7 @@ const Leads = () => {
   const [selectedStatuses, setSelectedStatuses] = useState<LeadStatus[]>([]);
   const [importing, setImporting] = useState(false);
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
+  const orgId = user?.id ?? null;
 
   const {
     data: leads = [],
@@ -288,10 +314,17 @@ const Leads = () => {
     isError,
     error,
     refetch,
-  } = useQuery({
-    queryKey: ["leads"],
-    queryFn: fetchLeads,
-  });
+  } = useLeadsList(
+    orgId,
+    selectedStatuses.length
+      ? {
+          statuses: selectedStatuses,
+        }
+      : undefined,
+    searchTerm
+  );
+
+  const updateLeadMutation = useUpdateLead(orgId);
 
   const filteredLeads = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -312,6 +345,7 @@ const Leads = () => {
         lead.city,
         lead.postal_code,
         lead.product_name ?? "",
+        lead.product_type ?? "",
         lead.utm_source ?? "",
         lead.company ?? "",
       ]
@@ -377,19 +411,24 @@ const Leads = () => {
 
       const payload = rows.map((row) => ({
         user_id: user.id,
+        org_id: user.id,
+        created_by: user.id,
+        assigned_to: user.id,
         full_name: row.full_name,
         email: row.email,
         phone_raw: row.phone_raw,
         city: row.city,
         postal_code: row.postal_code,
-        status: row.status ?? "NEW",
-        company: row.company || undefined,
-        product_name: row.product_name || undefined,
-        surface_m2: row.surface_m2 || undefined,
-        utm_source: row.utm_source || undefined,
-        commentaire: row.commentaire || undefined,
-        date_rdv: row.date_rdv || undefined,
-        heure_rdv: row.heure_rdv || undefined,
+        status: row.status ?? "Nouveau",
+        company: row.company ?? null,
+        product_type: row.product_type ?? row.product_name ?? null,
+        product_name: row.product_name ?? row.product_type ?? null,
+        surface_m2: row.surface_m2 ?? null,
+        utm_source: row.utm_source ?? null,
+        commentaire: row.commentaire ?? null,
+        date_rdv: row.date_rdv ?? null,
+        heure_rdv: row.heure_rdv ?? null,
+        extra_fields: {},
       }));
 
       const { error: insertError } = await supabase.from("leads").insert(payload);
@@ -431,13 +470,11 @@ const Leads = () => {
 
   const handleProjectCreated = async (lead: LeadRecord) => {
     try {
-      if (lead.status !== "CONVERTED") {
-        const { error: updateError } = await supabase
-          .from("leads")
-          .update({ status: "CONVERTED", updated_at: new Date().toISOString() })
-          .eq("id", lead.id);
-
-        if (updateError) throw updateError;
+      if (lead.status !== "Converti") {
+        await updateLeadMutation.mutateAsync({
+          id: lead.id,
+          values: { status: "Converti", updated_at: new Date().toISOString() },
+        });
 
         toast({
           title: "Lead converti",
@@ -486,7 +523,7 @@ const Leads = () => {
               )}
               {importing ? "Import en cours" : "Importer CSV"}
             </Button>
-            <AddLeadDialog onLeadAdded={handleLeadAdded} />
+            <LeadFormDialog onCreated={handleLeadAdded} />
           </div>
         </div>
 
@@ -641,9 +678,12 @@ const Leads = () => {
                           <MapPin className="w-4 h-4 text-muted-foreground" />
                           {lead.city} ({lead.postal_code})
                         </div>
-                        {lead.product_name && (
+                        {(lead.product_name || lead.product_type) && (
                           <div className="text-sm">
-                            <span className="font-medium">{lead.product_name}</span>
+                            <span className="font-medium">{lead.product_name ?? lead.product_type}</span>
+                            {lead.product_name && lead.product_type && lead.product_name !== lead.product_type ? (
+                              <span className="block text-xs text-muted-foreground">{lead.product_type}</span>
+                            ) : null}
                             {lead.surface_m2 && (
                               <span className="text-muted-foreground"> • {lead.surface_m2} m²</span>
                             )}
@@ -686,7 +726,7 @@ const Leads = () => {
                             project_ref: generateProjectRef(lead),
                             client_name: lead.full_name,
                             company: lead.company ?? "",
-                            product_name: lead.product_name ?? "",
+                            product_name: lead.product_name ?? lead.product_type ?? "",
                             city: lead.city,
                             postal_code: lead.postal_code,
                             surface_isolee_m2: lead.surface_m2 ?? undefined,
@@ -748,9 +788,12 @@ const Leads = () => {
                           </div>
                         </TableCell>
                         <TableCell className="text-sm">
-                          {lead.product_name ? (
+                          {lead.product_name || lead.product_type ? (
                             <div>
-                              <span className="font-medium">{lead.product_name}</span>
+                              <span className="font-medium">{lead.product_name ?? lead.product_type}</span>
+                              {lead.product_name && lead.product_type && lead.product_name !== lead.product_type ? (
+                                <div className="text-xs text-muted-foreground">{lead.product_type}</div>
+                              ) : null}
                               {lead.surface_m2 && (
                                 <span className="text-muted-foreground"> • {lead.surface_m2} m²</span>
                               )}
@@ -793,18 +836,18 @@ const Leads = () => {
                             </span>
                             <div className="flex gap-2">
                               <ScheduleLeadDialog lead={lead} onScheduled={handleLeadScheduled} />
-                              <AddProjectDialog
-                                trigger={<Button size="sm">Créer Projet</Button>}
-                                initialValues={{
-                                  project_ref: generateProjectRef(lead),
-                                  client_name: lead.full_name,
-                                  company: lead.company ?? "",
-                                  product_name: lead.product_name ?? "",
-                                  city: lead.city,
-                                  postal_code: lead.postal_code,
-                                  surface_isolee_m2: lead.surface_m2 ?? undefined,
-                                  lead_id: lead.id,
-                                }}
+                        <AddProjectDialog
+                          trigger={<Button size="sm">Créer Projet</Button>}
+                          initialValues={{
+                            project_ref: generateProjectRef(lead),
+                            client_name: lead.full_name,
+                            company: lead.company ?? "",
+                            product_name: lead.product_name ?? lead.product_type ?? "",
+                            city: lead.city,
+                            postal_code: lead.postal_code,
+                            surface_isolee_m2: lead.surface_m2 ?? undefined,
+                            lead_id: lead.id,
+                          }}
                                 onProjectAdded={() => handleProjectCreated(lead)}
                               />
                             </div>
