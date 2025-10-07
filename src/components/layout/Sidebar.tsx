@@ -41,6 +41,7 @@ const mainItems = [
 const businessItems = [
   { title: "Planning RDV", url: "/calendar", icon: Calendar },
   { title: "Reporting", url: "/reports", icon: TrendingUp },
+  { title: "Membres", url: "/members", icon: Users },
   { title: "Paramètres", url: "/settings", icon: Settings },
 ];
 

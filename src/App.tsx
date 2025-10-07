@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { OrgProvider } from "@/features/organizations/OrgContext";
 import { ThemeProvider } from "@/components/theme-provider";
 import Index from "./pages/Index";
 import Leads from "./pages/Leads";
@@ -18,6 +19,7 @@ import CalendarPage from "./pages/Calendar";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import Settings from "./pages/Settings";
+import Members from "./pages/Members";
 import Reports from "./pages/Reports";
 
 const queryClient = new QueryClient();
@@ -28,8 +30,9 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <BrowserRouter>
-          <AuthProvider>
+      <BrowserRouter>
+        <AuthProvider>
+          <OrgProvider>
             <Routes>
               <Route path="/auth" element={<Auth />} />
               <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
@@ -50,9 +53,11 @@ const App = () => (
               <Route path="/calendar" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+              <Route path="/members" element={<ProtectedRoute><Members /></ProtectedRoute>} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
+          </OrgProvider>
           </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>

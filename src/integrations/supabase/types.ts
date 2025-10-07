@@ -23,6 +23,7 @@ export type Database = {
           id: string
           invoice_ref: string
           notes: string | null
+          org_id: string | null
           paid_date: string | null
           project_id: string | null
           quote_id: string | null
@@ -38,6 +39,7 @@ export type Database = {
           id?: string
           invoice_ref: string
           notes?: string | null
+          org_id?: string | null
           paid_date?: string | null
           project_id?: string | null
           quote_id?: string | null
@@ -53,6 +55,7 @@ export type Database = {
           id?: string
           invoice_ref?: string
           notes?: string | null
+          org_id?: string | null
           paid_date?: string | null
           project_id?: string | null
           quote_id?: string | null
@@ -61,6 +64,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "invoices_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "invoices_project_id_fkey"
             columns: ["project_id"]
@@ -79,15 +89,12 @@ export type Database = {
       }
       leads: {
         Row: {
-          assigned_to: string | null
           city: string
           commentaire: string | null
           company: string | null
           created_at: string
-          created_by: string | null
           date_rdv: string | null
           email: string
-          extra_fields: Json
           full_name: string
           heure_rdv: string | null
           id: string
@@ -95,7 +102,6 @@ export type Database = {
           phone_raw: string
           postal_code: string
           product_name: string | null
-          product_type: string | null
           status: string
           surface_m2: number | null
           updated_at: string
@@ -103,15 +109,12 @@ export type Database = {
           utm_source: string | null
         }
         Insert: {
-          assigned_to?: string | null
           city: string
           commentaire?: string | null
           company?: string | null
           created_at?: string
-          created_by?: string | null
           date_rdv?: string | null
           email: string
-          extra_fields?: Json
           full_name: string
           heure_rdv?: string | null
           id?: string
@@ -119,7 +122,6 @@ export type Database = {
           phone_raw: string
           postal_code: string
           product_name?: string | null
-          product_type?: string | null
           status?: string
           surface_m2?: number | null
           updated_at?: string
@@ -127,15 +129,12 @@ export type Database = {
           utm_source?: string | null
         }
         Update: {
-          assigned_to?: string | null
           city?: string
           commentaire?: string | null
           company?: string | null
           created_at?: string
-          created_by?: string | null
           date_rdv?: string | null
           email?: string
-          extra_fields?: Json
           full_name?: string
           heure_rdv?: string | null
           id?: string
@@ -143,7 +142,6 @@ export type Database = {
           phone_raw?: string
           postal_code?: string
           product_name?: string | null
-          product_type?: string | null
           status?: string
           surface_m2?: number | null
           updated_at?: string
@@ -152,55 +150,34 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "leads_assigned_to_fkey"
-            columns: ["assigned_to"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "leads_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "leads_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "leads_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          }
         ]
       }
       memberships: {
         Row: {
           created_at: string
-          id: string
+          invited_by: string | null
           org_id: string
-          role: string
+          role: Database["public"]["Enums"]["org_role"]
           user_id: string
         }
         Insert: {
           created_at?: string
-          id?: string
+          invited_by?: string | null
           org_id: string
-          role?: string
+          role?: Database["public"]["Enums"]["org_role"]
           user_id: string
         }
         Update: {
           created_at?: string
-          id?: string
+          invited_by?: string | null
           org_id?: string
-          role?: string
+          role?: Database["public"]["Enums"]["org_role"]
           user_id?: string
         }
         Relationships: [
@@ -211,32 +188,43 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "memberships_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          }
         ]
       }
       organizations: {
         Row: {
+          address: string | null
+          city: string | null
+          country: string | null
           created_at: string
           id: string
           name: string
+          postal_code: string | null
+          siret: string | null
+          tva: string | null
           updated_at: string
         }
         Insert: {
+          address?: string | null
+          city?: string | null
+          country?: string | null
           created_at?: string
           id?: string
           name: string
+          postal_code?: string | null
+          siret?: string | null
+          tva?: string | null
           updated_at?: string
         }
         Update: {
+          address?: string | null
+          city?: string | null
+          country?: string | null
           created_at?: string
           id?: string
           name?: string
+          postal_code?: string | null
+          siret?: string | null
+          tva?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -251,6 +239,7 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          org_id: string | null
           owner_id: string
           params_schema: Json | null
           schema_version: number
@@ -265,6 +254,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          org_id?: string | null
           owner_id: string
           params_schema?: Json | null
           schema_version?: number
@@ -279,52 +269,20 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          org_id?: string | null
           owner_id?: string
           params_schema?: Json | null
           schema_version?: number
           updated_at?: string
         }
-        Relationships: []
-      }
-      products: {
-        Row: {
-          created_at: string
-          enabled: boolean
-          form_schema: Json | null
-          id: string
-          label: string
-          org_id: string
-          product_type: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          enabled?: boolean
-          form_schema?: Json | null
-          id?: string
-          label: string
-          org_id: string
-          product_type: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          enabled?: boolean
-          form_schema?: Json | null
-          id?: string
-          label?: string
-          org_id?: string
-          product_type?: string
-          updated_at?: string
-        }
         Relationships: [
           {
-            foreignKeyName: "products_org_id_fkey"
+            foreignKeyName: "product_catalog_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
-          }
+          },
         ]
       }
       profiles: {
@@ -368,6 +326,7 @@ export type Database = {
           estimated_value: number | null
           id: string
           lead_id: string | null
+          org_id: string | null
           phone: string | null
           postal_code: string
           prime_cee: number | null
@@ -396,6 +355,7 @@ export type Database = {
           estimated_value?: number | null
           id?: string
           lead_id?: string | null
+          org_id?: string | null
           phone?: string | null
           postal_code: string
           prime_cee?: number | null
@@ -424,6 +384,7 @@ export type Database = {
           estimated_value?: number | null
           id?: string
           lead_id?: string | null
+          org_id?: string | null
           phone?: string | null
           postal_code?: string
           prime_cee?: number | null
@@ -447,6 +408,13 @@ export type Database = {
             referencedRelation: "leads"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "projects_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
         ]
       }
       quotes: {
@@ -456,6 +424,7 @@ export type Database = {
           created_at: string
           id: string
           notes: string | null
+          org_id: string | null
           product_name: string
           project_id: string | null
           quote_ref: string
@@ -470,6 +439,7 @@ export type Database = {
           created_at?: string
           id?: string
           notes?: string | null
+          org_id?: string | null
           product_name: string
           project_id?: string | null
           quote_ref: string
@@ -484,6 +454,7 @@ export type Database = {
           created_at?: string
           id?: string
           notes?: string | null
+          org_id?: string | null
           product_name?: string
           project_id?: string | null
           quote_ref?: string
@@ -493,6 +464,13 @@ export type Database = {
           valid_until?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "quotes_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "quotes_project_id_fkey"
             columns: ["project_id"]
@@ -504,86 +482,99 @@ export type Database = {
       }
       sites: {
         Row: {
+          additional_costs: Json | null
           address: string
-          assigned_to: string | null
           city: string
           client_name: string
+          cofrac_status: string | null
+          cout_isolation_m2: number | null
+          cout_main_oeuvre_m2_ht: number | null
           created_at: string
-          created_by: string | null
           date_debut: string
           date_fin_prevue: string | null
           id: string
+          isolation_utilisee_m2: number | null
+          montant_commission: number | null
+          notes: string | null
           org_id: string | null
           postal_code: string
           product_name: string
+          profit_margin: number | null
           progress_percentage: number | null
           project_id: string | null
           project_ref: string
+          revenue: number | null
           site_ref: string
           status: string
+          surface_facturee: number | null
           team_members: string[] | null
           updated_at: string
           user_id: string
+          valorisation_cee: number | null
         }
         Insert: {
+          additional_costs?: Json | null
           address: string
-          assigned_to?: string | null
           city: string
           client_name: string
+          cofrac_status?: string | null
+          cout_isolation_m2?: number | null
+          cout_main_oeuvre_m2_ht?: number | null
           created_at?: string
-          created_by?: string | null
           date_debut: string
           date_fin_prevue?: string | null
           id?: string
+          isolation_utilisee_m2?: number | null
+          montant_commission?: number | null
+          notes?: string | null
           org_id?: string | null
           postal_code: string
           product_name: string
+          profit_margin?: number | null
           progress_percentage?: number | null
           project_id?: string | null
           project_ref: string
+          revenue?: number | null
           site_ref: string
           status?: string
+          surface_facturee?: number | null
           team_members?: string[] | null
           updated_at?: string
           user_id: string
+          valorisation_cee?: number | null
         }
         Update: {
+          additional_costs?: Json | null
           address?: string
-          assigned_to?: string | null
           city?: string
           client_name?: string
+          cofrac_status?: string | null
+          cout_isolation_m2?: number | null
+          cout_main_oeuvre_m2_ht?: number | null
           created_at?: string
-          created_by?: string | null
           date_debut?: string
           date_fin_prevue?: string | null
           id?: string
+          isolation_utilisee_m2?: number | null
+          montant_commission?: number | null
+          notes?: string | null
           org_id?: string | null
           postal_code?: string
           product_name?: string
+          profit_margin?: number | null
           progress_percentage?: number | null
           project_id?: string | null
           project_ref?: string
+          revenue?: number | null
           site_ref?: string
           status?: string
+          surface_facturee?: number | null
           team_members?: string[] | null
           updated_at?: string
           user_id?: string
+          valorisation_cee?: number | null
         }
         Relationships: [
-          {
-            foreignKeyName: "sites_assigned_to_fkey"
-            columns: ["assigned_to"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sites_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "sites_org_id_fkey"
             columns: ["org_id"]
@@ -608,7 +599,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      org_role: "owner" | "admin" | "member"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -735,6 +726,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      org_role: ["owner", "admin", "member"],
+    },
   },
 } as const

@@ -4,6 +4,7 @@ import { Bell, MessageCircle, Search, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ModeToggle } from "@/components/theme/ModeToggle";
+import { OrgSelector } from "@/features/organizations/OrgSelector";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -31,6 +32,7 @@ export function Layout({ children }: LayoutProps) {
             </div>
 
             <div className="flex items-center gap-3">
+              <OrgSelector />
               <ModeToggle />
               <Button variant="ghost" size="icon">
                 <Bell className="w-4 h-4" />

@@ -36,7 +36,7 @@ export const DynamicFields = <TFormValues extends { extra_fields?: Record<string
 
   const renderFieldControl = (
     fieldConfig: DynamicFieldSchema,
-    field: ControllerRenderProps<TFormValues, `extra_fields.${string}`>
+    field: ControllerRenderProps<TFormValues, any>
   ) => {
     switch (fieldConfig.type) {
       case "textarea":
@@ -115,7 +115,7 @@ export const DynamicFields = <TFormValues extends { extra_fields?: Record<string
           <Fragment key={fieldConfig.name}>
             <FormField
               control={form.control}
-              name={`extra_fields.${fieldConfig.name}` as const}
+              name={`extra_fields.${fieldConfig.name}` as any}
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>
