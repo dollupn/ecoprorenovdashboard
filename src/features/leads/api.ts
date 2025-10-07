@@ -10,7 +10,10 @@ type LeadUpdate = TablesUpdate<"leads">;
 type MembershipRecord = Tables<"memberships">;
 type ProfileRecord = Tables<"profiles">;
 
-type ProductRecord = Tables<"products">;
+type ProductRecord = Tables<"products"> & {
+  label?: string;
+  form_schema?: ProductFormSchema;
+};
 
 type QueryError = Error;
 
@@ -40,7 +43,7 @@ const sanitizeSearch = (value: string) => value.replace(/[%_]/g, (match) => `\\$
 export const getProductFormSchema = async (orgId: string, productType: string) => {
   const { data, error } = await supabase
     .from("products")
-    .select("product_type, label, form_schema, enabled")
+    .select("product_type, name, description, quantity_default, enabled")
     .eq("org_id", orgId)
     .eq("product_type", productType)
     .eq("enabled", true)
@@ -50,27 +53,27 @@ export const getProductFormSchema = async (orgId: string, productType: string) =
 
   if (!data) return null;
 
-  const formSchema = (data.form_schema ?? { fields: [] }) as ProductFormSchema;
-
   return {
     ...data,
-    form_schema: formSchema,
+    label: data.name,
+    form_schema: { fields: [] } satisfies ProductFormSchema,
   } as ProductRecord & { form_schema: ProductFormSchema };
 };
 
 export const getOrganizationProducts = async (orgId: string) => {
   const { data, error } = await supabase
     .from("products")
-    .select("id, product_type, label, enabled, form_schema")
+    .select("id, name, product_type, enabled")
     .eq("org_id", orgId)
     .eq("enabled", true)
-    .order("label", { ascending: true });
+    .order("name", { ascending: true });
 
   if (error) throw error as QueryError;
 
   return (data ?? []).map((product) => ({
     ...product,
-    form_schema: (product.form_schema ?? { fields: [] }) as ProductFormSchema,
+    label: product.name,
+    form_schema: { fields: [] } as ProductFormSchema,
   }));
 };
 
