@@ -98,12 +98,8 @@ export const ProductFormDialog = ({
   );
 
   const typeOptions = useMemo(() => {
-    if (!product?.product_type) {
-      return productTypes;
-    }
-    if (productTypes.includes(product.product_type)) {
-      return productTypes;
-    }
+    if (!product?.product_type) return productTypes;
+    if (productTypes.includes(product.product_type)) return productTypes;
     return [product.product_type, ...productTypes];
   }, [product?.product_type, productTypes]);
 
@@ -204,6 +200,7 @@ export const ProductFormDialog = ({
                 )}
               />
             </div>
+
             <div className="grid gap-4 md:grid-cols-2">
               <FormField
                 control={form.control}
@@ -269,6 +266,7 @@ export const ProductFormDialog = ({
                 )}
               />
             </div>
+
             <div className="grid gap-4 md:grid-cols-3">
               <FormField
                 control={form.control}
@@ -328,6 +326,7 @@ export const ProductFormDialog = ({
                 )}
               />
             </div>
+
             <FormField
               control={form.control}
               name="description"
@@ -357,6 +356,7 @@ export const ProductFormDialog = ({
                 </FormItem>
               )}
             />
+
             <FormField
               control={form.control}
               name="enabled"
@@ -374,6 +374,7 @@ export const ProductFormDialog = ({
                 </FormItem>
               )}
             />
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isSubmitting}>
                 Annuler
