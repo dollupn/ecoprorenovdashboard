@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -40,6 +39,7 @@ import {
   type LeadStatus,
   LEAD_STATUSES,
 } from "./status";
+import { useUpdateLead } from "@/features/leads/api";
 
 const scheduleSchema = z.object({
   date_rdv: z.string().min(1, "La date du rendez-vous est requise"),
@@ -59,18 +59,18 @@ interface ScheduleLeadDialogProps {
 
 const resolveInitialStatus = (status: string): LeadStatus => {
   if (isLeadStatus(status)) {
-    if (status === "NEW" || status === "QUALIFIED") {
-      return "RDV_PLANIFIE";
+    if (status === "Nouveau") {
+      return "Qualifié";
     }
     return status;
   }
-  return "RDV_PLANIFIE";
+  return "Qualifié";
 };
 
 export const ScheduleLeadDialog = ({ lead, onScheduled }: ScheduleLeadDialogProps) => {
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const updateLead = useUpdateLead(null);
 
   const form = useForm<ScheduleLeadForm>({
     resolver: zodResolver(scheduleSchema),
@@ -94,20 +94,17 @@ export const ScheduleLeadDialog = ({ lead, onScheduled }: ScheduleLeadDialogProp
   }, [open, lead, form]);
 
   const onSubmit = async (values: ScheduleLeadForm) => {
-    setLoading(true);
     try {
-      const { error } = await supabase
-        .from("leads")
-        .update({
+      await updateLead.mutateAsync({
+        id: lead.id,
+        values: {
           date_rdv: values.date_rdv,
           heure_rdv: values.heure_rdv,
           commentaire: values.commentaire?.trim() ? values.commentaire : null,
           status: values.status,
           updated_at: new Date().toISOString(),
-        })
-        .eq("id", lead.id);
-
-      if (error) throw error;
+        },
+      });
 
       toast({
         title: "RDV planifié",
@@ -123,8 +120,6 @@ export const ScheduleLeadDialog = ({ lead, onScheduled }: ScheduleLeadDialogProp
         description: message,
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -224,8 +219,8 @@ export const ScheduleLeadDialog = ({ lead, onScheduled }: ScheduleLeadDialogProp
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Annuler
               </Button>
-              <Button type="submit" disabled={loading}>
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <Button type="submit" disabled={updateLead.isPending}>
+                {updateLead.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Enregistrer le RDV
               </Button>
             </div>

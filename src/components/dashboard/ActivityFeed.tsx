@@ -20,7 +20,7 @@ const mockActivities: Activity[] = [
     description: "Marie Dupont - Isolation combles à Paris 15e",
     time: "il y a 2h",
     user: "System",
-    status: "NEW"
+    status: "Nouveau"
   },
   {
     id: "2",
@@ -72,7 +72,7 @@ const getActivityIcon = (type: Activity["type"]) => {
 
 const getStatusColor = (status?: string) => {
   switch (status) {
-    case "NEW": return "bg-blue-500/10 text-blue-700 border-blue-200";
+    case "Nouveau": return "bg-blue-500/10 text-blue-700 border-blue-200";
     case "SENT": return "bg-orange-500/10 text-orange-700 border-orange-200";
     case "ACCEPTED": return "bg-green-500/10 text-green-700 border-green-200";
     case "PAID": return "bg-green-500/10 text-green-700 border-green-200";

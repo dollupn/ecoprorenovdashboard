@@ -79,18 +79,23 @@ export type Database = {
       }
       leads: {
         Row: {
+          assigned_to: string | null
           city: string
           commentaire: string | null
           company: string | null
           created_at: string
+          created_by: string | null
           date_rdv: string | null
           email: string
+          extra_fields: Json
           full_name: string
           heure_rdv: string | null
           id: string
+          org_id: string | null
           phone_raw: string
           postal_code: string
           product_name: string | null
+          product_type: string | null
           status: string
           surface_m2: number | null
           updated_at: string
@@ -98,18 +103,23 @@ export type Database = {
           utm_source: string | null
         }
         Insert: {
+          assigned_to?: string | null
           city: string
           commentaire?: string | null
           company?: string | null
           created_at?: string
+          created_by?: string | null
           date_rdv?: string | null
           email: string
+          extra_fields?: Json
           full_name: string
           heure_rdv?: string | null
           id?: string
+          org_id?: string | null
           phone_raw: string
           postal_code: string
           product_name?: string | null
+          product_type?: string | null
           status?: string
           surface_m2?: number | null
           updated_at?: string
@@ -117,23 +127,117 @@ export type Database = {
           utm_source?: string | null
         }
         Update: {
+          assigned_to?: string | null
           city?: string
           commentaire?: string | null
           company?: string | null
           created_at?: string
+          created_by?: string | null
           date_rdv?: string | null
           email?: string
+          extra_fields?: Json
           full_name?: string
           heure_rdv?: string | null
           id?: string
+          org_id?: string | null
           phone_raw?: string
           postal_code?: string
           product_name?: string | null
+          product_type?: string | null
           status?: string
           surface_m2?: number | null
           updated_at?: string
           user_id?: string
           utm_source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leads_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      memberships: {
+        Row: {
+          created_at: string
+          id: string
+          org_id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          org_id: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          org_id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "memberships_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "memberships_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      organizations: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -181,6 +285,47 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      products: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          form_schema: Json | null
+          id: string
+          label: string
+          org_id: string
+          product_type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          form_schema?: Json | null
+          id?: string
+          label: string
+          org_id: string
+          product_type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          form_schema?: Json | null
+          id?: string
+          label?: string
+          org_id?: string
+          product_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       profiles: {
         Row: {
@@ -360,12 +505,15 @@ export type Database = {
       sites: {
         Row: {
           address: string
+          assigned_to: string | null
           city: string
           client_name: string
           created_at: string
+          created_by: string | null
           date_debut: string
           date_fin_prevue: string | null
           id: string
+          org_id: string | null
           postal_code: string
           product_name: string
           progress_percentage: number | null
@@ -379,12 +527,15 @@ export type Database = {
         }
         Insert: {
           address: string
+          assigned_to?: string | null
           city: string
           client_name: string
           created_at?: string
+          created_by?: string | null
           date_debut: string
           date_fin_prevue?: string | null
           id?: string
+          org_id?: string | null
           postal_code: string
           product_name: string
           progress_percentage?: number | null
@@ -398,12 +549,15 @@ export type Database = {
         }
         Update: {
           address?: string
+          assigned_to?: string | null
           city?: string
           client_name?: string
           created_at?: string
+          created_by?: string | null
           date_debut?: string
           date_fin_prevue?: string | null
           id?: string
+          org_id?: string | null
           postal_code?: string
           product_name?: string
           progress_percentage?: number | null
@@ -416,6 +570,27 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "sites_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sites_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sites_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sites_project_id_fkey"
             columns: ["project_id"]
