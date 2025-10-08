@@ -24,36 +24,12 @@ import { useCreateProduct, useUpdateProduct } from "./api";
 import { CategoryFormDialog } from "./CategoryFormDialog";
 import { RichDescription } from "./RichDescription";
 
-const numberField = z.preprocess((value) => {
-  if (value === "" || value === null || value === undefined) return undefined;
-  if (typeof value === "string") {
-    const normalized = value.replace(",", ".");
-    const parsed = Number(normalized);
-    return Number.isNaN(parsed) ? undefined : parsed;
-  }
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-  return undefined;
-}, z.number({ invalid_type_error: "Valeur invalide" }).min(0, "La valeur doit être positive").optional());
-
-const parseNumberInput = (value: string) => {
-  if (value === "") return undefined;
-  const normalized = value.replace(",", ".");
-  const parsed = Number(normalized);
-  return Number.isNaN(parsed) ? undefined : parsed;
-};
-
 const productSchema = z.object({
   name: z.string().min(2, "Le nom est requis").max(200),
-  sku: z.string().max(120).optional(),
-  product_type: z.string().min(2, "Le type est requis"),
-  category_id: z.string().optional().nullable(),
-  unit: z.string().max(50).optional(),
-  price_ref: numberField,
-  quantity_default: numberField,
+  code: z.string().max(120).optional(),
+  category: z.string().optional().nullable(),
   description: z.string().max(15000, "La description ne peut pas dépasser 15 000 caractères").optional(),
-  enabled: z.boolean().default(true),
+  is_active: z.boolean().default(true),
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -71,7 +47,6 @@ type ProductFormDialogProps = {
 export const ProductFormDialog = ({
   orgId,
   categories,
-  productTypes,
   product,
   trigger,
   open: openProp,
@@ -85,23 +60,13 @@ export const ProductFormDialog = ({
   const defaultValues = useMemo<ProductFormValues>(
     () => ({
       name: product?.name ?? "",
-      sku: product?.sku ?? "",
-      product_type: product?.product_type ?? "LED",
-      category_id: product?.category_id ?? undefined,
-      unit: product?.unit ?? "unité",
-      price_ref: product?.price_ref ?? undefined,
-      quantity_default: product?.quantity_default ?? undefined,
+      code: product?.code ?? "",
+      category: product?.category ?? null,
       description: product?.description ?? "",
-      enabled: product?.enabled ?? true,
+      is_active: product?.is_active ?? true,
     }),
     [product],
   );
-
-  const typeOptions = useMemo(() => {
-    if (!product?.product_type) return productTypes;
-    if (productTypes.includes(product.product_type)) return productTypes;
-    return [product.product_type, ...productTypes];
-  }, [product?.product_type, productTypes]);
 
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
@@ -133,83 +98,81 @@ export const ProductFormDialog = ({
       return;
     }
 
-    const payload: TablesInsert<"products"> = {
+    const payload: TablesInsert<"product_catalog"> = {
       org_id: orgId,
+      owner_id: orgId,
       name: values.name.trim(),
-      sku: values.sku?.trim() ? values.sku.trim() : null,
-      product_type: values.product_type,
-      category_id: values.category_id ?? null,
-      unit: values.unit?.trim() || "unité",
-      price_ref: values.price_ref ?? null,
-      quantity_default: values.quantity_default ?? null,
-      description: values.description?.trim() ? values.description.trim() : null,
-      enabled: values.enabled,
+      code: values.code?.trim() || "",
+      category: values.category,
+      description: values.description?.trim() || null,
+      is_active: values.is_active,
     };
 
     try {
       if (product) {
         await updateProduct.mutateAsync({ id: product.id, values: payload });
-        toast({ title: "Produit mis à jour", description: `${values.name} a été enregistré` });
+        toast({ title: "Produit modifié", description: `${values.name} a été mis à jour` });
       } else {
         await createProduct.mutateAsync(payload);
-        toast({ title: "Produit créé", description: `${values.name} a été ajouté` });
+        toast({ title: "Produit créé", description: `${values.name} a été ajouté au catalogue` });
       }
       setOpen(false);
+      form.reset(defaultValues);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Impossible d'enregistrer le produit";
+      const message = error instanceof Error ? error.message : "Impossible de sauvegarder le produit";
       toast({ title: "Erreur", description: message, variant: "destructive" });
     }
   };
 
-  const isSubmitting = createProduct.isPending || updateProduct.isPending;
+  const isSubmitting = form.formState.isSubmitting;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null}
-      <DialogContent className="max-w-3xl">
+      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>{product ? "Modifier le produit" : "Créer un produit"}</DialogTitle>
+          <DialogTitle>{product ? "Modifier le produit" : "Nouveau produit"}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nom *</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="Isolation des combles" disabled={isSubmitting} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="sku"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>SKU / Référence</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="SKU interne" disabled={isSubmitting} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 overflow-y-auto">
+            <div className="space-y-6 px-1">
+              <div className="grid gap-4 md:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nom *</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="Nom du produit" disabled={isSubmitting} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="code"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Code</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="Code produit" disabled={isSubmitting} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="category_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Catégorie</FormLabel>
-                    <FormControl>
-                      <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
+                <FormField
+                  control={form.control}
+                  name="category"
+                  render={({ field }) => (
+                    <FormItem className="flex-1">
+                      <FormLabel>Catégorie</FormLabel>
+                      <FormControl>
                         <Select
                           value={field.value ?? "null"}
                           onValueChange={(value) => field.onChange(value === "null" ? null : value)}
@@ -221,175 +184,71 @@ export const ProductFormDialog = ({
                           <SelectContent>
                             <SelectItem value="null">Aucune</SelectItem>
                             {categories.map((category) => (
-                              <SelectItem key={category.id} value={category.id}>
+                              <SelectItem key={category.id} value={category.name}>
                                 {category.name}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
-                        <CategoryFormDialog
-                          orgId={orgId}
-                          trigger={
-                            <Button type="button" variant="outline" size="sm" className="gap-2 whitespace-nowrap">
-                              <Plus className="h-4 w-4" /> + Catégorie
-                            </Button>
-                          }
-                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <CategoryFormDialog
+                  orgId={orgId}
+                  trigger={
+                    <Button type="button" variant="outline" size="sm" className="gap-2 whitespace-nowrap mt-8">
+                      <Plus className="h-4 w-4" /> Catégorie
+                    </Button>
+                  }
+                />
+              </div>
+
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <RichDescription
+                        value={field.value ?? ""}
+                        onChange={(value) => field.onChange(value)}
+                        disabled={isSubmitting}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="is_active"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">Produit actif</FormLabel>
+                      <div className="text-sm text-muted-foreground">
+                        Ce produit sera visible dans les formulaires
                       </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="product_type"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Type *</FormLabel>
+                    </div>
                     <FormControl>
-                      <Select value={field.value} onValueChange={field.onChange} disabled={isSubmitting}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner un type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {typeOptions.map((type) => (
-                            <SelectItem key={type} value={type}>
-                              {type}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Switch checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting} />
                     </FormControl>
-                    <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
-              <FormField
-                control={form.control}
-                name="unit"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Unité</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="ex. unité, m²" disabled={isSubmitting} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="price_ref"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Prix de référence (€)</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={field.value ?? ""}
-                        onChange={(event) => {
-                          field.onChange(parseNumberInput(event.target.value));
-                        }}
-                        disabled={isSubmitting}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="quantity_default"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Quantité par défaut</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={field.value ?? ""}
-                        onChange={(event) => {
-                          field.onChange(parseNumberInput(event.target.value));
-                        }}
-                        disabled={isSubmitting}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <RichDescription
-                      value={field.value ?? ""}
-                      onChange={(value) => {
-                        field.onChange(value);
-                        if (value.length > 15000) {
-                          form.setError("description", {
-                            type: "too_long",
-                            message: "La description ne peut pas dépasser 15 000 caractères",
-                          });
-                        } else {
-                          form.clearErrors("description");
-                        }
-                      }}
-                      onBlur={field.onBlur}
-                      maxLength={15000}
-                      disabled={isSubmitting}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="enabled"
-              render={({ field }) => (
-                <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                  <div>
-                    <FormLabel>Produit actif</FormLabel>
-                    <p className="text-sm text-muted-foreground">
-                      Un produit inactif n'apparaîtra pas dans les sélections.
-                    </p>
-                  </div>
-                  <FormControl>
-                    <Switch checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting} />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-
-            <DialogFooter>
+            <DialogFooter className="mt-6">
               <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isSubmitting}>
                 Annuler
               </Button>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Enregistrement...
-                  </span>
-                ) : product ? (
-                  "Mettre à jour"
-                ) : (
-                  "Créer"
-                )}
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {product ? "Modifier" : "Créer"}
               </Button>
             </DialogFooter>
           </form>

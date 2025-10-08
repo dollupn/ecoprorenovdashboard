@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 
 export type CategoryRecord = Tables<"categories">;
-export type ProductRecord = Tables<"products">;
+export type ProductRecord = Tables<"product_catalog">;
 export type ProductCatalogRecord = Tables<"product_catalog">;
 
 export type ProductFilters = {
@@ -134,13 +134,13 @@ export const useProductCatalog = (
 export const useCreateProduct = (orgId: string | null) => {
   const queryClient = useQueryClient();
 
-  return useMutation<ProductRecord, Error, TablesInsert<"products">>({
+  return useMutation<ProductRecord, Error, TablesInsert<"product_catalog">>({
     mutationFn: async (payload) => {
       if (!orgId) throw new Error("Organisation requise");
       
       const { data, error } = await supabase
-        .from("products")
-        .insert({ ...payload, org_id: orgId })
+        .from("product_catalog")
+        .insert({ ...payload, org_id: orgId, owner_id: orgId })
         .select()
         .single();
 
@@ -158,10 +158,10 @@ export const useCreateProduct = (orgId: string | null) => {
 export const useUpdateProduct = (orgId: string | null) => {
   const queryClient = useQueryClient();
 
-  return useMutation<ProductRecord, Error, { id: string; values: TablesUpdate<"products"> }>({
+  return useMutation<ProductRecord, Error, { id: string; values: TablesUpdate<"product_catalog"> }>({
     mutationFn: async ({ id, values }) => {
       const { data, error } = await supabase
-        .from("products")
+        .from("product_catalog")
         .update(values)
         .eq("id", id)
         .select()
@@ -183,7 +183,7 @@ export const useDeleteProduct = (orgId: string | null) => {
 
   return useMutation<{ id: string }, Error, string>({
     mutationFn: async (id) => {
-      const { error } = await supabase.from("products").delete().eq("id", id);
+      const { error } = await supabase.from("product_catalog").delete().eq("id", id);
       if (error) throw error;
       return { id };
     },
@@ -200,6 +200,6 @@ export const useProductTypes = (
 ): string[] =>
   useMemo(() => {
     const defaults = ["LED", "Isolation", "PAC", "Photovoltaïque", "Menuiserie"];
-    const existing = catalog?.map((product) => product.product_type).filter(Boolean) ?? [];
+    const existing = catalog?.map((product) => product.name).filter(Boolean) ?? [];
     return Array.from(new Set([...defaults, ...existing])).sort((a, b) => a.localeCompare(b));
   }, [catalog]);

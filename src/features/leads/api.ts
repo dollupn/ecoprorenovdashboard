@@ -25,32 +25,12 @@ export type LeadFilters = {
 
 const sanitizeSearch = (value: string) => value.replace(/[%_]/g, (match) => `\\${match}`);
 
-export const getProductFormSchema = async (orgId: string, productType: string) => {
-  const { data, error } = await supabase
-    .from("products")
-    .select("product_type, name, description, quantity_default, enabled")
-    .eq("org_id", orgId)
-    .eq("product_type", productType)
-    .eq("enabled", true)
-    .maybeSingle();
-
-  if (error) throw error;
-
-  if (!data) return null;
-
-  return {
-    ...data,
-    label: data.name,
-    form_schema: { fields: [] } satisfies ProductFormSchema,
-  };
-};
-
 export const getOrganizationProducts = async (orgId: string) => {
   const { data, error } = await supabase
-    .from("products")
-    .select("id, name, product_type, enabled")
+    .from("product_catalog")
+    .select("id, name, is_active")
     .eq("org_id", orgId)
-    .eq("enabled", true)
+    .eq("is_active", true)
     .order("name", { ascending: true });
 
   if (error) throw error;
@@ -58,7 +38,6 @@ export const getOrganizationProducts = async (orgId: string) => {
   return (data ?? []).map((product) => ({
     ...product,
     label: product.name,
-    form_schema: { fields: [] } as ProductFormSchema,
   }));
 };
 
