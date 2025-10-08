@@ -28,7 +28,6 @@ import {
   useCategories,
   useDeleteProduct,
   useProductCatalog,
-  useProductTypes,
   useUpdateProduct,
   type ProductCatalogRecord,
 } from "./api";
@@ -49,7 +48,6 @@ export const ProductsPage = () => {
 
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
-  const [typeFilter, setTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<(typeof STATUS_OPTIONS)[number]["value"]>("all");
   const [page, setPage] = useState(1);
   const [productToDelete, setProductToDelete] = useState<ProductCatalogRecord | null>(null);
@@ -60,7 +58,7 @@ export const ProductsPage = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [deferredSearch, categoryFilter, typeFilter, statusFilter]);
+  }, [deferredSearch, categoryFilter, statusFilter]);
 
   const { data: categoriesData } = useCategories(currentOrgId);
   const categories = categoriesData ?? [];
@@ -68,11 +66,10 @@ export const ProductsPage = () => {
   const filters = useMemo(
     () => ({
       search: deferredSearch,
-      categoryId: categoryFilter !== "all" ? categoryFilter : undefined,
-      productType: typeFilter !== "all" ? typeFilter : undefined,
-      enabled: statusFilter === "all" ? undefined : statusFilter === "active",
+      category: categoryFilter !== "all" ? categoryFilter : undefined,
+      isActive: statusFilter === "all" ? undefined : statusFilter === "active",
     }),
-    [deferredSearch, categoryFilter, typeFilter, statusFilter],
+    [deferredSearch, categoryFilter, statusFilter],
   );
 
   const {
@@ -92,8 +89,6 @@ export const ProductsPage = () => {
   const products = catalogResult?.data ?? [];
   const total = catalogResult?.count ?? 0;
 
-  const productTypes = useProductTypes(catalogResult?.data);
-
   const updateProduct = useUpdateProduct(currentOrgId);
   const deleteProduct = useDeleteProduct(currentOrgId);
 
@@ -103,10 +98,10 @@ export const ProductsPage = () => {
     }
   }, [page, products.length, total]);
 
-  const handleToggleEnabled = async (product: ProductCatalogRecord, enabled: boolean) => {
+  const handleToggleActive = async (product: ProductCatalogRecord, enabled: boolean) => {
     setUpdatingId(product.id);
     try {
-      await updateProduct.mutateAsync({ id: product.id, values: { enabled } });
+      await updateProduct.mutateAsync({ id: product.id, values: { is_active: enabled } });
       toast({
         title: enabled ? "Produit activé" : "Produit désactivé",
         description: `${product.name} est désormais ${enabled ? "disponible" : "masqué"}`,
@@ -160,7 +155,6 @@ export const ProductsPage = () => {
         <ProductFormDialog
           orgId={currentOrgId}
           categories={categories}
-          productTypes={productTypes}
           trigger={
             <Button type="button" className="gap-2">
               <Plus className="h-4 w-4" /> Nouveau produit
@@ -183,7 +177,7 @@ export const ProductsPage = () => {
                 <Input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Rechercher par nom, SKU ou type"
+                  placeholder="Rechercher par nom, code ou catégorie"
                   className="pl-9"
                 />
               </div>
@@ -195,21 +189,8 @@ export const ProductsPage = () => {
               <SelectContent>
                 <SelectItem value="all">Toutes les catégories</SelectItem>
                 {categories.map((category) => (
-                  <SelectItem key={category.id} value={category.id}>
+                  <SelectItem key={category.id} value={category.name}>
                     {category.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les types</SelectItem>
-                {productTypes.map((type) => (
-                  <SelectItem key={type} value={type}>
-                    {type}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -241,14 +222,13 @@ export const ProductsPage = () => {
         onPageChange={setPage}
         onEdit={handleEdit}
         onDelete={handleDelete}
-        onToggleEnabled={(product, enabled) => handleToggleEnabled(product, enabled)}
+        onToggleActive={(product, enabled) => handleToggleActive(product, enabled)}
         updatingProductId={updatingId}
       />
 
       <ProductFormDialog
         orgId={currentOrgId}
         categories={categories}
-        productTypes={productTypes}
         product={editingProduct}
         open={Boolean(editingProduct)}
         onOpenChange={(next) => {

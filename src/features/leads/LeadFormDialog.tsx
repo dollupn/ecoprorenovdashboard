@@ -56,7 +56,7 @@ const leadSchema = z.object({
   phone_raw: z.string().min(6, "Numéro de téléphone invalide"),
   city: z.string().min(2, "La ville est requise"),
   postal_code: z.string().min(4, "Code postal invalide"),
-  product_type: z.string().min(1, "Le type de produit est requis"),
+  product_code: z.string().min(1, "Le produit est requis"),
   utm_source: z.string().optional(),
   status: leadStatusEnum,
   commentaire: z.string().optional(),
@@ -86,7 +86,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
       phone_raw: "",
       city: "",
       postal_code: "",
-      product_type: "",
+      product_code: "",
       utm_source: "",
       status: "Nouveau",
       commentaire: "",
@@ -111,22 +111,24 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
 
   const canAssignOthers = currentMemberRole === "owner" || currentMemberRole === "admin";
 
-  const productType = form.watch("product_type");
+  const productCode = form.watch("product_code");
 
   useEffect(() => {
-    if (!productType) return;
+    if (!productCode) return;
     form.setValue("extra_fields", {});
-  }, [productType, form]);
+  }, [productCode, form]);
 
   useEffect(() => {
-    if (!form.getValues("product_type") && products?.length === 1) {
-      form.setValue("product_type", products[0].product_type);
+    if (!form.getValues("product_code") && products?.length === 1) {
+      form.setValue("product_code", products[0].value ?? products[0].id ?? "");
     }
   }, [products, form]);
 
-  const { data: schemaData } = useQueryProductSchema(orgId, productType);
+  const { data: schemaData } = useQueryProductSchema(orgId, productCode);
 
-  const dynamicSchema: ProductFormSchema | undefined = schemaData?.form_schema ?? products?.find((product) => product.product_type === productType)?.form_schema;
+  const dynamicSchema: ProductFormSchema | undefined =
+    schemaData?.form_schema ??
+    products?.find((product) => (product.value ?? product.code ?? product.id) === productCode)?.form_schema;
 
   const createLead = useCreateLead(orgId);
 
@@ -193,7 +195,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
       return;
     }
 
-    const selectedProduct = products?.find((product) => product.product_type === values.product_type);
+    const selectedProduct = products?.find((product) => (product.value ?? product.code ?? product.id) === values.product_code);
 
     const payload = {
       full_name: values.full_name,
@@ -203,7 +205,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
       postal_code: values.postal_code,
       status: values.status,
       company: values.company?.trim() ? values.company : null,
-      product_name: selectedProduct?.label ?? values.product_type,
+      product_name: selectedProduct?.label ?? values.product_code,
       utm_source: values.utm_source?.trim() ? values.utm_source : null,
       commentaire: values.commentaire?.trim() ? values.commentaire : null,
       user_id: user.id,
@@ -225,7 +227,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         phone_raw: "",
         city: "",
         postal_code: "",
-        product_type: products?.length === 1 ? products[0].product_type : "",
+        product_code: products?.length === 1 ? products[0].value ?? products[0].id ?? "" : "",
         utm_source: "",
         status: "Nouveau",
         commentaire: "",
@@ -278,7 +280,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         phone_raw: "",
         city: "",
         postal_code: "",
-        product_type: products?.length === 1 ? products[0].product_type : "",
+        product_code: products?.length === 1 ? products[0].value ?? products[0].id ?? "" : "",
         utm_source: "",
         status: "Nouveau",
         commentaire: "",
@@ -395,10 +397,10 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
             <div className="grid gap-4 md:grid-cols-2">
               <FormField
                 control={form.control}
-                name="product_type"
+                name="product_code"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Type de produit *</FormLabel>
+                    <FormLabel>Produit *</FormLabel>
                     <Select
                       onValueChange={(value) => field.onChange(value)}
                       value={field.value}
@@ -411,7 +413,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
                       </FormControl>
                       <SelectContent>
                         {(products ?? []).map((product) => (
-                          <SelectItem key={product.product_type} value={product.product_type}>
+                          <SelectItem key={product.value ?? product.id} value={product.value ?? product.id}>
                             {product.label}
                           </SelectItem>
                         ))}
@@ -561,9 +563,9 @@ const useQueryOrganizationMembers = (orgId: string | null) =>
     enabled: Boolean(orgId),
   });
 
-const useQueryProductSchema = (orgId: string | null, productType: string) =>
+const useQueryProductSchema = (orgId: string | null, productCode: string) =>
   useQuery<ProductSchemaResult, Error>({
-    queryKey: ["form-schema", orgId, productType],
-    queryFn: () => getProductFormSchema(orgId as string, productType),
-    enabled: Boolean(orgId && productType),
+    queryKey: ["form-schema", orgId, productCode],
+    queryFn: () => getProductFormSchema(orgId as string, productCode),
+    enabled: Boolean(orgId && productCode),
   });

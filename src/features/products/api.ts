@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
@@ -9,9 +8,8 @@ export type ProductCatalogRecord = Tables<"product_catalog">;
 
 export type ProductFilters = {
   search?: string;
-  categoryId?: string | null;
-  productType?: string | null;
-  enabled?: boolean | null;
+  category?: string | null;
+  isActive?: boolean | null;
 };
 
 export type PaginationOptions = {
@@ -81,7 +79,7 @@ export const useProductCatalog = (
     queryFn: async () => {
       if (!orgId) return { data: [], count: 0 };
 
-      const { search, categoryId, productType, enabled } = filters ?? {};
+      const { search, category, isActive } = filters ?? {};
       const trimmedSearch = search?.trim();
       const sanitizedSearch = trimmedSearch ? sanitizeSearch(trimmedSearch) : null;
 
@@ -96,23 +94,19 @@ export const useProductCatalog = (
         query = query.or(
           [
             `name.ilike.${pattern}`,
-            `sku.ilike.${pattern}`,
-            `product_type.ilike.${pattern}`,
             `category.ilike.${pattern}`,
+            `code.ilike.${pattern}`,
+            `description.ilike.${pattern}`,
           ].join(","),
         );
       }
 
-      if (categoryId) {
-        query = query.eq("category_id", categoryId);
+      if (category) {
+        query = query.eq("category", category);
       }
 
-      if (productType) {
-        query = query.eq("product_type", productType);
-      }
-
-      if (enabled !== null && enabled !== undefined) {
-        query = query.eq("enabled", enabled);
+      if (isActive !== null && isActive !== undefined) {
+        query = query.eq("is_active", isActive);
       }
 
       if (pagination) {
@@ -137,10 +131,10 @@ export const useCreateProduct = (orgId: string | null) => {
   return useMutation<ProductRecord, Error, TablesInsert<"product_catalog">>({
     mutationFn: async (payload) => {
       if (!orgId) throw new Error("Organisation requise");
-      
+
       const { data, error } = await supabase
         .from("product_catalog")
-        .insert({ ...payload, org_id: orgId, owner_id: orgId })
+        .insert({ ...payload, org_id: orgId })
         .select()
         .single();
 
@@ -195,11 +189,3 @@ export const useDeleteProduct = (orgId: string | null) => {
   });
 };
 
-export const useProductTypes = (
-  catalog: ProductCatalogRecord[] | undefined,
-): string[] =>
-  useMemo(() => {
-    const defaults = ["LED", "Isolation", "PAC", "Photovoltaïque", "Menuiserie"];
-    const existing = catalog?.map((product) => product.name).filter(Boolean) ?? [];
-    return Array.from(new Set([...defaults, ...existing])).sort((a, b) => a.localeCompare(b));
-  }, [catalog]);

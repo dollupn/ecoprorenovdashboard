@@ -18,7 +18,8 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import type { TablesInsert } from "@/integrations/supabase/types";
+import { useAuth } from "@/hooks/useAuth";
+import type { TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 import type { ProductCatalogRecord, CategoryRecord } from "./api";
 import { useCreateProduct, useUpdateProduct } from "./api";
 import { CategoryFormDialog } from "./CategoryFormDialog";
@@ -37,7 +38,6 @@ type ProductFormValues = z.infer<typeof productSchema>;
 type ProductFormDialogProps = {
   orgId: string | null;
   categories: CategoryRecord[];
-  productTypes: string[];
   product?: ProductCatalogRecord | null;
   trigger?: React.ReactNode;
   open?: boolean;
@@ -54,6 +54,7 @@ export const ProductFormDialog = ({
 }: ProductFormDialogProps) => {
   const [internalOpen, setInternalOpen] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
   const createProduct = useCreateProduct(orgId);
   const updateProduct = useUpdateProduct(orgId);
 
@@ -98,21 +99,33 @@ export const ProductFormDialog = ({
       return;
     }
 
-    const payload: TablesInsert<"product_catalog"> = {
-      org_id: orgId,
-      owner_id: orgId,
+    if (!user?.id) {
+      toast({
+        title: "Authentification requise",
+        description: "Connectez-vous pour gérer les produits",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const updateValues = {
       name: values.name.trim(),
       code: values.code?.trim() || "",
-      category: values.category,
+      category: values.category ?? null,
       description: values.description?.trim() || null,
       is_active: values.is_active,
-    };
+    } satisfies TablesUpdate<"product_catalog">;
 
     try {
       if (product) {
-        await updateProduct.mutateAsync({ id: product.id, values: payload });
+        await updateProduct.mutateAsync({ id: product.id, values: updateValues });
         toast({ title: "Produit modifié", description: `${values.name} a été mis à jour` });
       } else {
+        const payload: TablesInsert<"product_catalog"> = {
+          ...updateValues,
+          org_id: orgId,
+          owner_id: user.id,
+        };
         await createProduct.mutateAsync(payload);
         toast({ title: "Produit créé", description: `${values.name} a été ajouté au catalogue` });
       }

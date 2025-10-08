@@ -32,16 +32,6 @@ import {
 } from "@/components/ui/pagination";
 import type { ProductCatalogRecord } from "./api";
 
-const formatCurrency = (value: number | null) => {
-  if (value === null || Number.isNaN(value)) return "—";
-  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value);
-};
-
-const formatQuantity = (value: number | null) => {
-  if (value === null || Number.isNaN(value)) return "—";
-  return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 }).format(value);
-};
-
 type ProductTableProps = {
   products: ProductCatalogRecord[];
   isLoading: boolean;
@@ -51,7 +41,7 @@ type ProductTableProps = {
   onPageChange: (page: number) => void;
   onEdit: (product: ProductCatalogRecord) => void;
   onDelete: (product: ProductCatalogRecord) => void;
-  onToggleEnabled: (product: ProductCatalogRecord, enabled: boolean) => void;
+  onToggleActive: (product: ProductCatalogRecord, enabled: boolean) => void;
   updatingProductId?: string | null;
 };
 
@@ -64,7 +54,7 @@ export const ProductTable = ({
   onPageChange,
   onEdit,
   onDelete,
-  onToggleEnabled,
+  onToggleActive,
   updatingProductId,
 }: ProductTableProps) => {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -80,7 +70,7 @@ export const ProductTable = ({
     if (isLoading) {
       return (
         <TableRow>
-          <TableCell colSpan={7}>
+          <TableCell colSpan={5}>
             <Skeleton className="h-12 w-full" />
           </TableCell>
         </TableRow>
@@ -90,7 +80,7 @@ export const ProductTable = ({
     if (!hasData) {
       return (
         <TableRow>
-          <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+          <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
             Aucun produit trouvé.
           </TableCell>
         </TableRow>
@@ -98,25 +88,31 @@ export const ProductTable = ({
     }
 
     return products.map((product) => (
-      <TableRow key={product.id} className={!product.enabled ? "opacity-60" : undefined}>
+      <TableRow key={product.id} className={!product.is_active ? "opacity-60" : undefined}>
         <TableCell className="font-medium">
           <div className="flex flex-col">
             <span>{product.name}</span>
-            <span className="text-xs text-muted-foreground">{product.sku ?? "Sans référence"}</span>
+            {product.description ? (
+              <span className="text-xs text-muted-foreground line-clamp-2">{product.description}</span>
+            ) : null}
           </div>
         </TableCell>
+        <TableCell className="whitespace-nowrap">{product.code || "—"}</TableCell>
         <TableCell>
           {product.category ? <Badge variant="secondary">{product.category}</Badge> : <span className="text-muted-foreground">—</span>}
         </TableCell>
-        <TableCell>{product.product_type}</TableCell>
-        <TableCell>{product.unit ?? "unité"}</TableCell>
-        <TableCell>{formatCurrency(product.price_ref)}</TableCell>
-        <TableCell>{formatQuantity(product.quantity_default)}</TableCell>
+        <TableCell>
+          {product.is_active ? (
+            <Badge variant="secondary">Actif</Badge>
+          ) : (
+            <Badge variant="outline">Inactif</Badge>
+          )}
+        </TableCell>
         <TableCell>
           <div className="flex items-center gap-3">
             <Switch
-              checked={product.enabled}
-              onCheckedChange={(checked) => onToggleEnabled(product, checked)}
+              checked={product.is_active}
+              onCheckedChange={(checked) => onToggleActive(product, checked)}
               disabled={updatingProductId === product.id}
             />
             <DropdownMenu>
@@ -149,11 +145,9 @@ export const ProductTable = ({
           <TableHeader>
             <TableRow>
               <TableHead>Nom</TableHead>
+              <TableHead>Code</TableHead>
               <TableHead>Catégorie</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Unité</TableHead>
-              <TableHead>Prix</TableHead>
-              <TableHead>Quantité défaut</TableHead>
+              <TableHead>Statut</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
