@@ -204,7 +204,7 @@ export const RichDescription = ({
     const normalized = sanitized || "";
     if (editor.isEmpty && !normalized) return;
     if (current === normalized) return;
-    editor.commands.setContent(normalized, false);
+    editor.commands.setContent(normalized, { emitUpdate: false });
   }, [editor, value]);
 
   const activeFontFamily = useMemo(() => editor?.getAttributes("textStyle")?.fontFamily ?? "", [editor]);

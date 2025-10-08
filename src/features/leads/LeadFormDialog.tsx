@@ -195,7 +195,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
 
     const selectedProduct = products?.find((product) => product.product_type === values.product_type);
 
-    const payload: TablesInsert<"leads"> = {
+    const payload = {
       full_name: values.full_name,
       email: values.email,
       phone_raw: values.phone_raw,
@@ -203,16 +203,12 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
       postal_code: values.postal_code,
       status: values.status,
       company: values.company?.trim() ? values.company : null,
-      product_type: values.product_type,
       product_name: selectedProduct?.label ?? values.product_type,
       utm_source: values.utm_source?.trim() ? values.utm_source : null,
       commentaire: values.commentaire?.trim() ? values.commentaire : null,
-      assigned_to: values.assigned_to || user.id,
-      created_by: user.id,
       user_id: user.id,
       org_id: orgId,
-      extra_fields: values.extra_fields ?? {},
-    };
+    } as TablesInsert<"leads">;
 
     try {
       await createLead.mutateAsync(payload);

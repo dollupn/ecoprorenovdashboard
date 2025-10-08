@@ -2,21 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 
-type LeadRecord = Tables<"leads">;
-
-type LeadInsert = TablesInsert<"leads">;
-type LeadUpdate = TablesUpdate<"leads">;
-
-type MembershipRecord = Tables<"memberships">;
-type ProfileRecord = Tables<"profiles">;
-
-type ProductRecord = Tables<"products"> & {
-  label?: string;
-  form_schema?: ProductFormSchema;
-};
-
-type QueryError = Error;
-
 export type DynamicFieldSchema = {
   name: string;
   label: string;
@@ -49,7 +34,7 @@ export const getProductFormSchema = async (orgId: string, productType: string) =
     .eq("enabled", true)
     .maybeSingle();
 
-  if (error) throw error as QueryError;
+  if (error) throw error;
 
   if (!data) return null;
 
@@ -57,7 +42,7 @@ export const getProductFormSchema = async (orgId: string, productType: string) =
     ...data,
     label: data.name,
     form_schema: { fields: [] } satisfies ProductFormSchema,
-  } as ProductRecord & { form_schema: ProductFormSchema };
+  };
 };
 
 export const getOrganizationProducts = async (orgId: string) => {
@@ -68,7 +53,7 @@ export const getOrganizationProducts = async (orgId: string) => {
     .eq("enabled", true)
     .order("name", { ascending: true });
 
-  if (error) throw error as QueryError;
+  if (error) throw error;
 
   return (data ?? []).map((product) => ({
     ...product,
@@ -83,10 +68,10 @@ export const getOrganizationMembers = async (orgId: string) => {
     .select("org_id, user_id, role, created_at")
     .eq("org_id", orgId);
 
-  if (error) throw error as QueryError;
+  if (error) throw error;
 
   if (!memberships?.length) {
-    return [] as Array<MembershipRecord & { profile?: ProfileRecord | null }>;
+    return [];
   }
 
   const userIds = memberships.map((membership) => membership.user_id);
@@ -95,7 +80,7 @@ export const getOrganizationMembers = async (orgId: string) => {
     .select("user_id, full_name, role")
     .in("user_id", userIds);
 
-  if (profileError) throw profileError as QueryError;
+  if (profileError) throw profileError;
 
   return memberships.map((membership) => ({
     ...membership,
@@ -106,7 +91,7 @@ export const getOrganizationMembers = async (orgId: string) => {
 export const useLeadsList = (orgId: string | null, filters?: LeadFilters, search?: string) => {
   const sanitizedSearch = search?.trim() ? sanitizeSearch(search.trim()) : null;
 
-  return useQuery<LeadRecord[], QueryError>({
+  return useQuery<Tables<"leads">[], Error>({
     queryKey: [
       "leads",
       orgId,
@@ -128,28 +113,15 @@ export const useLeadsList = (orgId: string | null, filters?: LeadFilters, search
         query = query.in("status", filters.statuses);
       }
 
-      if (filters?.assignedTo) {
-        query = query.eq("assigned_to", filters.assignedTo);
-      }
-
       if (sanitizedSearch) {
         query = query.or(
-          [
-            `full_name.ilike.%${sanitizedSearch}%`,
-            `email.ilike.%${sanitizedSearch}%`,
-            `phone_raw.ilike.%${sanitizedSearch}%`,
-            `city.ilike.%${sanitizedSearch}%`,
-            `postal_code.ilike.%${sanitizedSearch}%`,
-            `company.ilike.%${sanitizedSearch}%`,
-            `product_name.ilike.%${sanitizedSearch}%`,
-            `utm_source.ilike.%${sanitizedSearch}%`,
-          ].join(",")
+          `full_name.ilike.%${sanitizedSearch}%,email.ilike.%${sanitizedSearch}%,phone_raw.ilike.%${sanitizedSearch}%,city.ilike.%${sanitizedSearch}%,postal_code.ilike.%${sanitizedSearch}%,company.ilike.%${sanitizedSearch}%,product_name.ilike.%${sanitizedSearch}%,utm_source.ilike.%${sanitizedSearch}%`
         );
       }
 
       const { data, error } = await query;
 
-      if (error) throw error as QueryError;
+      if (error) throw error;
 
       return data ?? [];
     },
@@ -158,10 +130,10 @@ export const useLeadsList = (orgId: string | null, filters?: LeadFilters, search
 
 export const useCreateLead = (_orgId: string | null) => {
   const queryClient = useQueryClient();
-  return useMutation<LeadRecord, QueryError, LeadInsert>({
+  return useMutation<Tables<"leads">, Error, TablesInsert<"leads">>({
     mutationFn: async (payload) => {
       const { data, error } = await supabase.from("leads").insert(payload).select().single();
-      if (error) throw error as QueryError;
+      if (error) throw error;
       return data;
     },
     onSuccess: () => {
@@ -172,7 +144,7 @@ export const useCreateLead = (_orgId: string | null) => {
 
 export const useUpdateLead = (_orgId: string | null) => {
   const queryClient = useQueryClient();
-  return useMutation<LeadRecord, QueryError, { id: string; values: LeadUpdate }>({
+  return useMutation<Tables<"leads">, Error, { id: string; values: TablesUpdate<"leads"> }>({
     mutationFn: async ({ id, values }) => {
       const { data, error } = await supabase
         .from("leads")
@@ -180,7 +152,7 @@ export const useUpdateLead = (_orgId: string | null) => {
         .eq("id", id)
         .select()
         .single();
-      if (error) throw error as QueryError;
+      if (error) throw error;
       return data;
     },
     onSuccess: () => {

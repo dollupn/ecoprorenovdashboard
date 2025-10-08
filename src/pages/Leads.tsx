@@ -69,7 +69,6 @@ type CsvLead = {
   postal_code: string;
   company?: string;
   product_name?: string;
-  product_type?: string;
   surface_m2?: number;
   utm_source?: string;
   status?: LeadStatus;
@@ -148,8 +147,8 @@ const HEADER_MAPPINGS: Record<string, keyof CsvLead> = {
   product: "product_name",
   produit: "product_name",
   productname: "product_name",
-  producttype: "product_type",
-  product_type: "product_type",
+  producttype: "product_name",
+  product_type: "product_name",
   surface: "surface_m2",
   surfacehabitable: "surface_m2",
   surfacem2: "surface_m2",
@@ -253,7 +252,6 @@ const parseCsv = (text: string): CsvParseResult => {
         case "utm_source":
         case "company":
         case "product_name":
-        case "product_type":
         case "commentaire": {
           // Preserve raw text
           record[key] = rawValue;
@@ -265,9 +263,6 @@ const parseCsv = (text: string): CsvParseResult => {
       }
     });
 
-    if (record.product_name && !record.product_type) {
-      record.product_type = record.product_name;
-    }
 
     if (
       record.full_name &&
@@ -345,7 +340,6 @@ const Leads = () => {
         lead.city,
         lead.postal_code,
         lead.product_name ?? "",
-        lead.product_type ?? "",
         lead.utm_source ?? "",
         lead.company ?? "",
       ]
@@ -421,8 +415,7 @@ const Leads = () => {
         postal_code: row.postal_code,
         status: row.status ?? "Nouveau",
         company: row.company ?? null,
-        product_type: row.product_type ?? row.product_name ?? null,
-        product_name: row.product_name ?? row.product_type ?? null,
+        product_name: row.product_name ?? null,
         surface_m2: row.surface_m2 ?? null,
         utm_source: row.utm_source ?? null,
         commentaire: row.commentaire ?? null,
@@ -678,12 +671,9 @@ const Leads = () => {
                           <MapPin className="w-4 h-4 text-muted-foreground" />
                           {lead.city} ({lead.postal_code})
                         </div>
-                        {(lead.product_name || lead.product_type) && (
+                        {lead.product_name && (
                           <div className="text-sm">
-                            <span className="font-medium">{lead.product_name ?? lead.product_type}</span>
-                            {lead.product_name && lead.product_type && lead.product_name !== lead.product_type ? (
-                              <span className="block text-xs text-muted-foreground">{lead.product_type}</span>
-                            ) : null}
+                            <span className="font-medium">{lead.product_name}</span>
                             {lead.surface_m2 && (
                               <span className="text-muted-foreground"> • {lead.surface_m2} m²</span>
                             )}
@@ -726,7 +716,7 @@ const Leads = () => {
                             project_ref: generateProjectRef(lead),
                             client_name: lead.full_name,
                             company: lead.company ?? "",
-                            product_name: lead.product_name ?? lead.product_type ?? "",
+                            product_name: lead.product_name ?? "",
                             city: lead.city,
                             postal_code: lead.postal_code,
                             surface_isolee_m2: lead.surface_m2 ?? undefined,
@@ -788,12 +778,9 @@ const Leads = () => {
                           </div>
                         </TableCell>
                         <TableCell className="text-sm">
-                          {lead.product_name || lead.product_type ? (
+                          {lead.product_name ? (
                             <div>
-                              <span className="font-medium">{lead.product_name ?? lead.product_type}</span>
-                              {lead.product_name && lead.product_type && lead.product_name !== lead.product_type ? (
-                                <div className="text-xs text-muted-foreground">{lead.product_type}</div>
-                              ) : null}
+                              <span className="font-medium">{lead.product_name}</span>
                               {lead.surface_m2 && (
                                 <span className="text-muted-foreground"> • {lead.surface_m2} m²</span>
                               )}
@@ -842,7 +829,7 @@ const Leads = () => {
                             project_ref: generateProjectRef(lead),
                             client_name: lead.full_name,
                             company: lead.company ?? "",
-                            product_name: lead.product_name ?? lead.product_type ?? "",
+                            product_name: lead.product_name ?? "",
                             city: lead.city,
                             postal_code: lead.postal_code,
                             surface_isolee_m2: lead.surface_m2 ?? undefined,
