@@ -295,7 +295,7 @@ export const RichDescription = ({
             <SelectValue placeholder="Taille" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Taille</SelectItem>
+            <SelectItem value="default">Taille</SelectItem>
             {fontSizes.map((size) => (
               <SelectItem key={size.value} value={size.value}>
                 {size.label}

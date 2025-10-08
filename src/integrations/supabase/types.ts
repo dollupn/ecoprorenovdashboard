@@ -14,6 +14,38 @@ export type Database = {
   }
   public: {
     Tables: {
+      categories: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          org_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          org_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categories_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoices: {
         Row: {
           amount: number
@@ -89,10 +121,12 @@ export type Database = {
       }
       leads: {
         Row: {
+          assigned_to: string | null
           city: string
           commentaire: string | null
           company: string | null
           created_at: string
+          created_by: string | null
           date_rdv: string | null
           email: string
           full_name: string
@@ -109,10 +143,12 @@ export type Database = {
           utm_source: string | null
         }
         Insert: {
+          assigned_to?: string | null
           city: string
           commentaire?: string | null
           company?: string | null
           created_at?: string
+          created_by?: string | null
           date_rdv?: string | null
           email: string
           full_name: string
@@ -129,10 +165,12 @@ export type Database = {
           utm_source?: string | null
         }
         Update: {
+          assigned_to?: string | null
           city?: string
           commentaire?: string | null
           company?: string | null
           created_at?: string
+          created_by?: string | null
           date_rdv?: string | null
           email?: string
           full_name?: string
@@ -229,97 +267,55 @@ export type Database = {
         }
         Relationships: []
       }
-      categories: {
+      product_catalog: {
         Row: {
-          created_at: string | null
+          category: string | null
+          code: string
+          created_at: string
+          default_params: Json | null
           description: string | null
           id: string
+          is_active: boolean
           name: string
-          org_id: string
+          org_id: string | null
+          owner_id: string
+          params_schema: Json | null
+          schema_version: number
+          updated_at: string
         }
         Insert: {
-          created_at?: string | null
+          category?: string | null
+          code: string
+          created_at?: string
+          default_params?: Json | null
           description?: string | null
           id?: string
+          is_active?: boolean
           name: string
-          org_id: string
+          org_id?: string | null
+          owner_id: string
+          params_schema?: Json | null
+          schema_version?: number
+          updated_at?: string
         }
         Update: {
-          created_at?: string | null
+          category?: string | null
+          code?: string
+          created_at?: string
+          default_params?: Json | null
           description?: string | null
           id?: string
+          is_active?: boolean
           name?: string
-          org_id?: string
+          org_id?: string | null
+          owner_id?: string
+          params_schema?: Json | null
+          schema_version?: number
+          updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "categories_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      products: {
-        Row: {
-          category_id: string | null
-          created_at: string | null
-          created_by: string | null
-          description: string | null
-          enabled: boolean | null
-          id: string
-          name: string
-          org_id: string
-          price_ref: number | null
-          product_type: string
-          quantity_default: number | null
-          sku: string | null
-          unit: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          category_id?: string | null
-          created_at?: string | null
-          created_by?: string | null
-          description?: string | null
-          enabled?: boolean | null
-          id?: string
-          name: string
-          org_id: string
-          price_ref?: number | null
-          product_type: string
-          quantity_default?: number | null
-          sku?: string | null
-          unit?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          category_id?: string | null
-          created_at?: string | null
-          created_by?: string | null
-          description?: string | null
-          enabled?: boolean | null
-          id?: string
-          name?: string
-          org_id?: string
-          price_ref?: number | null
-          product_type?: string
-          quantity_default?: number | null
-          sku?: string | null
-          unit?: string | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "products_category_id_fkey"
-            columns: ["category_id"]
-            isOneToOne: false
-            referencedRelation: "categories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "products_org_id_fkey"
+            foreignKeyName: "product_catalog_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -635,25 +631,7 @@ export type Database = {
       }
     }
     Views: {
-      product_catalog: {
-        Row: {
-          category: string | null
-          category_id: string | null
-          created_at: string
-          description: string | null
-          enabled: boolean
-          id: string
-          name: string
-          org_id: string
-          price_ref: number | null
-          product_type: string
-          quantity_default: number
-          sku: string | null
-          unit: string | null
-          updated_at: string
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       [_ in never]: never

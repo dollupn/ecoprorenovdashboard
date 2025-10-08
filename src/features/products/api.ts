@@ -136,9 +136,11 @@ export const useCreateProduct = (orgId: string | null) => {
 
   return useMutation<ProductRecord, Error, TablesInsert<"products">>({
     mutationFn: async (payload) => {
+      if (!orgId) throw new Error("Organisation requise");
+      
       const { data, error } = await supabase
         .from("products")
-        .insert(payload)
+        .insert({ ...payload, org_id: orgId })
         .select()
         .single();
 

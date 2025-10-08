@@ -211,15 +211,15 @@ export const ProductFormDialog = ({
                     <FormControl>
                       <div className="flex items-center gap-2">
                         <Select
-                          value={field.value ?? ""}
-                          onValueChange={(value) => field.onChange(value === "" ? null : value)}
+                          value={field.value ?? "null"}
+                          onValueChange={(value) => field.onChange(value === "null" ? null : value)}
                           disabled={isSubmitting}
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Choisir une catégorie" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">Aucune</SelectItem>
+                            <SelectItem value="null">Aucune</SelectItem>
                             {categories.map((category) => (
                               <SelectItem key={category.id} value={category.id}>
                                 {category.name}
