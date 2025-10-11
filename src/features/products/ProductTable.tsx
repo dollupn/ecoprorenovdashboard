@@ -78,19 +78,19 @@ export const ProductTable = ({
 
   const renderRows = () => {
     if (isLoading) {
-      return (
-        <TableRow>
-          <TableCell colSpan={3}>
-            <Skeleton className="h-12 w-full" />
-          </TableCell>
-        </TableRow>
-      );
+    return (
+      <TableRow>
+        <TableCell colSpan={7}>
+          <Skeleton className="h-12 w-full" />
+        </TableCell>
+      </TableRow>
+    );
     }
 
     if (!hasData) {
       return (
         <TableRow>
-          <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
+          <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
             Aucun produit trouvé.
           </TableCell>
         </TableRow>
@@ -107,6 +107,18 @@ export const ProductTable = ({
         </TableCell>
         <TableCell>
           {product.category ? <Badge variant="secondary">{product.category}</Badge> : <span className="text-muted-foreground">—</span>}
+        </TableCell>
+        <TableCell>
+          {product.unit_type ? <span className="text-sm">{product.unit_type}</span> : <span className="text-muted-foreground">—</span>}
+        </TableCell>
+        <TableCell className="text-right">
+          {formatCurrency(product.base_price_ht)}
+        </TableCell>
+        <TableCell className="text-right">
+          {formatCurrency(product.price_ttc)}
+        </TableCell>
+        <TableCell>
+          {product.supplier_name || <span className="text-muted-foreground">—</span>}
         </TableCell>
         <TableCell>
           <div className="flex items-center gap-3">
@@ -146,6 +158,10 @@ export const ProductTable = ({
           <TableRow>
             <TableHead>Nom</TableHead>
             <TableHead>Catégorie</TableHead>
+            <TableHead>Unité</TableHead>
+            <TableHead className="text-right">Prix HT</TableHead>
+            <TableHead className="text-right">Prix TTC</TableHead>
+            <TableHead>Fournisseur</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
           </TableHeader>

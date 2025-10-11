@@ -17,12 +17,15 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import type { TablesInsert } from "@/integrations/supabase/types";
 import type { ProductCatalogRecord, CategoryRecord } from "./api";
 import { useCreateProduct, useUpdateProduct } from "./api";
 import { CategoryFormDialog } from "./CategoryFormDialog";
 import { RichDescription } from "./RichDescription";
+import { TechnicalSheetUpload } from "./TechnicalSheetUpload";
+import { DynamicFieldsEditor } from "./DynamicFieldsEditor";
 
 const productSchema = z.object({
   name: z.string().min(2, "Le nom est requis").max(200),
@@ -30,6 +33,14 @@ const productSchema = z.object({
   category: z.string().optional().nullable(),
   description: z.string().max(15000, "La description ne peut pas dépasser 15 000 caractères").optional(),
   is_active: z.boolean().default(true),
+  unit_type: z.string().optional().nullable(),
+  base_price_ht: z.number().optional().nullable(),
+  tva_percentage: z.number().min(0).max(100).optional().nullable(),
+  supplier_name: z.string().optional().nullable(),
+  supplier_reference: z.string().optional().nullable(),
+  technical_sheet_url: z.string().optional().nullable(),
+  params_schema: z.any().optional().nullable(),
+  default_params: z.any().optional().nullable(),
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -64,6 +75,14 @@ export const ProductFormDialog = ({
       category: product?.category ?? null,
       description: product?.description ?? "",
       is_active: product?.is_active ?? true,
+      unit_type: product?.unit_type ?? null,
+      base_price_ht: product?.base_price_ht ?? null,
+      tva_percentage: product?.tva_percentage ?? 20,
+      supplier_name: product?.supplier_name ?? null,
+      supplier_reference: product?.supplier_reference ?? null,
+      technical_sheet_url: product?.technical_sheet_url ?? null,
+      params_schema: product?.params_schema ?? null,
+      default_params: product?.default_params ?? null,
     }),
     [product],
   );
@@ -106,6 +125,14 @@ export const ProductFormDialog = ({
       category: values.category,
       description: values.description?.trim() || null,
       is_active: values.is_active,
+      unit_type: values.unit_type,
+      base_price_ht: values.base_price_ht,
+      tva_percentage: values.tva_percentage,
+      supplier_name: values.supplier_name?.trim() || null,
+      supplier_reference: values.supplier_reference?.trim() || null,
+      technical_sheet_url: values.technical_sheet_url,
+      params_schema: values.params_schema,
+      default_params: values.default_params,
     };
 
     try {
@@ -126,6 +153,15 @@ export const ProductFormDialog = ({
 
   const isSubmitting = form.formState.isSubmitting;
 
+  const priceTTC = useMemo(() => {
+    const basePrice = form.watch("base_price_ht");
+    const tva = form.watch("tva_percentage");
+    if (basePrice && tva !== null && tva !== undefined) {
+      return basePrice * (1 + tva / 100);
+    }
+    return null;
+  }, [form.watch("base_price_ht"), form.watch("tva_percentage")]);
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
@@ -135,7 +171,14 @@ export const ProductFormDialog = ({
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 overflow-y-auto">
-            <div className="space-y-6 px-1">
+            <Tabs defaultValue="general" className="space-y-6 px-1">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="general">Général</TabsTrigger>
+                <TabsTrigger value="pricing">Tarification</TabsTrigger>
+                <TabsTrigger value="dynamic">Champs dynamiques</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="general" className="space-y-6">
               <div className="grid gap-4 md:grid-cols-2">
                 <FormField
                   control={form.control}
@@ -240,7 +283,180 @@ export const ProductFormDialog = ({
                   </FormItem>
                 )}
               />
-            </div>
+            </TabsContent>
+
+            <TabsContent value="pricing" className="space-y-6">
+              <div className="grid gap-4 md:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="unit_type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Type d'unité</FormLabel>
+                      <FormControl>
+                        <Select
+                          value={field.value ?? "null"}
+                          onValueChange={(value) => field.onChange(value === "null" ? null : value)}
+                          disabled={isSubmitting}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Choisir une unité" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="null">Aucune</SelectItem>
+                            <SelectItem value="m2">m²</SelectItem>
+                            <SelectItem value="ml">ml (mètre linéaire)</SelectItem>
+                            <SelectItem value="unite">Unité</SelectItem>
+                            <SelectItem value="kg">kg</SelectItem>
+                            <SelectItem value="litre">Litre</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="base_price_ht"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Prix de base HT</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          {...field}
+                          value={field.value ?? ""}
+                          onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                          placeholder="0.00"
+                          disabled={isSubmitting}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="tva_percentage"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>TVA (%)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          {...field}
+                          value={field.value ?? ""}
+                          onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                          placeholder="20.0"
+                          disabled={isSubmitting}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div>
+                  <FormLabel>Prix TTC (calculé)</FormLabel>
+                  <Input
+                    value={priceTTC ? priceTTC.toFixed(2) + " €" : "—"}
+                    disabled
+                    className="bg-muted mt-2"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="supplier_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Fournisseur</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          value={field.value ?? ""}
+                          placeholder="Nom du fournisseur"
+                          disabled={isSubmitting}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="supplier_reference"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Référence fournisseur</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          value={field.value ?? ""}
+                          placeholder="Référence"
+                          disabled={isSubmitting}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={form.control}
+                name="technical_sheet_url"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Fiche technique (PDF)</FormLabel>
+                    <FormControl>
+                      <TechnicalSheetUpload
+                        orgId={orgId}
+                        productId={product?.id}
+                        currentUrl={field.value}
+                        onUrlChange={field.onChange}
+                        disabled={isSubmitting}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </TabsContent>
+
+            <TabsContent value="dynamic" className="space-y-6">
+              <FormField
+                control={form.control}
+                name="params_schema"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <DynamicFieldsEditor
+                        value={{
+                          schema: (form.watch("params_schema") as any) || [],
+                          defaults: (form.watch("default_params") as any) || {},
+                        }}
+                        onChange={(value) => {
+                          form.setValue("params_schema", value.schema);
+                          form.setValue("default_params", value.defaults);
+                        }}
+                        disabled={isSubmitting}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </TabsContent>
+            </Tabs>
 
             <DialogFooter className="mt-6">
               <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isSubmitting}>

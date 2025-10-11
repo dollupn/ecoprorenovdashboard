@@ -116,6 +116,9 @@ export default function Members() {
                               <SelectItem value="admin">
                                 <UserRoleBadge role="admin" />
                               </SelectItem>
+                              <SelectItem value="commercial">
+                                <UserRoleBadge role="commercial" />
+                              </SelectItem>
                               <SelectItem value="member">
                                 <UserRoleBadge role="member" />
                               </SelectItem>
