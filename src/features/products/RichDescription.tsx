@@ -115,7 +115,7 @@ const FontSize = Extension.create({
 });
 
 const fontFamilies = [
-  { label: "Par défaut", value: "" },
+  { label: "Par défaut", value: "default" },
   { label: "Inter", value: "'Inter', sans-serif" },
   { label: "Roboto", value: "'Roboto', sans-serif" },
   { label: "Serif", value: "serif" },
@@ -304,10 +304,10 @@ export const RichDescription = ({
           </SelectContent>
         </Select>
         <Select
-          value={activeFontFamily || ""}
+          value={activeFontFamily || "default"}
           onValueChange={(value) => {
             editor.chain().focus();
-            if (!value) {
+            if (value === "default") {
               editor.commands.unsetFontFamily?.();
               return;
             }
@@ -320,7 +320,7 @@ export const RichDescription = ({
           </SelectTrigger>
           <SelectContent>
             {fontFamilies.map((family) => (
-              <SelectItem key={family.value || "default"} value={family.value}>
+              <SelectItem key={family.value} value={family.value}>
                 {family.label}
               </SelectItem>
             ))}
