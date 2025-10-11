@@ -159,9 +159,9 @@ export const AddProjectDialog = ({
 
       const { data, error } = await supabase
         .from("product_catalog")
-        .select("id, name, sku, category, enabled")
+        .select("id, name, code, category, is_active")
         .eq("org_id", currentOrgId)
-        .eq("enabled", true)
+        .eq("is_active", true)
         .order("name", { ascending: true });
 
       if (error) throw error;
@@ -214,11 +214,11 @@ export const AddProjectDialog = ({
     if (!productsData) return [] as SelectOption[];
 
     return productsData
-      .filter((product) => product.enabled !== false)
+      .filter((product) => product.is_active !== false)
       .map((product) => ({
         value: product.name ?? "",
         label: product.name ?? "Produit",
-        description: product.sku ?? undefined,
+        description: product.code ?? undefined,
       })) as SelectOption[];
   }, [productsData]);
 

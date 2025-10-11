@@ -80,7 +80,7 @@ export const ProductTable = ({
     if (isLoading) {
       return (
         <TableRow>
-          <TableCell colSpan={7}>
+          <TableCell colSpan={3}>
             <Skeleton className="h-12 w-full" />
           </TableCell>
         </TableRow>
@@ -90,7 +90,7 @@ export const ProductTable = ({
     if (!hasData) {
       return (
         <TableRow>
-          <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+          <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
             Aucun produit trouvé.
           </TableCell>
         </TableRow>
@@ -98,24 +98,20 @@ export const ProductTable = ({
     }
 
     return products.map((product) => (
-      <TableRow key={product.id} className={!product.enabled ? "opacity-60" : undefined}>
+      <TableRow key={product.id} className={!product.is_active ? "opacity-60" : undefined}>
         <TableCell className="font-medium">
           <div className="flex flex-col">
             <span>{product.name}</span>
-            <span className="text-xs text-muted-foreground">{product.sku ?? "Sans référence"}</span>
+            <span className="text-xs text-muted-foreground">{product.code || "Sans code"}</span>
           </div>
         </TableCell>
         <TableCell>
           {product.category ? <Badge variant="secondary">{product.category}</Badge> : <span className="text-muted-foreground">—</span>}
         </TableCell>
-        <TableCell>{product.product_type}</TableCell>
-        <TableCell>{product.unit ?? "unité"}</TableCell>
-        <TableCell>{formatCurrency(product.price_ref)}</TableCell>
-        <TableCell>{formatQuantity(product.quantity_default)}</TableCell>
         <TableCell>
           <div className="flex items-center gap-3">
             <Switch
-              checked={product.enabled}
+              checked={product.is_active}
               onCheckedChange={(checked) => onToggleEnabled(product, checked)}
               disabled={updatingProductId === product.id}
             />
@@ -147,15 +143,11 @@ export const ProductTable = ({
       <div className="rounded-md border">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead>Nom</TableHead>
-              <TableHead>Catégorie</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Unité</TableHead>
-              <TableHead>Prix</TableHead>
-              <TableHead>Quantité défaut</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
+          <TableRow>
+            <TableHead>Nom</TableHead>
+            <TableHead>Catégorie</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
           </TableHeader>
           <TableBody>{renderRows()}</TableBody>
         </Table>

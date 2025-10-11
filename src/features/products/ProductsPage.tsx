@@ -106,7 +106,7 @@ export const ProductsPage = () => {
   const handleToggleEnabled = async (product: ProductCatalogRecord, enabled: boolean) => {
     setUpdatingId(product.id);
     try {
-      await updateProduct.mutateAsync({ id: product.id, values: { enabled } });
+      await updateProduct.mutateAsync({ id: product.id, values: { is_active: enabled } });
       toast({
         title: enabled ? "Produit activé" : "Produit désactivé",
         description: `${product.name} est désormais ${enabled ? "disponible" : "masqué"}`,

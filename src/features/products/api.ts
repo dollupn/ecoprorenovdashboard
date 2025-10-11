@@ -104,15 +104,11 @@ export const useProductCatalog = (
       }
 
       if (categoryId) {
-        query = query.eq("category_id", categoryId);
-      }
-
-      if (productType) {
-        query = query.eq("product_type", productType);
+        query = query.eq("category", categoryId);
       }
 
       if (enabled !== null && enabled !== undefined) {
-        query = query.eq("enabled", enabled);
+        query = query.eq("is_active", enabled);
       }
 
       if (pagination) {

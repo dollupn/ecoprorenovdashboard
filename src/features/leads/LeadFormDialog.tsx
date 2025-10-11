@@ -43,9 +43,7 @@ import { DynamicFields } from "./DynamicFields";
 import {
   getOrganizationMembers,
   getOrganizationProducts,
-  getProductFormSchema,
   useCreateLead,
-  type ProductFormSchema,
 } from "./api";
 import type { TablesInsert } from "@/integrations/supabase/types";
 
@@ -120,58 +118,13 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
 
   useEffect(() => {
     if (!form.getValues("product_type") && products?.length === 1) {
-      form.setValue("product_type", products[0].product_type);
+      form.setValue("product_type", products[0].name);
     }
   }, [products, form]);
-
-  const { data: schemaData } = useQueryProductSchema(orgId, productType);
-
-  const dynamicSchema: ProductFormSchema | undefined = schemaData?.form_schema ?? products?.find((product) => product.product_type === productType)?.form_schema;
 
   const createLead = useCreateLead(orgId);
 
   const isSubmitting = createLead.isPending;
-
-  const validateDynamicFields = (values: LeadFormValues) => {
-    if (!dynamicSchema?.fields?.length) {
-      return true;
-    }
-
-    let isValid = true;
-
-    dynamicSchema.fields.forEach((field) => {
-      const value = values.extra_fields?.[field.name];
-      const fieldPath = `extra_fields.${field.name}` as const;
-
-      if (field.required && (value === undefined || value === null || value === "")) {
-        form.setError(fieldPath, { type: "required", message: "Ce champ est obligatoire" });
-        isValid = false;
-        return;
-      }
-
-      if (field.type === "number" && typeof value === "number") {
-        if (typeof field.min === "number" && value < field.min) {
-          form.setError(fieldPath, { message: `Valeur minimale ${field.min}` });
-          isValid = false;
-          return;
-        }
-        if (typeof field.max === "number" && value > field.max) {
-          form.setError(fieldPath, { message: `Valeur maximale ${field.max}` });
-          isValid = false;
-          return;
-        }
-      }
-
-      if (field.type === "select" && field.options?.length && typeof value === "string") {
-        if (!field.options.includes(value)) {
-          form.setError(fieldPath, { message: "Option invalide" });
-          isValid = false;
-        }
-      }
-    });
-
-    return isValid;
-  };
 
   const onSubmit = async (values: LeadFormValues) => {
     if (!user?.id || !orgId) {
@@ -184,16 +137,8 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
     }
 
     form.clearErrors();
-    if (!validateDynamicFields(values)) {
-      toast({
-        title: "Champs requis",
-        description: "Veuillez compléter les champs obligatoires du produit",
-        variant: "destructive",
-      });
-      return;
-    }
 
-    const selectedProduct = products?.find((product) => product.product_type === values.product_type);
+    const selectedProduct = products?.find((product) => product.name === values.product_type);
 
     const payload = {
       full_name: values.full_name,
@@ -225,7 +170,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         phone_raw: "",
         city: "",
         postal_code: "",
-        product_type: products?.length === 1 ? products[0].product_type : "",
+        product_type: products?.length === 1 ? products[0].name : "",
         utm_source: "",
         status: "Nouveau",
         commentaire: "",
@@ -278,7 +223,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         phone_raw: "",
         city: "",
         postal_code: "",
-        product_type: products?.length === 1 ? products[0].product_type : "",
+        product_type: products?.length === 1 ? products[0].name : "",
         utm_source: "",
         status: "Nouveau",
         commentaire: "",
@@ -411,7 +356,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
                       </FormControl>
                       <SelectContent>
                         {(products ?? []).map((product) => (
-                          <SelectItem key={product.product_type} value={product.product_type}>
+                          <SelectItem key={product.id} value={product.name}>
                             {product.label}
                           </SelectItem>
                         ))}
@@ -461,7 +406,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
               />
             </div>
 
-            <DynamicFields form={form} schema={dynamicSchema} disabled={isSubmitting} />
+            
 
             <div className="grid gap-4 md:grid-cols-2">
               <FormField
@@ -545,7 +490,6 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
 
 type ProductsResult = Awaited<ReturnType<typeof getOrganizationProducts>>;
 type MembersResult = Awaited<ReturnType<typeof getOrganizationMembers>>;
-type ProductSchemaResult = Awaited<ReturnType<typeof getProductFormSchema>>;
 
 const useQueryOrganizationProducts = (orgId: string | null) =>
   useQuery<ProductsResult, Error>({
@@ -559,11 +503,4 @@ const useQueryOrganizationMembers = (orgId: string | null) =>
     queryKey: ["memberships", orgId],
     queryFn: () => getOrganizationMembers(orgId as string),
     enabled: Boolean(orgId),
-  });
-
-const useQueryProductSchema = (orgId: string | null, productType: string) =>
-  useQuery<ProductSchemaResult, Error>({
-    queryKey: ["form-schema", orgId, productType],
-    queryFn: () => getProductFormSchema(orgId as string, productType),
-    enabled: Boolean(orgId && productType),
   });
