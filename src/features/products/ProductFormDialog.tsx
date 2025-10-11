@@ -113,7 +113,11 @@ export const ProductFormDialog = ({
 
   const onSubmit = async (values: ProductFormValues) => {
     if (!orgId) {
-      toast({ title: "Organisation manquante", description: "Sélectionnez une organisation", variant: "destructive" });
+      toast({ 
+        title: "Organisation manquante", 
+        description: "Vous devez être membre d'une organisation pour créer des produits", 
+        variant: "destructive" 
+      });
       return;
     }
 

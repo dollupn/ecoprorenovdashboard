@@ -50,6 +50,15 @@ export const CategoryFormDialog = ({ orgId, trigger }: CategoryFormDialogProps) 
   };
 
   const onSubmit = async (values: CategoryFormValues) => {
+    if (!orgId) {
+      toast({ 
+        title: "Organisation manquante", 
+        description: "Vous devez être membre d'une organisation pour créer des catégories", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
     try {
       await createCategory.mutateAsync({
         name: values.name.trim(),
@@ -62,6 +71,24 @@ export const CategoryFormDialog = ({ orgId, trigger }: CategoryFormDialogProps) 
       toast({ title: "Erreur", description: message, variant: "destructive" });
     }
   };
+
+  // Afficher un message si pas d'organisation
+  if (!orgId) {
+    return trigger ? (
+      <div className="relative">
+        {trigger}
+        <div className="absolute inset-0 cursor-not-allowed" onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          toast({ 
+            title: "Organisation manquante", 
+            description: "Vous devez être membre d'une organisation. Contactez un administrateur.", 
+            variant: "destructive" 
+          });
+        }} />
+      </div>
+    ) : null;
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
