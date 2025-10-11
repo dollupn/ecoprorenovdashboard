@@ -269,6 +269,7 @@ export type Database = {
       }
       product_catalog: {
         Row: {
+          base_price_ht: number | null
           category: string | null
           code: string
           created_at: string
@@ -280,10 +281,17 @@ export type Database = {
           org_id: string | null
           owner_id: string
           params_schema: Json | null
+          price_ttc: number | null
           schema_version: number
+          supplier_name: string | null
+          supplier_reference: string | null
+          technical_sheet_url: string | null
+          tva_percentage: number | null
+          unit_type: string | null
           updated_at: string
         }
         Insert: {
+          base_price_ht?: number | null
           category?: string | null
           code: string
           created_at?: string
@@ -295,10 +303,17 @@ export type Database = {
           org_id?: string | null
           owner_id: string
           params_schema?: Json | null
+          price_ttc?: number | null
           schema_version?: number
+          supplier_name?: string | null
+          supplier_reference?: string | null
+          technical_sheet_url?: string | null
+          tva_percentage?: number | null
+          unit_type?: string | null
           updated_at?: string
         }
         Update: {
+          base_price_ht?: number | null
           category?: string | null
           code?: string
           created_at?: string
@@ -310,7 +325,13 @@ export type Database = {
           org_id?: string | null
           owner_id?: string
           params_schema?: Json | null
+          price_ttc?: number | null
           schema_version?: number
+          supplier_name?: string | null
+          supplier_reference?: string | null
+          technical_sheet_url?: string | null
+          tva_percentage?: number | null
+          unit_type?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -666,6 +687,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      has_org_membership: {
+        Args: { _org_id: string; _user_id: string }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _org_id: string
@@ -678,10 +703,14 @@ export type Database = {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
       }
+      is_org_owner_or_admin: {
+        Args: { _org_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "admin" | "commercial" | "user"
-      org_role: "owner" | "admin" | "member"
+      org_role: "owner" | "admin" | "member" | "commercial"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -810,7 +839,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "commercial", "user"],
-      org_role: ["owner", "admin", "member"],
+      org_role: ["owner", "admin", "member", "commercial"],
     },
   },
 } as const
