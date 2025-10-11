@@ -9,12 +9,14 @@ export function UserRoleBadge({ role }: UserRoleBadgeProps) {
   const variants = {
     owner: "bg-yellow-500/20 text-yellow-700 border-yellow-500/20 hover:bg-yellow-500/30",
     admin: "bg-blue-500/20 text-blue-700 border-blue-500/20 hover:bg-blue-500/30",
+    commercial: "bg-green-500/20 text-green-700 border-green-500/20 hover:bg-green-500/30",
     member: "bg-muted text-muted-foreground hover:bg-muted/80",
   };
 
   const labels = {
     owner: "Propriétaire",
     admin: "Admin",
+    commercial: "Commercial",
     member: "Membre",
   };
 
