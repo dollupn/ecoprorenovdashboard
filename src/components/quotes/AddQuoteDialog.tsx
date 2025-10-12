@@ -244,7 +244,7 @@ export const AddQuoteDialog = ({
                     <FormLabel>Statut *</FormLabel>
                     <Select
                       onValueChange={field.onChange}
-                      defaultValue={field.value}
+                      value={field.value}
                     >
                       <FormControl>
                         <SelectTrigger>
