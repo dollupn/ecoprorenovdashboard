@@ -677,12 +677,14 @@ export const AddProjectDialog = ({
                       />
                     </div>
 
-                    <DynamicFields
-                      form={form as any}
-                      schema={selectedProduct?.params_schema as any}
-                      disabled={loading}
-                      fieldPrefix={`products.${index}.dynamic_params`}
-                    />
+                    {selectedProduct?.params_schema && (
+                      <DynamicFields
+                        form={form as any}
+                        schema={{ fields: Array.isArray(selectedProduct.params_schema) ? selectedProduct.params_schema : (selectedProduct.params_schema as any)?.fields || [] }}
+                        disabled={loading}
+                        fieldPrefix={`products.${index}.dynamic_params`}
+                      />
+                    )}
                   </div>
                 );
               })}
