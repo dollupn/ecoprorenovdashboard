@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { DynamicFields } from "@/features/leads/DynamicFields";
 
 type ProductCatalogEntry = Tables<"product_catalog">;
@@ -44,11 +44,21 @@ type SelectOption = {
   description?: string;
 };
 
+type ProjectProduct = {
+  product_id: string;
+  quantity: number;
+  dynamic_params: Record<string, any>;
+};
+
 const projectSchema = z.object({
   client_name: z.string().min(2, "Le nom du client est requis"),
   company: z.string().optional(),
   phone: z.string().optional(),
-  product_id: z.string().min(1, "Le produit est requis"),
+  products: z.array(z.object({
+    product_id: z.string().min(1, "Le produit est requis"),
+    quantity: z.coerce.number().min(1, "La quantité doit être >= 1").default(1),
+    dynamic_params: z.record(z.any()).optional(),
+  })).min(1, "Au moins un produit est requis"),
   city: z.string().min(2, "La ville est requise"),
   postal_code: z.string().min(5, "Code postal invalide"),
   building_type: z.enum(["Entrepôt", "Hôtel"], { required_error: "Sélectionnez un type" }),
@@ -66,7 +76,6 @@ const projectSchema = z.object({
   date_fin_prevue: z.string().optional(),
   estimated_value: z.coerce.number().optional(),
   lead_id: z.string().optional(),
-  dynamic_params: z.record(z.any()).optional(),
 });
 
 export type ProjectFormValues = z.infer<typeof projectSchema>;
@@ -81,7 +90,7 @@ const baseDefaultValues: Partial<ProjectFormValues> = {
   client_name: "",
   company: "",
   phone: "",
-  product_id: "",
+  products: [{ product_id: "", quantity: 1, dynamic_params: {} }],
   city: "",
   postal_code: "",
   building_type: undefined,
@@ -99,7 +108,25 @@ const baseDefaultValues: Partial<ProjectFormValues> = {
   date_fin_prevue: "",
   estimated_value: undefined,
   lead_id: undefined,
-  dynamic_params: {},
+};
+
+// Fonction pour initialiser les champs dynamiques avec les valeurs par défaut
+const getInitialDynamicParams = (product: any) => {
+  if (!product?.params_schema) return {};
+  const schema = product.params_schema as any;
+  const initialParams: Record<string, any> = {};
+  
+  if (schema.fields && Array.isArray(schema.fields)) {
+    schema.fields.forEach((field: any) => {
+      if (product.default_params && typeof product.default_params === 'object' && field.name in product.default_params) {
+        initialParams[field.name] = (product.default_params as any)[field.name];
+      } else {
+        initialParams[field.name] = field.type === "number" ? 0 : "";
+      }
+    });
+  }
+  
+  return initialParams;
 };
 
 export const AddProjectDialog = ({
@@ -279,20 +306,27 @@ export const AddProjectDialog = ({
     defaultValues: {
       ...baseDefaultValues,
       assigned_to: defaultAssignee ?? "",
-      product_id: productOptions.length > 0 ? productOptions[0].value : "",
+      products: [{ product_id: productOptions.length > 0 ? productOptions[0].value : "", quantity: 1, dynamic_params: {} }],
     } as ProjectFormValues,
   });
 
-  const selectedProductId = form.watch("product_id");
-  const selectedProduct = useMemo(() => {
-    return productsData?.find((p) => p.id === selectedProductId);
-  }, [selectedProductId, productsData]);
+  const addProduct = () => {
+    const currentProducts = form.getValues("products") || [];
+    form.setValue("products", [...currentProducts, { product_id: "", quantity: 1, dynamic_params: {} }]);
+  };
+
+  const removeProduct = (index: number) => {
+    const currentProducts = form.getValues("products") || [];
+    if (currentProducts.length > 1) {
+      form.setValue("products", currentProducts.filter((_, i) => i !== index));
+    }
+  };
 
   const resetWithInitialValues = useCallback(() => {
     form.reset({
       ...baseDefaultValues,
       assigned_to: defaultAssignee ?? "",
-      product_id: productOptions.length > 0 ? productOptions[0].value : "",
+      products: [{ product_id: productOptions.length > 0 ? productOptions[0].value : "", quantity: 1, dynamic_params: {} }],
     } as ProjectFormValues);
   }, [defaultAssignee, form, productOptions]);
 
@@ -301,17 +335,6 @@ export const AddProjectDialog = ({
       form.setValue("assigned_to", defaultAssignee);
     }
   }, [defaultAssignee, form]);
-
-  useEffect(() => {
-    if (productOptions.length === 0) {
-      return;
-    }
-
-    const currentValue = form.getValues("product_id");
-    if (!currentValue) {
-      form.setValue("product_id", productOptions[0].value);
-    }
-  }, [form, productOptions]);
 
   useEffect(() => {
     if (open) {
@@ -353,42 +376,61 @@ export const AddProjectDialog = ({
 
       const project_ref = `ECOP-${dateStr}-${nextNumber.toString().padStart(3, '0')}`;
       
-      // Récupérer le nom du produit depuis l'ID
-      const product = productsData?.find(p => p.id === data.product_id);
-      const product_name = product?.name || "";
+      // Récupérer le nom du premier produit pour product_name (legacy)
+      const firstProduct = productsData?.find(p => p.id === data.products[0]?.product_id);
+      const product_name = firstProduct?.name || "";
 
-      const { error } = await supabase.from("projects").insert([{
-        user_id: user.id,
-        org_id: currentOrgId,
-        project_ref,
-        client_name: data.client_name,
-        product_name,
-        city: data.city,
-        postal_code: data.postal_code,
-        status: data.status,
-        assigned_to: data.assigned_to,
-        company: data.company || undefined,
-        phone: data.phone || undefined,
-        building_type: data.building_type || undefined,
-        usage: data.usage || undefined,
-        prime_cee: data.prime_cee || undefined,
-        discount: data.discount || undefined,
-        unit_price: data.unit_price || undefined,
-        signatory_name: data.signatory_name || undefined,
-        signatory_title: data.signatory_title || undefined,
-        surface_batiment_m2: data.surface_batiment_m2 || undefined,
-        surface_isolee_m2: data.surface_isolee_m2 || undefined,
-        date_debut_prevue: data.date_debut_prevue || undefined,
-        date_fin_prevue: data.date_fin_prevue || undefined,
-        estimated_value: data.estimated_value || undefined,
-        lead_id: data.lead_id || undefined,
-      }]);
+      // Créer le projet
+      const { data: createdProject, error: projectError } = await supabase
+        .from("projects")
+        .insert([{
+          user_id: user.id,
+          org_id: currentOrgId,
+          project_ref,
+          client_name: data.client_name,
+          product_name, // Pour compatibilité
+          city: data.city,
+          postal_code: data.postal_code,
+          status: data.status,
+          assigned_to: data.assigned_to,
+          company: data.company || undefined,
+          phone: data.phone || undefined,
+          building_type: data.building_type || undefined,
+          usage: data.usage || undefined,
+          prime_cee: data.prime_cee || undefined,
+          discount: data.discount || undefined,
+          unit_price: data.unit_price || undefined,
+          signatory_name: data.signatory_name || undefined,
+          signatory_title: data.signatory_title || undefined,
+          surface_batiment_m2: data.surface_batiment_m2 || undefined,
+          surface_isolee_m2: data.surface_isolee_m2 || undefined,
+          date_debut_prevue: data.date_debut_prevue || undefined,
+          date_fin_prevue: data.date_fin_prevue || undefined,
+          estimated_value: data.estimated_value || undefined,
+          lead_id: data.lead_id || undefined,
+        }])
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (projectError) throw projectError;
+
+      // Ajouter les produits au projet
+      const projectProducts = data.products.map(p => ({
+        project_id: createdProject.id,
+        product_id: p.product_id,
+        quantity: p.quantity,
+        dynamic_params: p.dynamic_params || {},
+      }));
+
+      const { error: productsError } = await supabase
+        .from("project_products")
+        .insert(projectProducts);
+
+      if (productsError) throw productsError;
 
       toast({
         title: "Projet créé",
-        description: `Le projet ${project_ref} a été ajouté avec succès`,
+        description: `Le projet ${project_ref} avec ${data.products.length} produit(s) a été ajouté avec succès`,
       });
 
       resetWithInitialValues();
@@ -550,119 +592,157 @@ export const AddProjectDialog = ({
               />
             </div>
 
-            <FormField
-              control={form.control}
-              name="product_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Produit *</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    value={field.value}
-                    disabled={productsLoading && productOptions.length === 0}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue
-                          placeholder={
-                            productsLoading && productOptions.length === 0
-                              ? "Chargement..."
-                              : productOptions.length > 0
-                                ? "Sélectionnez un produit"
-                                : "Aucun produit disponible"
-                          }
-                        />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {productsLoading && productOptions.length === 0 ? (
-                        <SelectItem value="__loading" disabled>
-                          Chargement...
-                        </SelectItem>
-                      ) : productOptions.length > 0 ? (
-                        productOptions.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            <div className="flex flex-col">
-                              <span>{option.label}</span>
-                              {option.description ? (
-                                <span className="text-xs text-muted-foreground">
-                                  {option.description}
-                                </span>
-                              ) : null}
-                            </div>
-                          </SelectItem>
-                        ))
-                      ) : (
-                        <SelectItem value="__empty" disabled>
-                          Aucun produit configuré
-                        </SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold">Produits</h3>
+                <Button type="button" onClick={addProduct} size="sm" variant="outline">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Ajouter un produit
+                </Button>
+              </div>
 
-            {selectedProduct?.params_schema && (
-              <div className="space-y-4 border p-4 rounded-md bg-muted/30">
-                <h3 className="font-semibold text-sm">Paramètres du produit</h3>
-                {(selectedProduct.params_schema as any).fields?.map((field: any) => (
-                  <FormField
-                    key={field.name}
-                    control={form.control}
-                    name={`dynamic_params.${field.name}` as any}
-                    render={({ field: formField }) => (
-                      <FormItem>
-                        <FormLabel>
-                          {field.label}
-                          {field.required && <span className="text-destructive"> *</span>}
-                        </FormLabel>
-                        <FormControl>
-                          {field.type === "textarea" ? (
-                            <textarea
-                              className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                              {...formField}
-                              disabled={loading}
-                            />
-                          ) : field.type === "select" ? (
+              {form.watch("products")?.map((_, index) => {
+                const productId = form.watch(`products.${index}.product_id`);
+                const selectedProduct = productsData?.find(p => p.id === productId);
+                
+                return (
+                  <div key={index} className="border p-4 rounded-md space-y-4 relative">
+                    {form.watch("products")!.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute top-2 right-2"
+                        onClick={() => removeProduct(index)}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    )}
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name={`products.${index}.product_id`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Produit *</FormLabel>
                             <Select
-                              onValueChange={formField.onChange}
-                              value={formField.value}
-                              disabled={loading}
+                              onValueChange={field.onChange}
+                              value={field.value ?? ""}
+                              disabled={productsLoading}
                             >
-                              <SelectTrigger>
-                                <SelectValue placeholder={`Sélectionnez ${field.label.toLowerCase()}`} />
-                              </SelectTrigger>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Sélectionnez un produit" />
+                                </SelectTrigger>
+                              </FormControl>
                               <SelectContent>
-                                {field.options?.map((option: string) => (
-                                  <SelectItem key={option} value={option}>
-                                    {option}
+                                {productOptions.map((option) => (
+                                  <SelectItem key={option.value} value={option.value}>
+                                    <div className="flex flex-col">
+                                      <span>{option.label}</span>
+                                      {option.description && (
+                                        <span className="text-xs text-muted-foreground">
+                                          {option.description}
+                                        </span>
+                                      )}
+                                    </div>
                                   </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
-                          ) : field.type === "number" ? (
-                            <Input
-                              type="number"
-                              {...formField}
-                              disabled={loading}
-                            />
-                          ) : (
-                            <Input
-                              type="text"
-                              {...formField}
-                              disabled={loading}
-                            />
-                          )}
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={form.control}
+                        name={`products.${index}.quantity`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Quantité *</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={field.value ?? 1}
+                                onChange={field.onChange}
+                                disabled={loading}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    {selectedProduct?.params_schema && (
+                      <div className="space-y-4 bg-muted/30 p-3 rounded-md">
+                        <h4 className="font-medium text-sm">Paramètres du produit</h4>
+                        {(selectedProduct.params_schema as any).fields?.map((field: any) => (
+                          <FormField
+                            key={field.name}
+                            control={form.control}
+                            name={`products.${index}.dynamic_params.${field.name}` as any}
+                            render={({ field: formField }) => (
+                              <FormItem>
+                                <FormLabel>
+                                  {field.label}
+                                  {field.required && <span className="text-destructive"> *</span>}
+                                </FormLabel>
+                                <FormControl>
+                                  {field.type === "textarea" ? (
+                                    <textarea
+                                      className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                      value={formField.value ?? ""}
+                                      onChange={formField.onChange}
+                                      disabled={loading}
+                                    />
+                                  ) : field.type === "select" ? (
+                                    <Select
+                                      onValueChange={formField.onChange}
+                                      value={formField.value ?? ""}
+                                      disabled={loading}
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue placeholder={`Sélectionnez ${field.label.toLowerCase()}`} />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {field.options?.map((option: string) => (
+                                          <SelectItem key={option} value={option}>
+                                            {option}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  ) : field.type === "number" ? (
+                                    <Input
+                                      type="number"
+                                      value={formField.value ?? ""}
+                                      onChange={formField.onChange}
+                                      disabled={loading}
+                                    />
+                                  ) : (
+                                    <Input
+                                      type="text"
+                                      value={formField.value ?? ""}
+                                      onChange={formField.onChange}
+                                      disabled={loading}
+                                    />
+                                  )}
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        ))}
+                      </div>
                     )}
-                  />
-                ))}
-              </div>
-            )}
+                  </div>
+                );
+              })}
+            </div>
 
             <div className="grid grid-cols-2 gap-4">
               <FormField

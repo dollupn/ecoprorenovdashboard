@@ -371,6 +371,51 @@ export type Database = {
         }
         Relationships: []
       }
+      project_products: {
+        Row: {
+          created_at: string
+          dynamic_params: Json | null
+          id: string
+          product_id: string
+          project_id: string
+          quantity: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          dynamic_params?: Json | null
+          id?: string
+          product_id: string
+          project_id: string
+          quantity?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          dynamic_params?: Json | null
+          id?: string
+          product_id?: string
+          project_id?: string
+          quantity?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "product_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_products_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           assigned_to: string
