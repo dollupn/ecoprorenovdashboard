@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { QuotePreview } from "@/components/quotes/QuotePreview";
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -31,6 +32,13 @@ import {
   Eye,
   AlertCircle,
   Loader2,
+  UserPlus,
+  FolderKanban,
+  FileText,
+  HardHat,
+  PhoneCall,
+  Receipt,
+  ArrowRight,
 } from "lucide-react";
 
 /** ---- Status & Types ---- */
@@ -97,6 +105,39 @@ const fetchQuotes = async (): Promise<QuoteRecord[]> => {
 };
 
 const Quotes = () => {
+  const processSteps = [
+    {
+      label: "Lead",
+      description: "Qualification commerciale",
+      icon: UserPlus,
+    },
+    {
+      label: "Projet",
+      description: "Structure et estimation",
+      icon: FolderKanban,
+    },
+    {
+      label: "Devis",
+      description: "Validation offre client",
+      icon: FileText,
+    },
+    {
+      label: "Chantier",
+      description: "Pilotage d'exécution",
+      icon: HardHat,
+    },
+    {
+      label: "Appel à facture",
+      description: "Préparation facturation",
+      icon: PhoneCall,
+    },
+    {
+      label: "Facture",
+      description: "Transformation du devis",
+      icon: Receipt,
+    },
+  ];
+
   const {
     data: quotes = [],
     isLoading,
@@ -228,6 +269,36 @@ const Quotes = () => {
           </CardContent>
         </Card>
 
+        <Card className="shadow-card bg-gradient-card border-0">
+          <CardHeader>
+            <CardTitle>Parcours opérationnel</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Le devis s'inscrit dans la chaîne Lead → Projet → Devis → Chantier → Appel à Facture → Facture.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-stretch">
+              {processSteps.map((step, index) => {
+                const Icon = step.icon;
+                return (
+                  <div key={step.label} className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 rounded-lg border bg-background/60 px-4 py-3 shadow-sm">
+                      <Icon className="h-5 w-5 text-primary" />
+                      <div>
+                        <p className="font-medium text-sm">{step.label}</p>
+                        <p className="text-xs text-muted-foreground">{step.description}</p>
+                      </div>
+                    </div>
+                    {index < processSteps.length - 1 && (
+                      <ArrowRight className="hidden md:block h-4 w-4 text-muted-foreground" />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Error state */}
         {isError && (
           <Alert variant="destructive">
@@ -332,6 +403,18 @@ const Quotes = () => {
             </CardContent>
           </Card>
         </div>
+
+        <Card className="shadow-card border-0">
+          <CardHeader>
+            <CardTitle>Aperçu Devis (gabarit)</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Modèle visuel aligné sur le gabarit facture pour générer les PDF et assurer la continuité commerciale.
+            </p>
+          </CardHeader>
+          <CardContent className="bg-slate-100">
+            <QuotePreview />
+          </CardContent>
+        </Card>
       </div>
     </Layout>
   );
