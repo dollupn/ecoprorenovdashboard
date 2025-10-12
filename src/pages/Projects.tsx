@@ -22,10 +22,21 @@ import {
   Settings,
   Eye,
   Phone,
-  Hammer
+  Hammer,
+  HandCoins
 } from "lucide-react";
 
 type Project = Tables<"projects">;
+type ProjectProduct = Tables<"project_products"> & {
+  product: Pick<Tables<"product_catalog">, "code" | "name"> | null;
+};
+
+type ProjectWithRelations = Project & {
+  project_products: ProjectProduct[];
+};
+
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value);
 
 const Projects = () => {
   const navigate = useNavigate();
@@ -33,19 +44,21 @@ const Projects = () => {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
 
-  const { data: projects = [], isLoading, refetch } = useQuery({
+  const { data: projects = [], isLoading, refetch } = useQuery<ProjectWithRelations[]>({
     queryKey: ["projects", user?.id],
     queryFn: async () => {
       if (!user) return [];
-      
+
       const { data, error } = await supabase
         .from("projects")
-        .select("*")
+        .select(
+          "*, project_products(id, quantity, product:product_catalog(code, name))"
+        )
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return data;
+      return (data ?? []) as ProjectWithRelations[];
     },
     enabled: !!user,
   });
@@ -64,7 +77,10 @@ const Projects = () => {
         project.company ?? "",
         project.city,
         project.postal_code,
-        project.product_name,
+        project.project_products
+          ?.map((item) => item.product?.code ?? "")
+          .filter(Boolean)
+          .join(" "),
         project.assigned_to
       ]
         .join(" ")
@@ -176,10 +192,27 @@ const Projects = () => {
 
               <CardContent className="space-y-4">
                 {/* Product & Location */}
-                <div>
-                  <h4 className="font-semibold text-foreground mb-1">
-                    {project.product_name}
-                  </h4>
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    {project.project_products?.length ? (
+                      project.project_products
+                        .map((product) => product.product?.code)
+                        .filter(Boolean)
+                        .map((code, index) => (
+                          <Badge
+                            key={`${project.id}-${code}-${index}`}
+                            variant="secondary"
+                            className="text-xs font-medium"
+                          >
+                            {code}
+                          </Badge>
+                        ))
+                    ) : (
+                      <span className="text-sm text-muted-foreground">
+                        Aucun code produit renseigné
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <MapPin className="w-4 h-4" />
                     {project.city} ({project.postal_code})
@@ -232,7 +265,16 @@ const Projects = () => {
                       <span className="text-sm text-muted-foreground">Montant estimé:</span>
                       <div className="flex items-center gap-1 text-sm font-bold text-primary">
                         <Euro className="w-4 h-4" />
-                        {project.estimated_value.toLocaleString()} €
+                        {formatCurrency(project.estimated_value)}
+                      </div>
+                    </div>
+                  )}
+                  {typeof project.prime_cee === "number" && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">Prime CEE:</span>
+                      <div className="flex items-center gap-1 text-sm font-bold text-emerald-600">
+                        <HandCoins className="w-4 h-4" />
+                        {formatCurrency(project.prime_cee)}
                       </div>
                     </div>
                   )}
