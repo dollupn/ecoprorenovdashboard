@@ -23,12 +23,14 @@ type DynamicFieldsProps<TFormValues extends { extra_fields?: Record<string, unkn
   form: UseFormReturn<TFormValues>;
   schema?: ProductFormSchema | null;
   disabled?: boolean;
+  fieldPrefix?: string;
 };
 
 export const DynamicFields = <TFormValues extends { extra_fields?: Record<string, unknown> }>({
   form,
   schema,
   disabled,
+  fieldPrefix = "extra_fields",
 }: DynamicFieldsProps<TFormValues>) => {
   if (!schema || !schema.fields?.length) {
     return null;
@@ -115,7 +117,7 @@ export const DynamicFields = <TFormValues extends { extra_fields?: Record<string
           <Fragment key={fieldConfig.name}>
             <FormField
               control={form.control}
-              name={`extra_fields.${fieldConfig.name}` as any}
+              name={`${fieldPrefix}.${fieldConfig.name}` as any}
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>

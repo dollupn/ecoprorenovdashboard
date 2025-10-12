@@ -677,71 +677,12 @@ export const AddProjectDialog = ({
                       />
                     </div>
 
-                    {selectedProduct?.params_schema && (
-                      <div className="space-y-4 bg-muted/30 p-3 rounded-md">
-                        <h4 className="font-medium text-sm">Paramètres du produit</h4>
-                        {(selectedProduct.params_schema as any).fields?.map((field: any) => (
-                          <FormField
-                            key={field.name}
-                            control={form.control}
-                            name={`products.${index}.dynamic_params.${field.name}` as any}
-                            render={({ field: formField }) => (
-                              <FormItem>
-                                <FormLabel>
-                                  {field.label}
-                                  {field.required && <span className="text-destructive"> *</span>}
-                                </FormLabel>
-                                <FormControl>
-                                  {field.type === "textarea" ? (
-                                    <textarea
-                                      className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                      value={formField.value || ""}
-                                      onChange={(e) => formField.onChange(e.target.value)}
-                                      disabled={loading}
-                                      placeholder={field.placeholder || `Entrez ${field.label.toLowerCase()}`}
-                                    />
-                                  ) : field.type === "select" ? (
-                                    <Select
-                                      onValueChange={formField.onChange}
-                                      value={formField.value || ""}
-                                      disabled={loading}
-                                    >
-                                      <SelectTrigger>
-                                        <SelectValue placeholder={`Sélectionnez ${field.label.toLowerCase()}`} />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {field.options?.map((option: string) => (
-                                          <SelectItem key={option} value={option}>
-                                            {option}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  ) : field.type === "number" ? (
-                                    <Input
-                                      type="number"
-                                      value={formField.value || ""}
-                                      onChange={(e) => formField.onChange(e.target.value)}
-                                      disabled={loading}
-                                      placeholder={field.placeholder || `Entrez ${field.label.toLowerCase()}`}
-                                    />
-                                  ) : (
-                                    <Input
-                                      type="text"
-                                      value={formField.value || ""}
-                                      onChange={(e) => formField.onChange(e.target.value)}
-                                      disabled={loading}
-                                      placeholder={field.placeholder || `Entrez ${field.label.toLowerCase()}`}
-                                    />
-                                  )}
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        ))}
-                      </div>
-                    )}
+                    <DynamicFields
+                      form={form as any}
+                      schema={selectedProduct?.params_schema as any}
+                      disabled={loading}
+                      fieldPrefix={`products.${index}.dynamic_params`}
+                    />
                   </div>
                 );
               })}
