@@ -13,6 +13,7 @@ import {
   Calendar,
   TrendingUp,
   LogOut,
+  ClipboardPlus,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -31,6 +32,7 @@ import {
 const mainItems = [
   { title: "Tableau de Bord", url: "/", icon: BarChart3 },
   { title: "Leads", url: "/leads", icon: Users },
+  { title: "Lead terrain", url: "/pos-lead", icon: ClipboardPlus },
   { title: "Projets", url: "/projects", icon: FolderOpen },
   { title: "Devis", url: "/quotes", icon: FileText },
   { title: "Factures", url: "/invoices", icon: Receipt },
