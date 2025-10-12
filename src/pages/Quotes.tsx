@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { QuotePreview } from "@/components/quotes/QuotePreview";
+import { AddQuoteDialog } from "@/components/quotes/AddQuoteDialog";
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -207,10 +208,17 @@ const Quotes = () => {
               <FileDown className="w-4 h-4 mr-2" />
               Exporter
             </Button>
-            <Button>
-              <PlusCircle className="w-4 h-4 mr-2" />
-              Nouveau Devis
-            </Button>
+            <AddQuoteDialog
+              onQuoteAdded={async () => {
+                await refetch();
+              }}
+              trigger={
+                <Button>
+                  <PlusCircle className="w-4 h-4 mr-2" />
+                  Nouveau Devis
+                </Button>
+              }
+            />
           </div>
         </div>
 
