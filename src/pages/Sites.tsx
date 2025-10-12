@@ -164,9 +164,31 @@ const Sites = () => {
   };
 
   const handleOpenCreate = useCallback(
-    (initial?: Partial<SiteFormValues>) => {
+    async (initial?: Partial<SiteFormValues>) => {
+      // Générer une référence unique basée sur la date et un compteur
+      const today = new Date();
+      const datePrefix = `SITE-${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(today.getDate()).padStart(2, "0")}`;
+      
+      // Récupérer les sites existants avec le même préfixe pour trouver le prochain numéro
+      const { data: existingSites } = await supabase
+        .from("sites")
+        .select("site_ref")
+        .eq("org_id", currentOrgId)
+        .like("site_ref", `${datePrefix}-%`)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      let nextNumber = 1;
+      if (existingSites && existingSites.length > 0) {
+        const lastRef = existingSites[0].site_ref;
+        const lastNumber = parseInt(lastRef.split("-").pop() || "0");
+        nextNumber = lastNumber + 1;
+      }
+
+      const site_ref = `${datePrefix}-${String(nextNumber).padStart(3, "0")}`;
+
       const baseDefaults: Partial<SiteFormValues> = {
-        site_ref: `SITE-${new Date().getFullYear()}-${String(sites.length + 1).padStart(4, "0")}`,
+        site_ref,
         date_debut: new Date().toISOString().slice(0, 10),
         status: "PLANIFIE",
         cofrac_status: "EN_ATTENTE",
@@ -180,7 +202,7 @@ const Sites = () => {
         montant_commission: 0,
         valorisation_cee: 0,
         team_members: [{ name: "" }],
-        additional_costs: [{ label: "", amount: 0 }],
+        additional_costs: [],
       };
 
       setDialogMode("create");
@@ -188,7 +210,7 @@ const Sites = () => {
       setDialogInitialValues({ ...baseDefaults, ...initial });
       setDialogOpen(true);
     },
-    [sites.length],
+    [currentOrgId],
   );
 
   const handleEditSite = (site: Site) => {
