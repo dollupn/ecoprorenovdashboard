@@ -1,9 +1,14 @@
+import { useMemo } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout/Layout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
-import { mockProjects } from "@/data/projects";
+import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
+import { useAuth } from "@/hooks/useAuth";
 import { getStatusColor, getStatusLabel } from "@/lib/projects";
 import {
   ArrowLeft,
@@ -12,19 +17,71 @@ import {
   Hammer,
   MapPin,
   Phone,
-  UserRound
+  UserRound,
+  HandCoins
 } from "lucide-react";
-import { useMemo } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+
+type Project = Tables<"projects">;
+type ProjectProduct = Tables<"project_products"> & {
+  product: Pick<Tables<"product_catalog">, "code" | "name"> | null;
+};
+
+type ProjectWithRelations = Project & {
+  project_products: ProjectProduct[];
+};
+
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value);
 
 const ProjectDetails = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
 
-  const project = useMemo(() => mockProjects.find((item) => item.id === id), [id]);
+  const {
+    data: project,
+    isLoading,
+    error
+  } = useQuery<ProjectWithRelations | null>({
+    queryKey: ["project", id, user?.id],
+    queryFn: async () => {
+      if (!id || !user?.id) return null;
 
-  if (!project) {
+      const { data, error } = await supabase
+        .from("projects")
+        .select(
+          "*, project_products(id, quantity, product:product_catalog(code, name))"
+        )
+        .eq("user_id", user.id)
+        .eq("id", id)
+        .maybeSingle();
+
+      if (error) throw error;
+      return (data as ProjectWithRelations | null) ?? null;
+    },
+    enabled: !!id && !!user?.id,
+  });
+
+  const productCodes = useMemo(() => {
+    if (!project?.project_products) return [] as string[];
+
+    return project.project_products
+      .map((item) => item.product?.code)
+      .filter((code): code is string => Boolean(code));
+  }, [project?.project_products]);
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center h-96">
+          <p className="text-muted-foreground">Chargement du projet...</p>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (!project || error) {
     return (
       <Layout>
         <div className="space-y-6">
@@ -46,7 +103,7 @@ const ProjectDetails = () => {
   }
 
   const handleCreateSite = () => {
-    navigate("/sites", { state: { projectId: project.id } });
+    navigate("/sites", { state: { createSite: { projectId: project.id } } });
     toast({
       title: "Création de chantier",
       description: `Nouveau chantier initialisé pour ${project.project_ref}.`
@@ -71,7 +128,8 @@ const ProjectDetails = () => {
               {project.project_ref}
             </h1>
             <p className="text-muted-foreground">
-              {project.product_name} – {project.city} ({project.postal_code})
+              {productCodes.length > 0 ? productCodes.join(", ") : "Aucun code produit"} – {project.city} (
+              {project.postal_code})
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -103,7 +161,7 @@ const ProjectDetails = () => {
                   <p className="text-sm text-muted-foreground">Téléphone</p>
                   <p className="font-medium flex items-center gap-2">
                     <Phone className="w-4 h-4 text-primary" />
-                    {project.phone}
+                    {project.phone ?? "Non renseigné"}
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -117,8 +175,8 @@ const ProjectDetails = () => {
                   <p className="text-sm text-muted-foreground">Montant estimé</p>
                   <p className="font-medium flex items-center gap-2">
                     <Euro className="w-4 h-4 text-primary" />
-                    {project.estimated_value
-                      ? `${project.estimated_value.toLocaleString()} €`
+                    {typeof project.estimated_value === "number"
+                      ? formatCurrency(project.estimated_value)
                       : "N/A"}
                   </p>
                 </div>
@@ -128,6 +186,15 @@ const ProjectDetails = () => {
                 <div className="space-y-2">
                   <p className="text-sm text-muted-foreground">Assigné à</p>
                   <p className="font-medium">{project.assigned_to}</p>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">Prime CEE</p>
+                  <p className="font-medium flex items-center gap-2">
+                    <HandCoins className="w-4 h-4 text-emerald-600" />
+                    {typeof project.prime_cee === "number"
+                      ? formatCurrency(project.prime_cee)
+                      : "N/A"}
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <p className="text-sm text-muted-foreground">Créé le</p>
