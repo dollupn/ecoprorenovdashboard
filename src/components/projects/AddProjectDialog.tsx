@@ -695,14 +695,15 @@ export const AddProjectDialog = ({
                                   {field.type === "textarea" ? (
                                     <textarea
                                       className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                      value={formField.value ?? ""}
-                                      onChange={formField.onChange}
+                                      value={formField.value || ""}
+                                      onChange={(e) => formField.onChange(e.target.value)}
                                       disabled={loading}
+                                      placeholder={field.placeholder || `Entrez ${field.label.toLowerCase()}`}
                                     />
                                   ) : field.type === "select" ? (
                                     <Select
                                       onValueChange={formField.onChange}
-                                      value={formField.value ?? ""}
+                                      value={formField.value || ""}
                                       disabled={loading}
                                     >
                                       <SelectTrigger>
@@ -719,16 +720,18 @@ export const AddProjectDialog = ({
                                   ) : field.type === "number" ? (
                                     <Input
                                       type="number"
-                                      value={formField.value ?? ""}
-                                      onChange={formField.onChange}
+                                      value={formField.value || ""}
+                                      onChange={(e) => formField.onChange(e.target.value)}
                                       disabled={loading}
+                                      placeholder={field.placeholder || `Entrez ${field.label.toLowerCase()}`}
                                     />
                                   ) : (
                                     <Input
                                       type="text"
-                                      value={formField.value ?? ""}
-                                      onChange={formField.onChange}
+                                      value={formField.value || ""}
+                                      onChange={(e) => formField.onChange(e.target.value)}
                                       disabled={loading}
+                                      placeholder={field.placeholder || `Entrez ${field.label.toLowerCase()}`}
                                     />
                                   )}
                                 </FormControl>
