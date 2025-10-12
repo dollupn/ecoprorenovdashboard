@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { Layout } from "@/components/layout/Layout";
@@ -20,6 +20,8 @@ import { AddQuoteDialog } from "@/components/quotes/AddQuoteDialog";
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
+import { useAuth } from "@/hooks/useAuth";
+import { useOrg } from "@/features/organizations/OrgContext";
 
 import {
   Search,
@@ -91,11 +93,24 @@ const formatDate = (value: string | null) => {
 };
 
 /** ---- Data ---- */
-const fetchQuotes = async (): Promise<QuoteRecord[]> => {
-  const { data, error } = await supabase
+const fetchQuotes = async ({
+  userId,
+  orgId,
+}: {
+  userId: string;
+  orgId?: string | null;
+}): Promise<QuoteRecord[]> => {
+  let query = supabase
     .from("quotes")
     .select("*, projects(project_ref, client_name, product_name)")
+    .eq("user_id", userId)
     .order("created_at", { ascending: false });
+
+  if (orgId) {
+    query = query.eq("org_id", orgId);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("Error fetching quotes", error);
@@ -106,6 +121,9 @@ const fetchQuotes = async (): Promise<QuoteRecord[]> => {
 };
 
 const Quotes = () => {
+  const { user } = useAuth();
+  const { currentOrgId } = useOrg();
+  const [searchTerm, setSearchTerm] = useState("");
   const processSteps = [
     {
       label: "Lead",
@@ -146,8 +164,15 @@ const Quotes = () => {
     error,
     refetch,
   } = useQuery({
-    queryKey: ["quotes"],
-    queryFn: fetchQuotes,
+    queryKey: ["quotes", user?.id, currentOrgId],
+    enabled: Boolean(user?.id),
+    queryFn: async () => {
+      if (!user?.id) {
+        return [];
+      }
+
+      return fetchQuotes({ userId: user.id, orgId: currentOrgId });
+    },
   });
 
   const metrics = useMemo(() => {
@@ -179,6 +204,30 @@ const Quotes = () => {
       conversionRate,
     };
   }, [quotes]);
+
+  const filteredQuotes = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
+    if (!normalizedSearch) {
+      return quotes;
+    }
+
+    return quotes.filter((quote) => {
+      const projectRef = quote.projects?.project_ref ?? "";
+      const productName = quote.product_name ?? quote.projects?.product_name ?? "";
+
+      const searchable = [
+        quote.quote_ref,
+        quote.client_name,
+        projectRef,
+        productName,
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return searchable.includes(normalizedSearch);
+    });
+  }, [quotes, searchTerm]);
 
   const renderStatus = (status: string) => {
     const normalized = (status?.toUpperCase() as QuoteStatus) || "DRAFT";
@@ -267,7 +316,12 @@ const Quotes = () => {
             <div className="flex flex-col md:flex-row gap-4">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input placeholder="Rechercher par client, référence, projet ou solution" className="pl-10" />
+                <Input
+                  placeholder="Rechercher par client, référence, projet ou solution"
+                  className="pl-10"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                />
               </div>
               <Button variant="outline">
                 <Filter className="w-4 h-4 mr-2" />
@@ -328,7 +382,10 @@ const Quotes = () => {
           <Card className="shadow-card bg-gradient-card border-0 xl:col-span-2">
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
-                <CardTitle>Devis ({quotes.length})</CardTitle>
+                <CardTitle>
+                  Devis ({filteredQuotes.length}
+                  {searchTerm ? ` / ${quotes.length}` : ""})
+                </CardTitle>
                 <p className="text-sm text-muted-foreground">
                   Dernière mise à jour {formatDate(new Date().toISOString())}
                 </p>
@@ -336,13 +393,22 @@ const Quotes = () => {
               {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
             </CardHeader>
             <CardContent>
-              {quotes.length === 0 && !isLoading ? (
-                <div className="text-center py-12">
-                  <Eye className="mx-auto h-10 w-10 text-muted-foreground/60" />
-                  <p className="mt-4 text-muted-foreground">
-                    Aucun devis n'est encore enregistré dans Supabase. Créez votre premier devis pour suivre votre pipeline.
-                  </p>
-                </div>
+              {filteredQuotes.length === 0 && !isLoading ? (
+                searchTerm ? (
+                  <div className="text-center py-12">
+                    <Eye className="mx-auto h-10 w-10 text-muted-foreground/60" />
+                    <p className="mt-4 text-muted-foreground">
+                      Aucun devis ne correspond à votre recherche.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <Eye className="mx-auto h-10 w-10 text-muted-foreground/60" />
+                    <p className="mt-4 text-muted-foreground">
+                      Aucun devis n'est encore enregistré dans Supabase. Créez votre premier devis pour suivre votre pipeline.
+                    </p>
+                  </div>
+                )
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
@@ -358,7 +424,7 @@ const Quotes = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {quotes.map((quote) => (
+                      {filteredQuotes.map((quote) => (
                         <TableRow key={quote.id}>
                           <TableCell className="font-medium">{quote.quote_ref}</TableCell>
                           <TableCell>{quote.client_name}</TableCell>
