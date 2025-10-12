@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { SiteDialog, type SiteFormValues } from "@/components/sites/SiteDialog";
 import { useToast } from "@/components/ui/use-toast";
 import type { Tables } from "@/integrations/supabase/types";
+import { useOrg } from "@/features/organizations/OrgContext";
 import {
   Plus,
   Search,
@@ -119,6 +120,7 @@ const Sites = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
+  const { currentOrgId } = useOrg();
 
   const { data: sites = [], isLoading, refetch } = useQuery({
     queryKey: ["sites", user?.id],
@@ -225,12 +227,14 @@ const Sites = () => {
   };
 
   const handleSubmitSite = async (values: SiteFormValues) => {
-    if (!user) return;
+    if (!user || !currentOrgId) return;
 
     const sanitizedTeam = values.team_members.map((member) => member.name.trim()).filter(Boolean);
     const sanitizedCosts = values.additional_costs
-      .filter((cost) => cost.label.trim().length > 0)
-      .map((cost) => ({ label: cost.label.trim(), amount: cost.amount }));
+      ? values.additional_costs
+          .filter((cost) => cost.label.trim().length > 0)
+          .map((cost) => ({ label: cost.label.trim(), amount: cost.amount }))
+      : [];
 
     const siteData = {
       site_ref: values.site_ref,
@@ -255,8 +259,9 @@ const Sites = () => {
       valorisation_cee: values.valorisation_cee,
       notes: values.notes?.trim() || null,
       team_members: sanitizedTeam.length > 0 ? sanitizedTeam : null,
-      additional_costs: sanitizedCosts,
+      additional_costs: sanitizedCosts.length > 0 ? sanitizedCosts : [],
       user_id: user.id,
+      org_id: currentOrgId,
     };
 
     try {

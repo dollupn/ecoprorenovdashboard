@@ -95,9 +95,7 @@ const siteSchema = z.object({
     .min(0, "Montant invalide"),
   notes: z.string().optional(),
   team_members: z.array(teamMemberSchema).min(1, "Ajoutez au moins un membre"),
-  additional_costs: z
-    .array(additionalCostSchema)
-    .min(1, "Ajoutez au moins un coût supplémentaire"),
+  additional_costs: z.array(additionalCostSchema).optional().default([]),
 });
 
 export type SiteFormValues = z.infer<typeof siteSchema>;
