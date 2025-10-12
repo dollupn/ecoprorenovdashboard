@@ -308,11 +308,9 @@ export const ProductFormDialog = ({
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="null">Aucune</SelectItem>
-                            <SelectItem value="m2">m²</SelectItem>
-                            <SelectItem value="ml">ml (mètre linéaire)</SelectItem>
-                            <SelectItem value="unite">Unité</SelectItem>
-                            <SelectItem value="kg">kg</SelectItem>
-                            <SelectItem value="litre">Litre</SelectItem>
+                            <SelectItem value="m²">m²</SelectItem>
+                            <SelectItem value="unité">Unité</SelectItem>
+                            <SelectItem value="kit">Kit</SelectItem>
                           </SelectContent>
                         </Select>
                       </FormControl>
