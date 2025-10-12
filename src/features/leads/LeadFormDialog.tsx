@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Plus, Loader2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { useOrg } from "@/features/organizations/OrgContext";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -71,9 +72,10 @@ interface LeadFormDialogProps {
 export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
   const [open, setOpen] = useState(false);
   const { user } = useAuth();
+  const { currentOrgId } = useOrg();
   const { toast } = useToast();
 
-  const orgId = user?.id ?? null;
+  const orgId = currentOrgId;
 
   const form = useForm<LeadFormValues>({
     resolver: zodResolver(leadSchema),
