@@ -287,12 +287,6 @@ const formatInitials = (fullName: string) => {
   return initials.toUpperCase();
 };
 
-const generateProjectRef = (lead: LeadRecord) => {
-  const postal = lead.postal_code?.replace(/\s+/g, "").slice(0, 5) || "00000";
-  const suffix = lead.id.slice(0, 4).toUpperCase();
-  return `PRJ-${postal}-${suffix}`;
-};
-
 const Leads = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -713,10 +707,8 @@ const Leads = () => {
                         <AddProjectDialog
                           trigger={<Button size="sm">Créer Projet</Button>}
                           initialValues={{
-                            project_ref: generateProjectRef(lead),
                             client_name: lead.full_name,
                             company: lead.company ?? "",
-                            product_name: lead.product_name ?? "",
                             city: lead.city,
                             postal_code: lead.postal_code,
                             surface_isolee_m2: lead.surface_m2 ?? undefined,
@@ -826,10 +818,8 @@ const Leads = () => {
                         <AddProjectDialog
                           trigger={<Button size="sm">Créer Projet</Button>}
                           initialValues={{
-                            project_ref: generateProjectRef(lead),
                             client_name: lead.full_name,
                             company: lead.company ?? "",
-                            product_name: lead.product_name ?? "",
                             city: lead.city,
                             postal_code: lead.postal_code,
                             surface_isolee_m2: lead.surface_m2 ?? undefined,

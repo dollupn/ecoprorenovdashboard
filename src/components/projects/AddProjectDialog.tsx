@@ -34,6 +34,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
+import { DynamicFields } from "@/features/leads/DynamicFields";
 
 type ProductCatalogEntry = Tables<"product_catalog">;
 type Profile = Tables<"profiles">;
@@ -44,15 +45,14 @@ type SelectOption = {
 };
 
 const projectSchema = z.object({
-  project_ref: z.string().min(3, "La référence est requise"),
   client_name: z.string().min(2, "Le nom du client est requis"),
   company: z.string().optional(),
   phone: z.string().optional(),
-  product_name: z.string().min(2, "Le produit est requis"),
+  product_id: z.string().min(1, "Le produit est requis"),
   city: z.string().min(2, "La ville est requise"),
   postal_code: z.string().min(5, "Code postal invalide"),
-  building_type: z.string().optional(),
-  usage: z.string().optional(),
+  building_type: z.enum(["Entrepôt", "Hôtel"], { required_error: "Sélectionnez un type" }),
+  usage: z.enum(["Commercial", "Agricole"], { required_error: "Sélectionnez un usage" }),
   prime_cee: z.coerce.number().optional(),
   discount: z.coerce.number().optional(),
   unit_price: z.coerce.number().optional(),
@@ -66,6 +66,7 @@ const projectSchema = z.object({
   date_fin_prevue: z.string().optional(),
   estimated_value: z.coerce.number().optional(),
   lead_id: z.string().optional(),
+  dynamic_params: z.record(z.any()).optional(),
 });
 
 export type ProjectFormValues = z.infer<typeof projectSchema>;
@@ -76,16 +77,15 @@ interface AddProjectDialogProps {
   initialValues?: Partial<ProjectFormValues>;
 }
 
-const baseDefaultValues: ProjectFormValues = {
-  project_ref: "",
+const baseDefaultValues: Partial<ProjectFormValues> = {
   client_name: "",
   company: "",
   phone: "",
-  product_name: "",
+  product_id: "",
   city: "",
   postal_code: "",
-  building_type: "",
-  usage: "",
+  building_type: undefined,
+  usage: undefined,
   prime_cee: undefined,
   discount: undefined,
   unit_price: undefined,
@@ -99,6 +99,7 @@ const baseDefaultValues: ProjectFormValues = {
   date_fin_prevue: "",
   estimated_value: undefined,
   lead_id: undefined,
+  dynamic_params: {},
 };
 
 export const AddProjectDialog = ({
@@ -159,7 +160,7 @@ export const AddProjectDialog = ({
 
       const { data, error } = await supabase
         .from("product_catalog")
-        .select("id, name, code, category, is_active")
+        .select("id, name, code, category, is_active, params_schema, default_params")
         .eq("org_id", currentOrgId)
         .eq("is_active", true)
         .order("name", { ascending: true });
@@ -169,6 +170,7 @@ export const AddProjectDialog = ({
     },
     enabled: Boolean(currentOrgId),
   });
+
 
   useEffect(() => {
     if (salesRepsError) {
@@ -216,7 +218,7 @@ export const AddProjectDialog = ({
     return productsData
       .filter((product) => product.is_active !== false)
       .map((product) => ({
-        value: product.name ?? "",
+        value: product.id ?? "",
         label: product.name ?? "Produit",
         description: product.code ?? undefined,
       })) as SelectOption[];
@@ -270,39 +272,29 @@ export const AddProjectDialog = ({
     ];
   }, [defaultAssignee, rawCommercialOptions, user?.email]);
 
-  const productOptions = useMemo(() => {
-    const options = [...rawProductOptions];
-    const initialProductName = initialValues?.product_name?.trim();
-
-    if (initialProductName && !options.some((option) => option.value === initialProductName)) {
-      options.unshift({ value: initialProductName, label: initialProductName });
-    }
-
-    return options;
-  }, [initialValues?.product_name, rawProductOptions]);
+  const productOptions = rawProductOptions;
 
   const form = useForm<ProjectFormValues>({
     resolver: zodResolver(projectSchema),
     defaultValues: {
       ...baseDefaultValues,
-      ...initialValues,
-      assigned_to: initialValues?.assigned_to ?? defaultAssignee ?? "",
-      product_name:
-        initialValues?.product_name ??
-        (productOptions.length > 0 ? productOptions[0].value : ""),
-    },
+      assigned_to: defaultAssignee ?? "",
+      product_id: productOptions.length > 0 ? productOptions[0].value : "",
+    } as ProjectFormValues,
   });
+
+  const selectedProductId = form.watch("product_id");
+  const selectedProduct = useMemo(() => {
+    return productsData?.find((p) => p.id === selectedProductId);
+  }, [selectedProductId, productsData]);
 
   const resetWithInitialValues = useCallback(() => {
     form.reset({
       ...baseDefaultValues,
-      ...initialValues,
-      assigned_to: initialValues?.assigned_to ?? defaultAssignee ?? "",
-      product_name:
-        initialValues?.product_name ??
-        (productOptions.length > 0 ? productOptions[0].value : ""),
-    });
-  }, [defaultAssignee, form, initialValues, productOptions]);
+      assigned_to: defaultAssignee ?? "",
+      product_id: productOptions.length > 0 ? productOptions[0].value : "",
+    } as ProjectFormValues);
+  }, [defaultAssignee, form, productOptions]);
 
   useEffect(() => {
     if (defaultAssignee && form.getValues("assigned_to") !== defaultAssignee) {
@@ -315,9 +307,9 @@ export const AddProjectDialog = ({
       return;
     }
 
-    const currentValue = form.getValues("product_name");
+    const currentValue = form.getValues("product_id");
     if (!currentValue) {
-      form.setValue("product_name", productOptions[0].value);
+      form.setValue("product_id", productOptions[0].value);
     }
   }, [form, productOptions]);
 
@@ -328,7 +320,7 @@ export const AddProjectDialog = ({
   }, [open, resetWithInitialValues]);
 
   const onSubmit = async (data: ProjectFormValues) => {
-    if (!user) {
+    if (!user || !currentOrgId) {
       toast({
         title: "Erreur",
         description: "Vous devez être connecté",
@@ -339,11 +331,38 @@ export const AddProjectDialog = ({
 
     setLoading(true);
     try {
+      // Générer la référence automatiquement format ECOP-Date-Number
+      const today = new Date();
+      const dateStr = today.toISOString().split('T')[0].replace(/-/g, '');
+      
+      // Récupérer le dernier projet du jour pour incrémenter le numéro
+      const { data: existingProjects } = await supabase
+        .from("projects")
+        .select("project_ref")
+        .eq("org_id", currentOrgId)
+        .like("project_ref", `ECOP-${dateStr}-%`)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      let nextNumber = 1;
+      if (existingProjects && existingProjects.length > 0) {
+        const lastRef = existingProjects[0].project_ref;
+        const lastNumber = parseInt(lastRef.split('-')[2] || "0");
+        nextNumber = lastNumber + 1;
+      }
+
+      const project_ref = `ECOP-${dateStr}-${nextNumber.toString().padStart(3, '0')}`;
+      
+      // Récupérer le nom du produit depuis l'ID
+      const product = productsData?.find(p => p.id === data.product_id);
+      const product_name = product?.name || "";
+
       const { error } = await supabase.from("projects").insert([{
         user_id: user.id,
-        project_ref: data.project_ref,
+        org_id: currentOrgId,
+        project_ref,
         client_name: data.client_name,
-        product_name: data.product_name,
+        product_name,
         city: data.city,
         postal_code: data.postal_code,
         status: data.status,
@@ -369,7 +388,7 @@ export const AddProjectDialog = ({
 
       toast({
         title: "Projet créé",
-        description: "Le projet a été ajouté avec succès",
+        description: `Le projet ${project_ref} a été ajouté avec succès`,
       });
 
       resetWithInitialValues();
@@ -406,51 +425,36 @@ export const AddProjectDialog = ({
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="project_ref"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Référence *</FormLabel>
+            <FormField
+              control={form.control}
+              name="status"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Statut *</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
                     <FormControl>
-                      <Input placeholder="PRJ-2024-XXXX" {...field} />
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Statut *</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="PROSPECTION">Prospection</SelectItem>
-                        <SelectItem value="ETUDE">Étude</SelectItem>
-                        <SelectItem value="DEVIS_ENVOYE">Devis Envoyé</SelectItem>
-                        <SelectItem value="ACCEPTE">Accepté</SelectItem>
-                        <SelectItem value="A_PLANIFIER">À Planifier</SelectItem>
-                        <SelectItem value="EN_COURS">En Cours</SelectItem>
-                        <SelectItem value="LIVRE">Livré</SelectItem>
-                        <SelectItem value="CLOTURE">Clôturé</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+                    <SelectContent>
+                      <SelectItem value="PROSPECTION">Prospection</SelectItem>
+                      <SelectItem value="ETUDE">Étude</SelectItem>
+                      <SelectItem value="DEVIS_ENVOYE">Devis Envoyé</SelectItem>
+                      <SelectItem value="ACCEPTE">Accepté</SelectItem>
+                      <SelectItem value="A_PLANIFIER">À Planifier</SelectItem>
+                      <SelectItem value="EN_COURS">En Cours</SelectItem>
+                      <SelectItem value="LIVRE">Livré</SelectItem>
+                      <SelectItem value="CLOTURE">Clôturé</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <div className="grid grid-cols-2 gap-4">
               <FormField
@@ -501,10 +505,21 @@ export const AddProjectDialog = ({
                 name="building_type"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Type de bâtiment</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
+                    <FormLabel>Type de bâtiment *</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionnez un type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="Entrepôt">Entrepôt</SelectItem>
+                        <SelectItem value="Hôtel">Hôtel</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -514,10 +529,21 @@ export const AddProjectDialog = ({
                 name="usage"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Usage</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
+                    <FormLabel>Usage *</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionnez un usage" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="Commercial">Commercial</SelectItem>
+                        <SelectItem value="Agricole">Agricole</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -526,7 +552,7 @@ export const AddProjectDialog = ({
 
             <FormField
               control={form.control}
-              name="product_name"
+              name="product_id"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Produit *</FormLabel>
@@ -577,6 +603,66 @@ export const AddProjectDialog = ({
                 </FormItem>
               )}
             />
+
+            {selectedProduct?.params_schema && (
+              <div className="space-y-4 border p-4 rounded-md bg-muted/30">
+                <h3 className="font-semibold text-sm">Paramètres du produit</h3>
+                {(selectedProduct.params_schema as any).fields?.map((field: any) => (
+                  <FormField
+                    key={field.name}
+                    control={form.control}
+                    name={`dynamic_params.${field.name}` as any}
+                    render={({ field: formField }) => (
+                      <FormItem>
+                        <FormLabel>
+                          {field.label}
+                          {field.required && <span className="text-destructive"> *</span>}
+                        </FormLabel>
+                        <FormControl>
+                          {field.type === "textarea" ? (
+                            <textarea
+                              className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                              {...formField}
+                              disabled={loading}
+                            />
+                          ) : field.type === "select" ? (
+                            <Select
+                              onValueChange={formField.onChange}
+                              value={formField.value}
+                              disabled={loading}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder={`Sélectionnez ${field.label.toLowerCase()}`} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {field.options?.map((option: string) => (
+                                  <SelectItem key={option} value={option}>
+                                    {option}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : field.type === "number" ? (
+                            <Input
+                              type="number"
+                              {...formField}
+                              disabled={loading}
+                            />
+                          ) : (
+                            <Input
+                              type="text"
+                              {...formField}
+                              disabled={loading}
+                            />
+                          )}
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ))}
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <FormField
