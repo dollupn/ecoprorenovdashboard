@@ -337,8 +337,8 @@ export const AddQuoteDialog = ({
                 <FormItem>
                   <FormLabel>Projet associé</FormLabel>
                   <Select
-                    onValueChange={(value) => field.onChange(value || undefined)}
-                    value={field.value ?? ""}
+                    onValueChange={(value) => field.onChange(value === "none" ? undefined : value)}
+                    value={field.value ?? "none"}
                   >
                     <FormControl>
                       <SelectTrigger>
@@ -346,7 +346,7 @@ export const AddQuoteDialog = ({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">Aucun projet</SelectItem>
+                      <SelectItem value="none">Aucun projet</SelectItem>
                       {projectOptions.length === 0 ? (
                         <SelectItem value="no-project" disabled>
                           Aucun projet disponible

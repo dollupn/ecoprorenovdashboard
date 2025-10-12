@@ -120,8 +120,8 @@ const ProjectDetails = () => {
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Retour
               </Button>
-              <Badge className={getStatusColor(project.status)}>
-                {getStatusLabel(project.status)}
+              <Badge className={getStatusColor(project.status as any)}>
+                {getStatusLabel(project.status as any)}
               </Badge>
             </div>
             <h1 className="mt-2 text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
