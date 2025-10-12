@@ -5,12 +5,33 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ModeToggle } from "@/components/theme/ModeToggle";
 import { OrgSelector } from "@/features/organizations/OrgSelector";
+import { useAuth } from "@/hooks/useAuth";
+import { useOrg } from "@/features/organizations/OrgContext";
+import { useMembers } from "@/features/members/api";
+import { UserRoleBadge } from "@/features/members/UserRoleBadge";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
 export function Layout({ children }: LayoutProps) {
+  const { user } = useAuth();
+  const { currentOrgId } = useOrg();
+  const { data: members = [] } = useMembers(currentOrgId);
+  
+  const currentMember = members.find((m) => m.user_id === user?.id);
+  
+  const getInitials = (name: string | null | undefined) => {
+    if (!name) return "?";
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-gradient-to-br from-background via-background to-muted/30">
@@ -39,12 +60,16 @@ export function Layout({ children }: LayoutProps) {
               </Button>
 
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center">
-                  <User className="w-4 h-4 text-white" />
-                </div>
+                <Avatar>
+                  <AvatarFallback className="bg-gradient-to-br from-primary to-accent text-white">
+                    {getInitials(currentMember?.profiles?.full_name)}
+                  </AvatarFallback>
+                </Avatar>
                 <div className="text-right">
-                  <p className="text-sm font-medium">Commercial</p>
-                  <p className="text-xs text-muted-foreground">En ligne</p>
+                  <p className="text-sm font-medium">{currentMember?.profiles?.full_name || "Utilisateur"}</p>
+                  <div className="text-xs">
+                    {currentMember?.role && <UserRoleBadge role={currentMember.role} />}
+                  </div>
                 </div>
               </div>
             </div>
