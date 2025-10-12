@@ -9,6 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { AddProjectDialog } from "@/components/projects/AddProjectDialog";
+import {
+  AddQuoteDialog,
+  type QuoteFormValues,
+} from "@/components/quotes/AddQuoteDialog";
 import { useToast } from "@/hooks/use-toast";
 import type { Tables } from "@/integrations/supabase/types";
 import { getStatusColor, getStatusLabel } from "@/lib/projects";
@@ -43,6 +47,9 @@ const Projects = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
+  const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
+  const [quoteInitialValues, setQuoteInitialValues] =
+    useState<Partial<QuoteFormValues>>({});
 
   const { data: projects = [], isLoading, refetch } = useQuery<ProjectWithRelations[]>({
     queryKey: ["projects", user?.id],
@@ -94,11 +101,23 @@ const Projects = () => {
     navigate(`/projects/${projectId}`);
   };
 
-  const handleCreateQuote = (project: Project) => {
-    toast({
-      title: "Création de devis",
-      description: `Préparez un devis pour ${project.client_name}.`
+  const handleCreateQuote = (project: ProjectWithRelations) => {
+    const firstProduct = project.project_products?.[0]?.product;
+
+    setQuoteInitialValues({
+      client_name: project.client_name ?? "",
+      project_id: project.id,
+      product_name:
+        firstProduct?.name ||
+        firstProduct?.code ||
+        (project as Project & { product_name?: string }).product_name ||
+        "",
+      amount: project.estimated_value ?? undefined,
+      quote_ref: project.project_ref
+        ? `${project.project_ref}-DEV`
+        : undefined,
     });
+    setQuoteDialogOpen(true);
   };
 
   const handleManageProject = (project: Project) => {
@@ -335,6 +354,16 @@ const Projects = () => {
           </Card>
         )}
       </div>
+      <AddQuoteDialog
+        open={quoteDialogOpen}
+        onOpenChange={(open) => {
+          setQuoteDialogOpen(open);
+          if (!open) {
+            setQuoteInitialValues({});
+          }
+        }}
+        initialValues={quoteInitialValues}
+      />
     </Layout>
   );
 };
