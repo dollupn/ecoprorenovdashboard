@@ -21,6 +21,7 @@ import NotFound from "./pages/NotFound";
 import Settings from "./pages/Settings";
 import Members from "./pages/Members";
 import Reports from "./pages/Reports";
+import CommercialLeadPOS from "./pages/CommercialLeadPOS";
 
 const queryClient = new QueryClient();
 
@@ -50,6 +51,14 @@ const App = () => (
               <Route path="/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
               <Route path="/sites" element={<ProtectedRoute><Sites /></ProtectedRoute>} />
               <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
+              <Route
+                path="/pos-lead"
+                element={
+                  <ProtectedRoute>
+                    <CommercialLeadPOS />
+                  </ProtectedRoute>
+                }
+              />
               <Route path="/calendar" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
