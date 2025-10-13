@@ -199,30 +199,34 @@ const normalizeCsvStatus = (value: string): LeadStatus | undefined => {
     .trim()
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/-/g, " ")
+    .replace(/\s+/g, " ");
 
   switch (cleaned) {
-    case "nouveau":
-    case "new":
-      return "Nouveau";
-    case "qualifie":
-    case "qualifiee":
-    case "qualified":
-      return "Qualifié";
+    case "non eligible":
+    case "noneligible":
+    case "not eligible":
+      return "Non éligible";
+    case "a rappeler":
+    case "rappeler":
+    case "call back":
+    case "callback":
+      return "À rappeler";
+    case "a recontacter":
+    case "recontacter":
+    case "follow up":
+    case "followup":
+      return "À recontacter";
+    case "programmer pre visite":
+    case "programmer previsite":
+    case "pre visite":
+    case "previsite":
+      return "Programmer pré-visite";
+    case "eligible":
     case "converti":
     case "converted":
-      return "Converti";
-    case "perdu":
-    case "lost":
-      return "Perdu";
-    case "cloture":
-    case "cloturee":
-    case "clos":
-    case "closed":
-    case "archive":
-    case "archivee":
-    case "archived":
-      return "Clôturé";
+      return "Éligible";
     default:
       return undefined;
   }
@@ -625,7 +629,8 @@ const parseCsv = (text: string): CsvParseResult => {
       if (key) {
         switch (key) {
           case "surface_m2": {
-            const parsed = Number.parseFloat(rawValue.replace(/,/, \"."));
+            // FIX: correct comma->dot replace (no escaped quote)
+            const parsed = Number.parseFloat(rawValue.replace(/,/, "."));
             if (!Number.isNaN(parsed)) {
               record.surface_m2 = parsed;
             }
@@ -644,11 +649,11 @@ const parseCsv = (text: string): CsvParseResult => {
           case "company":
           case "product_name":
           case "commentaire": {
-            record[key] = rawValue;
+            (record as any)[key] = rawValue;
             break;
           }
           default: {
-            record[key] = rawValue;
+            (record as any)[key] = rawValue;
           }
         }
         return;
@@ -680,10 +685,10 @@ const parseCsv = (text: string): CsvParseResult => {
     }
 
     if (
-      platformValue
-      && platformValue.toLowerCase().includes("facebook")
-      && record.utm_source
-      && /^facebook$/i.test(record.utm_source.trim())
+      platformValue &&
+      platformValue.toLowerCase().includes("facebook") &&
+      record.utm_source &&
+      /^facebook$/i.test(record.utm_source.trim())
     ) {
       record.utm_source = "Facebook Ads";
     }
@@ -699,7 +704,6 @@ const parseCsv = (text: string): CsvParseResult => {
     if (record.commentaire) {
       record.commentaire = record.commentaire.trim();
     }
-
 
     if (
       record.full_name &&
@@ -854,6 +858,7 @@ const Leads = () => {
         return;
       }
 
+      // MERGED: keep bulk product fallback + main's default status "À rappeler"
       const payload = rows.map((row) => {
         const rowProductName =
           row.product_name && row.product_name.trim().length > 0 ? row.product_name.trim() : null;
@@ -868,7 +873,7 @@ const Leads = () => {
           phone_raw: row.phone_raw,
           city: row.city,
           postal_code: row.postal_code,
-          status: row.status ?? "Nouveau",
+          status: row.status ?? "À rappeler",
           company: row.company ?? null,
           product_name: rowProductName ?? defaultProductName,
           surface_m2: row.surface_m2 ?? null,
@@ -919,15 +924,15 @@ const Leads = () => {
 
   const handleProjectCreated = async (lead: LeadRecord) => {
     try {
-      if (lead.status !== "Converti") {
+      if (lead.status !== "Éligible") {
         await updateLeadMutation.mutateAsync({
           id: lead.id,
-          values: { status: "Converti", updated_at: new Date().toISOString() },
+          values: { status: "Éligible", updated_at: new Date().toISOString() },
         });
 
         toast({
-          title: "Lead converti",
-          description: `${lead.full_name} est maintenant marqué comme converti.`,
+          title: "Lead éligible",
+          description: `${lead.full_name} est maintenant marqué comme éligible.`,
         });
       }
     } catch (error) {
@@ -1119,7 +1124,7 @@ const Leads = () => {
           </Alert>
         )}
 
-        {/* Leads Table */}
+        {/* Leads Table / Cards */}
         <Card className="shadow-card bg-gradient-card border-0">
           <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
@@ -1361,16 +1366,16 @@ const Leads = () => {
                             </span>
                             <div className="flex gap-2">
                               <ScheduleLeadDialog lead={lead} onScheduled={handleLeadScheduled} />
-                        <AddProjectDialog
-                          trigger={<Button size="sm">Créer Projet</Button>}
-                          initialValues={{
-                            client_name: lead.full_name,
-                            company: lead.company ?? "",
-                            city: lead.city,
-                            postal_code: lead.postal_code,
-                            surface_isolee_m2: lead.surface_m2 ?? undefined,
-                            lead_id: lead.id,
-                          }}
+                              <AddProjectDialog
+                                trigger={<Button size="sm">Créer Projet</Button>}
+                                initialValues={{
+                                  client_name: lead.full_name,
+                                  company: lead.company ?? "",
+                                  city: lead.city,
+                                  postal_code: lead.postal_code,
+                                  surface_isolee_m2: lead.surface_m2 ?? undefined,
+                                  lead_id: lead.id,
+                                }}
                                 onProjectAdded={() => handleProjectCreated(lead)}
                               />
                             </div>
