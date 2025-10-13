@@ -336,6 +336,7 @@ const Leads = () => {
         lead.product_name ?? "",
         lead.utm_source ?? "",
         lead.company ?? "",
+        lead.siren ?? "",
       ]
         .join(" ")
         .toLowerCase();
@@ -521,7 +522,7 @@ const Leads = () => {
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
-                  placeholder="Rechercher par nom, email, téléphone..."
+                  placeholder="Rechercher par nom, email, téléphone, SIREN..."
                   className="pl-10"
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
@@ -641,6 +642,11 @@ const Leads = () => {
                               {lead.company}
                             </p>
                           )}
+                          {lead.siren && (
+                            <p className="text-xs text-muted-foreground uppercase tracking-wide">
+                              SIREN : {lead.siren}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <Badge className={getLeadStatusColor(lead.status)}>
@@ -709,6 +715,7 @@ const Leads = () => {
                           initialValues={{
                             client_name: lead.full_name,
                             company: lead.company ?? "",
+                            siren: lead.siren ?? "",
                             city: lead.city,
                             postal_code: lead.postal_code,
                             surface_isolee_m2: lead.surface_m2 ?? undefined,
@@ -746,6 +753,11 @@ const Leads = () => {
                             <div className="text-sm text-muted-foreground flex items-center gap-1">
                               <Building className="h-3 w-3" />
                               {lead.company}
+                            </div>
+                          )}
+                          {lead.siren && (
+                            <div className="text-[11px] text-muted-foreground uppercase tracking-wide">
+                              SIREN : {lead.siren}
                             </div>
                           )}
                         </TableCell>
@@ -820,6 +832,7 @@ const Leads = () => {
                           initialValues={{
                             client_name: lead.full_name,
                             company: lead.company ?? "",
+                            siren: lead.siren ?? "",
                             city: lead.city,
                             postal_code: lead.postal_code,
                             surface_isolee_m2: lead.surface_m2 ?? undefined,

@@ -135,6 +135,7 @@ export type Database = {
           org_id: string | null
           phone_raw: string
           postal_code: string
+          siren: string | null
           product_name: string | null
           status: string
           surface_m2: number | null
@@ -157,6 +158,7 @@ export type Database = {
           org_id?: string | null
           phone_raw: string
           postal_code: string
+          siren?: string | null
           product_name?: string | null
           status?: string
           surface_m2?: number | null
@@ -179,6 +181,7 @@ export type Database = {
           org_id?: string | null
           phone_raw?: string
           postal_code?: string
+          siren?: string | null
           product_name?: string | null
           status?: string
           surface_m2?: number | null
@@ -436,6 +439,7 @@ export type Database = {
           prime_cee: number | null
           product_name: string
           project_ref: string
+          siren: string | null
           signatory_name: string | null
           signatory_title: string | null
           status: string
@@ -465,6 +469,7 @@ export type Database = {
           prime_cee?: number | null
           product_name: string
           project_ref: string
+          siren?: string | null
           signatory_name?: string | null
           signatory_title?: string | null
           status?: string
@@ -494,6 +499,7 @@ export type Database = {
           prime_cee?: number | null
           product_name?: string
           project_ref?: string
+          siren?: string | null
           signatory_name?: string | null
           signatory_title?: string | null
           status?: string

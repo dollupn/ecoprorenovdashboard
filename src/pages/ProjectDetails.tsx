@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout/Layout";
@@ -18,17 +18,35 @@ import {
   MapPin,
   Phone,
   UserRound,
-  HandCoins
+  HandCoins,
+  Building2,
+  FileText,
 } from "lucide-react";
+import { useOrg } from "@/features/organizations/OrgContext";
+import { useMembers } from "@/features/members/api";
+import {
+  AddQuoteDialog,
+  type QuoteFormValues,
+} from "@/components/quotes/AddQuoteDialog";
+import {
+  getDynamicFieldEntries,
+  formatDynamicFieldValue,
+} from "@/lib/product-params";
 
 type Project = Tables<"projects">;
 type ProjectProduct = Tables<"project_products"> & {
-  product: Pick<Tables<"product_catalog">, "code" | "name"> | null;
+  product: Pick<Tables<"product_catalog">, "code" | "name" | "params_schema"> | null;
 };
 
 type ProjectWithRelations = Project & {
   project_products: ProjectProduct[];
 };
+
+const getDisplayedProducts = (projectProducts?: ProjectProduct[]) =>
+  (projectProducts ?? []).filter((item) => {
+    const code = (item.product?.code ?? "").toUpperCase();
+    return !code.startsWith("ECO");
+  });
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value);
@@ -38,40 +56,61 @@ const ProjectDetails = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
+  const { currentOrgId } = useOrg();
+  const { data: members = [], isLoading: membersLoading } = useMembers(currentOrgId);
+  const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
+  const [quoteInitialValues, setQuoteInitialValues] =
+    useState<Partial<QuoteFormValues>>({});
+
+  const currentMember = members.find((member) => member.user_id === user?.id);
+  const isAdmin = currentMember?.role === "admin" || currentMember?.role === "owner";
 
   const {
     data: project,
     isLoading,
-    error
+    error,
   } = useQuery<ProjectWithRelations | null>({
-    queryKey: ["project", id, user?.id],
+    queryKey: ["project", id, user?.id, currentOrgId, isAdmin],
     queryFn: async () => {
       if (!id || !user?.id) return null;
 
-      const { data, error } = await supabase
+      let query = supabase
         .from("projects")
         .select(
-          "*, project_products(id, quantity, product:product_catalog(code, name))"
+          "*, project_products(id, quantity, dynamic_params, product:product_catalog(code, name, params_schema))"
         )
-        .eq("user_id", user.id)
-        .eq("id", id)
-        .maybeSingle();
+        .eq("id", id);
+
+      if (currentOrgId) {
+        query = query.eq("org_id", currentOrgId);
+      }
+
+      if (!isAdmin) {
+        query = query.eq("user_id", user.id);
+      }
+
+      const { data, error } = await query.maybeSingle();
 
       if (error) throw error;
       return (data as ProjectWithRelations | null) ?? null;
     },
-    enabled: !!id && !!user?.id,
+    enabled: !!id && !!user?.id && (!currentOrgId || !membersLoading),
   });
 
   const productCodes = useMemo(() => {
     if (!project?.project_products) return [] as string[];
 
-    return project.project_products
+    return getDisplayedProducts(project.project_products)
       .map((item) => item.product?.code)
       .filter((code): code is string => Boolean(code));
   }, [project?.project_products]);
 
-  if (isLoading) {
+  const projectProducts = useMemo(
+    () => getDisplayedProducts(project?.project_products),
+    [project?.project_products]
+  );
+
+  if (isLoading || membersLoading) {
     return (
       <Layout>
         <div className="flex items-center justify-center h-96">
@@ -106,8 +145,28 @@ const ProjectDetails = () => {
     navigate("/sites", { state: { createSite: { projectId: project.id } } });
     toast({
       title: "Création de chantier",
-      description: `Nouveau chantier initialisé pour ${project.project_ref}.`
+      description: `Nouveau chantier initialisé pour ${project.project_ref}.`,
     });
+  };
+
+  const handleOpenQuote = () => {
+    const displayedProducts = getDisplayedProducts(project.project_products);
+    const firstProduct = displayedProducts[0]?.product ?? project.project_products?.[0]?.product;
+
+    setQuoteInitialValues({
+      client_name: project.client_name ?? "",
+      project_id: project.id,
+      product_name:
+        firstProduct?.name ||
+        firstProduct?.code ||
+        (project as Project & { product_name?: string }).product_name ||
+        "",
+      amount: project.estimated_value ?? undefined,
+      quote_ref: project.project_ref
+        ? `${project.project_ref}-DEV`
+        : undefined,
+    });
+    setQuoteDialogOpen(true);
   };
 
   return (
@@ -133,6 +192,10 @@ const ProjectDetails = () => {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={handleOpenQuote}>
+              <FileText className="w-4 h-4 mr-2" />
+              Générer un devis
+            </Button>
             <Button variant="secondary" onClick={handleCreateSite}>
               <Hammer className="w-4 h-4 mr-2" />
               Créer un chantier
@@ -145,7 +208,7 @@ const ProjectDetails = () => {
             <CardHeader>
               <CardTitle>Informations générales</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <p className="text-sm text-muted-foreground">Client</p>
@@ -155,6 +218,11 @@ const ProjectDetails = () => {
                   </p>
                   {project.company && (
                     <p className="text-sm text-muted-foreground">{project.company}</p>
+                  )}
+                  {project.siren && (
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">
+                      SIREN : {project.siren}
+                    </p>
                   )}
                 </div>
                 <div className="space-y-2">
@@ -172,34 +240,37 @@ const ProjectDetails = () => {
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">Montant estimé</p>
-                  <p className="font-medium flex items-center gap-2">
-                    <Euro className="w-4 h-4 text-primary" />
-                    {typeof project.estimated_value === "number"
-                      ? formatCurrency(project.estimated_value)
-                      : "N/A"}
-                  </p>
+                  <p className="text-sm text-muted-foreground">Assigné à</p>
+                  <p className="font-medium">{project.assigned_to}</p>
                 </div>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">Assigné à</p>
-                  <p className="font-medium">{project.assigned_to}</p>
-                </div>
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">Prime CEE</p>
+                  <p className="text-sm text-muted-foreground">Type de bâtiment</p>
                   <p className="font-medium flex items-center gap-2">
-                    <HandCoins className="w-4 h-4 text-emerald-600" />
-                    {typeof project.prime_cee === "number"
-                      ? formatCurrency(project.prime_cee)
-                      : "N/A"}
+                    <Building2 className="w-4 h-4 text-primary" />
+                    {project.building_type ?? "Non renseigné"}
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">Créé le</p>
+                  <p className="text-sm text-muted-foreground">Usage</p>
+                  <p className="font-medium">{project.usage ?? "Non renseigné"}</p>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">Surface bâtiment</p>
                   <p className="font-medium">
-                    {new Date(project.created_at).toLocaleDateString("fr-FR")}
+                    {typeof project.surface_batiment_m2 === "number"
+                      ? `${project.surface_batiment_m2} m²`
+                      : "Non renseigné"}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">Surface isolée</p>
+                  <p className="font-medium">
+                    {typeof project.surface_isolee_m2 === "number"
+                      ? `${project.surface_isolee_m2} m²`
+                      : "Non renseigné"}
                   </p>
                 </div>
               </div>
@@ -208,9 +279,43 @@ const ProjectDetails = () => {
 
           <Card className="shadow-card bg-gradient-card border-0">
             <CardHeader>
-              <CardTitle>Planning</CardTitle>
+              <CardTitle>Finances & planning</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 text-sm">
+              <div className="flex items-center gap-2">
+                <Euro className="w-4 h-4 text-primary" />
+                <span className="text-muted-foreground">Montant estimé:</span>
+                <span className="font-medium">
+                  {typeof project.estimated_value === "number"
+                    ? formatCurrency(project.estimated_value)
+                    : "Non défini"}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <HandCoins className="w-4 h-4 text-emerald-600" />
+                <span className="text-muted-foreground">Prime CEE:</span>
+                <span className="font-medium">
+                  {typeof project.prime_cee === "number"
+                    ? formatCurrency(project.prime_cee)
+                    : "Non définie"}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">Remise:</span>
+                <span className="font-medium">
+                  {typeof project.discount === "number"
+                    ? formatCurrency(project.discount)
+                    : "Aucune"}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">Prix unitaire:</span>
+                <span className="font-medium">
+                  {typeof project.unit_price === "number"
+                    ? formatCurrency(project.unit_price)
+                    : "Non défini"}
+                </span>
+              </div>
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-primary" />
                 <span className="text-muted-foreground">Début prévu:</span>
@@ -229,10 +334,82 @@ const ProjectDetails = () => {
                     : "Non définie"}
                 </span>
               </div>
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">Créé le:</span>
+                <span className="font-medium">
+                  {new Date(project.created_at).toLocaleDateString("fr-FR")}
+                </span>
+              </div>
             </CardContent>
           </Card>
         </div>
+
+        <Card className="shadow-card bg-gradient-card border-0">
+          <CardHeader>
+            <CardTitle>Produits associés</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {projectProducts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Aucun produit (hors ECO) n'est associé à ce projet.
+              </p>
+            ) : (
+              projectProducts.map((item) => {
+                const dynamicFields = getDynamicFieldEntries(
+                  item.product?.params_schema ?? null,
+                  item.dynamic_params
+                );
+
+                return (
+                  <div
+                    key={item.id}
+                    className="border border-border/60 rounded-lg p-4 space-y-3"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className="text-xs font-semibold">
+                          {item.product?.code ?? "Code inconnu"}
+                        </Badge>
+                        <span className="text-sm text-muted-foreground">
+                          {item.product?.name ?? "Produit"}
+                        </span>
+                      </div>
+                      {typeof item.quantity === "number" && (
+                        <span className="text-sm font-medium">Quantité : {item.quantity}</span>
+                      )}
+                    </div>
+                    {dynamicFields.length > 0 && (
+                      <div className="grid gap-2 md:grid-cols-2 text-sm">
+                        {dynamicFields.map((field) => (
+                          <div
+                            key={`${item.id}-${field.label}`}
+                            className="flex items-center justify-between gap-2"
+                          >
+                            <span className="text-muted-foreground">{field.label}</span>
+                            <span className="font-medium">
+                              {String(formatDynamicFieldValue(field))}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </CardContent>
+        </Card>
       </div>
+      <AddQuoteDialog
+        open={quoteDialogOpen}
+        onOpenChange={(open) => {
+          setQuoteDialogOpen(open);
+          if (!open) {
+            setQuoteInitialValues({});
+          }
+        }}
+        initialValues={quoteInitialValues}
+      />
     </Layout>
   );
 };

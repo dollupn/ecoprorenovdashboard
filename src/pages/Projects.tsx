@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,7 +13,6 @@ import {
   AddQuoteDialog,
   type QuoteFormValues,
 } from "@/components/quotes/AddQuoteDialog";
-import { useToast } from "@/hooks/use-toast";
 import type { Tables } from "@/integrations/supabase/types";
 import { getStatusColor, getStatusLabel } from "@/lib/projects";
 import {
@@ -23,86 +22,153 @@ import {
   MapPin,
   Euro,
   FileText,
-  Settings,
   Eye,
   Phone,
   Hammer,
-  HandCoins
+  HandCoins,
 } from "lucide-react";
+import { useOrg } from "@/features/organizations/OrgContext";
+import { useMembers } from "@/features/members/api";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  getDynamicFieldEntries,
+  formatDynamicFieldValue,
+} from "@/lib/product-params";
 
 type Project = Tables<"projects">;
 type ProjectProduct = Tables<"project_products"> & {
-  product: Pick<Tables<"product_catalog">, "code" | "name"> | null;
+  product: Pick<Tables<"product_catalog">, "code" | "name" | "params_schema"> | null;
 };
 
 type ProjectWithRelations = Project & {
   project_products: ProjectProduct[];
 };
 
+const getDisplayedProducts = (projectProducts?: ProjectProduct[]) =>
+  (projectProducts ?? []).filter((item) => {
+    const code = (item.product?.code ?? "").toUpperCase();
+    return !code.startsWith("ECO");
+  });
+
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value);
 
 const Projects = () => {
   const navigate = useNavigate();
-  const { toast } = useToast();
   const { user } = useAuth();
+  const { currentOrgId } = useOrg();
+  const { data: members = [], isLoading: membersLoading } = useMembers(currentOrgId);
   const [searchTerm, setSearchTerm] = useState("");
+  const [assignedFilter, setAssignedFilter] = useState<string>("all");
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
   const [quoteInitialValues, setQuoteInitialValues] =
     useState<Partial<QuoteFormValues>>({});
 
+  const currentMember = members.find((member) => member.user_id === user?.id);
+  const isAdmin = currentMember?.role === "admin" || currentMember?.role === "owner";
+
   const { data: projects = [], isLoading, refetch } = useQuery<ProjectWithRelations[]>({
-    queryKey: ["projects", user?.id],
+    queryKey: ["projects", user?.id, currentOrgId, isAdmin],
     queryFn: async () => {
       if (!user) return [];
 
-      const { data, error } = await supabase
+      let query = supabase
         .from("projects")
         .select(
-          "*, project_products(id, quantity, product:product_catalog(code, name))"
+          "*, project_products(id, quantity, dynamic_params, product:product_catalog(code, name, params_schema))"
         )
-        .eq("user_id", user.id)
         .order("created_at", { ascending: false });
+
+      if (currentOrgId) {
+        query = query.eq("org_id", currentOrgId);
+      }
+
+      if (!isAdmin) {
+        query = query.eq("user_id", user.id);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       return (data ?? []) as ProjectWithRelations[];
     },
-    enabled: !!user,
+    enabled: !!user && (!currentOrgId || !membersLoading),
   });
+
+  const assignedOptions = useMemo(() => {
+    const unique = new Set<string>();
+    projects.forEach((project) => {
+      if (project.assigned_to) {
+        unique.add(project.assigned_to);
+      }
+    });
+    return Array.from(unique).sort((a, b) => a.localeCompare(b));
+  }, [projects]);
+
+  useEffect(() => {
+    if (assignedFilter !== "all" && !assignedOptions.includes(assignedFilter)) {
+      setAssignedFilter("all");
+    }
+  }, [assignedFilter, assignedOptions]);
 
   const filteredProjects = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
-    if (!normalizedSearch) {
-      return projects;
+    let base = projects;
+
+    if (assignedFilter !== "all") {
+      base = base.filter((project) => project.assigned_to === assignedFilter);
     }
 
-    return projects.filter((project) => {
+    if (!normalizedSearch) {
+      return base;
+    }
+
+    return base.filter((project) => {
+      const displayedProducts = getDisplayedProducts(project.project_products);
+      const productCodes = displayedProducts
+        .map((item) => item.product?.code ?? "")
+        .join(" ");
+      const dynamicValues = displayedProducts
+        .flatMap((item) =>
+          getDynamicFieldEntries(
+            item.product?.params_schema ?? null,
+            item.dynamic_params
+          ).map((entry) => entry.value?.toString().toLowerCase())
+        )
+        .join(" ");
+
       const searchable = [
         project.project_ref,
         project.client_name,
         project.company ?? "",
+        project.siren ?? "",
         project.city,
         project.postal_code,
-        project.project_products
-          ?.map((item) => item.product?.code ?? "")
-          .filter(Boolean)
-          .join(" "),
-        project.assigned_to
+        productCodes,
+        project.assigned_to,
+        dynamicValues,
       ]
         .join(" ")
         .toLowerCase();
 
       return searchable.includes(normalizedSearch);
     });
-  }, [searchTerm, projects]);
+  }, [searchTerm, projects, assignedFilter]);
 
   const handleViewProject = (projectId: string) => {
     navigate(`/projects/${projectId}`);
   };
 
   const handleCreateQuote = (project: ProjectWithRelations) => {
-    const firstProduct = project.project_products?.[0]?.product;
+    const displayedProducts = getDisplayedProducts(project.project_products);
+    const firstProduct = displayedProducts[0]?.product ?? project.project_products?.[0]?.product;
 
     setQuoteInitialValues({
       client_name: project.client_name ?? "",
@@ -120,18 +186,11 @@ const Projects = () => {
     setQuoteDialogOpen(true);
   };
 
-  const handleManageProject = (project: Project) => {
-    toast({
-      title: "Paramètres du projet",
-      description: `Accédez aux paramètres de ${project.project_ref}.`
-    });
-  };
-
   const handleCreateSite = (project: Project) => {
     navigate(`/sites`, { state: { createSite: { projectId: project.id } } });
   };
 
-  if (isLoading) {
+  if (isLoading || membersLoading) {
     return (
       <Layout>
         <div className="flex items-center justify-center h-96">
@@ -160,83 +219,140 @@ const Projects = () => {
         {/* Filters */}
         <Card className="shadow-card bg-gradient-card border-0">
           <CardContent className="pt-6">
-            <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex flex-col xl:flex-row gap-4">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
-                  placeholder="Rechercher par référence, client, ville..."
+                  placeholder="Rechercher par référence, client, SIREN, ville..."
                   className="pl-10"
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
                 />
               </div>
-              <Button variant="outline">
-                <Filter className="w-4 h-4 mr-2" />
-                Filtres
-              </Button>
+              <div className="flex flex-col md:flex-row gap-4">
+                <Select
+                  value={assignedFilter}
+                  onValueChange={(value) => setAssignedFilter(value)}
+                >
+                  <SelectTrigger className="md:w-[220px]">
+                    <SelectValue placeholder="Toutes les assignations" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Toutes les assignations</SelectItem>
+                    {assignedOptions.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button variant="outline">
+                  <Filter className="w-4 h-4 mr-2" />
+                  Filtres
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
 
         {/* Projects Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredProjects.map((project) => (
-            <Card key={project.id} className="shadow-card bg-gradient-card border border-black/10 transition-all duration-300 hover:shadow-elevated dark:border-white/10">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="text-lg font-bold text-primary">
-                      {project.project_ref}
-                    </CardTitle>
-                    <p className="text-sm text-muted-foreground mt-1 space-y-1">
-                      <span className="block">
-                        {project.client_name}
-                        {project.company && (
-                          <span className="block text-xs">{project.company}</span>
-                        )}
-                      </span>
-                      {project.phone && (
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground/80">
-                          <Phone className="w-3.5 h-3.5" />
-                          {project.phone}
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                  <Badge className={getStatusColor(project.status as any)}>
-                    {getStatusLabel(project.status as any)}
-                  </Badge>
-                </div>
-              </CardHeader>
+          {filteredProjects.map((project) => {
+            const displayedProducts = getDisplayedProducts(
+              project.project_products
+            );
 
-              <CardContent className="space-y-4">
-                {/* Product & Location */}
-                <div className="space-y-2">
-                  <div className="flex flex-wrap gap-2">
-                    {project.project_products?.length ? (
-                      project.project_products
-                        .map((product) => product.product?.code)
-                        .filter(Boolean)
-                        .map((code, index) => (
+            return (
+              <Card
+                key={project.id}
+                className="shadow-card bg-gradient-card border border-black/10 transition-all duration-300 hover:shadow-elevated dark:border-white/10"
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <CardTitle className="text-lg font-bold text-primary">
+                        {project.project_ref}
+                      </CardTitle>
+                      <p className="text-sm text-muted-foreground mt-1 space-y-1">
+                        <span className="block">
+                          {project.client_name}
+                          {project.company && (
+                            <span className="block text-xs">{project.company}</span>
+                          )}
+                          {project.siren && (
+                            <span className="block text-xs text-muted-foreground/80">
+                              SIREN : {project.siren}
+                            </span>
+                          )}
+                        </span>
+                        {project.phone && (
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground/80">
+                            <Phone className="w-3.5 h-3.5" />
+                            {project.phone}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <Badge className={getStatusColor(project.status as any)}>
+                      {getStatusLabel(project.status as any)}
+                    </Badge>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="space-y-4">
+                  {/* Product & Location */}
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap gap-2">
+                      {displayedProducts.length ? (
+                        displayedProducts.map((item, index) => (
                           <Badge
-                            key={`${project.id}-${code}-${index}`}
+                            key={`${project.id}-${item.product?.code}-${index}`}
                             variant="secondary"
                             className="text-xs font-medium"
                           >
-                            {code}
+                            {item.product?.code}
                           </Badge>
                         ))
-                    ) : (
-                      <span className="text-sm text-muted-foreground">
-                        Aucun code produit renseigné
-                      </span>
-                    )}
+                      ) : (
+                        <span className="text-sm text-muted-foreground">
+                          Aucun produit à afficher
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <MapPin className="w-4 h-4" />
+                      {project.city} ({project.postal_code})
+                    </div>
+                    {displayedProducts.map((item, index) => {
+                      const dynamicFields = getDynamicFieldEntries(
+                        item.product?.params_schema ?? null,
+                        item.dynamic_params
+                      );
+
+                      if (!dynamicFields.length) {
+                        return null;
+                      }
+
+                      return (
+                        <div
+                          key={`${project.id}-dynamic-${index}`}
+                          className="space-y-1 text-xs text-muted-foreground"
+                        >
+                          {dynamicFields.map((field) => (
+                            <div
+                              key={`${project.id}-${item.product?.code}-${field.label}`}
+                              className="flex items-center justify-between gap-2"
+                            >
+                              <span>{field.label}</span>
+                              <span className="font-medium text-foreground">
+                                {String(formatDynamicFieldValue(field))}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <MapPin className="w-4 h-4" />
-                    {project.city} ({project.postal_code})
-                  </div>
-                </div>
 
                 {/* Technical Details */}
                 {(project.surface_batiment_m2 || project.surface_isolee_m2) && (
@@ -323,13 +439,6 @@ const Projects = () => {
                   </Button>
                   <Button
                     size="sm"
-                    variant="outline"
-                    onClick={() => handleManageProject(project)}
-                  >
-                    <Settings className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    size="sm"
                     variant="secondary"
                     className="flex-1"
                     onClick={() => handleCreateSite(project)}
@@ -340,7 +449,8 @@ const Projects = () => {
                 </div>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
 
         {filteredProjects.length === 0 && (
