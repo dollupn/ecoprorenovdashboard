@@ -85,6 +85,72 @@ const formatDate = (value: string | null) => {
   }).format(new Date(value));
 };
 
+const normalizeProductCode = (code: string) => code.trim().toUpperCase();
+
+const filterUniqueProductCodes = (codes: (string | null | undefined)[]) => {
+  const seen = new Set<string>();
+  const filtered: string[] = [];
+
+  codes.forEach((rawCode) => {
+    if (!rawCode) return;
+    const normalized = normalizeProductCode(rawCode);
+
+    if (!normalized) return;
+    if (normalized.startsWith("ECO")) return;
+    if (normalized.includes(" ")) return;
+
+    const hasDigit = /\d/.test(normalized);
+    const hasSeparator = normalized.includes("-") || normalized.includes("_") || normalized.includes("/");
+
+    if (!hasDigit && !hasSeparator) return;
+    if (seen.has(normalized)) return;
+
+    seen.add(normalized);
+    filtered.push(normalized);
+  });
+
+  return filtered;
+};
+
+const splitPotentialCodes = (value?: string | null) => {
+  if (!value) {
+    return [] as string[];
+  }
+
+  return value
+    .split(/[\n,;|/]+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => part.split(/\s+-\s+/)[0]?.trim() ?? "")
+    .filter(Boolean);
+};
+
+const computeQuoteProductCodes = (quote: QuoteRecord) => {
+  const projectCodes = filterUniqueProductCodes(
+    (quote.projects?.project_products ?? []).map((item) => item.product?.code)
+  );
+
+  if (projectCodes.length > 0) {
+    return projectCodes;
+  }
+
+  const metadata = parseQuoteMetadata(quote);
+  const metadataCodes = filterUniqueProductCodes(
+    (metadata.lineItems ?? []).map((item) => item.reference ?? undefined)
+  );
+
+  if (metadataCodes.length > 0) {
+    return metadataCodes;
+  }
+
+  const fallbackCandidates = [
+    ...splitPotentialCodes(quote.product_name),
+    ...splitPotentialCodes(quote.projects?.product_name ?? null),
+  ];
+
+  return filterUniqueProductCodes(fallbackCandidates);
+};
+
 /** ---- Data ---- */
 const fetchQuotes = async ({
   userId,
@@ -95,7 +161,9 @@ const fetchQuotes = async ({
 }): Promise<QuoteRecord[]> => {
   let query = supabase
     .from("quotes")
-    .select("*, projects(project_ref, client_name, product_name)")
+    .select(
+      "*, projects(project_ref, client_name, product_name, project_products(product:product_catalog(code)))"
+    )
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
@@ -201,6 +269,16 @@ const Quotes = () => {
     };
   }, [quotes]);
 
+  const productCodesByQuote = useMemo(() => {
+    const map = new Map<string, string[]>();
+
+    quotes.forEach((quote) => {
+      map.set(quote.id, computeQuoteProductCodes(quote));
+    });
+
+    return map;
+  }, [quotes]);
+
   const filteredQuotes = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
@@ -211,19 +289,21 @@ const Quotes = () => {
     return quotes.filter((quote) => {
       const projectRef = quote.projects?.project_ref ?? "";
       const productName = quote.product_name ?? quote.projects?.product_name ?? "";
+      const productCodes = productCodesByQuote.get(quote.id) ?? [];
 
       const searchable = [
         quote.quote_ref,
         quote.client_name,
         projectRef,
         productName,
+        productCodes.join(" "),
       ]
         .join(" ")
         .toLowerCase();
 
       return searchable.includes(normalizedSearch);
     });
-  }, [quotes, searchTerm]);
+  }, [quotes, searchTerm, productCodesByQuote]);
 
   const renderStatus = (status: string) => {
     const normalized = (status?.toUpperCase() as QuoteStatus) || "DRAFT";
@@ -421,107 +501,113 @@ const Quotes = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredQuotes.map((quote) => (
-                        <TableRow key={quote.id}>
-                          <TableCell className="font-medium">{quote.quote_ref}</TableCell>
-                          <TableCell>{quote.client_name}</TableCell>
-                          <TableCell>{quote.projects?.project_ref ?? "—"}</TableCell>
-                          <TableCell>{(quote as any).product_name ?? quote.projects?.product_name ?? "—"}</TableCell>
-                          <TableCell className="text-right">
-                            {formatQuoteCurrency(Number(quote.amount || 0))}
-                          </TableCell>
-                          <TableCell>{renderStatus(quote.status || "DRAFT")}</TableCell>
-                          <TableCell>{formatDate(quote.valid_until)}</TableCell>
-                          <TableCell className="text-right">
-                            <QuoteActions
-                              quote={quote}
-                              onView={(value) => {
-                                setSelectedQuote(value);
-                                setDetailsOpen(true);
-                              }}
-                              onDownload={(value) => {
-                                const metadata = parseQuoteMetadata(value);
+                      {filteredQuotes.map((quote) => {
+                        const productCodes = productCodesByQuote.get(quote.id) ?? [];
 
-                                if (typeof window === "undefined") {
-                                  return;
-                                }
+                        return (
+                          <TableRow key={quote.id}>
+                            <TableCell className="font-medium">{quote.quote_ref}</TableCell>
+                            <TableCell>{quote.client_name}</TableCell>
+                            <TableCell>{quote.projects?.project_ref ?? "—"}</TableCell>
+                            <TableCell>
+                              {productCodes.length > 0 ? productCodes.join(", ") : "—"}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {formatQuoteCurrency(Number(quote.amount || 0))}
+                            </TableCell>
+                            <TableCell>{renderStatus(quote.status || "DRAFT")}</TableCell>
+                            <TableCell>{formatDate(quote.valid_until)}</TableCell>
+                            <TableCell className="text-right">
+                              <QuoteActions
+                                quote={quote}
+                                onView={(value) => {
+                                  setSelectedQuote(value);
+                                  setDetailsOpen(true);
+                                }}
+                                onDownload={(value) => {
+                                  const metadata = parseQuoteMetadata(value);
 
-                                const payload = {
-                                  quote: {
-                                    id: value.id,
-                                    reference: value.quote_ref,
-                                    client: value.client_name,
-                                    product: value.product_name,
-                                    status: value.status,
-                                    amount: value.amount,
-                                    validUntil: value.valid_until,
-                                    projectRef: value.projects?.project_ref,
-                                    projectClient: value.projects?.client_name,
-                                    createdAt: value.created_at,
-                                  },
-                                  metadata,
-                                };
+                                  if (typeof window === "undefined") {
+                                    return;
+                                  }
 
-                                const blob = new Blob([JSON.stringify(payload, null, 2)], {
-                                  type: "application/json",
-                                });
+                                  const payload = {
+                                    quote: {
+                                      id: value.id,
+                                      reference: value.quote_ref,
+                                      client: value.client_name,
+                                      product: value.product_name,
+                                      status: value.status,
+                                      amount: value.amount,
+                                      validUntil: value.valid_until,
+                                      projectRef: value.projects?.project_ref,
+                                      projectClient: value.projects?.client_name,
+                                      createdAt: value.created_at,
+                                    },
+                                    metadata,
+                                  };
 
-                                const url = URL.createObjectURL(blob);
-                                const link = document.createElement("a");
-                                link.href = url;
-                                link.download = `${value.quote_ref || "devis"}.json`;
-                                document.body.appendChild(link);
-                                link.click();
-                                document.body.removeChild(link);
-                                URL.revokeObjectURL(url);
-
-                                toast({
-                                  title: "Téléchargement en cours",
-                                  description: `Le devis ${value.quote_ref} a été préparé au format JSON.`,
-                                });
-                              }}
-                              onOpenDrive={(value) => {
-                                const metadata = parseQuoteMetadata(value);
-
-                                if (!metadata.driveFolderUrl) {
-                                  toast({
-                                    title: "Dossier indisponible",
-                                    description: "Aucun dossier Google Drive n'est associé à ce devis.",
-                                    variant: "destructive",
+                                  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+                                    type: "application/json",
                                   });
-                                  return;
-                                }
 
-                                if (typeof window !== "undefined") {
-                                  window.open(metadata.driveFolderUrl, "_blank", "noopener,noreferrer");
-                                }
-                              }}
-                              onSendEmail={(value) => {
-                                const metadata = parseQuoteMetadata(value);
+                                  const url = URL.createObjectURL(blob);
+                                  const link = document.createElement("a");
+                                  link.href = url;
+                                  link.download = `${value.quote_ref || "devis"}.json`;
+                                  document.body.appendChild(link);
+                                  link.click();
+                                  document.body.removeChild(link);
+                                  URL.revokeObjectURL(url);
 
-                                if (!metadata.clientEmail) {
                                   toast({
-                                    title: "Email manquant",
-                                    description: "Renseignez l'adresse email du client pour envoyer le devis.",
-                                    variant: "destructive",
+                                    title: "Téléchargement en cours",
+                                    description: `Le devis ${value.quote_ref} a été préparé au format JSON.`,
                                   });
-                                  return;
-                                }
+                                }}
+                                onOpenDrive={(value) => {
+                                  const metadata = parseQuoteMetadata(value);
 
-                                const subject = encodeURIComponent(`Devis ${value.quote_ref}`);
-                                const defaultBody = `Bonjour,\n\nVeuillez trouver ci-joint le devis ${value.quote_ref}.\nMontant HT : ${formatQuoteCurrency(Number(
-                                  value.amount || 0
-                                ))}\n\n${metadata.emailMessage ?? "Restant à votre disposition."}`;
-                                const body = encodeURIComponent(defaultBody);
+                                  if (!metadata.driveFolderUrl) {
+                                    toast({
+                                      title: "Dossier indisponible",
+                                      description: "Aucun dossier Google Drive n'est associé à ce devis.",
+                                      variant: "destructive",
+                                    });
+                                    return;
+                                  }
 
-                                if (typeof window !== "undefined") {
-                                  window.open(`mailto:${metadata.clientEmail}?subject=${subject}&body=${body}`);
-                                }
-                              }}
-                            />
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                                  if (typeof window !== "undefined") {
+                                    window.open(metadata.driveFolderUrl, "_blank", "noopener,noreferrer");
+                                  }
+                                }}
+                                onSendEmail={(value) => {
+                                  const metadata = parseQuoteMetadata(value);
+
+                                  if (!metadata.clientEmail) {
+                                    toast({
+                                      title: "Email manquant",
+                                      description: "Renseignez l'adresse email du client pour envoyer le devis.",
+                                      variant: "destructive",
+                                    });
+                                    return;
+                                  }
+
+                                  const subject = encodeURIComponent(`Devis ${value.quote_ref}`);
+                                  const defaultBody = `Bonjour,\n\nVeuillez trouver ci-joint le devis ${value.quote_ref}.\nMontant HT : ${formatQuoteCurrency(Number(
+                                    value.amount || 0
+                                  ))}\n\n${metadata.emailMessage ?? "Restant à votre disposition."}`;
+                                  const body = encodeURIComponent(defaultBody);
+
+                                  if (typeof window !== "undefined") {
+                                    window.open(`mailto:${metadata.clientEmail}?subject=${subject}&body=${body}`);
+                                  }
+                                }}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
