@@ -278,12 +278,18 @@ export type Database = {
           created_at: string
           default_params: Json | null
           description: string | null
+          custom_description_primary: string | null
+          custom_description_secondary: string | null
           id: string
           is_active: boolean
           name: string
           org_id: string | null
           owner_id: string
           params_schema: Json | null
+          prime_percentage: number | null
+          eco_admin_percentage: number | null
+          eco_furn_percentage: number | null
+          eco_log_percentage: number | null
           price_ttc: number | null
           schema_version: number
           supplier_name: string | null
@@ -300,12 +306,18 @@ export type Database = {
           created_at?: string
           default_params?: Json | null
           description?: string | null
+          custom_description_primary?: string | null
+          custom_description_secondary?: string | null
           id?: string
           is_active?: boolean
           name: string
           org_id?: string | null
           owner_id: string
           params_schema?: Json | null
+          prime_percentage?: number | null
+          eco_admin_percentage?: number | null
+          eco_furn_percentage?: number | null
+          eco_log_percentage?: number | null
           price_ttc?: number | null
           schema_version?: number
           supplier_name?: string | null
@@ -322,12 +334,18 @@ export type Database = {
           created_at?: string
           default_params?: Json | null
           description?: string | null
+          custom_description_primary?: string | null
+          custom_description_secondary?: string | null
           id?: string
           is_active?: boolean
           name?: string
           org_id?: string | null
           owner_id?: string
           params_schema?: Json | null
+          prime_percentage?: number | null
+          eco_admin_percentage?: number | null
+          eco_furn_percentage?: number | null
+          eco_log_percentage?: number | null
           price_ttc?: number | null
           schema_version?: number
           supplier_name?: string | null

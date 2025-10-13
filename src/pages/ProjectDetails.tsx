@@ -5,6 +5,17 @@ import { Layout } from "@/components/layout/Layout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -21,6 +32,7 @@ import {
   HandCoins,
   Building2,
   FileText,
+  Trash2,
 } from "lucide-react";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useMembers } from "@/features/members/api";
@@ -45,6 +57,7 @@ type ProjectWithRelations = Project & {
 const getDisplayedProducts = (projectProducts?: ProjectProduct[]) =>
   (projectProducts ?? []).filter((item) => {
     const code = (item.product?.code ?? "").toUpperCase();
+    // Hide ECO* helper/edge products from display & counts
     return !code.startsWith("ECO");
   });
 
@@ -58,9 +71,11 @@ const ProjectDetails = () => {
   const { user } = useAuth();
   const { currentOrgId } = useOrg();
   const { data: members = [], isLoading: membersLoading } = useMembers(currentOrgId);
+
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
-  const [quoteInitialValues, setQuoteInitialValues] =
-    useState<Partial<QuoteFormValues>>({});
+  const [quoteInitialValues, setQuoteInitialValues] = useState<Partial<QuoteFormValues>>({});
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const currentMember = members.find((member) => member.user_id === user?.id);
   const isAdmin = currentMember?.role === "admin" || currentMember?.role === "owner";
@@ -99,7 +114,6 @@ const ProjectDetails = () => {
 
   const productCodes = useMemo(() => {
     if (!project?.project_products) return [] as string[];
-
     return getDisplayedProducts(project.project_products)
       .map((item) => item.product?.code)
       .filter((code): code is string => Boolean(code));
@@ -151,7 +165,8 @@ const ProjectDetails = () => {
 
   const handleOpenQuote = () => {
     const displayedProducts = getDisplayedProducts(project.project_products);
-    const firstProduct = displayedProducts[0]?.product ?? project.project_products?.[0]?.product;
+    const firstProduct =
+      displayedProducts[0]?.product ?? project.project_products?.[0]?.product;
 
     setQuoteInitialValues({
       client_name: project.client_name ?? "",
@@ -162,11 +177,48 @@ const ProjectDetails = () => {
         (project as Project & { product_name?: string }).product_name ||
         "",
       amount: project.estimated_value ?? undefined,
-      quote_ref: project.project_ref
-        ? `${project.project_ref}-DEV`
-        : undefined,
+      quote_ref: project.project_ref ? `${project.project_ref}-DEV` : undefined,
     });
     setQuoteDialogOpen(true);
+  };
+
+  const handleDeleteProject = async () => {
+    if (!project) return;
+
+    try {
+      const projectLabel = project.project_ref || "ce projet";
+      setIsDeleting(true);
+      let query = supabase.from("projects").delete().eq("id", project.id);
+
+      if (currentOrgId) {
+        query = query.eq("org_id", currentOrgId);
+      }
+
+      const { error: deleteError } = await query;
+
+      if (deleteError) {
+        throw deleteError;
+      }
+
+      setDeleteDialogOpen(false);
+      toast({
+        title: "Projet supprimé",
+        description: `${projectLabel} a été supprimé avec succès.`,
+      });
+      navigate("/projects");
+    } catch (deleteError) {
+      const errorMessage =
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Une erreur est survenue lors de la suppression.";
+      toast({
+        title: "Erreur lors de la suppression",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -200,6 +252,30 @@ const ProjectDetails = () => {
               <Hammer className="w-4 h-4 mr-2" />
               Créer un chantier
             </Button>
+            {(isAdmin || project.user_id === user?.id) && (
+              <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive">
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Supprimer le projet
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Supprimer le projet ?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Cette action est irréversible. Le projet {project.project_ref || "sélectionné"} sera définitivement supprimé.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={isDeleting}>Annuler</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteProject} disabled={isDeleting}>
+                      {isDeleting ? "Suppression..." : "Confirmer"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
           </div>
         </div>
 
@@ -400,6 +476,7 @@ const ProjectDetails = () => {
           </CardContent>
         </Card>
       </div>
+
       <AddQuoteDialog
         open={quoteDialogOpen}
         onOpenChange={(open) => {

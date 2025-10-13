@@ -38,11 +38,11 @@ export function KPICard({
     <Card className="relative overflow-hidden border-0 shadow-card hover:shadow-elevated transition-all duration-300 bg-gradient-card">
       <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-10`} />
 
-      <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2 relative z-10">
+      <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0 pb-2 relative z-10">
         <CardTitle className="text-sm font-medium text-muted-foreground">
           {title}
         </CardTitle>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
           {badgeLabel && !isLoading && !error && (
             <Badge variant="outline" className="text-xs border-primary/30 text-primary bg-primary/10">
               {badgeLabel}
