@@ -14,6 +14,10 @@ import {
   TrendingUp,
   LogOut,
   ClipboardPlus,
+  UserCircle,
+  Calculator,
+  Settings2,
+  ChevronDown,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -31,12 +35,22 @@ import {
 
 const mainItems = [
   { title: "Tableau de Bord", url: "/", icon: BarChart3 },
-  { title: "Leads", url: "/leads", icon: Users },
-  { title: "Lead terrain", url: "/pos-lead", icon: ClipboardPlus },
+  { 
+    title: "Leads", 
+    url: "/leads", 
+    icon: Users,
+    subItems: [
+      { title: "Liste des leads", url: "/leads", icon: Users },
+      { title: "Lead terrain", url: "/leads/pos", icon: ClipboardPlus },
+      { title: "Paramètres Lead", url: "/leads/settings", icon: Settings2 },
+    ]
+  },
   { title: "Projets", url: "/projects", icon: FolderOpen },
   { title: "Devis", url: "/quotes", icon: FileText },
-  { title: "Factures", url: "/invoices", icon: Receipt },
   { title: "Chantiers", url: "/sites", icon: Building2 },
+  { title: "Clients", url: "/clients", icon: UserCircle },
+  { title: "Comptabilité", url: "/accounting", icon: Calculator },
+  { title: "Factures", url: "/invoices", icon: Receipt },
   { title: "Produits", url: "/products", icon: Package },
 ];
 
@@ -53,16 +67,24 @@ export function AppSidebar() {
   const currentPath = location.pathname;
   const isCollapsed = state === "collapsed";
   const { signOut } = useAuth();
+  const [openGroups, setOpenGroups] = React.useState<Record<string, boolean>>({});
 
-  const isActive = (path: string) => {
+  const isActive = (path: string, subItems?: any[]) => {
     if (path === "/") return currentPath === "/";
-    return currentPath.startsWith(path);
+    if (subItems) {
+      return subItems.some(sub => currentPath === sub.url || currentPath.startsWith(sub.url + "/"));
+    }
+    return currentPath === path || currentPath.startsWith(path + "/");
   };
 
   const getNavClassName = (active: boolean) =>
     active 
       ? "bg-gradient-to-r from-primary/20 to-primary/10 text-primary border-r-2 border-primary font-medium" 
       : "hover:bg-muted/50 text-muted-foreground hover:text-foreground";
+
+  const toggleGroup = (title: string) => {
+    setOpenGroups(prev => ({ ...prev, [title]: !prev[title] }));
+  };
 
   return (
     <Sidebar className={isCollapsed ? "w-14" : "w-64"} collapsible="icon">
@@ -91,15 +113,49 @@ export function AppSidebar() {
             <SidebarMenu className="px-2 space-y-1">
               {mainItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild className="h-11">
-                    <NavLink
-                      to={item.url}
-                      className={getNavClassName(isActive(item.url))}
-                    >
-                      <item.icon className="w-5 h-5 flex-shrink-0" />
-                      {!isCollapsed && <span className="ml-3">{item.title}</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
+                  {item.subItems ? (
+                    <>
+                      <SidebarMenuButton 
+                        className="h-11"
+                        onClick={() => !isCollapsed && toggleGroup(item.title)}
+                      >
+                        <item.icon className="w-5 h-5 flex-shrink-0" />
+                        {!isCollapsed && (
+                          <>
+                            <span className="ml-3 flex-1 text-left">{item.title}</span>
+                            <ChevronDown className={`w-4 h-4 transition-transform ${openGroups[item.title] || isActive(item.url, item.subItems) ? 'rotate-180' : ''}`} />
+                          </>
+                        )}
+                      </SidebarMenuButton>
+                      {!isCollapsed && (openGroups[item.title] || isActive(item.url, item.subItems)) && (
+                        <SidebarMenu className="ml-4 mt-1 space-y-1">
+                          {item.subItems.map((subItem) => (
+                            <SidebarMenuItem key={subItem.title}>
+                              <SidebarMenuButton asChild className="h-10">
+                                <NavLink
+                                  to={subItem.url}
+                                  className={getNavClassName(isActive(subItem.url))}
+                                >
+                                  <subItem.icon className="w-4 h-4 flex-shrink-0" />
+                                  <span className="ml-2 text-sm">{subItem.title}</span>
+                                </NavLink>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                          ))}
+                        </SidebarMenu>
+                      )}
+                    </>
+                  ) : (
+                    <SidebarMenuButton asChild className="h-11">
+                      <NavLink
+                        to={item.url}
+                        className={getNavClassName(isActive(item.url))}
+                      >
+                        <item.icon className="w-5 h-5 flex-shrink-0" />
+                        {!isCollapsed && <span className="ml-3">{item.title}</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  )}
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>

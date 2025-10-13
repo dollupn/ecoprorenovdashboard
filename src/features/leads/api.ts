@@ -28,9 +28,9 @@ const sanitizeSearch = (value: string) => value.replace(/[%_]/g, (match) => `\\$
 export const getOrganizationProducts = async (orgId: string) => {
   const { data, error } = await supabase
     .from("product_catalog")
-    .select("id, name, product_type, enabled")
+    .select("id, name, category, is_active")
     .eq("org_id", orgId)
-    .eq("enabled", true)
+    .eq("is_active", true)
     .order("name", { ascending: true });
 
   if (error) throw error;
