@@ -44,7 +44,10 @@ const siteSchema = z.object({
   site_ref: z.string().min(3, "Référence requise"),
   project_ref: z.string().min(3, "Référence projet requise"),
   client_name: z.string().min(2, "Client requis"),
-  product_name: z.string().min(2, "Produit requis"),
+  product_name: z
+    .string()
+    .optional()
+    .nullable(),
   address: z.string().min(3, "Adresse requise"),
   city: z.string().min(2, "Ville requise"),
   postal_code: z.string().min(4, "Code postal invalide"),
@@ -278,10 +281,19 @@ export const SiteDialog = ({
                 name="product_name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Produit</FormLabel>
+                    <FormLabel>Produit (défini par le projet)</FormLabel>
                     <FormControl>
-                      <Input placeholder="Type de prestation" {...field} />
+                      <Input
+                        {...field}
+                        value={field.value ?? ""}
+                        readOnly
+                        className="bg-muted"
+                        placeholder="Le produit sera renseigné depuis le projet"
+                      />
                     </FormControl>
+                    <p className="text-xs text-muted-foreground">
+                      Ce champ est automatiquement pré-rempli à partir du projet associé.
+                    </p>
                     <FormMessage />
                   </FormItem>
                 )}
