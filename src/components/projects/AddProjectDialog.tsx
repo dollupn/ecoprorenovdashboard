@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, X } from "lucide-react";
 import { DynamicFields } from "@/features/leads/DynamicFields";
 
@@ -246,10 +247,24 @@ export const AddProjectDialog = ({
       .filter((product) => product.is_active !== false)
       .map((product) => ({
         value: product.id ?? "",
-        label: product.name ?? "Produit",
-        description: product.code ?? undefined,
+        label: product.code ?? product.name ?? "Produit",
       })) as SelectOption[];
   }, [productsData]);
+
+  const ecoProducts = useMemo(() => {
+    if (!productsData) return [] as ProductCatalogEntry[];
+    return productsData.filter((product) =>
+      (product.code ?? "").toUpperCase().startsWith("ECO")
+    );
+  }, [productsData]);
+
+  const [selectedEcoProductIds, setSelectedEcoProductIds] = useState<string[]>([]);
+
+  const createProductEntry = (product?: ProductCatalogEntry | null): ProjectProduct => ({
+    product_id: product?.id ?? "",
+    quantity: 1,
+    dynamic_params: getInitialDynamicParams(product),
+  });
 
   const defaultAssignee = useMemo(() => {
     if (initialValues?.assigned_to) {
@@ -299,36 +314,64 @@ export const AddProjectDialog = ({
     ];
   }, [defaultAssignee, rawCommercialOptions, user?.email]);
 
-  const productOptions = rawProductOptions;
-
   const form = useForm<ProjectFormValues>({
     resolver: zodResolver(projectSchema),
     defaultValues: {
       ...baseDefaultValues,
       assigned_to: defaultAssignee ?? "",
-      products: [{ product_id: productOptions.length > 0 ? productOptions[0].value : "", quantity: 1, dynamic_params: {} }],
+      products: [createProductEntry()],
     } as ProjectFormValues,
   });
 
   const addProduct = () => {
     const currentProducts = form.getValues("products") || [];
-    form.setValue("products", [...currentProducts, { product_id: "", quantity: 1, dynamic_params: {} }]);
+    form.setValue("products", [...currentProducts, createProductEntry()]);
   };
 
   const removeProduct = (index: number) => {
     const currentProducts = form.getValues("products") || [];
-    if (currentProducts.length > 1) {
-      form.setValue("products", currentProducts.filter((_, i) => i !== index));
+    if (currentProducts.length <= 1) {
+      return;
+    }
+
+    const removed = currentProducts[index];
+    const updated = currentProducts.filter((_, i) => i !== index);
+
+    form.setValue(
+      "products",
+      updated.length ? updated : [createProductEntry()]
+    );
+
+    if (removed?.product_id && ecoProducts.some((product) => product.id === removed.product_id)) {
+      setSelectedEcoProductIds((prev) => prev.filter((id) => id !== removed.product_id));
     }
   };
 
-  const resetWithInitialValues = useCallback(() => {
-    form.reset({
-      ...baseDefaultValues,
-      assigned_to: defaultAssignee ?? "",
-      products: [{ product_id: productOptions.length > 0 ? productOptions[0].value : "", quantity: 1, dynamic_params: {} }],
-    } as ProjectFormValues);
-  }, [defaultAssignee, form, productOptions]);
+  const syncEcoProducts = useCallback(
+    (nextSelected: string[]) => {
+      const currentProducts = form.getValues("products") ?? [];
+      const ecoMap = new Map(ecoProducts.map((product) => [product.id, product]));
+
+      const ecoEntries = nextSelected
+        .map((id) => {
+          const existing = currentProducts.find((item) => item.product_id === id);
+          if (existing) {
+            return existing;
+          }
+          const catalogProduct = ecoMap.get(id);
+          return catalogProduct ? createProductEntry(catalogProduct) : null;
+        })
+        .filter((entry): entry is ProjectProduct => Boolean(entry));
+
+      const nonEcoProducts = currentProducts.filter(
+        (item) => !ecoMap.has(item.product_id)
+      );
+
+      const merged = [...ecoEntries, ...nonEcoProducts];
+      form.setValue("products", merged.length ? merged : [createProductEntry()]);
+    },
+    [ecoProducts, form]
+  );
 
   useEffect(() => {
     if (defaultAssignee && form.getValues("assigned_to") !== defaultAssignee) {
@@ -337,10 +380,80 @@ export const AddProjectDialog = ({
   }, [defaultAssignee, form]);
 
   useEffect(() => {
-    if (open) {
-      resetWithInitialValues();
-    }
-  }, [open, resetWithInitialValues]);
+    if (!open) return;
+
+    const defaultEcoIds = ecoProducts
+      .map((product) => product.id)
+      .filter((id): id is string => Boolean(id));
+
+    setSelectedEcoProductIds(defaultEcoIds);
+
+    const ecoEntries = defaultEcoIds
+      .map((id) => ecoProducts.find((product) => product.id === id))
+      .filter((product): product is ProductCatalogEntry => Boolean(product))
+      .map((product) => createProductEntry(product));
+
+    form.reset({
+      ...baseDefaultValues,
+      assigned_to: defaultAssignee ?? "",
+      products: ecoEntries.length ? ecoEntries : [createProductEntry()],
+    } as ProjectFormValues);
+  }, [open, ecoProducts, form, defaultAssignee]);
+
+  const handleEcoToggle = useCallback(
+    (productId: string, checked: boolean | "indeterminate") => {
+      const isChecked = checked === true;
+      setSelectedEcoProductIds((prev) => {
+        const next = isChecked
+          ? Array.from(new Set([...prev, productId]))
+          : prev.filter((id) => id !== productId);
+        syncEcoProducts(next);
+        return next;
+      });
+    },
+    [syncEcoProducts]
+  );
+
+  useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+      if (!name?.startsWith("products") || !name.endsWith("product_id")) {
+        return;
+      }
+
+      const match = name.match(/^products\.(\d+)\.product_id$/);
+      if (!match) return;
+      const index = Number(match[1]);
+      const productId = value?.products?.[index]?.product_id as string | undefined;
+      if (!productId) {
+        form.setValue(`products.${index}.dynamic_params`, {});
+        return;
+      }
+
+      const catalogProduct = productsData?.find((product) => product.id === productId);
+      if (!catalogProduct) {
+        form.setValue(`products.${index}.dynamic_params`, {});
+        return;
+      }
+
+      form.setValue(
+        `products.${index}.dynamic_params`,
+        getInitialDynamicParams(catalogProduct)
+      );
+
+      if ((catalogProduct.code ?? "").toUpperCase().startsWith("ECO")) {
+        setSelectedEcoProductIds((prev) => {
+          if (prev.includes(catalogProduct.id)) {
+            return prev;
+          }
+          const next = [...prev, catalogProduct.id];
+          syncEcoProducts(next);
+          return next;
+        });
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [form, productsData, syncEcoProducts]);
 
   const onSubmit = async (data: ProjectFormValues) => {
     if (!user || !currentOrgId) {
@@ -433,7 +546,21 @@ export const AddProjectDialog = ({
         description: `Le projet ${project_ref} avec ${data.products.length} produit(s) a été ajouté avec succès`,
       });
 
-      resetWithInitialValues();
+      const defaultEcoIds = ecoProducts
+        .map((product) => product.id)
+        .filter((id): id is string => Boolean(id));
+      setSelectedEcoProductIds(defaultEcoIds);
+
+      const ecoEntries = defaultEcoIds
+        .map((id) => ecoProducts.find((product) => product.id === id))
+        .filter((product): product is ProductCatalogEntry => Boolean(product))
+        .map((product) => createProductEntry(product));
+
+      form.reset({
+        ...baseDefaultValues,
+        assigned_to: defaultAssignee ?? "",
+        products: ecoEntries.length ? ecoEntries : [createProductEntry()],
+      } as ProjectFormValues);
       setOpen(false);
       await onProjectAdded?.();
     } catch (error) {
@@ -601,6 +728,31 @@ export const AddProjectDialog = ({
                 </Button>
               </div>
 
+              {ecoProducts.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">
+                    Produits ECO ajoutés par défaut
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    {ecoProducts.map((product) => (
+                      <label
+                        key={product.id}
+                        className="flex items-center gap-2 text-sm"
+                      >
+                        <Checkbox
+                          checked={selectedEcoProductIds.includes(product.id)}
+                          onCheckedChange={(checked) =>
+                            handleEcoToggle(product.id, checked)
+                          }
+                          disabled={loading}
+                        />
+                        <span className="font-medium">{product.code}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {form.watch("products")?.map((_, index) => {
                 const productId = form.watch(`products.${index}.product_id`);
                 const selectedProduct = productsData?.find(p => p.id === productId);
@@ -633,20 +785,13 @@ export const AddProjectDialog = ({
                             >
                               <FormControl>
                                 <SelectTrigger>
-                                  <SelectValue placeholder="Sélectionnez un produit" />
+                                  <SelectValue placeholder="Sélectionnez un code produit" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                {productOptions.map((option) => (
+                                {rawProductOptions.map((option) => (
                                   <SelectItem key={option.value} value={option.value}>
-                                    <div className="flex flex-col">
-                                      <span>{option.label}</span>
-                                      {option.description && (
-                                        <span className="text-xs text-muted-foreground">
-                                          {option.description}
-                                        </span>
-                                      )}
-                                    </div>
+                                    {option.label}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
