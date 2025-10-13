@@ -172,30 +172,34 @@ const normalizeCsvStatus = (value: string): LeadStatus | undefined => {
     .trim()
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/-/g, " ")
+    .replace(/\s+/g, " ");
 
   switch (cleaned) {
-    case "nouveau":
-    case "new":
-      return "Nouveau";
-    case "qualifie":
-    case "qualifiee":
-    case "qualified":
-      return "Qualifié";
+    case "non eligible":
+    case "noneligible":
+    case "not eligible":
+      return "Non éligible";
+    case "a rappeler":
+    case "rappeler":
+    case "call back":
+    case "callback":
+      return "À rappeler";
+    case "a recontacter":
+    case "recontacter":
+    case "follow up":
+    case "followup":
+      return "À recontacter";
+    case "programmer pre visite":
+    case "programmer previsite":
+    case "pre visite":
+    case "previsite":
+      return "Programmer pré-visite";
+    case "eligible":
     case "converti":
     case "converted":
-      return "Converti";
-    case "perdu":
-    case "lost":
-      return "Perdu";
-    case "cloture":
-    case "cloturee":
-    case "clos":
-    case "closed":
-    case "archive":
-    case "archivee":
-    case "archived":
-      return "Clôturé";
+      return "Éligible";
     default:
       return undefined;
   }
@@ -407,7 +411,7 @@ const Leads = () => {
         phone_raw: row.phone_raw,
         city: row.city,
         postal_code: row.postal_code,
-        status: row.status ?? "Nouveau",
+        status: row.status ?? "À rappeler",
         company: row.company ?? null,
         product_name: row.product_name ?? null,
         surface_m2: row.surface_m2 ?? null,
@@ -457,15 +461,15 @@ const Leads = () => {
 
   const handleProjectCreated = async (lead: LeadRecord) => {
     try {
-      if (lead.status !== "Converti") {
+      if (lead.status !== "Éligible") {
         await updateLeadMutation.mutateAsync({
           id: lead.id,
-          values: { status: "Converti", updated_at: new Date().toISOString() },
+          values: { status: "Éligible", updated_at: new Date().toISOString() },
         });
 
         toast({
-          title: "Lead converti",
-          description: `${lead.full_name} est maintenant marqué comme converti.`,
+          title: "Lead éligible",
+          description: `${lead.full_name} est maintenant marqué comme éligible.`,
         });
       }
     } catch (error) {

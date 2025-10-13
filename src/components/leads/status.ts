@@ -1,11 +1,11 @@
 import * as z from "zod";
 
 export const LEAD_STATUSES = [
-  "Nouveau",
-  "Qualifié",
-  "Converti",
-  "Perdu",
-  "Clôturé",
+  "Non éligible",
+  "À rappeler",
+  "À recontacter",
+  "Programmer pré-visite",
+  "Éligible",
 ] as const satisfies readonly [string, ...string[]];
 
 export type LeadStatus = (typeof LEAD_STATUSES)[number];
@@ -13,19 +13,19 @@ export type LeadStatus = (typeof LEAD_STATUSES)[number];
 export const leadStatusEnum = z.enum(LEAD_STATUSES);
 
 const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
-  Nouveau: "Nouveau",
-  Qualifié: "Qualifié",
-  Converti: "Converti",
-  Perdu: "Perdu",
-  Clôturé: "Clôturé",
+  "Non éligible": "Non éligible",
+  "À rappeler": "À rappeler",
+  "À recontacter": "À recontacter",
+  "Programmer pré-visite": "Programmer pré-visite",
+  "Éligible": "Éligible (automatique lors de la conversion en projet)",
 };
 
 const LEAD_STATUS_COLORS: Record<LeadStatus, string> = {
-  Nouveau: "bg-blue-500/10 text-blue-700 border-blue-200",
-  Qualifié: "bg-orange-500/10 text-orange-700 border-orange-200",
-  Converti: "bg-green-500/10 text-green-700 border-green-200",
-  Perdu: "bg-red-500/10 text-red-700 border-red-200",
-  Clôturé: "bg-slate-500/10 text-slate-700 border-slate-200",
+  "Non éligible": "bg-red-500/10 text-red-700 border-red-200",
+  "À rappeler": "bg-amber-500/10 text-amber-700 border-amber-200",
+  "À recontacter": "bg-blue-500/10 text-blue-700 border-blue-200",
+  "Programmer pré-visite": "bg-purple-500/10 text-purple-700 border-purple-200",
+  "Éligible": "bg-green-500/10 text-green-700 border-green-200",
 };
 
 export const isLeadStatus = (status: string): status is LeadStatus =>

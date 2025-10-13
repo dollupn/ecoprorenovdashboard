@@ -66,25 +66,30 @@ alter table public.leads
 
 update public.leads
 set status = case
-  when status in ('Nouveau','Qualifié','Converti','Perdu','Clôturé') then status
-  when status = 'NEW' then 'Nouveau'
-  when status = 'QUALIFIED' then 'Qualifié'
-  when status = 'RDV_PLANIFIE' then 'Qualifié'
-  when status = 'CONVERTED' then 'Converti'
-  when status = 'ARCHIVED' then 'Clôturé'
-  else 'Nouveau'
+  when status in ('Non éligible','À rappeler','À recontacter','Programmer pré-visite','Éligible') then status
+  when status = 'Non eligible' then 'Non éligible'
+  when status = 'A rappeler' then 'À rappeler'
+  when status = 'A recontacter' then 'À recontacter'
+  when status in ('Programmer Pre-visite', 'Programmer Pre Visite', 'Programmer pre-visite', 'Programmer pre visite') then 'Programmer pré-visite'
+  when status in ('Eligible', 'ELIGIBLE') then 'Éligible'
+  when status in ('Nouveau', 'NOUVEAU') then 'À rappeler'
+  when status in ('Qualifié', 'QUALIFIED') then 'À recontacter'
+  when status = 'RDV_PLANIFIE' then 'Programmer pré-visite'
+  when status in ('Converti', 'CONVERTED') then 'Éligible'
+  when status in ('Perdu', 'Clôturé', 'PERDU', 'CLOTURE', 'CLOTURÉ', 'ARCHIVED', 'ARCHIVE') then 'Non éligible'
+  else 'À rappeler'
 end;
 
 update public.leads
-set status = 'Nouveau'
+set status = 'À rappeler'
 where status is null;
 
 alter table public.leads
   add constraint leads_status_fr_check
-  check (status in ('Nouveau','Qualifié','Converti','Perdu','Clôturé'));
+  check (status in ('Non éligible','À rappeler','À recontacter','Programmer pré-visite','Éligible'));
 
 alter table public.leads
-  alter column status set default 'Nouveau';
+  alter column status set default 'À rappeler';
 
 -- Ensure ownership metadata is populated
 update public.leads
