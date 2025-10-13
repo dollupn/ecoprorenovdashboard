@@ -59,12 +59,15 @@ interface ScheduleLeadDialogProps {
 
 const resolveInitialStatus = (status: string): LeadStatus => {
   if (isLeadStatus(status)) {
-    if (status === "Nouveau") {
-      return "Qualifié";
+    if (status === "À rappeler") {
+      return "À recontacter";
+    }
+    if (status === "À recontacter") {
+      return "Programmer pré-visite";
     }
     return status;
   }
-  return "Qualifié";
+  return "À recontacter";
 };
 
 export const ScheduleLeadDialog = ({ lead, onScheduled }: ScheduleLeadDialogProps) => {
