@@ -50,6 +50,7 @@ type ProjectWithRelations = Project & {
   project_products: ProjectProduct[];
 };
 
+// Keep items so we can render dynamic fields and codes consistently.
 const getDisplayedProducts = (projectProducts?: ProjectProduct[]) =>
   (projectProducts ?? []).filter((item) =>
     (item.product?.code ?? "").toUpperCase().startsWith("BAT")
@@ -131,9 +132,11 @@ const Projects = () => {
 
     return base.filter((project) => {
       const displayedProducts = getDisplayedProducts(project.project_products);
+
       const productCodes = displayedProducts
         .map((item) => item.product?.code ?? "")
         .join(" ");
+
       const dynamicValues = displayedProducts
         .flatMap((item) =>
           getDynamicFieldEntries(
@@ -258,9 +261,7 @@ const Projects = () => {
         {/* Projects Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredProjects.map((project) => {
-            const displayedProducts = getDisplayedProducts(
-              project.project_products
-            );
+            const displayedProducts = getDisplayedProducts(project.project_products);
 
             return (
               <Card
@@ -318,6 +319,7 @@ const Projects = () => {
                       <MapPin className="w-4 h-4" />
                       {project.city} ({project.postal_code})
                     </div>
+
                     {displayedProducts.map((item, index) => {
                       const dynamicFields = getDynamicFieldEntries(
                         item.product?.params_schema ?? null,
@@ -349,101 +351,101 @@ const Projects = () => {
                     })}
                   </div>
 
-                {/* Technical Details */}
-                {(project.surface_batiment_m2 || project.surface_isolee_m2) && (
-                  <div className="space-y-2">
-                    {project.surface_batiment_m2 && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Surface bâtiment:</span>
-                        <span className="font-medium">{project.surface_batiment_m2} m²</span>
-                      </div>
-                    )}
-                    {project.surface_isolee_m2 && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Surface isolée:</span>
-                        <span className="font-medium">{project.surface_isolee_m2} m²</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Timeline */}
-                {project.date_debut_prevue && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Calendar className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-muted-foreground">Début:</span>
-                      <span className="font-medium">
-                        {new Date(project.date_debut_prevue).toLocaleDateString('fr-FR')}
-                      </span>
+                  {/* Technical Details */}
+                  {(project.surface_batiment_m2 || project.surface_isolee_m2) && (
+                    <div className="space-y-2">
+                      {project.surface_batiment_m2 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Surface bâtiment:</span>
+                          <span className="font-medium">{project.surface_batiment_m2} m²</span>
+                        </div>
+                      )}
+                      {project.surface_isolee_m2 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Surface isolée:</span>
+                          <span className="font-medium">{project.surface_isolee_m2} m²</span>
+                        </div>
+                      )}
                     </div>
-                    {project.date_fin_prevue && (
-                      <div className="flex items-center gap-2 text-sm ml-6">
-                        <span className="text-muted-foreground">Fin prévue:</span>
+                  )}
+
+                  {/* Timeline */}
+                  {project.date_debut_prevue && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm">
+                        <Calendar className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-muted-foreground">Début:</span>
                         <span className="font-medium">
-                          {new Date(project.date_fin_prevue).toLocaleDateString('fr-FR')}
+                          {new Date(project.date_debut_prevue).toLocaleDateString("fr-FR")}
                         </span>
                       </div>
+                      {project.date_fin_prevue && (
+                        <div className="flex items-center gap-2 text-sm ml-6">
+                          <span className="text-muted-foreground">Fin prévue:</span>
+                          <span className="font-medium">
+                            {new Date(project.date_fin_prevue).toLocaleDateString("fr-FR")}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Value & Assignment */}
+                  <div className="pt-2 border-t space-y-2">
+                    {project.estimated_value && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">Montant estimé:</span>
+                        <div className="flex items-center gap-1 text-sm font-bold text-primary">
+                          <Euro className="w-4 h-4" />
+                          {formatCurrency(project.estimated_value)}
+                        </div>
+                      </div>
                     )}
-                  </div>
-                )}
-
-                {/* Value & Assignment */}
-                <div className="pt-2 border-t space-y-2">
-                  {project.estimated_value && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Montant estimé:</span>
-                      <div className="flex items-center gap-1 text-sm font-bold text-primary">
-                        <Euro className="w-4 h-4" />
-                        {formatCurrency(project.estimated_value)}
+                    {typeof project.prime_cee === "number" && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">Prime CEE:</span>
+                        <div className="flex items-center gap-1 text-sm font-bold text-emerald-600">
+                          <HandCoins className="w-4 h-4" />
+                          {formatCurrency(project.prime_cee)}
+                        </div>
                       </div>
+                    )}
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Assigné à:</span>
+                      <span className="font-medium">{project.assigned_to}</span>
                     </div>
-                  )}
-                  {typeof project.prime_cee === "number" && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Prime CEE:</span>
-                      <div className="flex items-center gap-1 text-sm font-bold text-emerald-600">
-                        <HandCoins className="w-4 h-4" />
-                        {formatCurrency(project.prime_cee)}
-                      </div>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Assigné à:</span>
-                    <span className="font-medium">{project.assigned_to}</span>
                   </div>
-                </div>
 
-                {/* Actions */}
-                <div className="flex gap-2 pt-2 flex-wrap">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => handleViewProject(project.id)}
-                  >
-                    <Eye className="w-4 h-4 mr-1" />
-                    Voir
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleCreateQuote(project)}
-                  >
-                    <FileText className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="flex-1"
-                    onClick={() => handleCreateSite(project)}
-                  >
-                    <Hammer className="w-4 h-4 mr-1" />
-                    Créer chantier
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+                  {/* Actions */}
+                  <div className="flex gap-2 pt-2 flex-wrap">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => handleViewProject(project.id)}
+                    >
+                      <Eye className="w-4 h-4 mr-1" />
+                      Voir
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleCreateQuote(project)}
+                    >
+                      <FileText className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="flex-1"
+                      onClick={() => handleCreateSite(project)}
+                    >
+                      <Hammer className="w-4 h-4 mr-1" />
+                      Créer chantier
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             );
           })}
         </div>
