@@ -39,6 +39,11 @@ type ProjectWithRelations = Project & {
   project_products: ProjectProduct[];
 };
 
+const getDisplayedProductCodes = (projectProducts?: ProjectProduct[]) =>
+  (projectProducts ?? [])
+    .map((item) => item.product?.code?.trim() ?? "")
+    .filter((code) => code && code.toUpperCase().startsWith("BAT"));
+
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value);
 
@@ -84,10 +89,7 @@ const Projects = () => {
         project.company ?? "",
         project.city,
         project.postal_code,
-        project.project_products
-          ?.map((item) => item.product?.code ?? "")
-          .filter(Boolean)
-          .join(" "),
+        getDisplayedProductCodes(project.project_products).join(" "),
         project.assigned_to
       ]
         .join(" ")
@@ -102,7 +104,10 @@ const Projects = () => {
   };
 
   const handleCreateQuote = (project: ProjectWithRelations) => {
-    const firstProduct = project.project_products?.[0]?.product;
+    const firstProduct =
+      project.project_products?.find((item) =>
+        (item.product?.code ?? "").toUpperCase().startsWith("BAT")
+      )?.product ?? project.project_products?.[0]?.product;
 
     setQuoteInitialValues({
       client_name: project.client_name ?? "",
@@ -180,44 +185,49 @@ const Projects = () => {
 
         {/* Projects Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredProjects.map((project) => (
-            <Card key={project.id} className="shadow-card bg-gradient-card border border-black/10 transition-all duration-300 hover:shadow-elevated dark:border-white/10">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="text-lg font-bold text-primary">
-                      {project.project_ref}
-                    </CardTitle>
-                    <p className="text-sm text-muted-foreground mt-1 space-y-1">
-                      <span className="block">
-                        {project.client_name}
-                        {project.company && (
-                          <span className="block text-xs">{project.company}</span>
-                        )}
-                      </span>
-                      {project.phone && (
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground/80">
-                          <Phone className="w-3.5 h-3.5" />
-                          {project.phone}
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                  <Badge className={getStatusColor(project.status as any)}>
-                    {getStatusLabel(project.status as any)}
-                  </Badge>
-                </div>
-              </CardHeader>
+          {filteredProjects.map((project) => {
+            const displayedProductCodes = getDisplayedProductCodes(
+              project.project_products
+            );
 
-              <CardContent className="space-y-4">
-                {/* Product & Location */}
-                <div className="space-y-2">
-                  <div className="flex flex-wrap gap-2">
-                    {project.project_products?.length ? (
-                      project.project_products
-                        .map((product) => product.product?.code)
-                        .filter(Boolean)
-                        .map((code, index) => (
+            return (
+              <Card
+                key={project.id}
+                className="shadow-card bg-gradient-card border border-black/10 transition-all duration-300 hover:shadow-elevated dark:border-white/10"
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <CardTitle className="text-lg font-bold text-primary">
+                        {project.project_ref}
+                      </CardTitle>
+                      <p className="text-sm text-muted-foreground mt-1 space-y-1">
+                        <span className="block">
+                          {project.client_name}
+                          {project.company && (
+                            <span className="block text-xs">{project.company}</span>
+                          )}
+                        </span>
+                        {project.phone && (
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground/80">
+                            <Phone className="w-3.5 h-3.5" />
+                            {project.phone}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <Badge className={getStatusColor(project.status as any)}>
+                      {getStatusLabel(project.status as any)}
+                    </Badge>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="space-y-4">
+                  {/* Product & Location */}
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap gap-2">
+                      {displayedProductCodes.length ? (
+                        displayedProductCodes.map((code, index) => (
                           <Badge
                             key={`${project.id}-${code}-${index}`}
                             variant="secondary"
@@ -226,17 +236,17 @@ const Projects = () => {
                             {code}
                           </Badge>
                         ))
-                    ) : (
-                      <span className="text-sm text-muted-foreground">
-                        Aucun code produit renseigné
-                      </span>
-                    )}
+                      ) : (
+                        <span className="text-sm text-muted-foreground">
+                          Aucun code produit BAT renseigné
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <MapPin className="w-4 h-4" />
+                      {project.city} ({project.postal_code})
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <MapPin className="w-4 h-4" />
-                    {project.city} ({project.postal_code})
-                  </div>
-                </div>
 
                 {/* Technical Details */}
                 {(project.surface_batiment_m2 || project.surface_isolee_m2) && (
@@ -340,7 +350,8 @@ const Projects = () => {
                 </div>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
 
         {filteredProjects.length === 0 && (
