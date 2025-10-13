@@ -146,7 +146,7 @@ const Sites = () => {
     enabled: !!user,
   });
 
-  const { data: projects = [] } = useQuery<ProjectWithProducts[]>({
+  const { data: projects = [], isLoading: projectsLoading } = useQuery<ProjectWithProducts[]>({
     queryKey: ["projects", user?.id],
     queryFn: async () => {
       if (!user) return [];
@@ -390,6 +390,8 @@ const Sites = () => {
   const locationState = (location.state as SitesLocationState | undefined) ?? undefined;
 
   useEffect(() => {
+    if (projectsLoading) return;
+
     if (locationState?.createSite?.projectId) {
       const project = projects.find((item) => item.id === locationState.createSite?.projectId);
 
@@ -420,7 +422,15 @@ const Sites = () => {
 
       navigate(location.pathname, { replace: true });
     }
-  }, [locationState, handleOpenCreate, navigate, location.pathname, toast, projects]);
+  }, [
+    locationState,
+    handleOpenCreate,
+    navigate,
+    location.pathname,
+    toast,
+    projects,
+    projectsLoading,
+  ]);
 
   return (
     <Layout>
