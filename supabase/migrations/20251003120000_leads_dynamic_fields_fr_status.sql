@@ -66,9 +66,12 @@ alter table public.leads
 
 update public.leads
 set status = case
-  when status in ('Non éligible','À rappeler','À recontacter','Programmer pré-visite','Éligible') then status
+  when status in ('Non éligible','À rappeler','Phoning','À recontacter','Programmer pré-visite','Éligible') then status
   when status = 'Non eligible' then 'Non éligible'
   when status = 'A rappeler' then 'À rappeler'
+  when status = 'Phoning' then 'Phoning'
+  when status = 'PHONING' then 'Phoning'
+  when status = 'phoning' then 'Phoning'
   when status = 'A recontacter' then 'À recontacter'
   when status in ('Programmer Pre-visite', 'Programmer Pre Visite', 'Programmer pre-visite', 'Programmer pre visite') then 'Programmer pré-visite'
   when status in ('Eligible', 'ELIGIBLE') then 'Éligible'
@@ -86,7 +89,7 @@ where status is null;
 
 alter table public.leads
   add constraint leads_status_fr_check
-  check (status in ('Non éligible','À rappeler','À recontacter','Programmer pré-visite','Éligible'));
+  check (status in ('Non éligible','À rappeler','Phoning','À recontacter','Programmer pré-visite','Éligible'));
 
 alter table public.leads
   alter column status set default 'À rappeler';

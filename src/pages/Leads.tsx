@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/table";
 import { LeadFormDialog } from "@/features/leads/LeadFormDialog";
 import { ScheduleLeadDialog } from "@/components/leads/ScheduleLeadDialog";
+import { LeadPhoningDialog } from "@/components/leads/LeadPhoningDialog";
 import { AddProjectDialog } from "@/components/projects/AddProjectDialog";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -78,7 +79,7 @@ const CARD_SKELETON_COUNT = 4;
 
 const SELECT_NONE_VALUE = "__none" as const;
 
-type LeadRecord = Tables<"leads">;
+type LeadRecord = Tables<"leads"> & { extra_fields?: Record<string, unknown> | null };
 
 type CsvLead = {
   full_name: string;
@@ -213,6 +214,11 @@ const normalizeCsvStatus = (value: string): LeadStatus | undefined => {
     case "call back":
     case "callback":
       return "À rappeler";
+    case "phoning":
+    case "appel":
+    case "call":
+    case "calling":
+      return "Phoning";
     case "a recontacter":
     case "recontacter":
     case "follow up":
@@ -919,6 +925,10 @@ const Leads = () => {
     await refetch();
   };
 
+  const handlePhoningCompleted = async () => {
+    await refetch();
+  };
+
   const handleLeadScheduled = async () => {
     await refetch();
   };
@@ -1259,7 +1269,8 @@ const Leads = () => {
                       <span className="text-xs text-muted-foreground">
                         Créé le {new Date(lead.created_at).toLocaleDateString("fr-FR")}
                       </span>
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2 justify-end">
+                        <LeadPhoningDialog lead={lead} onCompleted={handlePhoningCompleted} />
                         <ScheduleLeadDialog lead={lead} onScheduled={handleLeadScheduled} />
                         <AddProjectDialog
                           trigger={<Button size="sm">Créer Projet</Button>}
@@ -1376,7 +1387,8 @@ const Leads = () => {
                             <span className="text-xs text-muted-foreground">
                               Créé le {new Date(lead.created_at).toLocaleDateString("fr-FR")}
                             </span>
-                            <div className="flex gap-2">
+                            <div className="flex flex-wrap gap-2 justify-end">
+                              <LeadPhoningDialog lead={lead} onCompleted={handlePhoningCompleted} />
                               <ScheduleLeadDialog lead={lead} onScheduled={handleLeadScheduled} />
                               <AddProjectDialog
                                 trigger={<Button size="sm">Créer Projet</Button>}

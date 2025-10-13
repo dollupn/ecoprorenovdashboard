@@ -60,6 +60,9 @@ interface ScheduleLeadDialogProps {
 const resolveInitialStatus = (status: string): LeadStatus => {
   if (isLeadStatus(status)) {
     if (status === "À rappeler") {
+      return "Phoning";
+    }
+    if (status === "Phoning") {
       return "À recontacter";
     }
     if (status === "À recontacter") {
@@ -67,7 +70,7 @@ const resolveInitialStatus = (status: string): LeadStatus => {
     }
     return status;
   }
-  return "À recontacter";
+  return "Phoning";
 };
 
 export const ScheduleLeadDialog = ({ lead, onScheduled }: ScheduleLeadDialogProps) => {
