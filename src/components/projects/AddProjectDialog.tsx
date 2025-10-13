@@ -70,7 +70,6 @@ const projectSchema = z.object({
   signatory_name: z.string().optional(),
   signatory_title: z.string().optional(),
   surface_batiment_m2: z.coerce.number().optional(),
-  surface_isolee_m2: z.coerce.number().optional(),
   status: z.enum(["PROSPECTION", "ETUDE", "DEVIS_ENVOYE", "ACCEPTE", "A_PLANIFIER", "EN_COURS", "LIVRE", "CLOTURE"]),
   assigned_to: z.string().min(2, "Assignation requise"),
   date_debut_prevue: z.string().optional(),
@@ -102,7 +101,6 @@ const baseDefaultValues: Partial<ProjectFormValues> = {
   signatory_name: "",
   signatory_title: "",
   surface_batiment_m2: undefined,
-  surface_isolee_m2: undefined,
   status: "PROSPECTION",
   assigned_to: "",
   date_debut_prevue: "",
@@ -516,7 +514,6 @@ export const AddProjectDialog = ({
           signatory_name: data.signatory_name || undefined,
           signatory_title: data.signatory_title || undefined,
           surface_batiment_m2: data.surface_batiment_m2 || undefined,
-          surface_isolee_m2: data.surface_isolee_m2 || undefined,
           date_debut_prevue: data.date_debut_prevue || undefined,
           date_fin_prevue: data.date_fin_prevue || undefined,
           estimated_value: data.estimated_value || undefined,
@@ -871,19 +868,6 @@ export const AddProjectDialog = ({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Surface bâtiment (m²)</FormLabel>
-                    <FormControl>
-                      <Input type="number" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="surface_isolee_m2"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Surface isolée (m²)</FormLabel>
                     <FormControl>
                       <Input type="number" {...field} />
                     </FormControl>
