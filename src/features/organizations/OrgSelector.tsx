@@ -23,7 +23,7 @@ export function OrgSelector() {
 
   if (isLoading || !currentOrg) {
     return (
-      <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 rounded-lg animate-pulse">
+      <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 rounded-lg animate-pulse w-full sm:w-auto">
         <Building2 className="w-4 h-4" />
         <span className="text-sm">Chargement...</span>
       </div>
@@ -37,7 +37,7 @@ export function OrgSelector() {
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-[200px] justify-between"
+          className="w-full sm:w-[220px] justify-between"
         >
           <div className="flex items-center gap-2 overflow-hidden">
             <Building2 className="w-4 h-4 shrink-0" />
@@ -46,7 +46,7 @@ export function OrgSelector() {
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[200px] p-0">
+      <PopoverContent className="w-[calc(100vw-2rem)] max-w-sm sm:w-[220px] p-0">
         <Command>
           <CommandInput placeholder="Rechercher..." />
           <CommandList>

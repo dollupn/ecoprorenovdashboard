@@ -39,36 +39,40 @@ export function Layout({ children }: LayoutProps) {
 
         <div className="flex-1 flex flex-col">
           {/* Header */}
-          <header className="h-16 border-b bg-card/50 backdrop-blur-sm flex items-center justify-between px-6">
-            <div className="flex items-center gap-4">
-              <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
+          <header className="border-b bg-card/50 backdrop-blur-sm px-4 py-3 md:px-6 md:py-0">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-center gap-3 md:flex-1 min-w-0">
+                <SidebarTrigger className="text-muted-foreground hover:text-foreground flex-shrink-0" />
 
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="Rechercher leads, projets, clients..."
-                  className="pl-10 w-80 bg-background/50"
-                />
+                <div className="relative flex-1 min-w-0">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Rechercher leads, projets, clients..."
+                    className="pl-10 w-full bg-background/50"
+                  />
+                </div>
               </div>
-            </div>
 
-            <div className="flex items-center gap-3">
-              <OrgSelector />
-              <ModeToggle />
-              <Button variant="ghost" size="icon">
-                <Bell className="w-4 h-4" />
-              </Button>
+              <div className="flex items-center gap-3 flex-wrap justify-end">
+                <OrgSelector />
+                <ModeToggle />
+                <Button variant="ghost" size="icon" className="rounded-full">
+                  <Bell className="w-4 h-4" />
+                </Button>
 
-              <div className="flex items-center gap-2">
-                <Avatar>
-                  <AvatarFallback className="bg-gradient-to-br from-primary to-accent text-white">
-                    {getInitials(currentMember?.profiles?.full_name)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="text-right">
-                  <p className="text-sm font-medium">{currentMember?.profiles?.full_name || "Utilisateur"}</p>
-                  <div className="text-xs">
-                    {currentMember?.role && <UserRoleBadge role={currentMember.role} />}
+                <div className="flex items-center gap-2 min-w-0">
+                  <Avatar>
+                    <AvatarFallback className="bg-gradient-to-br from-primary to-accent text-white">
+                      {getInitials(currentMember?.profiles?.full_name)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="hidden sm:block min-w-0 text-left sm:text-right">
+                    <p className="text-sm font-medium truncate">
+                      {currentMember?.profiles?.full_name || "Utilisateur"}
+                    </p>
+                    <div className="text-xs">
+                      {currentMember?.role && <UserRoleBadge role={currentMember.role} />}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -76,7 +80,7 @@ export function Layout({ children }: LayoutProps) {
           </header>
 
           {/* Main Content */}
-          <main className="flex-1 p-6">
+          <main className="flex-1 p-4 sm:p-6">
             {children}
           </main>
         </div>
