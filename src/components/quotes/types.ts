@@ -24,6 +24,8 @@ export interface QuoteMetadata {
   clientEmail?: string;
   clientPhone?: string;
   siteAddress?: string;
+  siteCity?: string;
+  sitePostalCode?: string;
   paymentTerms?: string;
   driveFolderUrl?: string;
   emailMessage?: string;

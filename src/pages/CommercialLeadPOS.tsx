@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
 import {
   Select,
   SelectContent,
@@ -13,15 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
-import {
-  Building2,
-  Camera,
-  Check,
-  ClipboardPlus,
-  MapPin,
-  Phone,
-  Upload,
-} from "lucide-react";
+import { Building2, Camera, Check, ClipboardPlus, Phone, Upload } from "lucide-react";
 
 const PRODUCT_OPTIONS = [
   "Isolation thermique extérieure",
@@ -39,6 +32,8 @@ const initialFormState = {
   surface: "",
   phone: "",
   address: "",
+  city: "",
+  postalCode: "",
   product: "",
   notes: "",
 };
@@ -193,14 +188,39 @@ const CommercialLeadPOS = () => {
 
               <div className="grid gap-2">
                 <Label htmlFor="address">Adresse</Label>
-                <div className="relative">
-                  <MapPin className="absolute left-4 top-4 h-5 w-5 text-muted-foreground" />
-                  <Textarea
-                    id="address"
-                    value={formState.address}
-                    onChange={handleInputChange("address")}
-                    placeholder="Adresse complète du site visité"
-                    className="min-h-[120px] rounded-xl border-2 border-muted-foreground/30 bg-background/80 py-4 pl-12 text-lg"
+                <AddressAutocomplete
+                  value={formState.address}
+                  onChange={(address, city, postalCode) => {
+                    setFormState((prev) => ({
+                      ...prev,
+                      address,
+                      city,
+                      postalCode,
+                    }));
+                  }}
+                  disabled={isSubmitting}
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="city">Ville</Label>
+                  <Input
+                    id="city"
+                    value={formState.city}
+                    readOnly
+                    placeholder="Sélectionnez une adresse"
+                    className="h-14 text-lg"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="postalCode">Code postal</Label>
+                  <Input
+                    id="postalCode"
+                    value={formState.postalCode}
+                    readOnly
+                    placeholder="Sélectionnez une adresse"
+                    className="h-14 text-lg"
                   />
                 </div>
               </div>

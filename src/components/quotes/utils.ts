@@ -31,6 +31,14 @@ export const parseQuoteMetadata = (quote: Pick<QuoteRecord, "notes">): QuoteMeta
       metadata.siteAddress = parsed.siteAddress.trim();
     }
 
+    if (typeof parsed.siteCity === "string" && parsed.siteCity.trim()) {
+      metadata.siteCity = parsed.siteCity.trim();
+    }
+
+    if (typeof parsed.sitePostalCode === "string" && parsed.sitePostalCode.trim()) {
+      metadata.sitePostalCode = parsed.sitePostalCode.trim();
+    }
+
     if (typeof parsed.paymentTerms === "string" && parsed.paymentTerms.trim()) {
       metadata.paymentTerms = parsed.paymentTerms.trim();
     }

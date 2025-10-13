@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -69,6 +70,8 @@ interface CompanyInfo {
   legalName: string;
   registration: string;
   address: string;
+  city: string;
+  postalCode: string;
   phone: string;
   email: string;
   description: string;
@@ -195,6 +198,8 @@ export default function Settings() {
     legalName: "EcoProRenov SAS",
     registration: "SIRET 897 654 321 00018",
     address: "42 rue des Artisans, 69007 Lyon",
+    city: "Lyon",
+    postalCode: "69007",
     phone: "+33 4 78 12 45 90",
     email: "contact@ecoprorenov.fr",
     description:
@@ -676,11 +681,37 @@ export default function Settings() {
                     </div>
                     <div className="md:col-span-2 space-y-2">
                       <Label htmlFor="company-address">Adresse</Label>
-                      <Textarea
-                        id="company-address"
+                      <AddressAutocomplete
                         value={companyInfo.address}
-                        onChange={(e) => setCompanyInfo((p) => ({ ...p, address: e.target.value }))}
+                        onChange={(address, city, postalCode) =>
+                          setCompanyInfo((p) => ({
+                            ...p,
+                            address,
+                            city,
+                            postalCode,
+                          }))
+                        }
                       />
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2 md:col-span-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="company-city">Ville</Label>
+                        <Input
+                          id="company-city"
+                          value={companyInfo.city}
+                          readOnly
+                          placeholder="Sélectionnez une adresse"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="company-postal">Code postal</Label>
+                        <Input
+                          id="company-postal"
+                          value={companyInfo.postalCode}
+                          readOnly
+                          placeholder="Sélectionnez une adresse"
+                        />
+                      </div>
                     </div>
                     <div className="md:col-span-2 space-y-2">
                       <Label htmlFor="company-description">Description publique</Label>

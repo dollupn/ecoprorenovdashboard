@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatQuoteCurrency, parseQuoteMetadata, computeLineItemsTotal } from "./utils";
 import type { QuoteRecord } from "./types";
-import { CalendarDays, FileText, FolderOpen, Mail, Phone, User } from "lucide-react";
+import { CalendarDays, FileText, FolderOpen, Mail, Phone, User, MapPin } from "lucide-react";
 
 interface QuoteDetailsDrawerProps {
   quote: QuoteRecord | null;
@@ -110,6 +110,15 @@ export const QuoteDetailsDrawer = ({ quote, open, onOpenChange }: QuoteDetailsDr
                   ) : null}
                   {metadata?.siteAddress ? (
                     <p className="text-muted-foreground whitespace-pre-line">{metadata.siteAddress}</p>
+                  ) : null}
+                  {metadata?.siteCity || metadata?.sitePostalCode ? (
+                    <p className="flex items-center gap-2 text-muted-foreground">
+                      <MapPin className="h-4 w-4" />
+                      <span>
+                        {metadata.sitePostalCode ? `${metadata.sitePostalCode} ` : ""}
+                        {metadata.siteCity ?? ""}
+                      </span>
+                    </p>
                   ) : null}
                 </div>
                 <div className="flex flex-wrap gap-2">

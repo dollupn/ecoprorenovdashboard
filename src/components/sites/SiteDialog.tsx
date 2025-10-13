@@ -46,6 +46,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
 import { GripVertical, Plus, Trash2 } from "lucide-react";
 
 const teamMemberSchema = z.object({
@@ -535,7 +536,18 @@ export const SiteDialog = ({
                   <FormItem className="md:col-span-2">
                     <FormLabel>Adresse</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Adresse complète du chantier" {...field} />
+                      <AddressAutocomplete
+                        value={field.value}
+                        onChange={(address, city, postalCode) => {
+                          field.onChange(address);
+                          form.setValue("city", city, { shouldDirty: true, shouldValidate: true });
+                          form.setValue("postal_code", postalCode, {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          });
+                        }}
+                        disabled={form.formState.isSubmitting}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -548,7 +560,7 @@ export const SiteDialog = ({
                   <FormItem>
                     <FormLabel>Ville</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ville" {...field} />
+                      <Input placeholder="Ville" {...field} readOnly disabled={form.formState.isSubmitting} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -561,7 +573,12 @@ export const SiteDialog = ({
                   <FormItem>
                     <FormLabel>Code postal</FormLabel>
                     <FormControl>
-                      <Input placeholder="31000" {...field} />
+                      <Input
+                        placeholder="31000"
+                        {...field}
+                        readOnly
+                        disabled={form.formState.isSubmitting}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
