@@ -17,11 +17,15 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { QuotePreview } from "@/components/quotes/QuotePreview";
 import { AddQuoteDialog } from "@/components/quotes/AddQuoteDialog";
+import { QuoteDetailsDrawer } from "@/components/quotes/QuoteDetailsDrawer";
+import { QuoteActions } from "@/components/quotes/QuoteActions";
+import { parseQuoteMetadata, formatQuoteCurrency } from "@/components/quotes/utils";
+import type { QuoteRecord } from "@/components/quotes/types";
 
 import { supabase } from "@/integrations/supabase/client";
-import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrg } from "@/features/organizations/OrgContext";
+import { useToast } from "@/hooks/use-toast";
 
 import {
   Search,
@@ -48,10 +52,6 @@ import {
 const QUOTE_STATUSES = ["DRAFT", "SENT", "ACCEPTED", "REJECTED", "EXPIRED"] as const;
 type QuoteStatus = (typeof QUOTE_STATUSES)[number];
 
-type QuoteRecord = Tables<"quotes"> & {
-  projects: Pick<Tables<"projects">, "project_ref" | "client_name" | "product_name"> | null;
-};
-
 const statusMeta: Record<QuoteStatus, { label: string; className: string }> = {
   DRAFT: {
     label: "Brouillon",
@@ -76,13 +76,6 @@ const statusMeta: Record<QuoteStatus, { label: string; className: string }> = {
 };
 
 /** ---- Utils ---- */
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("fr-FR", {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: 0,
-  }).format(value);
-
 const formatDate = (value: string | null) => {
   if (!value) return "—";
   return new Intl.DateTimeFormat("fr-FR", {
@@ -123,7 +116,10 @@ const fetchQuotes = async ({
 const Quotes = () => {
   const { user } = useAuth();
   const { currentOrgId } = useOrg();
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedQuote, setSelectedQuote] = useState<QuoteRecord | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const processSteps = [
     {
       label: "Lead",
@@ -277,8 +273,8 @@ const Quotes = () => {
             <CardHeader>
               <CardTitle>Total pipeline</CardTitle>
             </CardHeader>
-            <CardContent className="text-2xl font-semibold">
-              {formatCurrency(metrics.totalAmount)}
+              <CardContent className="text-2xl font-semibold">
+              {formatQuoteCurrency(metrics.totalAmount)}
             </CardContent>
           </Card>
           <Card className="shadow-card border-0 bg-gradient-card">
@@ -421,6 +417,7 @@ const Quotes = () => {
                         <TableHead className="text-right">Montant</TableHead>
                         <TableHead>Statut</TableHead>
                         <TableHead>Validité</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -430,9 +427,99 @@ const Quotes = () => {
                           <TableCell>{quote.client_name}</TableCell>
                           <TableCell>{quote.projects?.project_ref ?? "—"}</TableCell>
                           <TableCell>{(quote as any).product_name ?? quote.projects?.product_name ?? "—"}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(Number(quote.amount || 0))}</TableCell>
+                          <TableCell className="text-right">
+                            {formatQuoteCurrency(Number(quote.amount || 0))}
+                          </TableCell>
                           <TableCell>{renderStatus(quote.status || "DRAFT")}</TableCell>
                           <TableCell>{formatDate(quote.valid_until)}</TableCell>
+                          <TableCell className="text-right">
+                            <QuoteActions
+                              quote={quote}
+                              onView={(value) => {
+                                setSelectedQuote(value);
+                                setDetailsOpen(true);
+                              }}
+                              onDownload={(value) => {
+                                const metadata = parseQuoteMetadata(value);
+
+                                if (typeof window === "undefined") {
+                                  return;
+                                }
+
+                                const payload = {
+                                  quote: {
+                                    id: value.id,
+                                    reference: value.quote_ref,
+                                    client: value.client_name,
+                                    product: value.product_name,
+                                    status: value.status,
+                                    amount: value.amount,
+                                    validUntil: value.valid_until,
+                                    projectRef: value.projects?.project_ref,
+                                    projectClient: value.projects?.client_name,
+                                    createdAt: value.created_at,
+                                  },
+                                  metadata,
+                                };
+
+                                const blob = new Blob([JSON.stringify(payload, null, 2)], {
+                                  type: "application/json",
+                                });
+
+                                const url = URL.createObjectURL(blob);
+                                const link = document.createElement("a");
+                                link.href = url;
+                                link.download = `${value.quote_ref || "devis"}.json`;
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                                URL.revokeObjectURL(url);
+
+                                toast({
+                                  title: "Téléchargement en cours",
+                                  description: `Le devis ${value.quote_ref} a été préparé au format JSON.`,
+                                });
+                              }}
+                              onOpenDrive={(value) => {
+                                const metadata = parseQuoteMetadata(value);
+
+                                if (!metadata.driveFolderUrl) {
+                                  toast({
+                                    title: "Dossier indisponible",
+                                    description: "Aucun dossier Google Drive n'est associé à ce devis.",
+                                    variant: "destructive",
+                                  });
+                                  return;
+                                }
+
+                                if (typeof window !== "undefined") {
+                                  window.open(metadata.driveFolderUrl, "_blank", "noopener,noreferrer");
+                                }
+                              }}
+                              onSendEmail={(value) => {
+                                const metadata = parseQuoteMetadata(value);
+
+                                if (!metadata.clientEmail) {
+                                  toast({
+                                    title: "Email manquant",
+                                    description: "Renseignez l'adresse email du client pour envoyer le devis.",
+                                    variant: "destructive",
+                                  });
+                                  return;
+                                }
+
+                                const subject = encodeURIComponent(`Devis ${value.quote_ref}`);
+                                const defaultBody = `Bonjour,\n\nVeuillez trouver ci-joint le devis ${value.quote_ref}.\nMontant HT : ${formatQuoteCurrency(Number(
+                                  value.amount || 0
+                                ))}\n\n${metadata.emailMessage ?? "Restant à votre disposition."}`;
+                                const body = encodeURIComponent(defaultBody);
+
+                                if (typeof window !== "undefined") {
+                                  window.open(`mailto:${metadata.clientEmail}?subject=${subject}&body=${body}`);
+                                }
+                              }}
+                            />
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -490,6 +577,17 @@ const Quotes = () => {
           </CardContent>
         </Card>
       </div>
+
+      <QuoteDetailsDrawer
+        quote={selectedQuote}
+        open={detailsOpen && Boolean(selectedQuote)}
+        onOpenChange={(open) => {
+          setDetailsOpen(open);
+          if (!open) {
+            setSelectedQuote(null);
+          }
+        }}
+      />
     </Layout>
   );
 };
