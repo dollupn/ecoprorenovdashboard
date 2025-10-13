@@ -27,6 +27,10 @@ export function AddressAutocomplete({ value, onChange, disabled }: AddressAutoco
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    setSearch(value || "");
+  }, [value]);
+
+  useEffect(() => {
     if (!search || search.length < 3) {
       setSuggestions([]);
       return;

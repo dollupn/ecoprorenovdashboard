@@ -48,7 +48,7 @@ import {
   useCreateLead,
 } from "./api";
 import type { TablesInsert } from "@/integrations/supabase/types";
-import { AddressAutocomplete } from "@/components/leads/AddressAutocomplete";
+import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
 import { supabase } from "@/integrations/supabase/client";
 
 const LEAD_SOURCES = ["Commercial", "Campagne FB", "Régie Commercial"] as const;
