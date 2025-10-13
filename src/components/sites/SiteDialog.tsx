@@ -131,7 +131,7 @@ const defaultValues: SiteFormValues = {
   valorisation_cee: 0,
   notes: "",
   team_members: [{ name: "" }],
-  additional_costs: [{ label: "", amount: 0 }],
+  additional_costs: [],
 };
 
 const statusOptions = [
@@ -589,13 +589,13 @@ export const SiteDialog = ({
                       render={({ field: amountField }) => (
                         <FormItem className="md:col-span-2">
                           <FormControl>
-                            <Input type="number" min={0} step={10} {...amountField} />
+                            <Input type="number" min={0} {...amountField} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                    {costFields.length > 1 && (
+                    {costFields.length > 0 && (
                       <Button
                         type="button"
                         variant="ghost"
