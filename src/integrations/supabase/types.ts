@@ -150,6 +150,7 @@ export type Database = {
           updated_at: string
           user_id: string
           utm_source: string | null
+          extra_fields: Json
         }
         Insert: {
           address?: string
@@ -181,6 +182,7 @@ export type Database = {
           updated_at?: string
           user_id: string
           utm_source?: string | null
+          extra_fields?: Json
         }
         Update: {
           address?: string
@@ -212,6 +214,7 @@ export type Database = {
           updated_at?: string
           user_id?: string
           utm_source?: string | null
+          extra_fields?: Json
         }
         Relationships: [
           {
