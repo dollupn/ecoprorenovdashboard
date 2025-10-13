@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Plus, Loader2 } from "lucide-react";
+import { Plus, Loader2, Upload, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useOrg } from "@/features/organizations/OrgContext";
 
@@ -48,6 +48,9 @@ import {
 } from "./api";
 import type { TablesInsert } from "@/integrations/supabase/types";
 import { AddressAutocomplete } from "@/components/leads/AddressAutocomplete";
+import { supabase } from "@/integrations/supabase/client";
+
+const LEAD_SOURCES = ["Commercial", "Campagne FB", "Régie Commercial"] as const;
 
 const leadSchema = z.object({
   full_name: z.string().min(2, "Le nom doit contenir au moins 2 caractères"),
@@ -63,6 +66,7 @@ const leadSchema = z.object({
   commentaire: z.string().optional(),
   assigned_to: z.string().optional(),
   extra_fields: z.record(z.any()).default({}),
+  photo_file: z.instanceof(File).optional(),
 });
 
 type LeadFormValues = z.infer<typeof leadSchema>;
@@ -73,6 +77,7 @@ interface LeadFormDialogProps {
 
 export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
   const [open, setOpen] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const { user } = useAuth();
   const { currentOrgId } = useOrg();
   const { toast } = useToast();
@@ -145,23 +150,46 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
 
     const selectedProduct = products?.find((product) => product.name === values.product_type);
 
-    const payload = {
-      full_name: values.full_name,
-      email: values.email,
-      phone_raw: values.phone_raw,
-      address: values.address,
-      city: values.city,
-      postal_code: values.postal_code,
-      status: values.status,
-      company: values.company?.trim() ? values.company : null,
-      product_name: selectedProduct?.label ?? values.product_type,
-      utm_source: values.utm_source?.trim() ? values.utm_source : null,
-      commentaire: values.commentaire?.trim() ? values.commentaire : null,
-      user_id: user.id,
-      org_id: orgId,
-    } as TablesInsert<"leads">;
-
     try {
+      let photoUrl: string | null = null;
+
+      // Upload photo if provided
+      if (values.photo_file) {
+        const fileExt = values.photo_file.name.split('.').pop();
+        const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+        
+        const { error: uploadError, data } = await supabase.storage
+          .from('lead-photos')
+          .upload(fileName, values.photo_file);
+
+        if (uploadError) {
+          throw new Error(`Erreur lors de l'upload de la photo: ${uploadError.message}`);
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('lead-photos')
+          .getPublicUrl(fileName);
+        
+        photoUrl = publicUrl;
+      }
+
+      const payload = {
+        full_name: values.full_name,
+        email: values.email,
+        phone_raw: values.phone_raw,
+        address: values.address,
+        city: values.city,
+        postal_code: values.postal_code,
+        status: values.status,
+        company: values.company?.trim() ? values.company : null,
+        product_name: selectedProduct?.label ?? values.product_type,
+        utm_source: values.utm_source?.trim() ? values.utm_source : null,
+        commentaire: values.commentaire?.trim() ? values.commentaire : null,
+        photo_previsite_url: photoUrl,
+        user_id: user.id,
+        org_id: orgId,
+      } as TablesInsert<"leads">;
+
       await createLead.mutateAsync(payload);
 
       toast({
@@ -183,8 +211,10 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         commentaire: "",
         assigned_to: user.id,
         extra_fields: {},
+        photo_file: undefined,
       });
 
+      setPhotoPreview(null);
       setOpen(false);
       await onCreated?.();
     } catch (error) {
@@ -445,9 +475,24 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Source</FormLabel>
-                    <FormControl>
-                      <Input {...field} disabled={isSubmitting} />
-                    </FormControl>
+                    <Select
+                      onValueChange={(value) => field.onChange(value)}
+                      value={field.value ?? ""}
+                      disabled={isSubmitting}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionner une source" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {LEAD_SOURCES.map((source) => (
+                          <SelectItem key={source} value={source}>
+                            {source}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -481,6 +526,63 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="photo_file"
+              render={({ field: { value, onChange, ...field } }) => (
+                <FormItem>
+                  <FormLabel>Photo pré-visite</FormLabel>
+                  <FormControl>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          {...field}
+                          type="file"
+                          accept="image/*"
+                          disabled={isSubmitting}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              onChange(file);
+                              const reader = new FileReader();
+                              reader.onloadend = () => {
+                                setPhotoPreview(reader.result as string);
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                          className="cursor-pointer"
+                        />
+                        {photoPreview && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              onChange(undefined);
+                              setPhotoPreview(null);
+                            }}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                      {photoPreview && (
+                        <div className="relative w-full max-w-xs">
+                          <img
+                            src={photoPreview}
+                            alt="Aperçu"
+                            className="rounded-lg border object-cover w-full h-48"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}
