@@ -140,7 +140,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
 
   useEffect(() => {
     if (!form.getValues("product_type") && products?.length === 1) {
-      form.setValue("product_type", products[0].name);
+      form.setValue("product_type", products[0].product_type ?? products[0].name);
     }
   }, [products, form]);
 
@@ -160,7 +160,13 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
 
     form.clearErrors();
 
-    const selectedProduct = products?.find((product) => product.name === values.product_type);
+    const selectedProduct = products?.find((product) => {
+      return (
+        product.product_type === values.product_type ||
+        product.name === values.product_type ||
+        product.id === values.product_type
+      );
+    });
     const normalizedSiren = (values.siren ?? "").replace(/\s+/g, "").trim();
 
     try {
@@ -197,6 +203,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         company: values.company?.trim() ? values.company : null,
         siren: normalizedSiren ? normalizedSiren : null,
         product_name: selectedProduct?.label ?? values.product_type,
+        product_type: selectedProduct?.product_type ?? values.product_type,
         utm_source: values.utm_source?.trim() ? values.utm_source : null,
         commentaire: values.commentaire?.trim() ? values.commentaire : null,
         photo_previsite_url: photoUrl,
@@ -222,7 +229,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         address: "",
         city: "",
         postal_code: "",
-        product_type: products?.length === 1 ? products[0].name : "",
+        product_type: products?.length === 1 ? (products[0].product_type ?? products[0].name) : "",
         utm_source: "",
         status: "À rappeler",
         commentaire: "",
@@ -279,7 +286,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         address: "",
         city: "",
         postal_code: "",
-        product_type: products?.length === 1 ? products[0].name : "",
+        product_type: products?.length === 1 ? (products[0].product_type ?? products[0].name) : "",
         utm_source: "",
         status: "À rappeler",
         commentaire: "",
@@ -452,7 +459,10 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
                       </FormControl>
                       <SelectContent>
                         {(products ?? []).map((product) => (
-                          <SelectItem key={product.id} value={product.name}>
+                          <SelectItem
+                            key={product.id}
+                            value={product.product_type ?? product.name ?? product.id}
+                          >
                             {product.label}
                           </SelectItem>
                         ))}
