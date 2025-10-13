@@ -50,11 +50,12 @@ type ProjectWithRelations = Project & {
   project_products: ProjectProduct[];
 };
 
-// Keep items so we can render dynamic fields and codes consistently.
+// Show all products except those whose code starts with "ECO"
 const getDisplayedProducts = (projectProducts?: ProjectProduct[]) =>
-  (projectProducts ?? []).filter((item) =>
-    (item.product?.code ?? "").toUpperCase().startsWith("BAT")
-  );
+  (projectProducts ?? []).filter((item) => {
+    const code = (item.product?.code ?? "").toUpperCase();
+    return !code.startsWith("ECO");
+  });
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value);
@@ -150,6 +151,7 @@ const Projects = () => {
         project.project_ref,
         project.client_name,
         project.company ?? "",
+        project.siren ?? "",
         project.city,
         project.postal_code,
         productCodes,
@@ -168,10 +170,8 @@ const Projects = () => {
   };
 
   const handleCreateQuote = (project: ProjectWithRelations) => {
-    const firstProduct =
-      project.project_products?.find((item) =>
-        (item.product?.code ?? "").toUpperCase().startsWith("BAT")
-      )?.product ?? project.project_products?.[0]?.product;
+    const displayedProducts = getDisplayedProducts(project.project_products);
+    const firstProduct = displayedProducts[0]?.product ?? project.project_products?.[0]?.product;
 
     setQuoteInitialValues({
       client_name: project.client_name ?? "",
@@ -226,7 +226,7 @@ const Projects = () => {
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
-                  placeholder="Rechercher par référence, client, ville..."
+                  placeholder="Rechercher par référence, client, SIREN, ville..."
                   className="pl-10"
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
@@ -280,6 +280,11 @@ const Projects = () => {
                           {project.company && (
                             <span className="block text-xs">{project.company}</span>
                           )}
+                          {project.siren && (
+                            <span className="block text-xs text-muted-foreground/80">
+                              SIREN : {project.siren}
+                            </span>
+                          )}
                         </span>
                         {project.phone && (
                           <span className="flex items-center gap-1 text-xs text-muted-foreground/80">
@@ -311,7 +316,7 @@ const Projects = () => {
                         ))
                       ) : (
                         <span className="text-sm text-muted-foreground">
-                          Aucun code produit BAT renseigné
+                          Aucun produit à afficher
                         </span>
                       )}
                     </div>

@@ -54,6 +54,13 @@ type ProjectWithRelations = Project & {
   project_products: ProjectProduct[];
 };
 
+const getDisplayedProducts = (projectProducts?: ProjectProduct[]) =>
+  (projectProducts ?? []).filter((item) => {
+    const code = (item.product?.code ?? "").toUpperCase();
+    // Hide ECO* helper/edge products from display & counts
+    return !code.startsWith("ECO");
+  });
+
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value);
 
@@ -64,9 +71,9 @@ const ProjectDetails = () => {
   const { user } = useAuth();
   const { currentOrgId } = useOrg();
   const { data: members = [], isLoading: membersLoading } = useMembers(currentOrgId);
+
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
-  const [quoteInitialValues, setQuoteInitialValues] =
-    useState<Partial<QuoteFormValues>>({});
+  const [quoteInitialValues, setQuoteInitialValues] = useState<Partial<QuoteFormValues>>({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -107,14 +114,13 @@ const ProjectDetails = () => {
 
   const productCodes = useMemo(() => {
     if (!project?.project_products) return [] as string[];
-
-    return project.project_products
+    return getDisplayedProducts(project.project_products)
       .map((item) => item.product?.code)
       .filter((code): code is string => Boolean(code));
   }, [project?.project_products]);
 
   const projectProducts = useMemo(
-    () => project?.project_products ?? [],
+    () => getDisplayedProducts(project?.project_products),
     [project?.project_products]
   );
 
@@ -158,10 +164,9 @@ const ProjectDetails = () => {
   };
 
   const handleOpenQuote = () => {
+    const displayedProducts = getDisplayedProducts(project.project_products);
     const firstProduct =
-      project.project_products?.find((item) =>
-        (item.product?.code ?? "").toUpperCase().startsWith("BAT")
-      )?.product ?? project.project_products?.[0]?.product;
+      displayedProducts[0]?.product ?? project.project_products?.[0]?.product;
 
     setQuoteInitialValues({
       client_name: project.client_name ?? "",
@@ -172,9 +177,7 @@ const ProjectDetails = () => {
         (project as Project & { product_name?: string }).product_name ||
         "",
       amount: project.estimated_value ?? undefined,
-      quote_ref: project.project_ref
-        ? `${project.project_ref}-DEV`
-        : undefined,
+      quote_ref: project.project_ref ? `${project.project_ref}-DEV` : undefined,
     });
     setQuoteDialogOpen(true);
   };
@@ -291,6 +294,11 @@ const ProjectDetails = () => {
                   </p>
                   {project.company && (
                     <p className="text-sm text-muted-foreground">{project.company}</p>
+                  )}
+                  {project.siren && (
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">
+                      SIREN : {project.siren}
+                    </p>
                   )}
                 </div>
                 <div className="space-y-2">
@@ -419,7 +427,7 @@ const ProjectDetails = () => {
           <CardContent className="space-y-4">
             {projectProducts.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Aucun produit n'est associé à ce projet.
+                Aucun produit (hors ECO) n'est associé à ce projet.
               </p>
             ) : (
               projectProducts.map((item) => {
@@ -468,6 +476,7 @@ const ProjectDetails = () => {
           </CardContent>
         </Card>
       </div>
+
       <AddQuoteDialog
         open={quoteDialogOpen}
         onOpenChange={(open) => {

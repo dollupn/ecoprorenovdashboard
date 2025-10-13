@@ -51,10 +51,21 @@ type ProjectProduct = {
   dynamic_params: Record<string, any>;
 };
 
+const sirenSchema = z
+  .string()
+  .optional()
+  .refine((value) => {
+    if (!value) return true;
+    const sanitized = value.replace(/\s+/g, "");
+    if (sanitized.length === 0) return true;
+    return /^\d{9}$/.test(sanitized);
+  }, "Le SIREN doit contenir 9 chiffres");
+
 const projectSchema = z.object({
   client_name: z.string().min(2, "Le nom du client est requis"),
   company: z.string().optional(),
   phone: z.string().optional(),
+  siren: sirenSchema,
   products: z.array(z.object({
     product_id: z.string().min(1, "Le produit est requis"),
     quantity: z.coerce.number().min(1, "La quantité doit être >= 1").default(1),
@@ -90,6 +101,7 @@ const baseDefaultValues: Partial<ProjectFormValues> = {
   client_name: "",
   company: "",
   phone: "",
+  siren: "",
   products: [{ product_id: "", quantity: 1, dynamic_params: {} }],
   city: "",
   postal_code: "",
@@ -114,17 +126,17 @@ const getInitialDynamicParams = (product: any) => {
   if (!product?.params_schema) return {};
   const schema = product.params_schema as any;
   const initialParams: Record<string, any> = {};
-  
+
   if (schema.fields && Array.isArray(schema.fields)) {
     schema.fields.forEach((field: any) => {
-      if (product.default_params && typeof product.default_params === 'object' && field.name in product.default_params) {
+      if (product.default_params && typeof product.default_params === "object" && field.name in product.default_params) {
         initialParams[field.name] = (product.default_params as any)[field.name];
       } else {
         initialParams[field.name] = field.type === "number" ? 0 : "";
       }
     });
   }
-  
+
   return initialParams;
 };
 
@@ -196,7 +208,6 @@ export const AddProjectDialog = ({
     },
     enabled: Boolean(currentOrgId),
   });
-
 
   useEffect(() => {
     if (salesRepsError) {
@@ -377,6 +388,7 @@ export const AddProjectDialog = ({
     }
   }, [defaultAssignee, form]);
 
+  // **** Merged/conflict-resolved effect: honors initialValues + defaults ****
   useEffect(() => {
     if (!open) return;
 
@@ -384,19 +396,55 @@ export const AddProjectDialog = ({
       .map((product) => product.id)
       .filter((id): id is string => Boolean(id));
 
-    setSelectedEcoProductIds(defaultEcoIds);
+    const ecoMap = new Map(ecoProducts.map((product) => [product.id, product]));
 
-    const ecoEntries = defaultEcoIds
-      .map((id) => ecoProducts.find((product) => product.id === id))
-      .filter((product): product is ProductCatalogEntry => Boolean(product))
-      .map((product) => createProductEntry(product));
+    // Validate initial products against current catalog
+    const initialProductEntries =
+      (initialValues?.products ?? [])
+        .map((entry) => {
+          if (!entry?.product_id) return null;
+          const catalogProduct = productsData?.find((product) => product.id === entry.product_id);
+          return catalogProduct
+            ? {
+                product_id: entry.product_id,
+                quantity: entry.quantity ?? 1,
+                dynamic_params: entry.dynamic_params ?? getInitialDynamicParams(catalogProduct),
+              }
+            : null;
+        })
+        .filter((entry): entry is ProjectProduct => Boolean(entry));
+
+    // Merge default ECO selection with initial products that are ECO
+    const mergedEcoSelection = new Set<string>([
+      ...defaultEcoIds,
+      ...initialProductEntries
+        .map((entry) => entry.product_id)
+        .filter((productId): productId is string => ecoMap.has(productId)),
+    ]);
+
+    setSelectedEcoProductIds(Array.from(mergedEcoSelection));
+
+    const ecoEntries = Array.from(mergedEcoSelection)
+      .map((id) => ecoMap.get(id))
+      .filter((p): p is ProductCatalogEntry => Boolean(p))
+      .map((p) => createProductEntry(p));
+
+    const productList =
+      initialProductEntries.length > 0
+        ? initialProductEntries
+        : ecoEntries.length
+        ? ecoEntries
+        : [createProductEntry()];
 
     form.reset({
       ...baseDefaultValues,
-      assigned_to: defaultAssignee ?? "",
-      products: ecoEntries.length ? ecoEntries : [createProductEntry()],
+      ...initialValues,
+      assigned_to: initialValues?.assigned_to ?? defaultAssignee ?? "",
+      siren: initialValues?.siren ?? "",
+      products: productList,
     } as ProjectFormValues);
-  }, [open, ecoProducts, form, defaultAssignee]);
+  }, [open, ecoProducts, form, defaultAssignee, initialValues, productsData]);
+  // **** end merged effect ****
 
   const handleEcoToggle = useCallback(
     (productId: string, checked: boolean | "indeterminate") => {
@@ -440,10 +488,10 @@ export const AddProjectDialog = ({
 
       if ((catalogProduct.code ?? "").toUpperCase().startsWith("ECO")) {
         setSelectedEcoProductIds((prev) => {
-          if (prev.includes(catalogProduct.id)) {
+          if (prev.includes(catalogProduct.id!)) {
             return prev;
           }
-          const next = [...prev, catalogProduct.id];
+          const next = [...prev, catalogProduct.id!];
           syncEcoProducts(next);
           return next;
         });
@@ -467,8 +515,8 @@ export const AddProjectDialog = ({
     try {
       // Générer la référence automatiquement format ECOP-Date-Number
       const today = new Date();
-      const dateStr = today.toISOString().split('T')[0].replace(/-/g, '');
-      
+      const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
+
       // Récupérer le dernier projet du jour pour incrémenter le numéro
       const { data: existingProjects } = await supabase
         .from("projects")
@@ -480,63 +528,69 @@ export const AddProjectDialog = ({
 
       let nextNumber = 1;
       if (existingProjects && existingProjects.length > 0) {
-        const lastRef = existingProjects[0].project_ref;
-        const lastNumber = parseInt(lastRef.split('-')[2] || "0");
-        nextNumber = lastNumber + 1;
+        const lastRef = existingProjects[0].project_ref as string;
+        const parts = lastRef.split("-");
+        const lastNumber = parseInt(parts[2] || "0", 10);
+        nextNumber = (Number.isFinite(lastNumber) ? lastNumber : 0) + 1;
       }
 
-      const project_ref = `ECOP-${dateStr}-${nextNumber.toString().padStart(3, '0')}`;
-      
+      const project_ref = `ECOP-${dateStr}-${nextNumber.toString().padStart(3, "0")}`;
+
       // Récupérer le nom du premier produit pour product_name (legacy)
-      const firstProduct = productsData?.find(p => p.id === data.products[0]?.product_id);
+      const firstProduct = productsData?.find((p) => p.id === data.products[0]?.product_id);
       const product_name = firstProduct?.name || "";
 
       // Créer le projet
+      const normalizedSiren = (data.siren ?? "").replace(/\s+/g, "").trim();
+
       const { data: createdProject, error: projectError } = await supabase
         .from("projects")
-        .insert([{
-          user_id: user.id,
-          org_id: currentOrgId,
-          project_ref,
-          client_name: data.client_name,
-          product_name, // Pour compatibilité
-          city: data.city,
-          postal_code: data.postal_code,
-          status: data.status,
-          assigned_to: data.assigned_to,
-          company: data.company || undefined,
-          phone: data.phone || undefined,
-          building_type: data.building_type || undefined,
-          usage: data.usage || undefined,
-          prime_cee: data.prime_cee || undefined,
-          discount: data.discount || undefined,
-          unit_price: data.unit_price || undefined,
-          signatory_name: data.signatory_name || undefined,
-          signatory_title: data.signatory_title || undefined,
-          surface_batiment_m2: data.surface_batiment_m2 || undefined,
-          date_debut_prevue: data.date_debut_prevue || undefined,
-          date_fin_prevue: data.date_fin_prevue || undefined,
-          estimated_value: data.estimated_value || undefined,
-          lead_id: data.lead_id || undefined,
-        }])
+        .insert([
+          {
+            user_id: user.id,
+            org_id: currentOrgId,
+            project_ref,
+            client_name: data.client_name,
+            product_name, // Pour compatibilité
+            city: data.city,
+            postal_code: data.postal_code,
+            status: data.status,
+            assigned_to: data.assigned_to,
+            company: data.company || undefined,
+            phone: data.phone || undefined,
+            siren: normalizedSiren ? normalizedSiren : undefined,
+            building_type: data.building_type || undefined,
+            usage: data.usage || undefined,
+            prime_cee: data.prime_cee || undefined,
+            discount: data.discount || undefined,
+            unit_price: data.unit_price || undefined,
+            signatory_name: data.signatory_name || undefined,
+            signatory_title: data.signatory_title || undefined,
+            surface_batiment_m2: data.surface_batiment_m2 || undefined,
+            date_debut_prevue: data.date_debut_prevue || undefined,
+            date_fin_prevue: data.date_fin_prevue || undefined,
+            estimated_value: data.estimated_value || undefined,
+            lead_id: data.lead_id || undefined,
+          },
+        ])
         .select()
         .single();
 
       if (projectError) throw projectError;
 
       // Ajouter les produits au projet
-      const projectProducts = data.products.map(p => ({
+      const projectProducts = data.products.map((p) => ({
         project_id: createdProject.id,
         product_id: p.product_id,
         quantity: p.quantity,
         dynamic_params: p.dynamic_params || {},
       }));
 
-      const { error: productsError } = await supabase
+      const { error: productsInsertError } = await supabase
         .from("project_products")
         .insert(projectProducts);
 
-      if (productsError) throw productsError;
+      if (productsInsertError) throw productsInsertError;
 
       toast({
         title: "Projet créé",
@@ -651,19 +705,34 @@ export const AddProjectDialog = ({
               />
             </div>
 
-            <FormField
-              control={form.control}
-              name="phone"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Téléphone</FormLabel>
-                  <FormControl>
-                    <Input type="tel" placeholder="+33 6 12 34 56 78" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Téléphone</FormLabel>
+                    <FormControl>
+                      <Input type="tel" placeholder="+33 6 12 34 56 78" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="siren"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>SIREN (optionnel)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="000000000" maxLength={11} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <div className="grid grid-cols-2 gap-4">
               <FormField
@@ -737,9 +806,9 @@ export const AddProjectDialog = ({
                         className="flex items-center gap-2 text-sm"
                       >
                         <Checkbox
-                          checked={selectedEcoProductIds.includes(product.id)}
+                          checked={selectedEcoProductIds.includes(product.id!)}
                           onCheckedChange={(checked) =>
-                            handleEcoToggle(product.id, checked)
+                            handleEcoToggle(product.id!, checked)
                           }
                           disabled={loading}
                         />
@@ -752,8 +821,8 @@ export const AddProjectDialog = ({
 
               {form.watch("products")?.map((_, index) => {
                 const productId = form.watch(`products.${index}.product_id`);
-                const selectedProduct = productsData?.find(p => p.id === productId);
-                
+                const selectedProduct = productsData?.find((p) => p.id === productId);
+
                 return (
                   <div key={index} className="border p-4 rounded-md space-y-4 relative">
                     {form.watch("products")!.length > 1 && (
@@ -767,7 +836,7 @@ export const AddProjectDialog = ({
                         <X className="w-4 h-4" />
                       </Button>
                     )}
-                    
+
                     <div className="grid grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
@@ -797,7 +866,7 @@ export const AddProjectDialog = ({
                           </FormItem>
                         )}
                       />
-                      
+
                       <FormField
                         control={form.control}
                         name={`products.${index}.quantity`}
@@ -822,7 +891,11 @@ export const AddProjectDialog = ({
                     {selectedProduct?.params_schema && (
                       <DynamicFields
                         form={form as any}
-                        schema={{ fields: Array.isArray(selectedProduct.params_schema) ? selectedProduct.params_schema : (selectedProduct.params_schema as any)?.fields || [] }}
+                        schema={{
+                          fields: Array.isArray(selectedProduct.params_schema)
+                            ? selectedProduct.params_schema
+                            : (selectedProduct.params_schema as any)?.fields || [],
+                        }}
                         disabled={loading}
                         fieldPrefix={`products.${index}.dynamic_params`}
                       />
@@ -937,8 +1010,8 @@ export const AddProjectDialog = ({
                             salesRepsLoading && commercialOptions.length === 0
                               ? "Chargement..."
                               : commercialOptions.length > 0
-                                ? "Sélectionnez un commercial"
-                                : "Aucun commercial configuré"
+                              ? "Sélectionnez un commercial"
+                              : "Aucun commercial configuré"
                           }
                         />
                       </SelectTrigger>

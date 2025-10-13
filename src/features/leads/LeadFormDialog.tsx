@@ -52,9 +52,20 @@ import { supabase } from "@/integrations/supabase/client";
 
 const LEAD_SOURCES = ["Commercial", "Campagne FB", "Régie Commercial"] as const;
 
+const sirenSchema = z
+  .string()
+  .optional()
+  .refine((value) => {
+    if (!value) return true;
+    const sanitized = value.replace(/\s+/g, "").trim();
+    if (sanitized.length === 0) return true;
+    return /^\d{9}$/.test(sanitized);
+  }, "Le SIREN doit contenir 9 chiffres");
+
 const leadSchema = z.object({
   full_name: z.string().min(2, "Le nom doit contenir au moins 2 caractères"),
   company: z.string().optional(),
+  siren: sirenSchema,
   email: z.string().email("Email invalide"),
   phone_raw: z.string().min(6, "Numéro de téléphone invalide"),
   address: z.string().min(5, "L'adresse est requise"),
@@ -89,6 +100,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
     defaultValues: {
       full_name: "",
       company: "",
+      siren: "",
       email: "",
       phone_raw: "",
       address: "",
@@ -149,6 +161,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
     form.clearErrors();
 
     const selectedProduct = products?.find((product) => product.name === values.product_type);
+    const normalizedSiren = (values.siren ?? "").replace(/\s+/g, "").trim();
 
     try {
       let photoUrl: string | null = null;
@@ -182,6 +195,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         postal_code: values.postal_code,
         status: values.status,
         company: values.company?.trim() ? values.company : null,
+        siren: normalizedSiren ? normalizedSiren : null,
         product_name: selectedProduct?.label ?? values.product_type,
         utm_source: values.utm_source?.trim() ? values.utm_source : null,
         commentaire: values.commentaire?.trim() ? values.commentaire : null,
@@ -200,6 +214,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
       form.reset({
         full_name: "",
         company: "",
+        siren: "",
         email: "",
         phone_raw: "",
         address: "",
@@ -256,6 +271,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
       form.reset({
         full_name: "",
         company: "",
+        siren: "",
         email: "",
         phone_raw: "",
         address: "",
@@ -288,7 +304,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-3">
               <FormField
                 control={form.control}
                 name="full_name"
@@ -310,6 +326,24 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
                     <FormLabel>Entreprise</FormLabel>
                     <FormControl>
                       <Input {...field} disabled={isSubmitting} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="siren"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>SIREN (optionnel)</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        disabled={isSubmitting}
+                        placeholder="000000000"
+                        maxLength={11}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

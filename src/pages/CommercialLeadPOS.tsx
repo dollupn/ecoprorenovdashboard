@@ -35,6 +35,7 @@ const PRODUCT_OPTIONS = [
 const initialFormState = {
   fullName: "",
   company: "",
+  siren: "",
   surface: "",
   phone: "",
   address: "",
@@ -121,7 +122,7 @@ const CommercialLeadPOS = () => {
               </p>
             </CardHeader>
             <CardContent className="grid gap-6 p-6">
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-3">
                 <div className="grid gap-2">
                   <Label htmlFor="fullName">Nom</Label>
                   <Input
@@ -145,6 +146,17 @@ const CommercialLeadPOS = () => {
                       className="h-14 pl-12 text-lg"
                     />
                   </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="siren">SIREN (optionnel)</Label>
+                  <Input
+                    id="siren"
+                    value={formState.siren}
+                    onChange={handleInputChange("siren")}
+                    placeholder="000000000"
+                    maxLength={11}
+                    className="h-14 text-lg"
+                  />
                 </div>
               </div>
 

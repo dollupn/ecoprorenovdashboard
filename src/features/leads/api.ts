@@ -94,7 +94,7 @@ export const useLeadsList = (orgId: string | null, filters?: LeadFilters, search
 
       if (sanitizedSearch) {
         query = query.or(
-          `full_name.ilike.%${sanitizedSearch}%,email.ilike.%${sanitizedSearch}%,phone_raw.ilike.%${sanitizedSearch}%,city.ilike.%${sanitizedSearch}%,postal_code.ilike.%${sanitizedSearch}%,company.ilike.%${sanitizedSearch}%,product_name.ilike.%${sanitizedSearch}%,utm_source.ilike.%${sanitizedSearch}%`
+          `full_name.ilike.%${sanitizedSearch}%,email.ilike.%${sanitizedSearch}%,phone_raw.ilike.%${sanitizedSearch}%,city.ilike.%${sanitizedSearch}%,postal_code.ilike.%${sanitizedSearch}%,company.ilike.%${sanitizedSearch}%,siren.ilike.%${sanitizedSearch}%,product_name.ilike.%${sanitizedSearch}%,utm_source.ilike.%${sanitizedSearch}%`
         );
       }
 
