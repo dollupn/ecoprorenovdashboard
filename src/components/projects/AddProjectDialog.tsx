@@ -37,7 +37,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, X } from "lucide-react";
 import { DynamicFields } from "@/features/leads/DynamicFields";
 
-type ProductCatalogEntry = Tables<"product_catalog">;
+type ProductCatalogEntry = Pick<Tables<"product_catalog">, "id" | "name" | "code" | "category" | "is_active" | "params_schema" | "default_params">;
 type Profile = Tables<"profiles">;
 type SelectOption = {
   value: string;

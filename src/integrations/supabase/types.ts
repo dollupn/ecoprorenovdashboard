@@ -121,6 +121,7 @@ export type Database = {
       }
       leads: {
         Row: {
+          address: string
           assigned_to: string | null
           city: string
           commentaire: string | null
@@ -134,9 +135,10 @@ export type Database = {
           id: string
           org_id: string | null
           phone_raw: string
+          photo_previsite_url: string | null
           postal_code: string
-          siren: string | null
           product_name: string | null
+          siren: string | null
           status: string
           surface_m2: number | null
           updated_at: string
@@ -144,6 +146,7 @@ export type Database = {
           utm_source: string | null
         }
         Insert: {
+          address?: string
           assigned_to?: string | null
           city: string
           commentaire?: string | null
@@ -157,9 +160,10 @@ export type Database = {
           id?: string
           org_id?: string | null
           phone_raw: string
+          photo_previsite_url?: string | null
           postal_code: string
-          siren?: string | null
           product_name?: string | null
+          siren?: string | null
           status?: string
           surface_m2?: number | null
           updated_at?: string
@@ -167,6 +171,7 @@ export type Database = {
           utm_source?: string | null
         }
         Update: {
+          address?: string
           assigned_to?: string | null
           city?: string
           commentaire?: string | null
@@ -180,9 +185,10 @@ export type Database = {
           id?: string
           org_id?: string | null
           phone_raw?: string
+          photo_previsite_url?: string | null
           postal_code?: string
-          siren?: string | null
           product_name?: string | null
+          siren?: string | null
           status?: string
           surface_m2?: number | null
           updated_at?: string
@@ -276,21 +282,21 @@ export type Database = {
           category: string | null
           code: string
           created_at: string
-          default_params: Json | null
-          description: string | null
           custom_description_primary: string | null
           custom_description_secondary: string | null
+          default_params: Json | null
+          description: string | null
+          eco_admin_percentage: number | null
+          eco_furn_percentage: number | null
+          eco_log_percentage: number | null
           id: string
           is_active: boolean
           name: string
           org_id: string | null
           owner_id: string
           params_schema: Json | null
-          prime_percentage: number | null
-          eco_admin_percentage: number | null
-          eco_furn_percentage: number | null
-          eco_log_percentage: number | null
           price_ttc: number | null
+          prime_percentage: number | null
           schema_version: number
           supplier_name: string | null
           supplier_reference: string | null
@@ -304,21 +310,21 @@ export type Database = {
           category?: string | null
           code: string
           created_at?: string
-          default_params?: Json | null
-          description?: string | null
           custom_description_primary?: string | null
           custom_description_secondary?: string | null
+          default_params?: Json | null
+          description?: string | null
+          eco_admin_percentage?: number | null
+          eco_furn_percentage?: number | null
+          eco_log_percentage?: number | null
           id?: string
           is_active?: boolean
           name: string
           org_id?: string | null
           owner_id: string
           params_schema?: Json | null
-          prime_percentage?: number | null
-          eco_admin_percentage?: number | null
-          eco_furn_percentage?: number | null
-          eco_log_percentage?: number | null
           price_ttc?: number | null
+          prime_percentage?: number | null
           schema_version?: number
           supplier_name?: string | null
           supplier_reference?: string | null
@@ -332,21 +338,21 @@ export type Database = {
           category?: string | null
           code?: string
           created_at?: string
-          default_params?: Json | null
-          description?: string | null
           custom_description_primary?: string | null
           custom_description_secondary?: string | null
+          default_params?: Json | null
+          description?: string | null
+          eco_admin_percentage?: number | null
+          eco_furn_percentage?: number | null
+          eco_log_percentage?: number | null
           id?: string
           is_active?: boolean
           name?: string
           org_id?: string | null
           owner_id?: string
           params_schema?: Json | null
-          prime_percentage?: number | null
-          eco_admin_percentage?: number | null
-          eco_furn_percentage?: number | null
-          eco_log_percentage?: number | null
           price_ttc?: number | null
+          prime_percentage?: number | null
           schema_version?: number
           supplier_name?: string | null
           supplier_reference?: string | null
@@ -457,9 +463,9 @@ export type Database = {
           prime_cee: number | null
           product_name: string
           project_ref: string
-          siren: string | null
           signatory_name: string | null
           signatory_title: string | null
+          siren: string | null
           status: string
           surface_batiment_m2: number | null
           surface_isolee_m2: number | null
@@ -487,9 +493,9 @@ export type Database = {
           prime_cee?: number | null
           product_name: string
           project_ref: string
-          siren?: string | null
           signatory_name?: string | null
           signatory_title?: string | null
+          siren?: string | null
           status?: string
           surface_batiment_m2?: number | null
           surface_isolee_m2?: number | null
@@ -517,9 +523,9 @@ export type Database = {
           prime_cee?: number | null
           product_name?: string
           project_ref?: string
-          siren?: string | null
           signatory_name?: string | null
           signatory_title?: string | null
+          siren?: string | null
           status?: string
           surface_batiment_m2?: number | null
           surface_isolee_m2?: number | null

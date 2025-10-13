@@ -1269,7 +1269,7 @@ const Leads = () => {
                             siren: lead.siren ?? "",
                             city: lead.city,
                             postal_code: lead.postal_code,
-                            surface_isolee_m2: lead.surface_m2 ?? undefined,
+                            surface_batiment_m2: lead.surface_m2 ?? undefined,
                             lead_id: lead.id,
                           }}
                           onProjectAdded={() => handleProjectCreated(lead)}
@@ -1386,7 +1386,7 @@ const Leads = () => {
                                   siren: lead.siren ?? "",
                                   city: lead.city,
                                   postal_code: lead.postal_code,
-                                  surface_isolee_m2: lead.surface_m2 ?? undefined,
+                                  surface_batiment_m2: lead.surface_m2 ?? undefined,
                                   lead_id: lead.id,
                                 }}
                                 onProjectAdded={() => handleProjectCreated(lead)}
