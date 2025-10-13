@@ -225,8 +225,9 @@ const Invoices = () => {
 
         {/* Tabs */}
         <Tabs defaultValue="client" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="client">Facture Client/Délégataire</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="client">Facture Client</TabsTrigger>
+            <TabsTrigger value="delegataire">Facture Délégataire</TabsTrigger>
             <TabsTrigger value="subcontractor">Facture Sous-traitant</TabsTrigger>
             <TabsTrigger value="supplier">Facture Fournisseur</TabsTrigger>
           </TabsList>
@@ -333,6 +334,19 @@ const Invoices = () => {
               </CardHeader>
               <CardContent className="bg-slate-100">
                 <InvoicePreview />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="delegataire" className="space-y-6">
+            <Card className="shadow-card bg-gradient-card border-0">
+              <CardContent className="py-12">
+                <div className="text-center">
+                  <Timer className="mx-auto h-10 w-10 text-muted-foreground/60" />
+                  <p className="mt-4 text-muted-foreground">
+                    Gestion des factures délégataires à venir.
+                  </p>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
