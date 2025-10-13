@@ -39,6 +39,13 @@ import {
 type SiteStatus = "PLANIFIE" | "EN_PREPARATION" | "EN_COURS" | "SUSPENDU" | "TERMINE" | "LIVRE";
 type CofracStatus = "EN_ATTENTE" | "CONFORME" | "NON_CONFORME" | "A_PLANIFIER";
 
+type ProjectProduct = Tables<"project_products"> & {
+  product: Pick<Tables<"product_catalog">, "code"> | null;
+};
+type ProjectWithProducts = Tables<"projects"> & {
+  project_products?: ProjectProduct[] | null;
+};
+
 type Site = Tables<"sites"> & {
   revenue?: number | null;
   profit_margin?: number | null;
@@ -139,18 +146,20 @@ const Sites = () => {
     enabled: !!user,
   });
 
-  const { data: projects = [] } = useQuery({
+  const { data: projects = [] } = useQuery<ProjectWithProducts[]>({
     queryKey: ["projects", user?.id],
     queryFn: async () => {
       if (!user) return [];
-      
+
       const { data, error } = await supabase
         .from("projects")
-        .select("*")
+        .select(
+          "*, project_products(id, product:product_catalog(code))"
+        )
         .eq("user_id", user.id);
 
       if (error) throw error;
-      return data;
+      return (data as ProjectWithProducts[]) ?? [];
     },
     enabled: !!user,
   });
@@ -385,12 +394,17 @@ const Sites = () => {
       const project = projects.find((item) => item.id === locationState.createSite?.projectId);
 
       if (project) {
+        const productCodes =
+          project.project_products
+            ?.map((item) => item.product?.code)
+            .filter((code): code is string => Boolean(code)) ?? [];
+
         handleOpenCreate({
-          project_ref: project.project_ref,
-          client_name: project.client_name,
-          product_name: project.product_name,
-          city: project.city,
-          postal_code: project.postal_code,
+          project_ref: project.project_ref ?? "",
+          client_name: project.client_name ?? "",
+          product_name: productCodes.join(", "),
+          city: project.city ?? "",
+          postal_code: project.postal_code ?? "",
         });
         toast({
           title: "Préparation du chantier",
