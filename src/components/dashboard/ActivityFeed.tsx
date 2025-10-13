@@ -110,14 +110,14 @@ export function ActivityFeed({ orgId, enabled = true }: ActivityFeedProps) {
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <h4 className="text-sm font-medium text-foreground truncate">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <h4 className="text-sm font-medium text-foreground truncate flex-1 min-w-0">
                       {activity.title}
                     </h4>
                     {activity.status && (
                       <Badge
                         variant="secondary"
-                        className={getStatusBadgeClasses(activity.status)}
+                        className={`${getStatusBadgeClasses(activity.status)} md:ml-auto`}
                       >
                         {activity.status}
                       </Badge>
