@@ -77,7 +77,7 @@ const leadSchema = z.object({
   commentaire: z.string().optional(),
   assigned_to: z.string().optional(),
   extra_fields: z.record(z.any()).default({}),
-  photo_file: z.instanceof(File).optional(),
+  photo_file: z.instanceof(File).optional().nullable(),
 });
 
 type LeadFormValues = z.infer<typeof leadSchema>;
