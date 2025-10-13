@@ -271,7 +271,7 @@ const Sites = () => {
       site_ref: values.site_ref,
       project_ref: values.project_ref,
       client_name: values.client_name,
-      product_name: values.product_name,
+      product_name: values.product_name?.trim() || null,
       address: values.address,
       city: values.city,
       postal_code: values.postal_code,
