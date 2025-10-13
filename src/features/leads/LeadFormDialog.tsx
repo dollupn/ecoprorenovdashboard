@@ -202,6 +202,8 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         photo_previsite_url: photoUrl,
         user_id: user.id,
         org_id: orgId,
+        assigned_to: values.assigned_to || user.id,
+        created_by: user.id,
       } as TablesInsert<"leads">;
 
       await createLead.mutateAsync(payload);
