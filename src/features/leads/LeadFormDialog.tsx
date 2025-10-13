@@ -47,12 +47,14 @@ import {
   useCreateLead,
 } from "./api";
 import type { TablesInsert } from "@/integrations/supabase/types";
+import { AddressAutocomplete } from "@/components/leads/AddressAutocomplete";
 
 const leadSchema = z.object({
   full_name: z.string().min(2, "Le nom doit contenir au moins 2 caractères"),
   company: z.string().optional(),
   email: z.string().email("Email invalide"),
   phone_raw: z.string().min(6, "Numéro de téléphone invalide"),
+  address: z.string().min(5, "L'adresse est requise"),
   city: z.string().min(2, "La ville est requise"),
   postal_code: z.string().min(4, "Code postal invalide"),
   product_type: z.string().min(1, "Le type de produit est requis"),
@@ -84,6 +86,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
       company: "",
       email: "",
       phone_raw: "",
+      address: "",
       city: "",
       postal_code: "",
       product_type: "",
@@ -146,6 +149,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
       full_name: values.full_name,
       email: values.email,
       phone_raw: values.phone_raw,
+      address: values.address,
       city: values.city,
       postal_code: values.postal_code,
       status: values.status,
@@ -170,6 +174,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         company: "",
         email: "",
         phone_raw: "",
+        address: "",
         city: "",
         postal_code: "",
         product_type: products?.length === 1 ? products[0].name : "",
@@ -223,6 +228,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         company: "",
         email: "",
         phone_raw: "",
+        address: "",
         city: "",
         postal_code: "",
         product_type: products?.length === 1 ? products[0].name : "",
@@ -310,6 +316,28 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
               />
             </div>
 
+            <FormField
+              control={form.control}
+              name="address"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Adresse *</FormLabel>
+                  <FormControl>
+                    <AddressAutocomplete
+                      value={field.value}
+                      onChange={(address, city, postalCode) => {
+                        field.onChange(address);
+                        form.setValue("city", city);
+                        form.setValue("postal_code", postalCode);
+                      }}
+                      disabled={isSubmitting}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <div className="grid gap-4 md:grid-cols-2">
               <FormField
                 control={form.control}
@@ -318,7 +346,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
                   <FormItem>
                     <FormLabel>Ville *</FormLabel>
                     <FormControl>
-                      <Input {...field} disabled={isSubmitting} />
+                      <Input {...field} disabled={isSubmitting} readOnly />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -331,7 +359,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
                   <FormItem>
                     <FormLabel>Code postal *</FormLabel>
                     <FormControl>
-                      <Input {...field} disabled={isSubmitting} />
+                      <Input {...field} disabled={isSubmitting} readOnly />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

@@ -439,10 +439,15 @@ const CalendarPage = () => {
                             </div>
 
                             <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
-                              <span className="inline-flex items-center gap-1.5">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-auto p-0 inline-flex items-center gap-1.5 hover:text-primary"
+                                onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}`, '_blank')}
+                              >
                                 <MapPin className="h-4 w-4" />
                                 {event.location}
-                              </span>
+                              </Button>
                               <span className="inline-flex items-center gap-1.5">
                                 <Users className="h-4 w-4" />
                                 {event.assignedTo}
