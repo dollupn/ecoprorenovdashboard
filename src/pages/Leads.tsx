@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,6 +37,21 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   getLeadStatusColor,
   getLeadStatusLabel,
   isLeadStatus,
@@ -56,8 +72,11 @@ import {
   LayoutGrid,
   List,
 } from "lucide-react";
+import { getOrganizationProducts } from "@/features/leads/api";
 
 const CARD_SKELETON_COUNT = 4;
+
+const SELECT_NONE_VALUE = "__none" as const;
 
 type LeadRecord = Tables<"leads">;
 
@@ -124,6 +143,7 @@ const normalizeHeader = (header: string) =>
 
 const HEADER_MAPPINGS: Record<string, keyof CsvLead> = {
   fullname: "full_name",
+  nometprenom: "full_name",
   nom: "full_name",
   name: "full_name",
   client: "full_name",
@@ -134,13 +154,20 @@ const HEADER_MAPPINGS: Record<string, keyof CsvLead> = {
   telephone: "phone_raw",
   tel: "phone_raw",
   phoneraw: "phone_raw",
+  phonenumber: "phone_raw",
+  phonenumberwithcountrycode: "phone_raw",
+  mobilephone: "phone_raw",
   city: "city",
   ville: "city",
   locality: "city",
+  cityname: "city",
   postalcode: "postal_code",
   codepostal: "postal_code",
   postal: "postal_code",
   postal_code: "postal_code",
+  zipcode: "postal_code",
+  zip: "postal_code",
+  cp: "postal_code",
   company: "company",
   entreprise: "company",
   societe: "company",
@@ -201,6 +228,324 @@ const normalizeCsvStatus = (value: string): LeadStatus | undefined => {
   }
 };
 
+type FieldParsingContext = {
+  firstName?: string;
+  lastName?: string;
+  comments: string[];
+};
+
+const safeParseJson = (value: string) => {
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    try {
+      return JSON.parse(value.replace(/""/g, '"'));
+    } catch {
+      console.warn("Impossible d'analyser le JSON du champ field_data", error);
+      return null;
+    }
+  }
+};
+
+const parseSurfaceValue = (value: string) => {
+  const normalized = value.replace(/[^0-9,\.]/g, "").replace(/,/g, ".");
+  if (!normalized) return undefined;
+  const parsed = Number.parseFloat(normalized);
+  return Number.isNaN(parsed) ? undefined : parsed;
+};
+
+const mergeComments = (current: string | undefined, additions: string[]) => {
+  const existing = current
+    ? current
+        .split("\n")
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : [];
+  const incoming = additions.map((item) => item.trim()).filter(Boolean);
+  if (!incoming.length) {
+    return existing.join("\n");
+  }
+  const merged = Array.from(new Set([...existing, ...incoming]));
+  return merged.join("\n");
+};
+
+const getFieldEntryValues = (entry: any): string[] => {
+  if (Array.isArray(entry?.values)) {
+    return entry.values
+      .map((value) => {
+        if (typeof value === "string") return value;
+        if (value && typeof value === "object" && "value" in value) {
+          return String((value as { value?: string }).value ?? "");
+        }
+        return "";
+      })
+      .filter((item) => item && item.trim().length > 0);
+  }
+  if (typeof entry?.value === "string") {
+    return [entry.value];
+  }
+  return [];
+};
+
+const applyHeuristicAssignment = (
+  header: string,
+  value: string,
+  record: Partial<CsvLead>,
+  context: FieldParsingContext
+) => {
+  const normalized = header;
+  const trimmed = value.trim();
+  if (!trimmed) return;
+
+  if (normalized.includes("prenom")) {
+    context.firstName = context.firstName ?? trimmed;
+    return;
+  }
+
+  if (
+    normalized.includes("nom") &&
+    !normalized.includes("campaign") &&
+    !normalized.includes("form") &&
+    !normalized.includes("ad")
+  ) {
+    if (!record.full_name) {
+      record.full_name = trimmed;
+    } else if (!context.lastName) {
+      context.lastName = trimmed;
+    }
+    return;
+  }
+
+  if (normalized.includes("email") || normalized.includes("courriel") || normalized.includes("mail")) {
+    if (!record.email) {
+      record.email = trimmed;
+    }
+    return;
+  }
+
+  if (
+    normalized.includes("phone") ||
+    normalized.includes("tel") ||
+    normalized.includes("mobile") ||
+    normalized.includes("telephone")
+  ) {
+    if (!record.phone_raw) {
+      record.phone_raw = trimmed;
+    }
+    return;
+  }
+
+  if (normalized.includes("ville") || normalized.includes("city") || normalized.includes("localite")) {
+    if (!record.city) {
+      record.city = trimmed;
+    }
+    return;
+  }
+
+  if (
+    normalized.includes("codepostal") ||
+    normalized.includes("postalcode") ||
+    normalized.includes("zipcode") ||
+    normalized === "zip" ||
+    normalized === "cp"
+  ) {
+    if (!record.postal_code) {
+      record.postal_code = trimmed.replace(/\s+/g, "");
+    }
+    return;
+  }
+
+  if (normalized.includes("surface")) {
+    if (record.surface_m2 == null) {
+      const parsed = parseSurfaceValue(trimmed);
+      if (parsed !== undefined) {
+        record.surface_m2 = parsed;
+      }
+    }
+    return;
+  }
+
+  if (
+    normalized.includes("produit") ||
+    normalized.includes("categorie") ||
+    normalized.includes("travaux") ||
+    normalized.includes("projet") ||
+    normalized.includes("installation")
+  ) {
+    if (!record.product_name) {
+      record.product_name = trimmed;
+    }
+    return;
+  }
+
+  if (
+    normalized.includes("commentaire") ||
+    normalized.includes("message") ||
+    normalized.includes("precisions") ||
+    normalized.includes("note")
+  ) {
+    record.commentaire = mergeComments(record.commentaire ?? undefined, [trimmed]);
+    return;
+  }
+
+  if (normalized.includes("daterdv") || normalized.includes("daterendezvous")) {
+    if (!record.date_rdv) {
+      record.date_rdv = trimmed;
+    }
+    return;
+  }
+
+  if (
+    normalized.includes("heurerdv") ||
+    normalized.includes("heurerendezvous") ||
+    normalized === "heurerdv" ||
+    normalized === "heure"
+  ) {
+    if (!record.heure_rdv) {
+      record.heure_rdv = trimmed;
+    }
+  }
+};
+
+const parseFacebookFieldData = (
+  rawValue: string,
+  record: Partial<CsvLead>,
+  context: FieldParsingContext
+) => {
+  const parsed = safeParseJson(rawValue);
+  if (!Array.isArray(parsed)) return;
+
+  for (const entry of parsed) {
+    const name: string =
+      typeof entry?.name === "string"
+        ? entry.name
+        : typeof entry?.key === "string"
+        ? entry.key
+        : typeof entry?.label === "string"
+        ? entry.label
+        : "";
+    if (!name) continue;
+
+    const normalized = normalizeHeader(name);
+    const values = getFieldEntryValues(entry);
+    if (!values.length) continue;
+
+    const value = values.join(", ").trim();
+    if (!value) continue;
+
+    if (normalized === "fullname" || normalized === "nometprenom") {
+      if (!record.full_name) {
+        record.full_name = value;
+      }
+      continue;
+    }
+
+    if (normalized === "firstname" || normalized.includes("prenom")) {
+      context.firstName = context.firstName ?? value;
+      continue;
+    }
+
+    if (normalized === "lastname" || normalized === "nom" || normalized.endsWith("nom")) {
+      context.lastName = context.lastName ?? value;
+      continue;
+    }
+
+    if (normalized.includes("email") || normalized.includes("courriel") || normalized.includes("mail")) {
+      if (!record.email) {
+        record.email = value;
+      }
+      continue;
+    }
+
+    if (
+      normalized.includes("phone") ||
+      normalized.includes("tel") ||
+      normalized.includes("mobile") ||
+      normalized.includes("telephone")
+    ) {
+      if (!record.phone_raw) {
+        record.phone_raw = value;
+      }
+      continue;
+    }
+
+    if (normalized.includes("ville") || normalized.includes("city") || normalized.includes("localite")) {
+      if (!record.city) {
+        record.city = value;
+      }
+      continue;
+    }
+
+    if (
+      normalized.includes("codepostal") ||
+      normalized.includes("postalcode") ||
+      normalized.includes("zipcode") ||
+      normalized === "zip" ||
+      normalized === "cp"
+    ) {
+      if (!record.postal_code) {
+        record.postal_code = value.replace(/\s+/g, "");
+      }
+      continue;
+    }
+
+    if (
+      normalized.includes("produit") ||
+      normalized.includes("categorie") ||
+      normalized.includes("travaux") ||
+      normalized.includes("projet") ||
+      normalized.includes("installation")
+    ) {
+      if (!record.product_name) {
+        record.product_name = value;
+      }
+      continue;
+    }
+
+    if (normalized.includes("surface")) {
+      if (record.surface_m2 == null) {
+        const parsedSurface = parseSurfaceValue(value);
+        if (parsedSurface !== undefined) {
+          record.surface_m2 = parsedSurface;
+        }
+      }
+      continue;
+    }
+
+    if (
+      normalized.includes("commentaire") ||
+      normalized.includes("message") ||
+      normalized.includes("precisions") ||
+      normalized.includes("note")
+    ) {
+      context.comments.push(value);
+      continue;
+    }
+
+    if (normalized.includes("daterdv") || normalized.includes("daterendezvous")) {
+      if (!record.date_rdv) {
+        record.date_rdv = value;
+      }
+      continue;
+    }
+
+    if (
+      normalized.includes("heurerdv") ||
+      normalized.includes("heurerendezvous") ||
+      normalized === "heurerdv" ||
+      normalized === "heure"
+    ) {
+      if (!record.heure_rdv) {
+        record.heure_rdv = value;
+      }
+    }
+  }
+
+  if (context.comments.length) {
+    record.commentaire = mergeComments(record.commentaire ?? undefined, context.comments);
+  }
+};
+
 const parseCsv = (text: string): CsvParseResult => {
   const lines = text
     .split(/\r?\n/)
@@ -224,44 +569,136 @@ const parseCsv = (text: string): CsvParseResult => {
     }
 
     const record: Partial<CsvLead> = {};
+    const context: FieldParsingContext = { comments: [] };
+    let fieldDataRaw: string | null = null;
+    let platformValue: string | null = null;
+    let campaignName: string | null = null;
+    let formName: string | null = null;
 
     headers.forEach((header, index) => {
-      const key = HEADER_MAPPINGS[header];
-      if (!key) return;
-
       const rawValue = values[index]?.trim() ?? "";
       if (!rawValue) return;
 
-      switch (key) {
-        case "surface_m2": {
-          const parsed = Number.parseFloat(rawValue.replace(/,/, "."));
-          if (!Number.isNaN(parsed)) {
-            record.surface_m2 = parsed;
-          }
-          break;
+      switch (header) {
+        case "fielddata": {
+          fieldDataRaw = rawValue;
+          return;
         }
-        case "status": {
-          const normalized = normalizeCsvStatus(rawValue);
-          if (normalized) {
-            record.status = normalized;
-          }
-          break;
+        case "firstname": {
+          context.firstName = context.firstName ?? rawValue;
+          return;
         }
-        case "date_rdv":
-        case "heure_rdv":
-        case "utm_source":
-        case "company":
-        case "product_name":
-        case "commentaire": {
-          // Preserve raw text
-          record[key] = rawValue;
-          break;
+        case "lastname": {
+          context.lastName = context.lastName ?? rawValue;
+          return;
+        }
+        case "platform": {
+          platformValue = rawValue;
+          return;
+        }
+        case "campaignname": {
+          campaignName = rawValue;
+          if (!record.utm_source) {
+            record.utm_source = rawValue;
+          }
+          return;
+        }
+        case "adname": {
+          if (!record.utm_source) {
+            record.utm_source = rawValue;
+          }
+          return;
+        }
+        case "formname": {
+          formName = rawValue;
+          if (!record.product_name) {
+            record.product_name = rawValue;
+          }
+          return;
         }
         default: {
-          record[key] = rawValue;
+          break;
         }
       }
+
+      const key = HEADER_MAPPINGS[header];
+      if (key) {
+        switch (key) {
+          case "surface_m2": {
+            const parsed = Number.parseFloat(rawValue.replace(/,/, \"."));
+            if (!Number.isNaN(parsed)) {
+              record.surface_m2 = parsed;
+            }
+            break;
+          }
+          case "status": {
+            const normalized = normalizeCsvStatus(rawValue);
+            if (normalized) {
+              record.status = normalized;
+            }
+            break;
+          }
+          case "date_rdv":
+          case "heure_rdv":
+          case "utm_source":
+          case "company":
+          case "product_name":
+          case "commentaire": {
+            record[key] = rawValue;
+            break;
+          }
+          default: {
+            record[key] = rawValue;
+          }
+        }
+        return;
+      }
+
+      applyHeuristicAssignment(header, rawValue, record, context);
     });
+
+    if (fieldDataRaw) {
+      parseFacebookFieldData(fieldDataRaw, record, context);
+    }
+
+    if (!record.full_name) {
+      const combined = [context.firstName, context.lastName]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+      if (combined) {
+        record.full_name = combined;
+      }
+    }
+
+    if (!record.utm_source) {
+      if (campaignName) {
+        record.utm_source = campaignName;
+      } else if (platformValue) {
+        record.utm_source = platformValue;
+      }
+    }
+
+    if (
+      platformValue
+      && platformValue.toLowerCase().includes("facebook")
+      && record.utm_source
+      && /^facebook$/i.test(record.utm_source.trim())
+    ) {
+      record.utm_source = "Facebook Ads";
+    }
+
+    if (formName && !record.product_name) {
+      record.product_name = formName;
+    }
+
+    if (record.postal_code) {
+      record.postal_code = record.postal_code.replace(/\s+/g, "");
+    }
+
+    if (record.commentaire) {
+      record.commentaire = record.commentaire.trim();
+    }
 
 
     if (
@@ -315,6 +752,23 @@ const Leads = () => {
 
   const updateLeadMutation = useUpdateLead(orgId);
 
+  const [isImportDialogOpen, setImportDialogOpen] = useState(false);
+  const [selectedImportProductId, setSelectedImportProductId] = useState<string | null>(null);
+
+  const { data: productOptions = [], isLoading: productsLoading } = useQuery({
+    queryKey: ["lead-import-products", orgId],
+    enabled: Boolean(orgId),
+    queryFn: () => getOrganizationProducts(orgId!),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const selectedImportProduct = useMemo(() => {
+    if (!selectedImportProductId) return null;
+    return productOptions.find((product) => product.id === selectedImportProductId) ?? null;
+  }, [productOptions, selectedImportProductId]);
+
+  const bulkProductLabel = selectedImportProduct?.label ?? null;
+
   const filteredLeads = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
@@ -365,7 +819,7 @@ const Leads = () => {
       });
       return;
     }
-    fileInputRef.current?.click();
+    setImportDialogOpen(true);
   };
 
   const handleCsvImport = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -382,6 +836,9 @@ const Leads = () => {
       return;
     }
 
+    const defaultProductName = bulkProductLabel?.trim() ? bulkProductLabel.trim() : null;
+
+    setImportDialogOpen(false);
     setImporting(true);
 
     try {
@@ -397,26 +854,31 @@ const Leads = () => {
         return;
       }
 
-      const payload = rows.map((row) => ({
-        user_id: user.id,
-        org_id: user.id,
-        created_by: user.id,
-        assigned_to: user.id,
-        full_name: row.full_name,
-        email: row.email,
-        phone_raw: row.phone_raw,
-        city: row.city,
-        postal_code: row.postal_code,
-        status: row.status ?? "Nouveau",
-        company: row.company ?? null,
-        product_name: row.product_name ?? null,
-        surface_m2: row.surface_m2 ?? null,
-        utm_source: row.utm_source ?? null,
-        commentaire: row.commentaire ?? null,
-        date_rdv: row.date_rdv ?? null,
-        heure_rdv: row.heure_rdv ?? null,
-        extra_fields: {},
-      }));
+      const payload = rows.map((row) => {
+        const rowProductName =
+          row.product_name && row.product_name.trim().length > 0 ? row.product_name.trim() : null;
+
+        return {
+          user_id: user.id,
+          org_id: user.id,
+          created_by: user.id,
+          assigned_to: user.id,
+          full_name: row.full_name,
+          email: row.email,
+          phone_raw: row.phone_raw,
+          city: row.city,
+          postal_code: row.postal_code,
+          status: row.status ?? "Nouveau",
+          company: row.company ?? null,
+          product_name: rowProductName ?? defaultProductName,
+          surface_m2: row.surface_m2 ?? null,
+          utm_source: row.utm_source ?? null,
+          commentaire: row.commentaire ?? null,
+          date_rdv: row.date_rdv ?? null,
+          heure_rdv: row.heure_rdv ?? null,
+          extra_fields: {},
+        };
+      });
 
       const { error: insertError } = await supabase.from("leads").insert(payload);
       if (insertError) throw insertError;
@@ -483,6 +945,90 @@ const Leads = () => {
 
   return (
     <Layout>
+      <Dialog
+        open={isImportDialogOpen}
+        onOpenChange={(open) => {
+          if (importing && open) return;
+          setImportDialogOpen(open);
+        }}
+      >
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Importer des leads CSV</DialogTitle>
+            <DialogDescription>
+              Importez un export Facebook Lead Ads ou un fichier CSV compatible.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Compatibilité Facebook</AlertTitle>
+              <AlertDescription>
+                Les champs essentiels (nom, email, téléphone, ville, code postal) sont détectés
+                automatiquement, y compris depuis la colonne <span className="font-medium">field_data</span>.
+              </AlertDescription>
+            </Alert>
+            <div className="space-y-2">
+              <Label htmlFor="import-product">Catégorie de produit</Label>
+              <Select
+                value={selectedImportProductId ?? SELECT_NONE_VALUE}
+                onValueChange={(value) => {
+                  if (value === SELECT_NONE_VALUE) {
+                    setSelectedImportProductId(null);
+                  } else if (value !== "__loading" && value !== "__empty") {
+                    setSelectedImportProductId(value);
+                  }
+                }}
+                disabled={productsLoading}
+              >
+                <SelectTrigger id="import-product">
+                  <SelectValue placeholder="Sélectionner une catégorie (optionnel)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SELECT_NONE_VALUE}>Aucune catégorie</SelectItem>
+                  {productsLoading ? (
+                    <SelectItem value="__loading" disabled>
+                      Chargement...
+                    </SelectItem>
+                  ) : productOptions.length > 0 ? (
+                    productOptions.map((product) => (
+                      <SelectItem key={product.id} value={product.id}>
+                        {product.label}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="__empty" disabled>
+                      Aucun produit actif
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {selectedImportProduct
+                  ? `Le produit ${selectedImportProduct.label} sera appliqué aux leads sans produit.`
+                  : "Laissez vide pour conserver le produit présent dans chaque ligne du CSV."}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setImportDialogOpen(false)}
+                disabled={importing}
+              >
+                Annuler
+              </Button>
+              <Button onClick={() => fileInputRef.current?.click()} disabled={importing}>
+                {importing ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <FileX className="w-4 h-4 mr-2" />
+                )}
+                {importing ? "Import en cours" : "Sélectionner un fichier CSV"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
       <input
         ref={fileInputRef}
         type="file"
