@@ -27,15 +27,31 @@ import { RichDescription } from "./RichDescription";
 import { TechnicalSheetUpload } from "./TechnicalSheetUpload";
 import { DynamicFieldsEditor } from "./DynamicFieldsEditor";
 
+const euroFormatter = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" });
+
 const productSchema = z.object({
   name: z.string().min(2, "Le nom est requis").max(200),
   code: z.string().max(120).optional(),
   category: z.string().optional().nullable(),
   description: z.string().max(15000, "La description ne peut pas dépasser 15 000 caractères").optional(),
+  custom_description_primary: z
+    .string()
+    .max(15000, "La description ne peut pas dépasser 15 000 caractères")
+    .optional()
+    .nullable(),
+  custom_description_secondary: z
+    .string()
+    .max(15000, "La description ne peut pas dépasser 15 000 caractères")
+    .optional()
+    .nullable(),
   is_active: z.boolean().default(true),
   unit_type: z.string().optional().nullable(),
   base_price_ht: z.number().optional().nullable(),
   tva_percentage: z.number().min(0).max(100).optional().nullable(),
+  prime_percentage: z.number().min(0).max(100).optional().nullable(),
+  eco_admin_percentage: z.number().min(0).max(100).optional().nullable(),
+  eco_furn_percentage: z.number().min(0).max(100).optional().nullable(),
+  eco_log_percentage: z.number().min(0).max(100).optional().nullable(),
   supplier_name: z.string().optional().nullable(),
   supplier_reference: z.string().optional().nullable(),
   technical_sheet_url: z.string().optional().nullable(),
@@ -74,10 +90,16 @@ export const ProductFormDialog = ({
       code: product?.code ?? "",
       category: product?.category ?? null,
       description: product?.description ?? "",
+      custom_description_primary: product?.custom_description_primary ?? "",
+      custom_description_secondary: product?.custom_description_secondary ?? "",
       is_active: product?.is_active ?? true,
       unit_type: product?.unit_type ?? null,
       base_price_ht: product?.base_price_ht ?? null,
-      tva_percentage: product?.tva_percentage ?? 20,
+      tva_percentage: product?.tva_percentage ?? 8.5,
+      prime_percentage: product?.prime_percentage ?? 0,
+      eco_admin_percentage: product?.eco_admin_percentage ?? 15,
+      eco_furn_percentage: product?.eco_furn_percentage ?? 5,
+      eco_log_percentage: product?.eco_log_percentage ?? 0,
       supplier_name: product?.supplier_name ?? null,
       supplier_reference: product?.supplier_reference ?? null,
       technical_sheet_url: product?.technical_sheet_url ?? null,
@@ -128,10 +150,16 @@ export const ProductFormDialog = ({
       code: values.code?.trim() || "",
       category: values.category,
       description: values.description?.trim() || null,
+      custom_description_primary: values.custom_description_primary?.trim() || null,
+      custom_description_secondary: values.custom_description_secondary?.trim() || null,
       is_active: values.is_active,
       unit_type: values.unit_type,
       base_price_ht: values.base_price_ht,
       tva_percentage: values.tva_percentage,
+      prime_percentage: values.prime_percentage ?? 0,
+      eco_admin_percentage: values.eco_admin_percentage ?? 0,
+      eco_furn_percentage: values.eco_furn_percentage ?? 0,
+      eco_log_percentage: values.eco_log_percentage ?? 0,
       supplier_name: values.supplier_name?.trim() || null,
       supplier_reference: values.supplier_reference?.trim() || null,
       technical_sheet_url: values.technical_sheet_url,
@@ -165,6 +193,39 @@ export const ProductFormDialog = ({
     }
     return null;
   }, [form.watch("base_price_ht"), form.watch("tva_percentage")]);
+
+  const ecoEstimation = useMemo(() => {
+    const basePrice = form.watch("base_price_ht");
+    if (basePrice === null || basePrice === undefined) {
+      return null;
+    }
+
+    const prime = form.watch("prime_percentage") ?? 0;
+    const admin = form.watch("eco_admin_percentage") ?? 0;
+    const furn = form.watch("eco_furn_percentage") ?? 0;
+    const log = form.watch("eco_log_percentage") ?? 0;
+
+    const safeBase = Number(basePrice);
+    if (Number.isNaN(safeBase)) {
+      return null;
+    }
+
+    const totalPercent = Number(prime || 0) + Number(admin || 0) + Number(furn || 0) + Number(log || 0);
+    const ecoCharges = safeBase * (totalPercent / 100);
+    const totalWithEco = safeBase + ecoCharges;
+
+    return {
+      totalPercent,
+      ecoCharges,
+      totalWithEco,
+    };
+  }, [
+    form.watch("base_price_ht"),
+    form.watch("prime_percentage"),
+    form.watch("eco_admin_percentage"),
+    form.watch("eco_furn_percentage"),
+    form.watch("eco_log_percentage"),
+  ]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -272,6 +333,48 @@ export const ProductFormDialog = ({
 
               <FormField
                 control={form.control}
+                name="custom_description_primary"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description personnalisée — bloc 1</FormLabel>
+                    <FormControl>
+                      <RichDescription
+                        value={field.value ?? ""}
+                        onChange={(value) => field.onChange(value)}
+                        disabled={isSubmitting}
+                      />
+                    </FormControl>
+                    <p className="text-xs text-muted-foreground px-1">
+                      Contenu additionnel utilisé pour enrichir les devis (section principale).
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="custom_description_secondary"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description personnalisée — bloc 2</FormLabel>
+                    <FormControl>
+                      <RichDescription
+                        value={field.value ?? ""}
+                        onChange={(value) => field.onChange(value)}
+                        disabled={isSubmitting}
+                      />
+                    </FormControl>
+                    <p className="text-xs text-muted-foreground px-1">
+                      Deuxième bloc de description pour les annexes ou précisions techniques.
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
                 name="is_active"
                 render={({ field }) => (
                   <FormItem className="flex items-center justify-between rounded-lg border p-4">
@@ -354,7 +457,7 @@ export const ProductFormDialog = ({
                           {...field}
                           value={field.value ?? ""}
                           onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
-                          placeholder="20.0"
+                          placeholder="8.5"
                           disabled={isSubmitting}
                         />
                       </FormControl>
@@ -371,6 +474,130 @@ export const ProductFormDialog = ({
                     className="bg-muted mt-2"
                   />
                 </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <FormField
+                  control={form.control}
+                  name="prime_percentage"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Part prime (%)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          {...field}
+                          value={field.value ?? ""}
+                          onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                          placeholder="0"
+                          disabled={isSubmitting}
+                        />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground px-1">Pourcentage appliqué pour caler le prix prime.</p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="eco_admin_percentage"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>ECO-ADMN (%)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          {...field}
+                          value={field.value ?? ""}
+                          onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                          placeholder="15"
+                          disabled={isSubmitting}
+                        />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground px-1">Frais administratifs (par défaut 15%).</p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="eco_furn_percentage"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>ECO-FURN (%)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          {...field}
+                          value={field.value ?? ""}
+                          onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                          placeholder="5"
+                          disabled={isSubmitting}
+                        />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground px-1">Frais de fourniture (par défaut 5%).</p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="eco_log_percentage"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>ECO-LOG (%)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          {...field}
+                          value={field.value ?? ""}
+                          onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                          placeholder="0"
+                          disabled={isSubmitting}
+                        />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground px-1">Logistique (défaut 0% - gratuit).</p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="rounded-lg border p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <FormLabel className="text-sm font-medium">Estimation charges ECO</FormLabel>
+                  {ecoEstimation ? (
+                    <span className="text-xs text-muted-foreground">
+                      {ecoEstimation.totalPercent.toFixed(2)}%
+                    </span>
+                  ) : null}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Calcul basé sur le prix HT et les pourcentages configurés ci-dessus.
+                </p>
+                {ecoEstimation ? (
+                  <div className="space-y-1 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span>Montant charges</span>
+                      <span>{euroFormatter.format(ecoEstimation.ecoCharges)}</span>
+                    </div>
+                    <div className="flex items-center justify-between font-medium">
+                      <span>Total HT (produit + charges)</span>
+                      <span>{euroFormatter.format(ecoEstimation.totalWithEco)}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Saisissez un prix de base pour obtenir une estimation.
+                  </p>
+                )}
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">

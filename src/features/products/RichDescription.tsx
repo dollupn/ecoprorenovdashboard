@@ -38,7 +38,24 @@ interface RichDescriptionProps {
   onLengthChange?: (length: number) => void;
 }
 
-const allowedTags = ["p", "b", "strong", "i", "em", "u", "h1", "h2", "h3", "ul", "ol", "li", "a", "br", "span"];
+const allowedTags = [
+  "p",
+  "b",
+  "strong",
+  "i",
+  "em",
+  "u",
+  "h1",
+  "h2",
+  "h3",
+  "ul",
+  "ol",
+  "li",
+  "a",
+  "br",
+  "span",
+  "div",
+];
 
 const sanitize = (html: string) =>
   sanitizeHtml(html, {
@@ -47,6 +64,7 @@ const sanitize = (html: string) =>
       a: ["href", "target", "rel"],
       span: ["style"],
       p: ["style"],
+      div: ["style"],
       h1: ["style"],
       h2: ["style"],
       h3: ["style"],
@@ -69,6 +87,10 @@ const sanitize = (html: string) =>
           rel: attribs.rel ?? "noopener noreferrer",
           target: attribs.target ?? "_blank",
         },
+      }),
+      div: (tagName, attribs) => ({
+        tagName: "p",
+        attribs,
       }),
     },
   });
