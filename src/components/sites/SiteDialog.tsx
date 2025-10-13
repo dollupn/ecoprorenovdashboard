@@ -1,7 +1,26 @@
-import { useEffect, useMemo } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useCallback, useEffect, useMemo, type CSSProperties } from "react";
+import {
+  useForm,
+  useFieldArray,
+  type Control,
+  type FieldArrayWithId,
+} from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
   Dialog,
   DialogContent,
@@ -27,7 +46,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2 } from "lucide-react";
+import { GripVertical, Plus, Trash2 } from "lucide-react";
 
 const teamMemberSchema = z.object({
   name: z.string().min(1, "Le nom est requis"),
@@ -137,6 +156,164 @@ const defaultValues: SiteFormValues = {
   additional_costs: [],
 };
 
+interface SortableTeamMemberFieldProps {
+  field: FieldArrayWithId<SiteFormValues, "team_members">;
+  index: number;
+  control: Control<SiteFormValues>;
+  remove: (index: number) => void;
+  canRemove: boolean;
+}
+
+const SortableTeamMemberField = ({
+  field,
+  index,
+  control,
+  remove,
+  canRemove,
+}: SortableTeamMemberFieldProps) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: field.id,
+  });
+
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-start gap-2 rounded-md border bg-background/60 p-2 transition ${
+        isDragging ? "ring-2 ring-primary/40" : ""
+      }`}
+    >
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="mt-1 cursor-grab active:cursor-grabbing"
+        aria-label="Réorganiser le membre de l'équipe"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-4 w-4" />
+      </Button>
+      <FormField
+        control={control}
+        name={`team_members.${index}.name`}
+        render={({ field: memberField }) => (
+          <FormItem className="flex-1">
+            <FormControl>
+              <Input placeholder="Nom du membre" {...memberField} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+      {canRemove ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={() => remove(index)}
+          aria-label="Supprimer le membre"
+        >
+          <Trash2 className="w-4 h-4" />
+        </Button>
+      ) : null}
+    </div>
+  );
+};
+
+interface SortableAdditionalCostRowProps {
+  field: FieldArrayWithId<SiteFormValues, "additional_costs">;
+  index: number;
+  control: Control<SiteFormValues>;
+  remove: (index: number) => void;
+  canRemove: boolean;
+}
+
+const SortableAdditionalCostRow = ({
+  field,
+  index,
+  control,
+  remove,
+  canRemove,
+}: SortableAdditionalCostRowProps) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: field.id,
+  });
+
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`rounded-md border bg-background/60 p-3 transition ${
+        isDragging ? "ring-2 ring-primary/40" : ""
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="mt-1 cursor-grab active:cursor-grabbing"
+          aria-label="Réorganiser le coût supplémentaire"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-4 w-4" />
+        </Button>
+        <div className="grid flex-1 grid-cols-1 gap-2 md:grid-cols-7 md:items-start">
+          <FormField
+            control={control}
+            name={`additional_costs.${index}.label`}
+            render={({ field: labelField }) => (
+              <FormItem className="md:col-span-4">
+                <FormControl>
+                  <Input placeholder="Intitulé du coût" {...labelField} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={control}
+            name={`additional_costs.${index}.amount`}
+            render={({ field: amountField }) => (
+              <FormItem className="md:col-span-2">
+                <FormControl>
+                  <Input type="number" min={0} {...amountField} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          {canRemove ? (
+            <div className="flex justify-end md:col-span-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => remove(index)}
+                aria-label="Supprimer le coût"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const statusOptions = [
   { value: "PLANIFIE", label: "Planifié" },
   { value: "EN_PREPARATION", label: "En préparation" },
@@ -192,6 +369,7 @@ export const SiteDialog = ({
     fields: teamMemberFields,
     append: appendTeamMember,
     remove: removeTeamMember,
+    move: moveTeamMember,
   } = useFieldArray({
     control: form.control,
     name: "team_members",
@@ -201,10 +379,62 @@ export const SiteDialog = ({
     fields: costFields,
     append: appendCost,
     remove: removeCost,
+    move: moveCost,
   } = useFieldArray({
     control: form.control,
     name: "additional_costs",
   });
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    })
+  );
+
+  const teamMemberIds = useMemo(() => teamMemberFields.map((field) => field.id), [teamMemberFields]);
+  const costIds = useMemo(() => costFields.map((field) => field.id), [costFields]);
+
+  const handleTeamMemberDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+
+      if (!over || active.id === over.id) {
+        return;
+      }
+
+      const activeIndex = teamMemberIds.findIndex((id) => id === active.id);
+      const overIndex = teamMemberIds.findIndex((id) => id === over.id);
+
+      if (activeIndex === -1 || overIndex === -1 || activeIndex === overIndex) {
+        return;
+      }
+
+      moveTeamMember(activeIndex, overIndex);
+    },
+    [teamMemberIds, moveTeamMember]
+  );
+
+  const handleCostDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+
+      if (!over || active.id === over.id) {
+        return;
+      }
+
+      const activeIndex = costIds.findIndex((id) => id === active.id);
+      const overIndex = costIds.findIndex((id) => id === over.id);
+
+      if (activeIndex === -1 || overIndex === -1 || activeIndex === overIndex) {
+        return;
+      }
+
+      moveCost(activeIndex, overIndex);
+    },
+    [costIds, moveCost]
+  );
 
   const handleSubmit = (values: SiteFormValues) => {
     const filteredTeamMembers = values.team_members.filter(
@@ -538,34 +768,36 @@ export const SiteDialog = ({
 
             <div className="space-y-2">
               <FormLabel>Équipe chantier</FormLabel>
+              {teamMemberFields.length > 1 ? (
+                <p className="text-xs text-muted-foreground">
+                  Faites glisser les membres pour définir l&apos;ordre de votre équipe.
+                </p>
+              ) : null}
               <div className="space-y-3">
-                {teamMemberFields.map((field, index) => (
-                  <FormField
-                    key={field.id}
-                    control={form.control}
-                    name={`team_members.${index}.name`}
-                    render={({ field: memberField }) => (
-                      <FormItem>
-                        <div className="flex items-center gap-2">
-                          <FormControl>
-                            <Input placeholder="Nom du membre" {...memberField} />
-                          </FormControl>
-                          {teamMemberFields.length > 1 && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => removeTeamMember(index)}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          )}
-                        </div>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                ))}
+                {teamMemberFields.length === 0 ? (
+                  <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
+                    Ajoutez les membres composant l&apos;équipe chantier.
+                  </div>
+                ) : (
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleTeamMemberDragEnd}
+                  >
+                    <SortableContext items={teamMemberIds} strategy={verticalListSortingStrategy}>
+                      {teamMemberFields.map((field, index) => (
+                        <SortableTeamMemberField
+                          key={field.id}
+                          field={field}
+                          index={index}
+                          control={form.control}
+                          remove={removeTeamMember}
+                          canRemove={teamMemberFields.length > 1}
+                        />
+                      ))}
+                    </SortableContext>
+                  </DndContext>
+                )}
               </div>
               <Button
                 type="button"
@@ -580,46 +812,32 @@ export const SiteDialog = ({
 
             <div className="space-y-2">
               <FormLabel>Coûts supplémentaires</FormLabel>
+              {costFields.length > 1 ? (
+                <p className="text-xs text-muted-foreground">
+                  Réorganisez l&apos;affichage des coûts en les faisant glisser.
+                </p>
+              ) : null}
               <div className="space-y-3">
-                {costFields.map((field, index) => (
-                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-6 gap-2 items-start">
-                    <FormField
-                      control={form.control}
-                      name={`additional_costs.${index}.label`}
-                      render={({ field: labelField }) => (
-                        <FormItem className="md:col-span-4">
-                          <FormControl>
-                            <Input placeholder="Intitulé du coût" {...labelField} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name={`additional_costs.${index}.amount`}
-                      render={({ field: amountField }) => (
-                        <FormItem className="md:col-span-2">
-                          <FormControl>
-                            <Input type="number" min={0} {...amountField} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    {costFields.length > 0 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeCost(index)}
-                        className="md:col-span-1"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
+                {costFields.length === 0 ? null : (
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleCostDragEnd}
+                  >
+                    <SortableContext items={costIds} strategy={verticalListSortingStrategy}>
+                      {costFields.map((field, index) => (
+                        <SortableAdditionalCostRow
+                          key={field.id}
+                          field={field}
+                          index={index}
+                          control={form.control}
+                          remove={removeCost}
+                          canRemove={costFields.length > 0}
+                        />
+                      ))}
+                    </SortableContext>
+                  </DndContext>
+                )}
               </div>
               <Button
                 type="button"
