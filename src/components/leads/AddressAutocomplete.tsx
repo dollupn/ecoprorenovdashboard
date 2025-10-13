@@ -35,11 +35,17 @@ export function AddressAutocomplete({ value, onChange, disabled }: AddressAutoco
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
+        // Ajouter "974" à la recherche pour filtrer La Réunion
+        const searchQuery = `${search} 974`;
         const response = await fetch(
-          `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(search)}&postcode=974*&limit=10`
+          `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(searchQuery)}&limit=10`
         );
         const data = await response.json();
-        setSuggestions(data.features || []);
+        // Filtrer uniquement les résultats de La Réunion (codes postaux commençant par 974)
+        const reunionResults = (data.features || []).filter((feature: Address) => 
+          feature.properties.postcode?.startsWith('974')
+        );
+        setSuggestions(reunionResults);
       } catch (error) {
         console.error("Erreur lors de la recherche d'adresse:", error);
         setSuggestions([]);
