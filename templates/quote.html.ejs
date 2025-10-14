@@ -11,9 +11,9 @@
 
       body {
         font-family: "Inter", "Roboto", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-        color: #1d1f24;
-        font-size: 11pt;
-        line-height: 1.45;
+        color: #000000;
+        font-size: 10pt;
+        line-height: 1.4;
         margin: 0;
         padding: 0;
         -webkit-print-color-adjust: exact;
@@ -48,15 +48,19 @@
       }
 
       .header-title h1 {
-        font-size: 28pt;
+        font-size: 24pt;
         margin: 0;
-        text-transform: uppercase;
         font-weight: 700;
-        letter-spacing: 0.5pt;
+        letter-spacing: 0;
+        color: #000000;
       }
 
-      .header-title span {
-        color: #1d1f24;
+      .header-title .expert-tag {
+        font-size: 8pt;
+        text-transform: uppercase;
+        letter-spacing: 1pt;
+        color: #000000;
+        font-weight: 600;
       }
 
       .header-brand {
@@ -140,7 +144,8 @@
       }
 
       .items-table tbody tr {
-        border-bottom: 1px solid #e2e5eb;
+        border-bottom: 1px solid #d4d7dd;
+        page-break-inside: avoid;
       }
 
       .items-table tbody tr:last-child {
@@ -230,11 +235,11 @@
       }
 
       .totals-row.net {
-        margin-top: 6mm;
-        padding-top: 4mm;
-        border-top: 1px solid #d4d7dd;
+        margin-top: 3mm;
+        padding-top: 3mm;
+        border-top: 2px solid #000000;
         font-weight: 700;
-        font-size: 12pt;
+        font-size: 11pt;
       }
 
       .signature-card {
@@ -394,7 +399,8 @@
         <div class="header-meta">
           <div class="header-title">
             <p class="header-brand">Ecoprorenove (EB.CONSEILS) - Devis #<%= quote.number %></p>
-            <h1>Devis <span>#<%= quote.number %></span></h1>
+            <p class="expert-tag">EXPERT DE LA TRANSITION ÉNERGÉTIQUE</p>
+            <h1>Devis #<%= quote.number %></h1>
           </div>
           <div class="header-right">
             <span><%= quote.city %>, le <%= quote.date %></span>
@@ -427,11 +433,10 @@
             <% } %>
           </div>
           <div class="party-block">
-            <h2><%= company.label %></h2>
+            <h2>ECOPRORENOVE</h2>
             <p><%= company.address1 %></p>
             <p><%= company.postcode_city %></p>
-            <p>Tél. : <%= company.phone %></p>
-            <p class="mt-6"><span class="text-uppercase">Bon de commande</span> : <%= quote.number %></p>
+            <p><%= company.phone %></p>
           </div>
         </div>
       </header>
@@ -466,87 +471,70 @@
           </table>
         </section>
 
-        <section class="summary-grid avoid-break">
-          <div class="totals-card">
-            <h3>Récapitulatif financier</h3>
-            <div class="totals-row">
-              <span>Total HT</span>
-              <span><%= totals.total_ht %></span>
-            </div>
-            <div class="totals-row">
-              <span>TVA <%= totals.vat_rate_label %></span>
-              <span><%= totals.vat_amount %></span>
-            </div>
-            <div class="totals-row">
-              <span>Total TTC</span>
-              <span><%= totals.total_ttc %></span>
-            </div>
-            <div class="totals-row">
-              <span>Remise</span>
-              <span><%= totals.discount_amount %></span>
-            </div>
-            <div class="totals-row">
-              <span>Prime CEE</span>
-              <span><%= totals.cee_prime_amount %></span>
-            </div>
-            <div class="totals-row net">
-              <span>Net à payer</span>
-              <span><%= totals.net_to_pay %></span>
-            </div>
-          </div>
-          <div class="signature-card">
-            <div>
-              <div class="block-title">Validité & signature</div>
-              <p>Fait à : <strong><%= quote.city %></strong></p>
-              <p>Le : <strong><%= quote.date %></strong></p>
-              <p>Offre valable jusqu'au <strong><%= quote.valid_until %></strong></p>
-            </div>
-            <div class="signature-frame">
-              <span>Bon pour accord et signature</span>
-            </div>
-            <div>
-              <p><strong>Coordonnées bancaires</strong></p>
-              <p>IBAN : <%= company.bank_iban %></p>
-              <p>BIC : <%= company.bank_bic %></p>
-            </div>
+        <section class="avoid-break" style="margin-top: 10mm;">
+          <div style="text-align: right; font-size: 10pt;">
+            <table style="width: 100%; max-width: 400px; margin-left: auto; border-collapse: collapse;">
+              <tbody>
+                <tr style="border-bottom: 1px solid #d4d7dd;">
+                  <td style="padding: 2mm 4mm; text-align: left;">Total HT</td>
+                  <td style="padding: 2mm 4mm; text-align: right; font-weight: 600;"><%= totals.total_ht %></td>
+                </tr>
+                <tr style="border-bottom: 1px solid #d4d7dd;">
+                  <td style="padding: 2mm 4mm; text-align: left;">TVA <%= totals.vat_rate_label %></td>
+                  <td style="padding: 2mm 4mm; text-align: right; font-weight: 600;"><%= totals.vat_amount %></td>
+                </tr>
+                <tr style="border-bottom: 1px solid #d4d7dd;">
+                  <td style="padding: 2mm 4mm; text-align: left;">Total TTC</td>
+                  <td style="padding: 2mm 4mm; text-align: right; font-weight: 600;"><%= totals.total_ttc %></td>
+                </tr>
+                <tr style="border-bottom: 1px solid #d4d7dd;">
+                  <td style="padding: 2mm 4mm; text-align: left;">REMISE</td>
+                  <td style="padding: 2mm 4mm; text-align: right; font-weight: 600;"><%= totals.discount_amount %></td>
+                </tr>
+                <tr style="border-bottom: 1px solid #d4d7dd;">
+                  <td style="padding: 2mm 4mm; text-align: left;">PRIME CEE</td>
+                  <td style="padding: 2mm 4mm; text-align: right; font-weight: 600;"><%= totals.cee_prime_amount %></td>
+                </tr>
+                <tr style="border-top: 2px solid #000000;">
+                  <td style="padding: 3mm 4mm; text-align: left; font-weight: 700; font-size: 11pt;">Net à payer</td>
+                  <td style="padding: 3mm 4mm; text-align: right; font-weight: 700; font-size: 11pt;"><%= totals.net_to_pay %></td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </section>
 
-        <section class="info-grid mt-8">
-          <div class="info-card">
-            <div class="block-title">Caractéristiques bâtiment</div>
-            <p>Type : <strong><%= building.type %></strong></p>
-            <p>Usage : <strong><%= building.usage %></strong></p>
-            <p>Surface totale : <strong><%= building.surface_total %> m²</strong></p>
-            <p>Surface traitée : <strong><%= building.surface_operation %> m²</strong></p>
-          </div>
-          <div class="info-card">
-            <div class="block-title">Contacts & planification</div>
-            <% if (client.contact_name) { %>
-              <p>Signataire : <strong><%= client.contact_name %></strong></p>
-            <% } %>
-            <% if (client.contact_role) { %>
-              <p>Statut : <strong><%= client.contact_role %></strong></p>
-            <% } %>
-            <% if (client.phone) { %>
-              <p>Téléphone : <strong><%= client.phone %></strong></p>
-            <% } %>
-            <% if (client.email) { %>
-              <p>Email : <strong><%= client.email %></strong></p>
-            <% } %>
-            <p>Date prévue des travaux : <strong><%= quote.scheduled_date %></strong></p>
-          </div>
-        </section>
-
-        <section class="info-grid mt-8">
-          <div class="info-card">
-            <div class="block-title">Prime CEE</div>
-            <p><%= notes.prime_cee %></p>
-          </div>
-          <div class="info-card">
-            <div class="block-title">Modalités de règlement</div>
-            <p><%= notes.payment_terms %></p>
-          </div>
+        <section style="margin-top: 10mm; font-size: 9.5pt; line-height: 1.5;">
+          <p style="margin: 0 0 2mm;"><strong>Type de bâtiment :</strong> <%= building.type %></p>
+          <p style="margin: 0 0 2mm;"><strong>Usage :</strong> <%= building.usage %></p>
+          <p style="margin: 0 0 2mm;"><strong>Surface totale du bâtiment :</strong> <%= building.surface_total %> m²</p>
+          <p style="margin: 0 0 2mm;"><strong>Surface couverte par l'opération :</strong> <%= building.surface_operation %> m²</p>
+          
+          <% if (client.contact_name) { %>
+            <p style="margin: 4mm 0 2mm;"><strong>Nom du signataire :</strong> <%= client.contact_name %><% if (client.contact_role) { %> (<%= client.contact_role %>)<% } %></p>
+          <% } %>
+          
+          <% if (client.phone || client.email) { %>
+            <p style="margin: 0 0 2mm;"><strong>Coordonnées :</strong> 
+              <% if (client.phone) { %><%= client.phone %><% } %>
+              <% if (client.phone && client.email) { %> - <% } %>
+              <% if (client.email) { %><%= client.email %><% } %>
+            </p>
+          <% } %>
+          
+          <% if (client.tenant_note) { %>
+            <p style="margin: 0 0 2mm;"><strong>Locataire :</strong> <%= client.tenant_note %></p>
+          <% } %>
+          
+          <p style="margin: 4mm 0 2mm;"><strong>Date prévue des travaux :</strong> <%= quote.scheduled_date %></p>
+          
+          <p style="margin: 4mm 0 2mm;"><strong>Modalités et conditions de règlement :</strong> <%= notes.payment_terms %></p>
+          
+          <p style="margin: 4mm 0 2mm;"><strong>Code B.I.C :</strong> <%= company.bank_bic %></p>
+          <p style="margin: 0 0 2mm;"><strong>Code I.B.A.N :</strong> <%= company.bank_iban %></p>
+          
+          <p style="margin: 6mm 0 2mm;">Ce devis est valable 30 jours.</p>
+          <p style="margin: 0; font-size: 9pt; font-style: italic;">Toute commande est soumise à l'acceptation préalable de nos conditions générales de vente</p>
         </section>
       </main>
 

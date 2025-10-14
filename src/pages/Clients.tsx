@@ -368,7 +368,7 @@ const fetchClients = async (
     setIfEmpty(aggregate, "city", lead.city);
     setIfEmpty(aggregate, "postalCode", lead.postal_code);
 
-    aggregate.leads.push(lead);
+    aggregate.leads.push(lead as any);
     if (lead.utm_source) {
       aggregate.utmSources.add(lead.utm_source);
     }
@@ -395,7 +395,7 @@ const fetchClients = async (
     setIfEmpty(aggregate, "city", project.city);
     setIfEmpty(aggregate, "postalCode", project.postal_code);
 
-    aggregate.projects.push(project);
+    aggregate.projects.push(project as any);
     if (project.status) {
       aggregate.rawStatuses.add(project.status);
     }
@@ -413,7 +413,7 @@ const fetchClients = async (
 
     setIfEmpty(aggregate, "name", quote.client_name ?? "");
 
-    aggregate.quotes.push(quote);
+    aggregate.quotes.push(quote as any);
     if (quote.status) {
       aggregate.rawStatuses.add(quote.status);
     }
@@ -431,7 +431,7 @@ const fetchClients = async (
 
     setIfEmpty(aggregate, "name", site.client_name ?? "");
 
-    aggregate.sites.push(site);
+    aggregate.sites.push(site as any);
     if (site.status) {
       aggregate.rawStatuses.add(site.status);
     }
@@ -449,7 +449,7 @@ const fetchClients = async (
 
     setIfEmpty(aggregate, "name", invoice.client_name ?? "");
 
-    aggregate.invoices.push(invoice);
+    aggregate.invoices.push(invoice as any);
     if (invoice.status) {
       aggregate.rawStatuses.add(invoice.status);
     }

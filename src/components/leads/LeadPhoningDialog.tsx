@@ -187,7 +187,7 @@ export const LeadPhoningDialog = ({ lead, onCompleted }: LeadPhoningDialogProps)
       await updateLead.mutateAsync({
         id: lead.id,
         values: {
-          extra_fields: updatedExtraFields,
+          extra_fields: updatedExtraFields as any,
           status: values.next_status,
           updated_at: new Date().toISOString(),
         },

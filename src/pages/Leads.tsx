@@ -79,7 +79,8 @@ const CARD_SKELETON_COUNT = 4;
 
 const SELECT_NONE_VALUE = "__none" as const;
 
-type LeadRecord = Tables<"leads"> & { extra_fields?: Record<string, unknown> | null };
+type LeadRecord = Tables<"leads">;
+type LeadWithExtras = LeadRecord & { extra_fields?: Record<string, unknown> | null };
 
 type CsvLead = {
   full_name: string;
@@ -889,6 +890,7 @@ const Leads = () => {
           date_rdv: row.date_rdv ?? null,
           heure_rdv: row.heure_rdv ?? null,
           extra_fields: {},
+          siren: null,
         };
       });
 
@@ -1270,8 +1272,8 @@ const Leads = () => {
                         Créé le {new Date(lead.created_at).toLocaleDateString("fr-FR")}
                       </span>
                       <div className="flex flex-wrap gap-2 justify-end">
-                        <LeadPhoningDialog lead={lead} onCompleted={handlePhoningCompleted} />
-                        <ScheduleLeadDialog lead={lead} onScheduled={handleLeadScheduled} />
+                        <LeadPhoningDialog lead={lead as LeadWithExtras} onCompleted={handlePhoningCompleted} />
+                        <ScheduleLeadDialog lead={lead as LeadWithExtras} onScheduled={handleLeadScheduled} />
                         <AddProjectDialog
                           trigger={<Button size="sm">Créer Projet</Button>}
                           initialValues={{
@@ -1281,9 +1283,9 @@ const Leads = () => {
                             city: lead.city,
                             postal_code: lead.postal_code,
                             surface_batiment_m2: lead.surface_m2 ?? undefined,
-                            lead_id: lead.id,
-                          }}
-                          onProjectAdded={() => handleProjectCreated(lead)}
+                                lead_id: lead.id,
+                              }}
+                              onProjectAdded={() => handleProjectCreated(lead as LeadWithExtras)}
                         />
                       </div>
                     </div>
@@ -1388,8 +1390,8 @@ const Leads = () => {
                               Créé le {new Date(lead.created_at).toLocaleDateString("fr-FR")}
                             </span>
                             <div className="flex flex-wrap gap-2 justify-end">
-                              <LeadPhoningDialog lead={lead} onCompleted={handlePhoningCompleted} />
-                              <ScheduleLeadDialog lead={lead} onScheduled={handleLeadScheduled} />
+                              <LeadPhoningDialog lead={lead as LeadWithExtras} onCompleted={handlePhoningCompleted} />
+                              <ScheduleLeadDialog lead={lead as LeadWithExtras} onScheduled={handleLeadScheduled} />
                               <AddProjectDialog
                                 trigger={<Button size="sm">Créer Projet</Button>}
                                 initialValues={{
@@ -1401,7 +1403,7 @@ const Leads = () => {
                                   surface_batiment_m2: lead.surface_m2 ?? undefined,
                                   lead_id: lead.id,
                                 }}
-                                onProjectAdded={() => handleProjectCreated(lead)}
+                                onProjectAdded={() => handleProjectCreated(lead as LeadWithExtras)}
                               />
                             </div>
                           </div>

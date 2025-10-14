@@ -130,7 +130,7 @@ export class QuotesPdfService {
 
   private async generatePdfFromHtml(html: string): Promise<Buffer> {
     const browser = await puppeteer.launch({
-      headless: "new",
+      headless: true,
       args: ["--no-sandbox", "--font-render-hinting=none", "--disable-setuid-sandbox"],
     });
 
@@ -138,7 +138,7 @@ export class QuotesPdfService {
       const page = await browser.newPage();
       await page.setContent(html, { waitUntil: "networkidle0" });
 
-      const buffer = await page.pdf({
+      const pdfBuffer = await page.pdf({
         format: "A4",
         printBackground: true,
         margin: {
@@ -150,7 +150,7 @@ export class QuotesPdfService {
       });
 
       await page.close();
-      return buffer;
+      return Buffer.from(pdfBuffer);
     } finally {
       await browser.close();
     }
