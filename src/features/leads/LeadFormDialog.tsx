@@ -44,8 +44,8 @@ import {
 import { DynamicFields } from "./DynamicFields";
 import {
   getOrganizationMembers,
-  getOrganizationProducts,
   useCreateLead,
+  useLeadProductTypes,
 } from "./api";
 import type { TablesInsert } from "@/integrations/supabase/types";
 import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
@@ -139,7 +139,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
     }
   }, [user?.id, form]);
 
-  const { data: products } = useQueryOrganizationProducts(orgId);
+  const { data: productTypes } = useLeadProductTypes(orgId);
   const { data: members } = useQueryOrganizationMembers(orgId);
 
   const currentMemberRole = useMemo(() => {
@@ -157,10 +157,10 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
   }, [productType, form]);
 
   useEffect(() => {
-    if (!form.getValues("product_type") && products?.length === 1) {
-      form.setValue("product_type", products[0].category ?? products[0].name);
+    if (!form.getValues("product_type") && productTypes?.length === 1) {
+      form.setValue("product_type", productTypes[0].name);
     }
-  }, [products, form]);
+  }, [productTypes, form]);
 
   const createLead = useCreateLead(orgId);
 
@@ -178,15 +178,9 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
 
     form.clearErrors();
 
-    const selectedProduct = products?.find((product) => {
-      return (
-        product.category === values.product_type ||
-        product.name === values.product_type ||
-        product.id === values.product_type
-      );
-    });
     const normalizedSiren = values.siren.replace(/\s+/g, "").trim();
     const fullName = `${values.first_name} ${values.last_name}`.replace(/\s+/g, " ").trim();
+    const selectedProductType = values.product_type.trim();
     const parseDimension = (input?: string) => {
       if (!input || input.trim() === "") return null;
       const normalized = input.replace(/,/g, ".").trim();
@@ -226,8 +220,8 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         status: values.status,
         company: values.company?.trim() ? values.company : null,
         siren: normalizedSiren,
-        product_name: selectedProduct?.label ?? values.product_type,
-        product_type: selectedProduct?.category ?? values.product_type,
+        product_name: selectedProductType,
+        product_type: selectedProductType,
         utm_source: values.utm_source?.trim() ? values.utm_source : null,
         commentaire: values.commentaire?.trim() ? values.commentaire : null,
         remarks: values.remarks?.trim() ? values.remarks : null,
@@ -259,7 +253,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         address: "",
         city: "",
         postal_code: "",
-        product_type: products?.length === 1 ? (products[0].category ?? products[0].name) : "",
+        product_type: productTypes?.length === 1 ? productTypes[0].name : "",
         utm_source: "",
         status: "À rappeler",
         commentaire: "",
@@ -319,7 +313,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         address: "",
         city: "",
         postal_code: "",
-        product_type: products?.length === 1 ? (products[0].category ?? products[0].name) : "",
+        product_type: productTypes?.length === 1 ? productTypes[0].name : "",
         utm_source: "",
         status: "À rappeler",
         commentaire: "",
@@ -504,27 +498,24 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
                     <Select
                       onValueChange={(value) => field.onChange(value)}
                       value={field.value}
-                      disabled={isSubmitting || !products?.length}
+                      disabled={isSubmitting || !productTypes?.length}
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner un produit" />
+                          <SelectValue placeholder="Sélectionner un type de produit" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {(products ?? []).map((product) => (
-                          <SelectItem
-                            key={product.id}
-                            value={product.category ?? product.name ?? product.id}
-                          >
-                            {product.label}
+                        {(productTypes ?? []).map((type) => (
+                          <SelectItem key={type.id} value={type.name}>
+                            {type.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    {!products?.length ? (
+                    {!productTypes?.length ? (
                       <p className="text-xs text-muted-foreground">
-                        Aucun produit disponible. Ajoutez des produits dans le catalogue.
+                        Aucun type de produit disponible. Ajoutez des types dans les paramètres des leads.
                       </p>
                     ) : null}
                     <FormMessage />
@@ -739,7 +730,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
               <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={isSubmitting}>
                 Annuler
               </Button>
-              <Button type="submit" disabled={isSubmitting || !products?.length}>
+              <Button type="submit" disabled={isSubmitting || !productTypes?.length}>
                 {isSubmitting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -757,15 +748,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
   );
 };
 
-type ProductsResult = Awaited<ReturnType<typeof getOrganizationProducts>>;
 type MembersResult = Awaited<ReturnType<typeof getOrganizationMembers>>;
-
-const useQueryOrganizationProducts = (orgId: string | null) =>
-  useQuery<ProductsResult, Error>({
-    queryKey: ["products", orgId],
-    queryFn: () => getOrganizationProducts(orgId as string),
-    enabled: Boolean(orgId),
-  });
 
 const useQueryOrganizationMembers = (orgId: string | null) =>
   useQuery<MembersResult, Error>({
