@@ -185,6 +185,10 @@ const Projects = () => {
       quote_ref: project.project_ref
         ? `${project.project_ref}-DEV`
         : undefined,
+      client_phone: project.phone ?? "",
+      site_address: "", // Will be derived from city/postal_code if needed
+      site_city: project.city ?? "",
+      site_postal_code: project.postal_code ?? "",
     });
     setQuoteDialogOpen(true);
   };

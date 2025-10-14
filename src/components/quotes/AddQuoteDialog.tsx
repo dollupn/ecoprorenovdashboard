@@ -434,6 +434,11 @@ export const AddQuoteDialog = ({
     const values: QuoteFormValues = {
       ...baseDefaultValues,
       ...initialValues,
+      client_email: initialValues?.client_email ?? "",
+      client_phone: initialValues?.client_phone ?? "",
+      site_address: initialValues?.site_address ?? "",
+      site_city: initialValues?.site_city ?? "",
+      site_postal_code: initialValues?.site_postal_code ?? "",
     } as QuoteFormValues;
 
     if (typeof initialValues?.amount === "number") {

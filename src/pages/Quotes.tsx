@@ -407,35 +407,6 @@ const Quotes = () => {
           </CardContent>
         </Card>
 
-        <Card className="shadow-card bg-gradient-card border-0">
-          <CardHeader>
-            <CardTitle>Parcours opérationnel</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Le devis s'inscrit dans la chaîne Lead → Projet → Devis → Chantier → Appel à Facture → Facture.
-            </p>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-stretch">
-              {processSteps.map((step, index) => {
-                const Icon = step.icon;
-                return (
-                  <div key={step.label} className="flex items-center gap-3">
-                    <div className="flex items-center gap-3 rounded-lg border bg-background/60 px-4 py-3 shadow-sm">
-                      <Icon className="h-5 w-5 text-primary" />
-                      <div>
-                        <p className="font-medium text-sm">{step.label}</p>
-                        <p className="text-xs text-muted-foreground">{step.description}</p>
-                      </div>
-                    </div>
-                    {index < processSteps.length - 1 && (
-                      <ArrowRight className="hidden md:block h-4 w-4 text-muted-foreground" />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Error state */}
         {isError && (
@@ -453,9 +424,9 @@ const Quotes = () => {
           </Alert>
         )}
 
-        {/* Table + Side actions */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          <Card className="shadow-card bg-gradient-card border-0 xl:col-span-2">
+        {/* Table */}
+        <div className="grid grid-cols-1 gap-6">
+          <Card className="shadow-card bg-gradient-card border-0">
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle>
@@ -489,7 +460,7 @@ const Quotes = () => {
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
-                      <TableRow>
+                       <TableRow>
                         <TableHead>Référence</TableHead>
                         <TableHead>Client</TableHead>
                         <TableHead>Projet</TableHead>
@@ -497,7 +468,7 @@ const Quotes = () => {
                         <TableHead className="text-right">Montant</TableHead>
                         <TableHead>Statut</TableHead>
                         <TableHead>Validité</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
+                        <TableHead className="text-center">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -615,53 +586,7 @@ const Quotes = () => {
             </CardContent>
           </Card>
 
-          <Card className="shadow-card bg-gradient-card border-0">
-            <CardHeader>
-              <CardTitle>Prochaines actions</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex gap-3 p-3 rounded-lg border bg-background/60">
-                <Send className="w-5 h-5 text-blue-500 mt-1" />
-                <div>
-                  <p className="font-medium">Relancer les devis envoyés</p>
-                  <p className="text-sm text-muted-foreground">
-                    {metrics.sent} devis en attente de réponse
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-3 p-3 rounded-lg border bg-background/60">
-                <CheckCircle2 className="w-5 h-5 text-green-500 mt-1" />
-                <div>
-                  <p className="font-medium">Convertir en facture</p>
-                  <p className="text-sm text-muted-foreground">
-                    {metrics.accepted} devis acceptés prêts à être transformés
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-3 p-3 rounded-lg border bg-background/60">
-                <Timer className="w-5 h-5 text-orange-500 mt-1" />
-                <div>
-                  <p className="font-medium">Expiration prochaine (≤ 7 jours)</p>
-                  <p className="text-sm text-muted-foreground">
-                    {metrics.upcomingExpiry} devis à vérifier
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </div>
-
-        <Card className="shadow-card border-0">
-          <CardHeader>
-            <CardTitle>Aperçu Devis (gabarit)</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Modèle visuel aligné sur le gabarit facture pour générer les PDF et assurer la continuité commerciale.
-            </p>
-          </CardHeader>
-          <CardContent className="bg-slate-100">
-            <QuotePreview />
-          </CardContent>
-        </Card>
       </div>
 
       <QuoteDetailsDrawer
