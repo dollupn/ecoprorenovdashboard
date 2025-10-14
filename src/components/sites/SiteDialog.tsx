@@ -73,10 +73,7 @@ const siteSchema = z.object({
   site_ref: z.string().min(3, "Référence requise"),
   project_ref: z.string().min(3, "Référence projet requise"),
   client_name: z.string().min(2, "Client requis"),
-  product_name: z
-    .string()
-    .optional()
-    .nullable(),
+  product_name: z.string().optional().nullable(),
   address: z.string().min(3, "Adresse requise"),
   city: z.string().min(2, "Ville requise"),
   postal_code: z.string().min(4, "Code postal invalide"),
@@ -348,9 +345,8 @@ const SortableAdditionalCostRow = ({
                       className="hidden"
                       onChange={(event) => {
                         const file = event.target.files?.[0];
-                        if (!file) {
-                          return;
-                        }
+                        if (!file) return;
+                        // Replace with your upload logic; we keep file name as placeholder
                         attachmentField.onChange(file.name);
                         event.target.value = "";
                       }}
@@ -417,8 +413,8 @@ export const SiteDialog = ({
       initialValues?.additional_costs && initialValues.additional_costs.length > 0
         ? initialValues.additional_costs.map((cost) => ({
             label: cost.label,
-            amount_ht: Number.isFinite(cost.amount_ht) ? cost.amount_ht : 0,
-            taxes: Number.isFinite(cost.taxes) ? cost.taxes : 0,
+            amount_ht: Number.isFinite(cost.amount_ht as number) ? (cost.amount_ht as number) : 0,
+            taxes: Number.isFinite(cost.taxes as number) ? (cost.taxes as number) : 0,
             attachment: cost.attachment ?? null,
           }))
         : defaultValues.additional_costs;
@@ -481,17 +477,11 @@ export const SiteDialog = ({
   const handleTeamMemberDragEnd = useCallback(
     (event: DragEndEvent) => {
       const { active, over } = event;
-
-      if (!over || active.id === over.id) {
-        return;
-      }
+      if (!over || active.id === over.id) return;
 
       const activeIndex = teamMemberIds.findIndex((id) => id === active.id);
       const overIndex = teamMemberIds.findIndex((id) => id === over.id);
-
-      if (activeIndex === -1 || overIndex === -1 || activeIndex === overIndex) {
-        return;
-      }
+      if (activeIndex === -1 || overIndex === -1 || activeIndex === overIndex) return;
 
       moveTeamMember(activeIndex, overIndex);
     },
@@ -501,17 +491,11 @@ export const SiteDialog = ({
   const handleCostDragEnd = useCallback(
     (event: DragEndEvent) => {
       const { active, over } = event;
-
-      if (!over || active.id === over.id) {
-        return;
-      }
+      if (!over || active.id === over.id) return;
 
       const activeIndex = costIds.findIndex((id) => id === active.id);
       const overIndex = costIds.findIndex((id) => id === over.id);
-
-      if (activeIndex === -1 || overIndex === -1 || activeIndex === overIndex) {
-        return;
-      }
+      if (activeIndex === -1 || overIndex === -1 || activeIndex === overIndex) return;
 
       moveCost(activeIndex, overIndex);
     },
@@ -527,7 +511,6 @@ export const SiteDialog = ({
       .filter((cost) => cost.label.trim().length > 0)
       .map((cost) => {
         const attachment = cost.attachment ? cost.attachment.trim() : "";
-
         return {
           label: cost.label.trim(),
           amount_ht: Number.isFinite(cost.amount_ht) ? cost.amount_ht : 0,
