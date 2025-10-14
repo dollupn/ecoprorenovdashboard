@@ -1,6 +1,7 @@
 import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings2, Tags, List, Database } from "lucide-react";
+import { Settings2, Tags, List, Database, Boxes } from "lucide-react";
+import { LeadProductTypesManager } from "@/features/leads/LeadProductTypesManager";
 
 const LeadSettings = () => {
   return (
@@ -12,6 +13,22 @@ const LeadSettings = () => {
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Boxes className="h-5 w-5" />
+                Types de produit
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Gérez les types de produit utilisés lors de la création d'un lead. Ces catégories servent de
+                base pour différencier vos offres (ex. Isolation, Led).
+              </p>
+              <LeadProductTypesManager />
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">

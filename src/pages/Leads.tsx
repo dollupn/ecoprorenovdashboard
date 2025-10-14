@@ -1,5 +1,4 @@
 import { useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
-import { useQuery } from "@tanstack/react-query";
 
 import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,7 +26,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { useLeadsList, useUpdateLead } from "@/features/leads/api";
+import { useLeadProductTypes, useLeadsList, useUpdateLead } from "@/features/leads/api";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -92,6 +91,7 @@ type CsvLead = {
   postal_code: string;
   company?: string;
   product_name?: string;
+  product_type?: string;
   surface_m2?: number;
   utm_source?: string;
   status?: LeadStatus;
@@ -767,21 +767,19 @@ const Leads = () => {
   const updateLeadMutation = useUpdateLead(orgId);
 
   const [isImportDialogOpen, setImportDialogOpen] = useState(false);
-  const [selectedImportProductId, setSelectedImportProductId] = useState<string | null>(null);
+  const [selectedImportProductTypeId, setSelectedImportProductTypeId] = useState<string | null>(null);
 
-  const { data: productOptions = [], isLoading: productsLoading } = useQuery({
-    queryKey: ["lead-import-products", orgId],
-    enabled: Boolean(orgId),
-    queryFn: () => getOrganizationProducts(orgId!),
-    staleTime: 5 * 60 * 1000,
-  });
+  const {
+    data: productTypeOptions = [],
+    isLoading: productTypesLoading,
+  } = useLeadProductTypes(orgId);
 
-  const selectedImportProduct = useMemo(() => {
-    if (!selectedImportProductId) return null;
-    return productOptions.find((product) => product.id === selectedImportProductId) ?? null;
-  }, [productOptions, selectedImportProductId]);
+  const selectedImportProductType = useMemo(() => {
+    if (!selectedImportProductTypeId) return null;
+    return productTypeOptions.find((type) => type.id === selectedImportProductTypeId) ?? null;
+  }, [productTypeOptions, selectedImportProductTypeId]);
 
-  const bulkProductLabel = selectedImportProduct?.label ?? null;
+  const bulkProductTypeLabel = selectedImportProductType?.name ?? null;
 
   const filteredLeads = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -862,7 +860,7 @@ const Leads = () => {
       return;
     }
 
-    const defaultProductName = bulkProductLabel?.trim() ? bulkProductLabel.trim() : null;
+    const defaultProductType = bulkProductTypeLabel?.trim() ? bulkProductTypeLabel.trim() : null;
 
     setImportDialogOpen(false);
     setImporting(true);
@@ -883,6 +881,9 @@ const Leads = () => {
       const payload = rows.map((row) => {
         const rowProductName =
           row.product_name && row.product_name.trim().length > 0 ? row.product_name.trim() : null;
+        const rowProductType =
+          row.product_type && row.product_type.trim().length > 0 ? row.product_type.trim() : null;
+        const resolvedProductType = rowProductName ?? rowProductType ?? defaultProductType;
 
         return {
           user_id: user.id,
@@ -896,7 +897,8 @@ const Leads = () => {
           postal_code: row.postal_code,
           status: row.status ?? "À rappeler",
           company: row.company ?? null,
-          product_name: rowProductName ?? defaultProductName,
+          product_name: resolvedProductType,
+          product_type: resolvedProductType,
           surface_m2: row.surface_m2 ?? null,
           utm_source: row.utm_source ?? null,
           commentaire: row.commentaire ?? null,
@@ -1028,44 +1030,44 @@ const Leads = () => {
               </AlertDescription>
             </Alert>
             <div className="space-y-2">
-              <Label htmlFor="import-product">Catégorie de produit</Label>
+              <Label htmlFor="import-product">Type de produit</Label>
               <Select
-                value={selectedImportProductId ?? SELECT_NONE_VALUE}
+                value={selectedImportProductTypeId ?? SELECT_NONE_VALUE}
                 onValueChange={(value) => {
                   if (value === SELECT_NONE_VALUE) {
-                    setSelectedImportProductId(null);
+                    setSelectedImportProductTypeId(null);
                   } else if (value !== "__loading" && value !== "__empty") {
-                    setSelectedImportProductId(value);
+                    setSelectedImportProductTypeId(value);
                   }
                 }}
-                disabled={productsLoading}
+                disabled={productTypesLoading}
               >
                 <SelectTrigger id="import-product">
-                  <SelectValue placeholder="Sélectionner une catégorie (optionnel)" />
+                  <SelectValue placeholder="Sélectionner un type (optionnel)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={SELECT_NONE_VALUE}>Aucune catégorie</SelectItem>
-                  {productsLoading ? (
+                  <SelectItem value={SELECT_NONE_VALUE}>Aucun type</SelectItem>
+                  {productTypesLoading ? (
                     <SelectItem value="__loading" disabled>
                       Chargement...
                     </SelectItem>
-                  ) : productOptions.length > 0 ? (
-                    productOptions.map((product) => (
-                      <SelectItem key={product.id} value={product.id}>
-                        {product.label}
+                  ) : productTypeOptions.length > 0 ? (
+                    productTypeOptions.map((type) => (
+                      <SelectItem key={type.id} value={type.id}>
+                        {type.name}
                       </SelectItem>
                     ))
                   ) : (
                     <SelectItem value="__empty" disabled>
-                      Aucun produit actif
+                      Aucun type disponible
                     </SelectItem>
                   )}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                {selectedImportProduct
-                  ? `Le produit ${selectedImportProduct.label} sera appliqué aux leads sans produit.`
-                  : "Laissez vide pour conserver le produit présent dans chaque ligne du CSV."}
+                {selectedImportProductType
+                  ? `Le type ${selectedImportProductType.name} sera appliqué aux leads sans type.`
+                  : "Laissez vide pour conserver le type présent dans chaque ligne du CSV."}
               </p>
             </div>
             <div

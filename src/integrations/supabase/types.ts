@@ -304,6 +304,7 @@ export type Database = {
           photo_previsite_url: string | null
           postal_code: string
           product_name: string | null
+          product_type: string | null
           remarks: string | null
           siren: string
           status: string
@@ -336,6 +337,7 @@ export type Database = {
           photo_previsite_url?: string | null
           postal_code: string
           product_name?: string | null
+          product_type?: string | null
           remarks?: string | null
           siren: string
           status?: string
@@ -368,6 +370,7 @@ export type Database = {
           photo_previsite_url?: string | null
           postal_code?: string
           product_name?: string | null
+          product_type?: string | null
           remarks?: string | null
           siren?: string
           status?: string
@@ -380,6 +383,38 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "leads_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_product_types: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          org_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          org_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          org_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_product_types_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"

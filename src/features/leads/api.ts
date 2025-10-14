@@ -25,20 +25,75 @@ export type LeadFilters = {
 
 const sanitizeSearch = (value: string) => value.replace(/[%_]/g, (match) => `\\${match}`);
 
-export const getOrganizationProducts = async (orgId: string) => {
+export type LeadProductTypeRecord = Tables<"lead_product_types">;
+
+export const getLeadProductTypes = async (orgId: string) => {
   const { data, error } = await supabase
-    .from("product_catalog")
-    .select("id, name, category, is_active")
+    .from("lead_product_types")
+    .select("id, name, org_id, created_at, updated_at")
     .eq("org_id", orgId)
-    .eq("is_active", true)
     .order("name", { ascending: true });
 
   if (error) throw error;
 
-  return (data ?? []).map((product) => ({
-    ...product,
-    label: product.name,
-  }));
+  return data ?? [];
+};
+
+export const useLeadProductTypes = (orgId: string | null) =>
+  useQuery<LeadProductTypeRecord[], Error>({
+    queryKey: ["lead-product-types", orgId],
+    enabled: Boolean(orgId),
+    queryFn: async () => {
+      if (!orgId) return [];
+      return getLeadProductTypes(orgId);
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+export const useCreateLeadProductType = (orgId: string | null) => {
+  const queryClient = useQueryClient();
+
+  return useMutation<LeadProductTypeRecord, Error, { name: string }>({
+    mutationFn: async ({ name }) => {
+      if (!orgId) throw new Error("Organisation requise");
+
+      const payload: TablesInsert<"lead_product_types"> = {
+        org_id: orgId,
+        name: name.trim(),
+      };
+
+      const { data, error } = await supabase
+        .from("lead_product_types")
+        .insert(payload)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      if (orgId) {
+        queryClient.invalidateQueries({ queryKey: ["lead-product-types", orgId] });
+      }
+    },
+  });
+};
+
+export const useDeleteLeadProductType = (orgId: string | null) => {
+  const queryClient = useQueryClient();
+
+  return useMutation<{ id: string }, Error, string>({
+    mutationFn: async (id) => {
+      const { error } = await supabase.from("lead_product_types").delete().eq("id", id);
+      if (error) throw error;
+      return { id };
+    },
+    onSuccess: () => {
+      if (orgId) {
+        queryClient.invalidateQueries({ queryKey: ["lead-product-types", orgId] });
+      }
+    },
+  });
 };
 
 export const getOrganizationMembers = async (orgId: string) => {
