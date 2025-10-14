@@ -698,6 +698,7 @@ const Sites = () => {
         onOpenChange={handleDialogOpenChange}
         onSubmit={handleSubmitSite}
         initialValues={dialogInitialValues}
+        orgId={currentOrgId}
       />
     </Layout>
   );

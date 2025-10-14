@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useOrg } from "@/features/organizations/OrgContext";
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -43,6 +45,7 @@ import {
   Palette,
   Plus,
   Trash2,
+  Loader2,
 } from "lucide-react";
 import {
   DEFAULT_PROJECT_STATUSES,
@@ -52,6 +55,12 @@ import {
   saveProjectStatuses,
   type ProjectStatusSetting,
 } from "@/lib/projects";
+import {
+  useDriveAuthUrl,
+  useDriveConnectionRefresh,
+  useDriveConnectionStatus,
+  useDriveDisconnect,
+} from "@/integrations/googleDrive";
 
 const ROLE_OPTIONS = ["Administrateur", "Manager", "Commercial", "Technicien"] as const;
 type RoleOption = (typeof ROLE_OPTIONS)[number];
@@ -130,6 +139,36 @@ const isProfileActive = (role: string | null) => {
   return !INACTIVE_KEYWORDS.has(role.toLowerCase());
 };
 
+const formatRelativeExpiry = (iso?: string | null) => {
+  if (!iso) return null;
+
+  try {
+    const formatted = formatDistanceToNow(parseISO(iso), {
+      addSuffix: true,
+      locale: fr,
+    });
+    return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+  } catch (error) {
+    console.warn("Unable to format Drive expiry date", error);
+    return null;
+  }
+};
+
+const DRIVE_AUTH_STORAGE_PREFIX = "drive-auth:";
+const buildDriveAuthStateKey = (state: string) => `${DRIVE_AUTH_STORAGE_PREFIX}${state}`;
+
+const createDriveStateToken = () => {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+};
+
+type SettingsLocationState = {
+  driveAuth?: "connected" | "error";
+  driveOrgId?: string;
+};
+
 const formatLastActivity = (timestamp: string | null) => {
   if (!timestamp) return "Activité inconnue";
   try {
@@ -199,7 +238,20 @@ const sessionOptions = [
 export default function Settings() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { currentOrgId } = useOrg();
   const isMounted = useRef(true);
+
+  const {
+    data: driveConnection,
+    isLoading: driveStatusLoading,
+    isFetching: driveStatusFetching,
+    error: driveStatusError,
+  } = useDriveConnectionStatus(currentOrgId);
+  const driveAuthUrlMutation = useDriveAuthUrl();
+  const driveRefreshMutation = useDriveConnectionRefresh();
+  const driveDisconnectMutation = useDriveDisconnect();
 
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
@@ -234,10 +286,181 @@ export default function Settings() {
   });
 
   const [integrations, setIntegrations] = useState(initialIntegrations);
+  useEffect(() => {
+    const state = location.state as SettingsLocationState | null;
+    if (!state?.driveAuth) return;
+
+    if (state.driveAuth === "connected") {
+      toast({
+        title: "Google Drive connecté",
+        description: "La connexion Drive de l'organisation est désormais active.",
+      });
+    } else if (state.driveAuth === "error") {
+      toast({
+        title: "Erreur Google Drive",
+        description: "La connexion Drive n'a pas pu être finalisée.",
+        variant: "destructive",
+      });
+    }
+
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.pathname, location.state, navigate, toast]);
   const syncedProjectStatuses = useProjectStatuses();
   const [projectStatuses, setProjectStatuses] = useState<ProjectStatusSetting[]>(() =>
     getProjectStatusSettings(),
   );
+
+  const driveConnectionLoading = driveStatusLoading || driveStatusFetching;
+  const driveErrorMessage = driveConnection?.errorMessage ?? driveStatusError?.message ?? null;
+  const driveIntegration = useMemo<Integration>(() => {
+    const status: Integration["status"] = !currentOrgId
+      ? "pending"
+      : driveConnectionLoading
+      ? "pending"
+      : driveConnection?.status === "connected"
+      ? "connected"
+      : driveConnection?.status === "pending"
+      ? "pending"
+      : "disconnected";
+
+    let lastSync = "Jamais connecté";
+    if (driveConnectionLoading) {
+      lastSync = "Vérification de la connexion...";
+    } else if (driveErrorMessage) {
+      lastSync = "Erreur lors de la connexion";
+    } else if (driveConnection?.expiresAt) {
+      lastSync = formatRelativeExpiry(driveConnection.expiresAt) ?? "Expiration inconnue";
+    } else if (driveConnection?.connected) {
+      lastSync = "Connexion active";
+    } else if (driveConnection?.status === "pending") {
+      lastSync = "Configuration requise";
+    }
+
+    const description = driveConnection?.connected
+      ? "Stockez automatiquement devis, factures et documents chantiers dans Drive."
+      : "Activez Google Drive pour centraliser les documents clients et projets.";
+
+    return {
+      id: "google-drive",
+      name: "Google Drive",
+      description,
+      status,
+      lastSync,
+    } satisfies Integration;
+  }, [currentOrgId, driveConnection, driveConnectionLoading, driveErrorMessage]);
+
+  const displayedIntegrations = useMemo(
+    () => [driveIntegration, ...integrations],
+    [driveIntegration, integrations],
+  );
+
+  const driveConnectLoading = driveAuthUrlMutation.isPending;
+  const driveRefreshLoading = driveRefreshMutation.isPending;
+  const driveDisconnectLoading = driveDisconnectMutation.isPending;
+
+  const handleDriveConnectClick = () => {
+    if (!currentOrgId) {
+      toast({
+        title: "Organisation requise",
+        description: "Sélectionnez une organisation avant d'activer Google Drive.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    void (async () => {
+      try {
+        const stateToken = createDriveStateToken();
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem(
+            buildDriveAuthStateKey(stateToken),
+            JSON.stringify({ orgId: currentOrgId }),
+          );
+        }
+        const { url } = await driveAuthUrlMutation.mutateAsync({
+          orgId: currentOrgId,
+          state: stateToken,
+        });
+        if (typeof window !== "undefined") {
+          window.location.href = url;
+        }
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Impossible de démarrer l'authentification Google Drive.";
+        toast({
+          title: "Connexion Google Drive",
+          description: message,
+          variant: "destructive",
+        });
+      }
+    })();
+  };
+
+  const handleDriveRefreshClick = () => {
+    if (!currentOrgId) {
+      toast({
+        title: "Organisation requise",
+        description: "Impossible d'actualiser le token sans organisation active.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    void driveRefreshMutation
+      .mutateAsync(currentOrgId)
+      .then((summary) => {
+        const expiry = formatRelativeExpiry(summary.expiresAt);
+        toast({
+          title: "Jeton Google Drive actualisé",
+          description:
+            expiry ?? "Le token d'accès Google Drive a été renouvelé avec succès.",
+        });
+      })
+      .catch((error) => {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Le renouvellement du token Google Drive a échoué.";
+        toast({
+          title: "Actualisation impossible",
+          description: message,
+          variant: "destructive",
+        });
+      });
+  };
+
+  const handleDriveDisconnectClick = () => {
+    if (!currentOrgId) {
+      toast({
+        title: "Organisation requise",
+        description: "Sélectionnez une organisation avant de déconnecter Drive.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    void driveDisconnectMutation
+      .mutateAsync(currentOrgId)
+      .then(() => {
+        toast({
+          title: "Google Drive déconnecté",
+          description: "Les identifiants ont été supprimés pour cette organisation.",
+        });
+      })
+      .catch((error) => {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Impossible de déconnecter l'intégration Google Drive.";
+        toast({
+          title: "Erreur lors de la déconnexion",
+          description: message,
+          variant: "destructive",
+        });
+      });
+  };
 
   useEffect(() => {
     return () => {
@@ -392,6 +615,10 @@ export default function Settings() {
   };
 
   const handleIntegrationAction = (integration: Integration) => {
+    if (integration.id === "google-drive") {
+      return;
+    }
+
     setIntegrations((prev) =>
       prev.map((item) =>
         item.id === integration.id
@@ -1056,11 +1283,26 @@ export default function Settings() {
                 </p>
               </CardHeader>
               <CardContent className="space-y-4">
-                {integrations.map((integration) => (
-                  <div
-                    key={integration.id}
-                    className="space-y-3 rounded-2xl border border-border/60 bg-background/60 p-4"
-                  >
+                {displayedIntegrations.map((integration) => {
+                  const isDrive = integration.id === "google-drive";
+                  const badgeLabel = isDrive && driveConnectionLoading
+                    ? (
+                        <span className="flex items-center gap-2">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          Vérification
+                        </span>
+                      )
+                    : integration.status === "connected"
+                    ? "Connecté"
+                    : integration.status === "pending"
+                    ? "En attente"
+                    : "Déconnecté";
+
+                  return (
+                    <div
+                      key={integration.id}
+                      className="space-y-3 rounded-2xl border border-border/60 bg-background/60 p-4"
+                    >
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                       <div>
                         <div className="flex items-center gap-2">
@@ -1069,30 +1311,88 @@ export default function Settings() {
                             className={integrationStatusStyles[integration.status]}
                             variant="outline"
                           >
-                            {integration.status === "connected"
-                              ? "Connecté"
-                              : integration.status === "pending"
-                              ? "En attente"
-                              : "Déconnecté"}
+                            {badgeLabel}
                           </Badge>
                         </div>
                         <p className="text-sm text-muted-foreground">{integration.description}</p>
                       </div>
-                      <Button
-                        variant={integration.status === "connected" ? "ghost" : "secondary"}
-                        onClick={() => handleIntegrationAction(integration)}
-                        className="gap-2"
-                      >
-                        <RefreshCw className="h-4 w-4" />
-                        {integration.status === "connected" ? "Désactiver" : "Connecter"}
-                      </Button>
+                      {isDrive ? (
+                        <div className="flex flex-col gap-2 md:items-end">
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              variant={driveConnection?.connected ? "outline" : "secondary"}
+                              onClick={() =>
+                                driveConnection?.connected
+                                  ? handleDriveRefreshClick()
+                                  : handleDriveConnectClick()
+                              }
+                              disabled={
+                                driveConnectLoading ||
+                                driveRefreshLoading ||
+                                (!currentOrgId && !driveConnection?.connected)
+                              }
+                              className="gap-2"
+                            >
+                              {driveConnectLoading || driveRefreshLoading ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : driveConnection?.connected ? (
+                                <RefreshCw className="h-4 w-4" />
+                              ) : (
+                                <Plug className="h-4 w-4" />
+                              )}
+                              {driveConnection?.connected ? "Actualiser l'accès" : "Connecter"}
+                            </Button>
+                            {driveConnection?.connected ? (
+                              <Button
+                                variant="ghost"
+                                onClick={handleDriveDisconnectClick}
+                                disabled={driveDisconnectLoading}
+                                className="gap-2"
+                              >
+                                {driveDisconnectLoading ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
+                                Déconnecter
+                              </Button>
+                            ) : null}
+                          </div>
+                          {driveConnection?.rootFolderId ? (
+                            <p className="text-xs text-muted-foreground">
+                              Dossier racine : {driveConnection.rootFolderId}
+                            </p>
+                          ) : null}
+                          {driveConnection?.sharedDriveId ? (
+                            <p className="text-xs text-muted-foreground">
+                              Drive partagé : {driveConnection.sharedDriveId}
+                            </p>
+                          ) : null}
+                          {driveErrorMessage ? (
+                            <p className="flex items-center gap-2 text-xs text-destructive">
+                              <AlertCircle className="h-3.5 w-3.5" />
+                              {driveErrorMessage}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <Button
+                          variant={integration.status === "connected" ? "ghost" : "secondary"}
+                          onClick={() => handleIntegrationAction(integration)}
+                          className="gap-2"
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                          {integration.status === "connected" ? "Désactiver" : "Connecter"}
+                        </Button>
+                      )}
                     </div>
                     <Separator className="bg-border/60" />
                     <p className="text-xs text-muted-foreground">
                       Dernière synchronisation : {integration.lastSync}
                     </p>
                   </div>
-                ))}
+                );
+                })}
                 <div className="rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-4 text-sm text-muted-foreground">
                   Besoin d&apos;une intégration personnalisée ? Contactez notre équipe pour accéder à l&apos;API et aux
                   webhooks sécurisés.

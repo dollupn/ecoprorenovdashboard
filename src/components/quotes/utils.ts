@@ -47,6 +47,18 @@ export const parseQuoteMetadata = (quote: Pick<QuoteRecord, "notes">): QuoteMeta
       metadata.driveFolderUrl = parsed.driveFolderUrl.trim();
     }
 
+    if (typeof parsed.driveFileUrl === "string" && parsed.driveFileUrl.trim()) {
+      metadata.driveFileUrl = parsed.driveFileUrl.trim();
+    }
+
+    if (typeof parsed.driveFileId === "string" && parsed.driveFileId.trim()) {
+      metadata.driveFileId = parsed.driveFileId.trim();
+    }
+
+    if (typeof parsed.driveFileName === "string" && parsed.driveFileName.trim()) {
+      metadata.driveFileName = parsed.driveFileName.trim();
+    }
+
     if (typeof parsed.emailMessage === "string" && parsed.emailMessage.trim()) {
       metadata.emailMessage = parsed.emailMessage;
     }

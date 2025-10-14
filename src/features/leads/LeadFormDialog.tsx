@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Plus, Loader2, Upload, X } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useOrg } from "@/features/organizations/OrgContext";
 
@@ -49,8 +49,8 @@ import {
 } from "./api";
 import type { TablesInsert } from "@/integrations/supabase/types";
 import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
-import { supabase } from "@/integrations/supabase/client";
-import { cn } from "@/lib/utils";
+import { DriveFileUploader } from "@/components/integrations/DriveFileUploader";
+import type { DriveFileMetadata } from "@/integrations/googleDrive";
 
 const LEAD_SOURCES = ["Commercial", "Campagne FB", "Régie Commercial"] as const;
 
@@ -91,7 +91,6 @@ const leadSchema = z.object({
   building_height: optionalNumericString,
   assigned_to: z.string().optional(),
   extra_fields: z.record(z.any()).default({}),
-  photo_file: z.instanceof(File).optional().nullable(),
 });
 
 type LeadFormValues = z.infer<typeof leadSchema>;
@@ -102,9 +101,7 @@ interface LeadFormDialogProps {
 
 export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
   const [open, setOpen] = useState(false);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [isPhotoDragActive, setIsPhotoDragActive] = useState(false);
-  const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const [drivePhoto, setDrivePhoto] = useState<DriveFileMetadata | null>(null);
   const { user } = useAuth();
   const { currentOrgId } = useOrg();
   const { toast } = useToast();
@@ -201,26 +198,20 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
     const buildingHeight = parseDimension(values.building_height);
 
     try {
-      let photoUrl: string | null = null;
+      const extraFields = { ...values.extra_fields };
+      const drivePhotoMetadata = drivePhoto
+        ? {
+            id: drivePhoto.id,
+            name: drivePhoto.name,
+            webViewLink: drivePhoto.webViewLink ?? null,
+            webContentLink: drivePhoto.webContentLink ?? null,
+          }
+        : null;
 
-      // Upload photo if provided
-      if (values.photo_file) {
-        const fileExt = values.photo_file.name.split('.').pop();
-        const fileName = `${user.id}/${Date.now()}.${fileExt}`;
-        
-        const { error: uploadError, data } = await supabase.storage
-          .from('lead-photos')
-          .upload(fileName, values.photo_file);
-
-        if (uploadError) {
-          throw new Error(`Erreur lors de l'upload de la photo: ${uploadError.message}`);
-        }
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('lead-photos')
-          .getPublicUrl(fileName);
-        
-        photoUrl = publicUrl;
+      if (drivePhotoMetadata) {
+        (extraFields as Record<string, unknown>).drive_photo = drivePhotoMetadata;
+      } else if ("drive_photo" in extraFields) {
+        delete (extraFields as Record<string, unknown>).drive_photo;
       }
 
       const payload = {
@@ -243,7 +234,8 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         building_length: buildingLength,
         building_width: buildingWidth,
         building_height: buildingHeight,
-        photo_previsite_url: photoUrl,
+        photo_previsite_url: drivePhotoMetadata?.webViewLink ?? drivePhotoMetadata?.webContentLink ?? null,
+        extra_fields: extraFields,
         user_id: user.id,
         org_id: orgId,
         assigned_to: values.assigned_to || user.id,
@@ -277,10 +269,8 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         building_height: "",
         assigned_to: user.id,
         extra_fields: {},
-        photo_file: undefined,
       });
-
-      setPhotoPreview(null);
+      setDrivePhoto(null);
       setOpen(false);
       await onCreated?.();
     } catch (error) {
@@ -339,9 +329,8 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         building_height: "",
         assigned_to: user?.id ?? "",
         extra_fields: {},
-        photo_file: undefined,
       });
-      setPhotoPreview(null);
+      setDrivePhoto(null);
     }
   };
 
@@ -703,161 +692,20 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
               />
             </div>
 
-            <FormField
-              control={form.control}
-              name="photo_file"
-              render={({ field: { onChange, ref, ...field } }) => (
-                <FormItem>
-                  <FormLabel>Photo pré-visite</FormLabel>
-                  <FormControl>
-                    <div className="space-y-3">
-                      <div
-                        className={cn(
-                          "flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed p-6 text-center transition-colors",
-                          isPhotoDragActive ? "border-primary bg-primary/5" : "border-muted-foreground/30"
-                        )}
-                        onDragOver={(event) => {
-                          event.preventDefault();
-                          if (isSubmitting) return;
-                          setIsPhotoDragActive(true);
-                        }}
-                        onDragEnter={(event) => {
-                          event.preventDefault();
-                          if (isSubmitting) return;
-                          setIsPhotoDragActive(true);
-                        }}
-                        onDragLeave={(event) => {
-                          event.preventDefault();
-                          setIsPhotoDragActive(false);
-                        }}
-                        onDrop={(event) => {
-                          event.preventDefault();
-                          if (isSubmitting) return;
-                          setIsPhotoDragActive(false);
-                          const file = event.dataTransfer.files?.[0];
-                          if (!file) {
-                            return;
-                          }
-                          if (!file.type.startsWith("image/")) {
-                            toast({
-                              title: "Format invalide",
-                              description: "Seuls les fichiers image sont acceptés",
-                              variant: "destructive",
-                            });
-                            return;
-                          }
-
-                          if (file.size > 10 * 1024 * 1024) {
-                            toast({
-                              title: "Fichier trop volumineux",
-                              description: "La taille maximale est de 10 Mo",
-                              variant: "destructive",
-                            });
-                            return;
-                          }
-
-                          if (photoInputRef.current && typeof DataTransfer !== "undefined") {
-                            const dataTransfer = new DataTransfer();
-                            dataTransfer.items.add(file);
-                            photoInputRef.current.files = dataTransfer.files;
-                          }
-
-                          onChange(file);
-                          const reader = new FileReader();
-                          reader.onloadend = () => {
-                            setPhotoPreview(reader.result as string);
-                          };
-                          reader.readAsDataURL(file);
-                        }}
-                      >
-                        <Upload className="h-8 w-8 text-primary" />
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium">Glissez-déposez votre photo</p>
-                          <p className="text-xs text-muted-foreground">
-                            Formats acceptés : JPG, PNG – taille maximale 10 Mo
-                          </p>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => photoInputRef.current?.click()}
-                          disabled={isSubmitting}
-                        >
-                          Sélectionner une image
-                        </Button>
-                        <Input
-                          {...field}
-                          ref={(element) => {
-                            ref(element);
-                            photoInputRef.current = element;
-                          }}
-                          type="file"
-                          accept="image/*"
-                          disabled={isSubmitting}
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              if (!file.type.startsWith("image/")) {
-                                toast({
-                                  title: "Format invalide",
-                                  description: "Seuls les fichiers image sont acceptés",
-                                  variant: "destructive",
-                                });
-                                e.target.value = "";
-                                return;
-                              }
-                              if (file.size > 10 * 1024 * 1024) {
-                                toast({
-                                  title: "Fichier trop volumineux",
-                                  description: "La taille maximale est de 10 Mo",
-                                  variant: "destructive",
-                                });
-                                e.target.value = "";
-                                return;
-                              }
-                              onChange(file);
-                              const reader = new FileReader();
-                              reader.onloadend = () => {
-                                setPhotoPreview(reader.result as string);
-                              };
-                              reader.readAsDataURL(file);
-                            }
-                          }}
-                          className="hidden"
-                        />
-                      </div>
-                      {photoPreview && (
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="relative w-full max-w-xs">
-                            <img
-                              src={photoPreview}
-                              alt="Aperçu"
-                              className="h-48 w-full rounded-lg border object-cover"
-                            />
-                          </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              onChange(undefined);
-                              setPhotoPreview(null);
-                              if (photoInputRef.current) {
-                                photoInputRef.current.value = "";
-                              }
-                            }}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="space-y-2">
+              <FormLabel>Photo pré-visite</FormLabel>
+              <DriveFileUploader
+                orgId={orgId}
+                value={drivePhoto}
+                onChange={setDrivePhoto}
+                accept="image/*"
+                maxSizeMb={10}
+                entityType="lead"
+                description="Photo pré-visite enregistrée via Ecoprorenov"
+                emptyLabel="Glissez-déposez votre photo ou cliquez pour sélectionner"
+                helperText="Formats acceptés : JPG, PNG – taille maximale 10 Mo"
+              />
+            </div>
 
             <FormField
               control={form.control}
