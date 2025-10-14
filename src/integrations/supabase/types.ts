@@ -6,6 +6,13 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
+export type SiteAdditionalCost = {
+  label: string;
+  amount_ht: number;
+  taxes: number;
+  attachment: string | null;
+};
+
 export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
@@ -637,7 +644,7 @@ export type Database = {
       }
       sites: {
         Row: {
-          additional_costs: Json | null
+          additional_costs: SiteAdditionalCost[] | null
           address: string
           city: string
           client_name: string
@@ -668,7 +675,7 @@ export type Database = {
           valorisation_cee: number | null
         }
         Insert: {
-          additional_costs?: Json | null
+          additional_costs?: SiteAdditionalCost[] | null
           address: string
           city: string
           client_name: string
@@ -699,7 +706,7 @@ export type Database = {
           valorisation_cee?: number | null
         }
         Update: {
-          additional_costs?: Json | null
+          additional_costs?: SiteAdditionalCost[] | null
           address?: string
           city?: string
           client_name?: string

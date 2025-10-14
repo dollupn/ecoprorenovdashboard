@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, type CSSProperties } from "react";
 import {
   useForm,
   useFieldArray,
@@ -47,7 +47,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
-import { GripVertical, Plus, Trash2 } from "lucide-react";
+import { GripVertical, Plus, Trash2, Upload } from "lucide-react";
 
 const teamMemberSchema = z.object({
   name: z.string().min(1, "Le nom est requis"),
@@ -55,9 +55,18 @@ const teamMemberSchema = z.object({
 
 const additionalCostSchema = z.object({
   label: z.string().min(1, "Intitulé requis"),
-  amount: z.coerce
-    .number({ invalid_type_error: "Montant invalide" })
-    .min(0, "Le montant doit être positif"),
+  amount_ht: z.coerce
+    .number({ invalid_type_error: "Montant HT invalide" })
+    .min(0, "Le montant HT doit être positif"),
+  taxes: z.coerce
+    .number({ invalid_type_error: "Montant des taxes invalide" })
+    .min(0, "Le montant des taxes doit être positif"),
+  attachment: z
+    .string()
+    .trim()
+    .optional()
+    .nullable()
+    .transform((value) => (value && value.length > 0 ? value : null)),
 });
 
 const siteSchema = z.object({
@@ -245,6 +254,7 @@ const SortableAdditionalCostRow = ({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: field.id,
   });
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const style: CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -271,7 +281,7 @@ const SortableAdditionalCostRow = ({
         >
           <GripVertical className="h-4 w-4" />
         </Button>
-        <div className="grid flex-1 grid-cols-1 gap-2 md:grid-cols-7 md:items-start">
+        <div className="grid flex-1 grid-cols-1 gap-2 md:grid-cols-12 md:items-start">
           <FormField
             control={control}
             name={`additional_costs.${index}.label`}
@@ -286,11 +296,75 @@ const SortableAdditionalCostRow = ({
           />
           <FormField
             control={control}
-            name={`additional_costs.${index}.amount`}
-            render={({ field: amountField }) => (
+            name={`additional_costs.${index}.amount_ht`}
+            render={({ field: amountHTField }) => (
               <FormItem className="md:col-span-2">
                 <FormControl>
-                  <Input type="number" min={0} {...amountField} />
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    placeholder="Montant HT"
+                    {...amountHTField}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={control}
+            name={`additional_costs.${index}.taxes`}
+            render={({ field: taxesField }) => (
+              <FormItem className="md:col-span-2">
+                <FormControl>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    placeholder="Taxes"
+                    {...taxesField}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={control}
+            name={`additional_costs.${index}.attachment`}
+            render={({ field: attachmentField }) => (
+              <FormItem className="md:col-span-3">
+                <FormControl>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      placeholder="Lien ou identifiant"
+                      value={attachmentField.value ?? ""}
+                      onChange={(event) => attachmentField.onChange(event.target.value)}
+                    />
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (!file) {
+                          return;
+                        }
+                        attachmentField.onChange(file.name);
+                        event.target.value = "";
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      aria-label="Ajouter une pièce jointe"
+                    >
+                      <Upload className="h-4 w-4 mr-2" /> Joindre
+                    </Button>
+                  </div>
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -339,6 +413,16 @@ export const SiteDialog = ({
   initialValues,
 }: SiteDialogProps) => {
   const mergedDefaults = useMemo(() => {
+    const normalizedAdditionalCosts =
+      initialValues?.additional_costs && initialValues.additional_costs.length > 0
+        ? initialValues.additional_costs.map((cost) => ({
+            label: cost.label,
+            amount_ht: Number.isFinite(cost.amount_ht) ? cost.amount_ht : 0,
+            taxes: Number.isFinite(cost.taxes) ? cost.taxes : 0,
+            attachment: cost.attachment ?? null,
+          }))
+        : defaultValues.additional_costs;
+
     const values: SiteFormValues = {
       ...defaultValues,
       ...initialValues,
@@ -346,10 +430,7 @@ export const SiteDialog = ({
         initialValues?.team_members && initialValues.team_members.length > 0
           ? initialValues.team_members
           : defaultValues.team_members,
-      additional_costs:
-        initialValues?.additional_costs && initialValues.additional_costs.length > 0
-          ? initialValues.additional_costs
-          : defaultValues.additional_costs,
+      additional_costs: normalizedAdditionalCosts,
     } as SiteFormValues;
 
     return values;
@@ -442,9 +523,18 @@ export const SiteDialog = ({
       (member) => member.name.trim().length > 0,
     );
 
-    const filteredCosts = values.additional_costs.filter(
-      (cost) => cost.label.trim().length > 0,
-    );
+    const filteredCosts = values.additional_costs
+      .filter((cost) => cost.label.trim().length > 0)
+      .map((cost) => {
+        const attachment = cost.attachment ? cost.attachment.trim() : "";
+
+        return {
+          label: cost.label.trim(),
+          amount_ht: Number.isFinite(cost.amount_ht) ? cost.amount_ht : 0,
+          taxes: Number.isFinite(cost.taxes) ? cost.taxes : 0,
+          attachment: attachment.length > 0 ? attachment : null,
+        };
+      });
 
     onSubmit({
       ...values,
@@ -861,7 +951,14 @@ export const SiteDialog = ({
                 variant="outline"
                 size="sm"
                 className="mt-2"
-                onClick={() => appendCost({ label: "", amount: 0 })}
+                onClick={() =>
+                  appendCost({
+                    label: "",
+                    amount_ht: 0,
+                    taxes: 0,
+                    attachment: null,
+                  })
+                }
               >
                 <Plus className="w-4 h-4 mr-1" /> Ajouter un coût
               </Button>
