@@ -46,7 +46,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
 import { DriveFileUploader } from "@/components/integrations/DriveFileUploader";
 import type { DriveFileMetadata } from "@/integrations/googleDrive";
 import { GripVertical, Plus, Trash2, Upload } from "lucide-react";
@@ -99,6 +98,16 @@ const siteSchema = z.object({
 
 export type SiteFormValues = z.infer<typeof siteSchema>;
 
+export type SiteProjectOption = {
+  id?: string;
+  project_ref: string;
+  client_name: string;
+  product_name: string;
+  address?: string | null;
+  city: string;
+  postal_code: string;
+};
+
 interface SiteDialogProps {
   open: boolean;
   mode: "create" | "edit";
@@ -106,6 +115,7 @@ interface SiteDialogProps {
   onSubmit: (values: SiteFormValues) => void;
   initialValues?: (Partial<SiteFormValues> & { org_id?: string | null }) | undefined;
   orgId?: string | null;
+  projects?: SiteProjectOption[];
 }
 
 const defaultValues: SiteFormValues = {
@@ -361,6 +371,7 @@ export const SiteDialog = ({
   onSubmit,
   initialValues,
   orgId,
+  projects,
 }: SiteDialogProps) => {
   const parsedNotes = useMemo(() => {
     if (!initialValues?.notes) {
@@ -429,6 +440,121 @@ export const SiteDialog = ({
     resolver: zodResolver(siteSchema),
     defaultValues: mergedDefaults,
   });
+
+  const availableProjects = useMemo<SiteProjectOption[]>(() => {
+    const base = [...(projects ?? [])];
+    const currentRef = mergedDefaults.project_ref;
+
+    if (currentRef && !base.some((project) => project.project_ref === currentRef)) {
+      base.push({
+        id: currentRef,
+        project_ref: currentRef,
+        client_name: mergedDefaults.client_name,
+        product_name: mergedDefaults.product_name,
+        address: mergedDefaults.address,
+        city: mergedDefaults.city,
+        postal_code: mergedDefaults.postal_code,
+      });
+    }
+
+    return base;
+  }, [projects, mergedDefaults]);
+
+  const applyProjectDetails = useCallback(
+    (projectRef: string) => {
+      if (!projectRef) return;
+
+      const selectedProject = availableProjects.find(
+        (project) => project.project_ref === projectRef,
+      );
+
+      if (!selectedProject) return;
+
+      form.setValue("client_name", selectedProject.client_name ?? "", {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      form.setValue("product_name", selectedProject.product_name ?? "", {
+        shouldDirty: true,
+      });
+      form.setValue("address", selectedProject.address ?? "", {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      form.setValue("city", selectedProject.city ?? "", {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      form.setValue("postal_code", selectedProject.postal_code ?? "", {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    },
+    [availableProjects, form],
+  );
+
+  const watchedStartDate = form.watch("date_debut");
+  const watchedEndDate = form.watch("date_fin_prevue");
+
+  useEffect(() => {
+    const currentProgress = form.getValues("progress_percentage");
+
+    if (!watchedStartDate || !watchedEndDate) {
+      if (currentProgress !== 0) {
+        form.setValue("progress_percentage", 0, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      }
+      return;
+    }
+
+    const start = new Date(watchedStartDate);
+    const end = new Date(watchedEndDate);
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      if (currentProgress !== 0) {
+        form.setValue("progress_percentage", 0, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      }
+      return;
+    }
+
+    if (end.getTime() <= start.getTime()) {
+      const computed = new Date().getTime() >= end.getTime() ? 100 : 0;
+      if (computed !== currentProgress) {
+        form.setValue("progress_percentage", computed, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      }
+      return;
+    }
+
+    const now = new Date();
+    const totalDuration = end.getTime() - start.getTime();
+    const elapsed = now.getTime() - start.getTime();
+
+    let computed = 0;
+    if (elapsed <= 0) {
+      computed = 0;
+    } else if (elapsed >= totalDuration) {
+      computed = 100;
+    } else {
+      computed = Math.round((elapsed / totalDuration) * 100);
+    }
+
+    computed = Math.max(0, Math.min(100, computed));
+
+    if (computed !== currentProgress) {
+      form.setValue("progress_percentage", computed, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    }
+  }, [form, watchedStartDate, watchedEndDate]);
 
   useEffect(() => {
     if (open) form.reset(mergedDefaults);
@@ -540,114 +666,6 @@ export const SiteDialog = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="site_ref"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Référence chantier</FormLabel>
-                    <FormControl>
-                      <Input placeholder="SITE-2024-0001" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="project_ref"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Référence projet</FormLabel>
-                    <FormControl>
-                      <Input placeholder="PRJ-2024-0001" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="client_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Client</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Nom du client" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="product_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Produit (défini par le projet)</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        value={field.value ?? ""}
-                        readOnly
-                        className="bg-muted"
-                        placeholder="Le produit sera renseigné depuis le projet"
-                      />
-                    </FormControl>
-                    <p className="text-xs text-muted-foreground">
-                      Ce champ est automatiquement pré-rempli à partir du projet associé.
-                    </p>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="address"
-                render={({ field }) => (
-                  <FormItem className="md:col-span-2">
-                    <FormLabel>Adresse</FormLabel>
-                    <FormControl>
-                      <AddressAutocomplete
-                        value={field.value}
-                        onChange={(address, city, postalCode) => {
-                          field.onChange(address);
-                          form.setValue("city", city, { shouldDirty: true, shouldValidate: true });
-                          form.setValue("postal_code", postalCode, { shouldDirty: true, shouldValidate: true });
-                        }}
-                        disabled={form.formState.isSubmitting}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="city"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Ville</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ville" {...field} readOnly disabled={form.formState.isSubmitting} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="postal_code"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Code postal</FormLabel>
-                    <FormControl>
-                      <Input placeholder="31000" {...field} readOnly disabled={form.formState.isSubmitting} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
                 name="status"
                 render={({ field }) => (
                   <FormItem>
@@ -699,6 +717,85 @@ export const SiteDialog = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
+                name="site_ref"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Référence chantier</FormLabel>
+                    <FormControl>
+                      <Input placeholder="SITE-2024-0001" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="project_ref"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Projet associé</FormLabel>
+                    <Select
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        applyProjectDetails(value);
+                      }}
+                      value={field.value ?? ""}
+                    >
+                      <FormControl>
+                        <SelectTrigger disabled={availableProjects.length === 0}>
+                          <SelectValue placeholder="Sélectionner un projet" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {availableProjects.length > 0 ? (
+                          availableProjects.map((project) => (
+                            <SelectItem
+                              key={project.id ?? project.project_ref}
+                              value={project.project_ref}
+                            >
+                              {project.project_ref} • {project.client_name}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="" disabled>
+                            Aucun projet disponible
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Le chantier reprend automatiquement les informations du projet sélectionné.
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="client_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Client</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Nom du client"
+                        {...field}
+                        readOnly
+                        className="bg-muted"
+                      />
+                    </FormControl>
+                    <p className="text-xs text-muted-foreground">
+                      Pré-rempli à partir du projet associé.
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
                 name="date_debut"
                 render={({ field }) => (
                   <FormItem>
@@ -730,8 +827,19 @@ export const SiteDialog = ({
                   <FormItem>
                     <FormLabel>Avancement (%)</FormLabel>
                     <FormControl>
-                      <Input type="number" min={0} max={100} step={5} {...field} />
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={5}
+                        {...field}
+                        readOnly
+                        className="bg-muted"
+                      />
                     </FormControl>
+                    <p className="text-xs text-muted-foreground">
+                      Calculé automatiquement à partir des dates du chantier.
+                    </p>
                     <FormMessage />
                   </FormItem>
                 )}

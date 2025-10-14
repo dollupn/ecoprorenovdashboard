@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,7 +8,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { SiteDialog, type SiteFormValues } from "@/components/sites/SiteDialog";
+import {
+  SiteDialog,
+  type SiteFormValues,
+  type SiteProjectOption,
+} from "@/components/sites/SiteDialog";
 import { useToast } from "@/components/ui/use-toast";
 import type { Tables } from "@/integrations/supabase/types";
 import { useOrg } from "@/features/organizations/OrgContext";
@@ -219,6 +223,32 @@ const Sites = () => {
     enabled: !!user,
   });
 
+  const projectOptions = useMemo<SiteProjectOption[]>(() => {
+    return projects.map((project) => {
+      const productCodes =
+        project.project_products
+          ?.map((item) => item.product?.code)
+          .filter((code): code is string => Boolean(code)) ?? [];
+
+      const productLabel =
+        productCodes.length > 0
+          ? productCodes.join(", ")
+          : project.product_name ?? "";
+
+      const address = (project as { address?: string | null }).address ?? "";
+
+      return {
+        id: project.id,
+        project_ref: project.project_ref ?? "",
+        client_name: project.client_name ?? "",
+        product_name: productLabel,
+        address,
+        city: project.city ?? "",
+        postal_code: project.postal_code ?? "",
+      } satisfies SiteProjectOption;
+    });
+  }, [projects]);
+
   const handleDialogOpenChange = (open: boolean) => {
     setDialogOpen(open);
     if (!open) {
@@ -333,7 +363,7 @@ const Sites = () => {
       site_ref: values.site_ref,
       project_ref: values.project_ref,
       client_name: values.client_name,
-      product_name: values.product_name?.trim() || null,
+      product_name: values.product_name?.trim() || "",
       address: values.address,
       city: values.city,
       postal_code: values.postal_code,
@@ -467,6 +497,7 @@ const Sites = () => {
           project_ref: project.project_ref ?? "",
           client_name: project.client_name ?? "",
           product_name: productCodes.join(", "),
+          address: (project as { address?: string | null }).address ?? "",
           city: project.city ?? "",
           postal_code: project.postal_code ?? "",
         });
@@ -699,6 +730,7 @@ const Sites = () => {
         onSubmit={handleSubmitSite}
         initialValues={dialogInitialValues}
         orgId={currentOrgId}
+        projects={projectOptions}
       />
     </Layout>
   );
