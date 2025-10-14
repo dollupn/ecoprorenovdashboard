@@ -95,17 +95,17 @@ const extractProductParamFields = (
   }
 
   if (Array.isArray(schema)) {
-    return schema.filter((field): field is ProductParamField =>
-      typeof (field as ProductParamField | undefined)?.name === "string"
-    );
+    return schema.filter((field: any): field is ProductParamField => {
+      return isRecord(field) && typeof field.name === "string";
+    }) as ProductParamField[];
   }
 
   if (isRecord(schema)) {
     const maybeFields = (schema as Record<string, unknown>).fields;
     if (Array.isArray(maybeFields)) {
-      return maybeFields.filter((field): field is ProductParamField =>
-        typeof (field as ProductParamField | undefined)?.name === "string"
-      );
+      return maybeFields.filter((field: any): field is ProductParamField => {
+        return isRecord(field) && typeof field.name === "string";
+      }) as ProductParamField[];
     }
   }
 
@@ -244,7 +244,7 @@ const SortableProjectProductRow = ({
       {hasDynamicFields ? (
         <DynamicFields
           form={form as unknown as UseFormReturn<ProjectFormWithOptionalExtras>}
-          schema={{ fields: dynamicFields }}
+          schema={{ fields: dynamicFields as any }}
           disabled={isSubmitting}
           fieldPrefix={`products.${index}.dynamic_params`}
         />

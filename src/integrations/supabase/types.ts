@@ -6,13 +6,6 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-export type SiteAdditionalCost = {
-  label: string;
-  amount_ht: number;
-  taxes: number;
-  attachment: string | null;
-};
-
 export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
@@ -48,160 +41,6 @@ export type Database = {
             foreignKeyName: "categories_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      drive_credentials: {
-        Row: {
-          access_token: string | null
-          created_at: string
-          error_message: string | null
-          expires_at: string | null
-          id: string
-          org_id: string
-          refresh_token: string | null
-          scope: string[] | null
-          status: Database["public"]["Enums"]["drive_connection_status"] | null
-          token_type: string | null
-          updated_at: string
-        }
-        Insert: {
-          access_token?: string | null
-          created_at?: string
-          error_message?: string | null
-          expires_at?: string | null
-          id?: string
-          org_id: string
-          refresh_token?: string | null
-          scope?: string[] | null
-          status?: Database["public"]["Enums"]["drive_connection_status"] | null
-          token_type?: string | null
-          updated_at?: string
-        }
-        Update: {
-          access_token?: string | null
-          created_at?: string
-          error_message?: string | null
-          expires_at?: string | null
-          id?: string
-          org_id?: string
-          refresh_token?: string | null
-          scope?: string[] | null
-          status?: Database["public"]["Enums"]["drive_connection_status"] | null
-          token_type?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "drive_credentials_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: true
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      drive_files: {
-        Row: {
-          created_at: string
-          drive_file_id: string
-          drive_file_name: string | null
-          entity_id: string | null
-          entity_type: string | null
-          icon_link: string | null
-          id: string
-          mime_type: string | null
-          org_id: string
-          uploaded_by: string | null
-          web_content_link: string | null
-          web_view_link: string | null
-        }
-        Insert: {
-          created_at?: string
-          drive_file_id: string
-          drive_file_name?: string | null
-          entity_id?: string | null
-          entity_type?: string | null
-          icon_link?: string | null
-          id?: string
-          mime_type?: string | null
-          org_id: string
-          uploaded_by?: string | null
-          web_content_link?: string | null
-          web_view_link?: string | null
-        }
-        Update: {
-          created_at?: string
-          drive_file_id?: string
-          drive_file_name?: string | null
-          entity_id?: string | null
-          entity_type?: string | null
-          icon_link?: string | null
-          id?: string
-          mime_type?: string | null
-          org_id?: string
-          uploaded_by?: string | null
-          web_content_link?: string | null
-          web_view_link?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "drive_files_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "drive_files_uploaded_by_fkey"
-            columns: ["uploaded_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["user_id"]
-          },
-        ]
-      }
-      drive_settings: {
-        Row: {
-          client_id: string | null
-          client_secret: string | null
-          created_at: string
-          id: string
-          org_id: string
-          redirect_uri: string | null
-          root_folder_id: string | null
-          shared_drive_id: string | null
-          updated_at: string
-        }
-        Insert: {
-          client_id?: string | null
-          client_secret?: string | null
-          created_at?: string
-          id?: string
-          org_id: string
-          redirect_uri?: string | null
-          root_folder_id?: string | null
-          shared_drive_id?: string | null
-          updated_at?: string
-        }
-        Update: {
-          client_id?: string | null
-          client_secret?: string | null
-          created_at?: string
-          id?: string
-          org_id?: string
-          redirect_uri?: string | null
-          root_folder_id?: string | null
-          shared_drive_id?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "drive_settings_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: true
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
@@ -280,116 +119,6 @@ export type Database = {
           },
         ]
       }
-      leads: {
-        Row: {
-          address: string
-          assigned_to: string | null
-          building_height: number | null
-          building_length: number | null
-          building_width: number | null
-          city: string
-          commentaire: string | null
-          company: string | null
-          created_at: string
-          created_by: string | null
-          date_rdv: string | null
-          email: string
-          first_name: string | null
-          full_name: string
-          heure_rdv: string | null
-          id: string
-          last_name: string | null
-          org_id: string | null
-          phone_raw: string
-          photo_previsite_url: string | null
-          postal_code: string
-          product_name: string | null
-          product_type: string | null
-          remarks: string | null
-          siren: string
-          status: string
-          surface_m2: number | null
-          updated_at: string
-          user_id: string
-          utm_source: string | null
-          extra_fields: Json
-        }
-        Insert: {
-          address?: string
-          assigned_to?: string | null
-          building_height?: number | null
-          building_length?: number | null
-          building_width?: number | null
-          city: string
-          commentaire?: string | null
-          company?: string | null
-          created_at?: string
-          created_by?: string | null
-          date_rdv?: string | null
-          email: string
-          first_name?: string | null
-          full_name: string
-          heure_rdv?: string | null
-          id?: string
-          last_name?: string | null
-          org_id?: string | null
-          phone_raw: string
-          photo_previsite_url?: string | null
-          postal_code: string
-          product_name?: string | null
-          product_type?: string | null
-          remarks?: string | null
-          siren: string
-          status?: string
-          surface_m2?: number | null
-          updated_at?: string
-          user_id: string
-          utm_source?: string | null
-          extra_fields?: Json
-        }
-        Update: {
-          address?: string
-          assigned_to?: string | null
-          building_height?: number | null
-          building_length?: number | null
-          building_width?: number | null
-          city?: string
-          commentaire?: string | null
-          company?: string | null
-          created_at?: string
-          created_by?: string | null
-          date_rdv?: string | null
-          email?: string
-          first_name?: string | null
-          full_name?: string
-          heure_rdv?: string | null
-          id?: string
-          last_name?: string | null
-          org_id?: string | null
-          phone_raw?: string
-          photo_previsite_url?: string | null
-          postal_code?: string
-          product_name?: string | null
-          product_type?: string | null
-          remarks?: string | null
-          siren?: string
-          status?: string
-          surface_m2?: number | null
-          updated_at?: string
-          user_id?: string
-          utm_source?: string | null
-          extra_fields?: Json
-        }
-        Relationships: [
-          {
-            foreignKeyName: "leads_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       lead_product_types: {
         Row: {
           created_at: string
@@ -415,6 +144,95 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "lead_product_types_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leads: {
+        Row: {
+          address: string
+          assigned_to: string | null
+          city: string
+          commentaire: string | null
+          company: string | null
+          created_at: string
+          created_by: string | null
+          date_rdv: string | null
+          email: string
+          extra_fields: Json | null
+          full_name: string
+          heure_rdv: string | null
+          id: string
+          org_id: string | null
+          phone_raw: string
+          photo_previsite_url: string | null
+          postal_code: string
+          product_name: string | null
+          siren: string | null
+          status: string
+          surface_m2: number | null
+          updated_at: string
+          user_id: string
+          utm_source: string | null
+        }
+        Insert: {
+          address?: string
+          assigned_to?: string | null
+          city: string
+          commentaire?: string | null
+          company?: string | null
+          created_at?: string
+          created_by?: string | null
+          date_rdv?: string | null
+          email: string
+          extra_fields?: Json | null
+          full_name: string
+          heure_rdv?: string | null
+          id?: string
+          org_id?: string | null
+          phone_raw: string
+          photo_previsite_url?: string | null
+          postal_code: string
+          product_name?: string | null
+          siren?: string | null
+          status?: string
+          surface_m2?: number | null
+          updated_at?: string
+          user_id: string
+          utm_source?: string | null
+        }
+        Update: {
+          address?: string
+          assigned_to?: string | null
+          city?: string
+          commentaire?: string | null
+          company?: string | null
+          created_at?: string
+          created_by?: string | null
+          date_rdv?: string | null
+          email?: string
+          extra_fields?: Json | null
+          full_name?: string
+          heure_rdv?: string | null
+          id?: string
+          org_id?: string | null
+          phone_raw?: string
+          photo_previsite_url?: string | null
+          postal_code?: string
+          product_name?: string | null
+          siren?: string | null
+          status?: string
+          surface_m2?: number | null
+          updated_at?: string
+          user_id?: string
+          utm_source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leads_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -833,7 +651,7 @@ export type Database = {
       }
       sites: {
         Row: {
-          additional_costs: SiteAdditionalCost[] | null
+          additional_costs: Json | null
           address: string
           city: string
           client_name: string
@@ -864,7 +682,7 @@ export type Database = {
           valorisation_cee: number | null
         }
         Insert: {
-          additional_costs?: SiteAdditionalCost[] | null
+          additional_costs?: Json | null
           address: string
           city: string
           client_name: string
@@ -895,7 +713,7 @@ export type Database = {
           valorisation_cee?: number | null
         }
         Update: {
-          additional_costs?: SiteAdditionalCost[] | null
+          additional_costs?: Json | null
           address?: string
           city?: string
           client_name?: string
@@ -1002,7 +820,6 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "commercial" | "user"
-      drive_connection_status: "connected" | "disconnected" | "error" | "pending"
       org_role: "owner" | "admin" | "member" | "commercial"
     }
     CompositeTypes: {

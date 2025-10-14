@@ -194,3 +194,15 @@ export const useUpdateLead = (_orgId: string | null) => {
     },
   });
 };
+
+export const getOrganizationProducts = async (orgId: string) => {
+  const { data, error } = await supabase
+    .from("product_catalog")
+    .select("id, name, category, is_active")
+    .eq("org_id", orgId)
+    .eq("is_active", true)
+    .order("name", { ascending: true });
+
+  if (error) throw error;
+  return data ?? [];
+};

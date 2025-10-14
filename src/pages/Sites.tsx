@@ -99,9 +99,9 @@ const normalizeAdditionalCosts = (costs: unknown): SiteAdditionalCostFormValue[]
         amount_ht: amountHTValue,
         taxes: taxesValue,
         attachment: attachmentValue,
-      } satisfies SiteAdditionalCostFormValue;
+      } as SiteAdditionalCostFormValue;
     })
-    .filter((cost): cost is SiteAdditionalCostFormValue => cost !== null);
+    .filter((cost) => cost !== null) as SiteAdditionalCostFormValue[];
 
   return normalized.length > 0 ? normalized : [createEmptyAdditionalCost()];
 };

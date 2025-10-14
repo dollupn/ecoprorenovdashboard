@@ -504,7 +504,7 @@ export const AddQuoteDialog = ({
 
     if (typeof initialValues?.amount === "number") {
       values.amount = initialValues.amount.toString() as unknown as number;
-    } else if (typeof initialValues?.amount === "string" && initialValues.amount.trim().length > 0) {
+    } else if (typeof initialValues?.amount === "string" && (initialValues.amount as any).trim().length > 0) {
       values.amount = initialValues.amount as unknown as number;
     } else if (metadataLineItems && metadataLineItems.length > 0) {
       const total = metadataLineItems.reduce(
