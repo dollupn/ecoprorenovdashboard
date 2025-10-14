@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   useForm,
   useFieldArray,
@@ -49,7 +49,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
 import { DriveFileUploader } from "@/components/integrations/DriveFileUploader";
 import type { DriveFileMetadata } from "@/integrations/googleDrive";
-import { GripVertical, Plus, Trash2 } from "lucide-react";
+import { GripVertical, Plus, Trash2, Upload } from "lucide-react";
 
 const teamMemberSchema = z.object({
   name: z.string().min(1, "Le nom est requis"),
@@ -57,67 +57,41 @@ const teamMemberSchema = z.object({
 
 const additionalCostSchema = z.object({
   label: z.string().min(1, "Intitulé requis"),
-  amount: z.coerce
-    .number({ invalid_type_error: "Montant invalide" })
-    .min(0, "Le montant doit être positif"),
+  amount_ht: z.coerce
+    .number({ invalid_type_error: "Montant HT invalide" })
+    .min(0, "Le montant HT doit être positif"),
+  taxes: z.coerce
+    .number({ invalid_type_error: "Montant des taxes invalide" })
+    .min(0, "Le montant des taxes doit être positif"),
+  attachment: z
+    .string()
+    .trim()
+    .optional()
+    .nullable()
+    .transform((value) => (value && value.length > 0 ? value : null)),
 });
 
 const siteSchema = z.object({
   site_ref: z.string().min(3, "Référence requise"),
   project_ref: z.string().min(3, "Référence projet requise"),
   client_name: z.string().min(2, "Client requis"),
-  product_name: z
-    .string()
-    .optional()
-    .nullable(),
+  product_name: z.string().optional().nullable(),
   address: z.string().min(3, "Adresse requise"),
   city: z.string().min(2, "Ville requise"),
   postal_code: z.string().min(4, "Code postal invalide"),
-  status: z.enum([
-    "PLANIFIE",
-    "EN_PREPARATION",
-    "EN_COURS",
-    "SUSPENDU",
-    "TERMINE",
-    "LIVRE",
-  ]),
-  cofrac_status: z.enum([
-    "EN_ATTENTE",
-    "CONFORME",
-    "NON_CONFORME",
-    "A_PLANIFIER",
-  ]),
+  status: z.enum(["PLANIFIE", "EN_PREPARATION", "EN_COURS", "SUSPENDU", "TERMINE", "LIVRE"]),
+  cofrac_status: z.enum(["EN_ATTENTE", "CONFORME", "NON_CONFORME", "A_PLANIFIER"]),
   date_debut: z.string().min(1, "Date de début requise"),
   date_fin_prevue: z.string().optional(),
-  progress_percentage: z.coerce
-    .number({ invalid_type_error: "Avancement invalide" })
-    .min(0)
-    .max(100),
-  revenue: z.coerce
-    .number({ invalid_type_error: "CA invalide" })
-    .min(0, "Le CA doit être positif"),
-  profit_margin: z.coerce
-    .number({ invalid_type_error: "Marge invalide" })
-    .min(-100, "Marge invalide")
-    .max(100, "Marge invalide"),
-  surface_facturee: z.coerce
-    .number({ invalid_type_error: "Surface invalide" })
-    .min(0, "Surface invalide"),
-  cout_main_oeuvre_m2_ht: z.coerce
-    .number({ invalid_type_error: "Coût invalide" })
-    .min(0, "Coût invalide"),
-  cout_isolation_m2: z.coerce
-    .number({ invalid_type_error: "Coût invalide" })
-    .min(0, "Coût invalide"),
-  isolation_utilisee_m2: z.coerce
-    .number({ invalid_type_error: "Quantité invalide" })
-    .min(0, "Quantité invalide"),
-  montant_commission: z.coerce
-    .number({ invalid_type_error: "Montant invalide" })
-    .min(0, "Montant invalide"),
-  valorisation_cee: z.coerce
-    .number({ invalid_type_error: "Montant invalide" })
-    .min(0, "Montant invalide"),
+  progress_percentage: z.coerce.number({ invalid_type_error: "Avancement invalide" }).min(0).max(100),
+  revenue: z.coerce.number({ invalid_type_error: "CA invalide" }).min(0, "Le CA doit être positif"),
+  profit_margin: z.coerce.number({ invalid_type_error: "Marge invalide" }).min(-100).max(100),
+  surface_facturee: z.coerce.number({ invalid_type_error: "Surface invalide" }).min(0),
+  cout_main_oeuvre_m2_ht: z.coerce.number({ invalid_type_error: "Coût invalide" }).min(0),
+  cout_isolation_m2: z.coerce.number({ invalid_type_error: "Coût invalide" }).min(0),
+  isolation_utilisee_m2: z.coerce.number({ invalid_type_error: "Quantité invalide" }).min(0),
+  montant_commission: z.coerce.number({ invalid_type_error: "Montant invalide" }).min(0),
+  valorisation_cee: z.coerce.number({ invalid_type_error: "Montant invalide" }).min(0),
   notes: z.string().optional(),
   team_members: z.array(teamMemberSchema).min(1, "Ajoutez au moins un membre"),
   additional_costs: z.array(additionalCostSchema).optional().default([]),
@@ -179,10 +153,7 @@ const SortableTeamMemberField = ({
     id: field.id,
   });
 
-  const style: CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
+  const style: CSSProperties = { transform: CSS.Transform.toString(transform), transition };
 
   return (
     <div
@@ -248,11 +219,9 @@ const SortableAdditionalCostRow = ({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: field.id,
   });
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const style: CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
+  const style: CSSProperties = { transform: CSS.Transform.toString(transform), transition };
 
   return (
     <div
@@ -274,7 +243,7 @@ const SortableAdditionalCostRow = ({
         >
           <GripVertical className="h-4 w-4" />
         </Button>
-        <div className="grid flex-1 grid-cols-1 gap-2 md:grid-cols-7 md:items-start">
+        <div className="grid flex-1 grid-cols-1 gap-2 md:grid-cols-12 md:items-start">
           <FormField
             control={control}
             name={`additional_costs.${index}.label`}
@@ -289,11 +258,62 @@ const SortableAdditionalCostRow = ({
           />
           <FormField
             control={control}
-            name={`additional_costs.${index}.amount`}
-            render={({ field: amountField }) => (
+            name={`additional_costs.${index}.amount_ht`}
+            render={({ field: amountHTField }) => (
               <FormItem className="md:col-span-2">
                 <FormControl>
-                  <Input type="number" min={0} {...amountField} />
+                  <Input type="number" min={0} step="0.01" placeholder="Montant HT" {...amountHTField} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={control}
+            name={`additional_costs.${index}.taxes`}
+            render={({ field: taxesField }) => (
+              <FormItem className="md:col-span-2">
+                <FormControl>
+                  <Input type="number" min={0} step="0.01" placeholder="Taxes" {...taxesField} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={control}
+            name={`additional_costs.${index}.attachment`}
+            render={({ field: attachmentField }) => (
+              <FormItem className="md:col-span-3">
+                <FormControl>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      placeholder="Lien ou identifiant"
+                      value={attachmentField.value ?? ""}
+                      onChange={(event) => attachmentField.onChange(event.target.value)}
+                    />
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (!file) return;
+                        // Replace with actual upload; keeping file name as placeholder
+                        attachmentField.onChange(file.name);
+                        event.target.value = "";
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      aria-label="Ajouter une pièce jointe"
+                    >
+                      <Upload className="h-4 w-4 mr-2" /> Joindre
+                    </Button>
+                  </div>
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -360,8 +380,8 @@ export const SiteDialog = ({
         const driveName = typeof record.driveFileName === "string" ? record.driveFileName : undefined;
         const driveFile: DriveFileMetadata | null = driveUrl
           ? {
-              id: driveId && driveId.trim() ? driveId : driveUrl,
-              name: driveName && driveName.trim() ? driveName : "Document chantier",
+              id: driveId && String(driveId).trim() ? String(driveId) : driveUrl,
+              name: driveName && String(driveName).trim() ? String(driveName) : "Document chantier",
               webViewLink: driveUrl,
             }
           : null;
@@ -380,6 +400,16 @@ export const SiteDialog = ({
   const [siteDriveFile, setSiteDriveFile] = useState<DriveFileMetadata | null>(parsedNotes.driveFile);
 
   const mergedDefaults = useMemo(() => {
+    const normalizedAdditionalCosts =
+      initialValues?.additional_costs && initialValues.additional_costs.length > 0
+        ? initialValues.additional_costs.map((cost) => ({
+            label: cost.label,
+            amount_ht: Number.isFinite(cost.amount_ht) ? cost.amount_ht : 0,
+            taxes: Number.isFinite(cost.taxes) ? cost.taxes : 0,
+            attachment: cost.attachment ?? null,
+          }))
+        : defaultValues.additional_costs;
+
     const values: SiteFormValues = {
       ...defaultValues,
       ...initialValues,
@@ -387,10 +417,7 @@ export const SiteDialog = ({
         initialValues?.team_members && initialValues.team_members.length > 0
           ? initialValues.team_members
           : defaultValues.team_members,
-      additional_costs:
-        initialValues?.additional_costs && initialValues.additional_costs.length > 0
-          ? initialValues.additional_costs
-          : defaultValues.additional_costs,
+      additional_costs: normalizedAdditionalCosts,
     } as SiteFormValues;
 
     values.notes = parsedNotes.text;
@@ -404,17 +431,12 @@ export const SiteDialog = ({
   });
 
   useEffect(() => {
-    if (open) {
-      form.reset(mergedDefaults);
-    }
+    if (open) form.reset(mergedDefaults);
   }, [open, mergedDefaults, form]);
 
   useEffect(() => {
-    if (open) {
-      setSiteDriveFile(parsedNotes.driveFile);
-    } else {
-      setSiteDriveFile(null);
-    }
+    if (open) setSiteDriveFile(parsedNotes.driveFile);
+    else setSiteDriveFile(null);
   }, [open, parsedNotes.driveFile]);
 
   const {
@@ -422,46 +444,30 @@ export const SiteDialog = ({
     append: appendTeamMember,
     remove: removeTeamMember,
     move: moveTeamMember,
-  } = useFieldArray({
-    control: form.control,
-    name: "team_members",
-  });
+  } = useFieldArray({ control: form.control, name: "team_members" });
 
   const {
     fields: costFields,
     append: appendCost,
     remove: removeCost,
     move: moveCost,
-  } = useFieldArray({
-    control: form.control,
-    name: "additional_costs",
-  });
+  } = useFieldArray({ control: form.control, name: "additional_costs" });
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 5,
-      },
-    })
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
 
-  const teamMemberIds = useMemo(() => teamMemberFields.map((field) => field.id), [teamMemberFields]);
-  const costIds = useMemo(() => costFields.map((field) => field.id), [costFields]);
+  const teamMemberIds = useMemo(() => teamMemberFields.map((f) => f.id), [teamMemberFields]);
+  const costIds = useMemo(() => costFields.map((f) => f.id), [costFields]);
 
   const handleTeamMemberDragEnd = useCallback(
     (event: DragEndEvent) => {
       const { active, over } = event;
-
-      if (!over || active.id === over.id) {
-        return;
-      }
+      if (!over || active.id === over.id) return;
 
       const activeIndex = teamMemberIds.findIndex((id) => id === active.id);
       const overIndex = teamMemberIds.findIndex((id) => id === over.id);
-
-      if (activeIndex === -1 || overIndex === -1 || activeIndex === overIndex) {
-        return;
-      }
+      if (activeIndex === -1 || overIndex === -1 || activeIndex === overIndex) return;
 
       moveTeamMember(activeIndex, overIndex);
     },
@@ -471,17 +477,11 @@ export const SiteDialog = ({
   const handleCostDragEnd = useCallback(
     (event: DragEndEvent) => {
       const { active, over } = event;
-
-      if (!over || active.id === over.id) {
-        return;
-      }
+      if (!over || active.id === over.id) return;
 
       const activeIndex = costIds.findIndex((id) => id === active.id);
       const overIndex = costIds.findIndex((id) => id === over.id);
-
-      if (activeIndex === -1 || overIndex === -1 || activeIndex === overIndex) {
-        return;
-      }
+      if (activeIndex === -1 || overIndex === -1 || activeIndex === overIndex) return;
 
       moveCost(activeIndex, overIndex);
     },
@@ -489,15 +489,21 @@ export const SiteDialog = ({
   );
 
   const handleSubmit = (values: SiteFormValues) => {
-    const filteredTeamMembers = values.team_members.filter(
-      (member) => member.name.trim().length > 0,
-    );
+    const filteredTeamMembers = values.team_members.filter((m) => m.name.trim().length > 0);
 
-    const filteredCosts = values.additional_costs.filter(
-      (cost) => cost.label.trim().length > 0,
-    );
+    const filteredCosts = values.additional_costs
+      .filter((c) => c.label.trim().length > 0)
+      .map((c) => {
+        const attachment = c.attachment ? c.attachment.trim() : "";
+        return {
+          label: c.label.trim(),
+          amount_ht: Number.isFinite(c.amount_ht) ? c.amount_ht : 0,
+          taxes: Number.isFinite(c.taxes) ? c.taxes : 0,
+          attachment: attachment.length > 0 ? attachment : null,
+        };
+      });
 
-    const driveFileUrl = siteDriveFile?.webViewLink ?? siteDriveFile?.webContentLink ?? undefined;
+    const driveFileUrl = siteDriveFile?.webViewLink ?? (siteDriveFile as any)?.webContentLink ?? undefined;
     const notesMetadata: Record<string, unknown> = {};
 
     if (driveFileUrl) {
@@ -505,7 +511,6 @@ export const SiteDialog = ({
       notesMetadata.driveFileId = siteDriveFile?.id;
       notesMetadata.driveFileName = siteDriveFile?.name;
     }
-
     if (values.notes && values.notes.trim()) {
       notesMetadata.internalNotes = values.notes.trim();
     }
@@ -524,9 +529,7 @@ export const SiteDialog = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl w-[95vw] sm:w-full max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>
-            {mode === "create" ? "Nouveau chantier" : "Modifier le chantier"}
-          </DialogTitle>
+          <DialogTitle>{mode === "create" ? "Nouveau chantier" : "Modifier le chantier"}</DialogTitle>
           <DialogDescription>
             Renseignez les informations financières et opérationnelles du chantier.
           </DialogDescription>
@@ -608,10 +611,7 @@ export const SiteDialog = ({
                         onChange={(address, city, postalCode) => {
                           field.onChange(address);
                           form.setValue("city", city, { shouldDirty: true, shouldValidate: true });
-                          form.setValue("postal_code", postalCode, {
-                            shouldDirty: true,
-                            shouldValidate: true,
-                          });
+                          form.setValue("postal_code", postalCode, { shouldDirty: true, shouldValidate: true });
                         }}
                         disabled={form.formState.isSubmitting}
                       />
@@ -640,12 +640,7 @@ export const SiteDialog = ({
                   <FormItem>
                     <FormLabel>Code postal</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder="31000"
-                        {...field}
-                        readOnly
-                        disabled={form.formState.isSubmitting}
-                      />
+                      <Input placeholder="31000" {...field} readOnly disabled={form.formState.isSubmitting} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -853,9 +848,7 @@ export const SiteDialog = ({
             <div className="space-y-2">
               <FormLabel>Équipe chantier</FormLabel>
               {teamMemberFields.length > 1 ? (
-                <p className="text-xs text-muted-foreground">
-                  Faites glisser les membres pour définir l&apos;ordre de votre équipe.
-                </p>
+                <p className="text-xs text-muted-foreground">Faites glisser les membres pour définir l&apos;ordre de votre équipe.</p>
               ) : null}
               <div className="space-y-3">
                 {teamMemberFields.length === 0 ? (
@@ -863,11 +856,7 @@ export const SiteDialog = ({
                     Ajoutez les membres composant l&apos;équipe chantier.
                   </div>
                 ) : (
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleTeamMemberDragEnd}
-                  >
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTeamMemberDragEnd}>
                     <SortableContext items={teamMemberIds} strategy={verticalListSortingStrategy}>
                       {teamMemberFields.map((field, index) => (
                         <SortableTeamMemberField
@@ -883,13 +872,7 @@ export const SiteDialog = ({
                   </DndContext>
                 )}
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="mt-2"
-                onClick={() => appendTeamMember({ name: "" })}
-              >
+              <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => appendTeamMember({ name: "" })}>
                 <Plus className="w-4 h-4 mr-1" /> Ajouter un membre
               </Button>
             </div>
@@ -897,17 +880,11 @@ export const SiteDialog = ({
             <div className="space-y-2">
               <FormLabel>Coûts supplémentaires</FormLabel>
               {costFields.length > 1 ? (
-                <p className="text-xs text-muted-foreground">
-                  Réorganisez l&apos;affichage des coûts en les faisant glisser.
-                </p>
+                <p className="text-xs text-muted-foreground">Réorganisez l&apos;affichage des coûts en les faisant glisser.</p>
               ) : null}
               <div className="space-y-3">
                 {costFields.length === 0 ? null : (
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleCostDragEnd}
-                  >
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCostDragEnd}>
                     <SortableContext items={costIds} strategy={verticalListSortingStrategy}>
                       {costFields.map((field, index) => (
                         <SortableAdditionalCostRow
@@ -928,7 +905,14 @@ export const SiteDialog = ({
                 variant="outline"
                 size="sm"
                 className="mt-2"
-                onClick={() => appendCost({ label: "", amount: 0 })}
+                onClick={() =>
+                  appendCost({
+                    label: "",
+                    amount_ht: 0,
+                    taxes: 0,
+                    attachment: null,
+                  })
+                }
               >
                 <Plus className="w-4 h-4 mr-1" /> Ajouter un coût
               </Button>
@@ -967,9 +951,7 @@ export const SiteDialog = ({
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Annuler
               </Button>
-              <Button type="submit">
-                {mode === "create" ? "Créer le chantier" : "Enregistrer"}
-              </Button>
+              <Button type="submit">{mode === "create" ? "Créer le chantier" : "Enregistrer"}</Button>
             </div>
           </form>
         </Form>
