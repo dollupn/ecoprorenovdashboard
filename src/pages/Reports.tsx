@@ -71,6 +71,34 @@ const topProjects = [
   },
 ];
 
+const motivationHighlights: {
+  title: string;
+  value: string;
+  description: string;
+  emoji: string;
+  progress?: number;
+}[] = [
+  {
+    title: "Bonus équipe en vue",
+    value: "72% atteint",
+    description: "Plus que 48k€ de CA pour débloquer le bonus collectif Q3",
+    emoji: "🚀",
+    progress: 72,
+  },
+  {
+    title: "Satisfaction client",
+    value: "4.7 / 5",
+    description: "12 avis 5★ reçus sur les 30 derniers jours",
+    emoji: "💬",
+  },
+  {
+    title: "Streak de signature",
+    value: "7 jours",
+    description: "Des contrats signés chaque jour depuis une semaine",
+    emoji: "🔥",
+  },
+];
+
 const alerts = [
   {
     title: "Marge en dessous de l'objectif",
@@ -110,6 +138,19 @@ const Reports = () => {
 
   const totalLeads = sourceBreakdown.reduce((acc, item) => acc + item.leads, 0);
 
+  const getProjectEmoji = (project: (typeof topProjects)[number]) => {
+    if (project.revenue >= 40000 && project.margin >= 0.3) {
+      return "🏆";
+    }
+    if (project.margin >= 0.33) {
+      return "💪";
+    }
+    if (project.revenue >= 30000) {
+      return "🚀";
+    }
+    return "✨";
+  };
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -132,6 +173,40 @@ const Reports = () => {
               <p className="font-medium">Il y a 5 minutes</p>
             </div>
           </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          {motivationHighlights.map((highlight) => (
+            <Card
+              key={highlight.title}
+              className="shadow-card border-0 bg-card/60 backdrop-blur"
+            >
+              <CardContent className="space-y-3 p-5">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                      {highlight.title}
+                    </p>
+                    <p className="text-xl font-semibold">{highlight.value}</p>
+                  </div>
+                  <span className="text-2xl" aria-hidden>
+                    {highlight.emoji}
+                  </span>
+                </div>
+                {typeof highlight.progress === "number" && (
+                  <div className="space-y-1">
+                    <Progress value={highlight.progress} className="h-2" />
+                    <p className="text-xs text-muted-foreground">
+                      Vous êtes à {highlight.progress}% de votre objectif du mois
+                    </p>
+                  </div>
+                )}
+                <p className="text-sm text-muted-foreground">
+                  {highlight.description}
+                </p>
+              </CardContent>
+            </Card>
+          ))}
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
@@ -334,24 +409,40 @@ const Reports = () => {
                   <TableRow className="hover:bg-transparent">
                     <TableHead>Projet</TableHead>
                     <TableHead className="text-right">CA</TableHead>
-                    <TableHead className="text-right">Marge</TableHead>
+                    <TableHead className="text-right">Marge (€)</TableHead>
+                    <TableHead className="text-right">Marge (%)</TableHead>
                     <TableHead className="text-right">Statut</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {topProjects.map((project) => (
-                    <TableRow key={project.name} className="hover:bg-muted/40">
-                      <TableCell className="font-medium">{project.name}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(project.revenue)}</TableCell>
-                      <TableCell className="text-right">{formatPercent(project.margin)}</TableCell>
-                      <TableCell className="text-right">
-                        <Badge variant="outline" className="gap-1">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          {project.status}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {topProjects.map((project) => {
+                    const marginValue = project.revenue * project.margin;
+                    return (
+                      <TableRow key={project.name} className="hover:bg-muted/40">
+                        <TableCell className="font-medium">
+                          <span className="mr-2 text-lg" aria-hidden>
+                            {getProjectEmoji(project)}
+                          </span>
+                          {project.name}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(project.revenue)}
+                        </TableCell>
+                        <TableCell className="text-right text-emerald-600">
+                          {formatCurrency(marginValue)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatPercent(project.margin)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Badge variant="outline" className="gap-1">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            {project.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </CardContent>
