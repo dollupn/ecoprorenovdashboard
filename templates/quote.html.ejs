@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>Devis <%= quote.number %></title>
+    <style>
+      @page {
+        size: A4;
+        margin: 18mm 15mm 24mm 15mm;
+      }
+
+      body {
+        font-family: "Inter", "Roboto", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+        color: #1d1f24;
+        font-size: 11pt;
+        line-height: 1.45;
+        margin: 0;
+        padding: 0;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      .document {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+      }
+
+      header {
+        margin-bottom: 18mm;
+      }
+
+      .header-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 12mm;
+      }
+
+      .header-title {
+        display: flex;
+        flex-direction: column;
+        gap: 4mm;
+      }
+
+      .header-title h1 {
+        font-size: 28pt;
+        margin: 0;
+        text-transform: uppercase;
+        font-weight: 700;
+        letter-spacing: 0.5pt;
+      }
+
+      .header-title span {
+        color: #1d1f24;
+      }
+
+      .header-brand {
+        font-size: 9pt;
+        letter-spacing: 0.5pt;
+        text-transform: uppercase;
+        color: #4d535f;
+        margin: 0;
+      }
+
+      .header-right {
+        text-align: right;
+        font-weight: 500;
+        font-size: 11pt;
+      }
+
+      .header-right span {
+        display: block;
+      }
+
+      .parties {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12mm;
+      }
+
+      .party-block {
+        border: 1px solid #d4d7dd;
+        padding: 8mm;
+        border-radius: 6px;
+        min-height: 58mm;
+      }
+
+      .party-block h2 {
+        font-size: 11pt;
+        text-transform: uppercase;
+        letter-spacing: 0.6pt;
+        margin: 0 0 4mm;
+        font-weight: 600;
+      }
+
+      .party-block p {
+        margin: 0 0 2mm;
+      }
+
+      main {
+        flex: 1 0 auto;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        border-spacing: 0;
+        table-layout: fixed;
+      }
+
+      .items-table {
+        margin-bottom: 10mm;
+        border: 1px solid #d4d7dd;
+        border-radius: 6px;
+        overflow: hidden;
+      }
+
+      .items-table thead {
+        background: #f4f6f8;
+        font-size: 10pt;
+        text-transform: uppercase;
+        letter-spacing: 0.4pt;
+      }
+
+      .items-table thead th {
+        padding: 6mm 5mm;
+        text-align: left;
+        font-weight: 600;
+        color: #262a33;
+        border-bottom: 1px solid #d4d7dd;
+      }
+
+      .items-table thead th:nth-child(n + 2) {
+        text-align: right;
+      }
+
+      .items-table tbody tr {
+        border-bottom: 1px solid #e2e5eb;
+      }
+
+      .items-table tbody tr:last-child {
+        border-bottom: none;
+      }
+
+      .items-table td {
+        padding: 5mm;
+        vertical-align: top;
+        font-size: 10.5pt;
+      }
+
+      .items-table td:nth-child(n + 2) {
+        text-align: right;
+        white-space: nowrap;
+      }
+
+      .item-description {
+        font-weight: 600;
+        margin-bottom: 2mm;
+        color: #1d1f24;
+      }
+
+      .item-code {
+        font-size: 9pt;
+        letter-spacing: 0.4pt;
+        color: #5c6371;
+        text-transform: uppercase;
+        display: block;
+        margin-bottom: 1mm;
+      }
+
+      .item-title {
+        font-size: 11pt;
+        font-weight: 600;
+      }
+
+      .item-long-description {
+        font-weight: 400;
+        color: #363b45;
+        font-size: 10.2pt;
+        line-height: 1.45;
+      }
+
+      .item-long-description p {
+        margin: 0 0 3mm;
+      }
+
+      .item-long-description ul {
+        padding-left: 4mm;
+        margin: 0 0 3mm;
+      }
+
+      .item-long-description ul li {
+        margin-bottom: 1.5mm;
+      }
+
+      .summary-grid {
+        display: grid;
+        grid-template-columns: 1.2fr 1fr;
+        gap: 12mm;
+      }
+
+      .totals-card {
+        border: 1px solid #d4d7dd;
+        border-radius: 6px;
+        padding: 8mm;
+        font-size: 11pt;
+      }
+
+      .totals-card h3 {
+        margin: 0 0 5mm;
+        text-transform: uppercase;
+        letter-spacing: 0.4pt;
+        font-weight: 600;
+        font-size: 11pt;
+      }
+
+      .totals-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 3mm;
+      }
+
+      .totals-row:last-child {
+        margin-bottom: 0;
+      }
+
+      .totals-row.net {
+        margin-top: 6mm;
+        padding-top: 4mm;
+        border-top: 1px solid #d4d7dd;
+        font-weight: 700;
+        font-size: 12pt;
+      }
+
+      .signature-card {
+        border: 1px solid #d4d7dd;
+        border-radius: 6px;
+        padding: 8mm;
+        font-size: 10.5pt;
+        display: flex;
+        flex-direction: column;
+        gap: 5mm;
+      }
+
+      .signature-frame {
+        border: 1px solid #1d1f24;
+        border-radius: 4px;
+        padding: 6mm;
+        text-align: center;
+        font-weight: 600;
+      }
+
+      .signature-frame span {
+        display: block;
+        text-transform: uppercase;
+        letter-spacing: 0.6pt;
+        font-size: 10pt;
+      }
+
+      .block-title {
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.4pt;
+        font-size: 11pt;
+        margin-bottom: 3mm;
+      }
+
+      .info-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8mm;
+      }
+
+      .info-card {
+        border: 1px solid #d4d7dd;
+        border-radius: 6px;
+        padding: 6mm 8mm;
+        font-size: 10.5pt;
+      }
+
+      .info-card p {
+        margin: 0 0 2.5mm;
+      }
+
+      .info-card p:last-child {
+        margin-bottom: 0;
+      }
+
+      footer {
+        flex-shrink: 0;
+      }
+
+      .footer-meta {
+        font-size: 9pt;
+        color: #545a66;
+        letter-spacing: 0.3pt;
+      }
+
+      .footer-legal {
+        font-size: 8.5pt;
+        color: #6a707d;
+        text-align: right;
+      }
+
+      .footer-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-top: 4mm;
+        border-top: 1px solid #d4d7dd;
+        margin-top: 10mm;
+      }
+
+      .footer-running {
+        position: running(footer);
+      }
+
+      .footer-legal-running {
+        position: running(footer-legal);
+      }
+
+      .footer-meta .page-counter::after {
+        content: "Page " counter(page) "/" counter(pages);
+      }
+
+      @page {
+        @bottom-left {
+          content: element(footer);
+        }
+        @bottom-right {
+          content: element(footer-legal);
+        }
+      }
+
+      .table-header {
+        display: table-header-group;
+      }
+
+      .table-footer {
+        display: table-footer-group;
+      }
+
+      .items-table tbody tr td:first-child {
+        width: 60%;
+      }
+
+      .items-table tbody tr td:nth-child(2) {
+        width: 14%;
+      }
+
+      .items-table tbody tr td:nth-child(3) {
+        width: 12%;
+      }
+
+      .items-table tbody tr td:nth-child(4) {
+        width: 14%;
+      }
+
+      .avoid-break {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+
+      .mt-6 {
+        margin-top: 6mm;
+      }
+
+      .mt-8 {
+        margin-top: 8mm;
+      }
+
+      .muted {
+        color: #5c6371;
+      }
+
+      .text-right {
+        text-align: right;
+      }
+
+      .text-uppercase {
+        text-transform: uppercase;
+        letter-spacing: 0.4pt;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="document">
+      <header>
+        <div class="header-meta">
+          <div class="header-title">
+            <p class="header-brand">Ecoprorenove (EB.CONSEILS) - Devis #<%= quote.number %></p>
+            <h1>Devis <span>#<%= quote.number %></span></h1>
+          </div>
+          <div class="header-right">
+            <span><%= quote.city %>, le <%= quote.date %></span>
+          </div>
+        </div>
+        <div class="parties">
+          <div class="party-block">
+            <h2>Client</h2>
+            <p class="party-name"><%= client.company_name %></p>
+            <p>SIRET/SIREN : <%= client.siret_or_siren %></p>
+            <p><%= client.address_line1 %></p>
+            <% if (client.address_line2) { %>
+              <p><%= client.address_line2 %></p>
+            <% } %>
+            <p><%= client.city_postcode %></p>
+            <% if (client.contact_name) { %>
+              <p>Contact : <%= client.contact_name %></p>
+            <% } %>
+            <% if (client.contact_role) { %>
+              <p><%= client.contact_role %></p>
+            <% } %>
+            <% if (client.phone) { %>
+              <p>Tél. : <%= client.phone %></p>
+            <% } %>
+            <% if (client.email) { %>
+              <p>Email : <%= client.email %></p>
+            <% } %>
+            <% if (client.tenant_note) { %>
+              <p><%= client.tenant_note %></p>
+            <% } %>
+          </div>
+          <div class="party-block">
+            <h2><%= company.label %></h2>
+            <p><%= company.address1 %></p>
+            <p><%= company.postcode_city %></p>
+            <p>Tél. : <%= company.phone %></p>
+            <p class="mt-6"><span class="text-uppercase">Bon de commande</span> : <%= quote.number %></p>
+          </div>
+        </div>
+      </header>
+
+      <main>
+        <section class="avoid-break">
+          <table class="items-table">
+            <thead class="table-header">
+              <tr>
+                <th>Description</th>
+                <th>Prix unitaire</th>
+                <th>Quantité</th>
+                <th>Montant HT</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% items.forEach(function(item) { %>
+                <tr>
+                  <td>
+                    <div class="item-code"><%= item.code %></div>
+                    <div class="item-title"><%= item.title %></div>
+                    <% if (item.long_description_html) { %>
+                      <div class="item-long-description"><%- item.long_description_html %></div>
+                    <% } %>
+                  </td>
+                  <td><%= item.unit_price %></td>
+                  <td><%= item.quantity %></td>
+                  <td><%= item.amount %></td>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="summary-grid avoid-break">
+          <div class="totals-card">
+            <h3>Récapitulatif financier</h3>
+            <div class="totals-row">
+              <span>Total HT</span>
+              <span><%= totals.total_ht %></span>
+            </div>
+            <div class="totals-row">
+              <span>TVA <%= totals.vat_rate_label %></span>
+              <span><%= totals.vat_amount %></span>
+            </div>
+            <div class="totals-row">
+              <span>Total TTC</span>
+              <span><%= totals.total_ttc %></span>
+            </div>
+            <div class="totals-row">
+              <span>Remise</span>
+              <span><%= totals.discount_amount %></span>
+            </div>
+            <div class="totals-row">
+              <span>Prime CEE</span>
+              <span><%= totals.cee_prime_amount %></span>
+            </div>
+            <div class="totals-row net">
+              <span>Net à payer</span>
+              <span><%= totals.net_to_pay %></span>
+            </div>
+          </div>
+          <div class="signature-card">
+            <div>
+              <div class="block-title">Validité & signature</div>
+              <p>Fait à : <strong><%= quote.city %></strong></p>
+              <p>Le : <strong><%= quote.date %></strong></p>
+              <p>Offre valable jusqu'au <strong><%= quote.valid_until %></strong></p>
+            </div>
+            <div class="signature-frame">
+              <span>Bon pour accord et signature</span>
+            </div>
+            <div>
+              <p><strong>Coordonnées bancaires</strong></p>
+              <p>IBAN : <%= company.bank_iban %></p>
+              <p>BIC : <%= company.bank_bic %></p>
+            </div>
+          </div>
+        </section>
+
+        <section class="info-grid mt-8">
+          <div class="info-card">
+            <div class="block-title">Caractéristiques bâtiment</div>
+            <p>Type : <strong><%= building.type %></strong></p>
+            <p>Usage : <strong><%= building.usage %></strong></p>
+            <p>Surface totale : <strong><%= building.surface_total %> m²</strong></p>
+            <p>Surface traitée : <strong><%= building.surface_operation %> m²</strong></p>
+          </div>
+          <div class="info-card">
+            <div class="block-title">Contacts & planification</div>
+            <% if (client.contact_name) { %>
+              <p>Signataire : <strong><%= client.contact_name %></strong></p>
+            <% } %>
+            <% if (client.contact_role) { %>
+              <p>Statut : <strong><%= client.contact_role %></strong></p>
+            <% } %>
+            <% if (client.phone) { %>
+              <p>Téléphone : <strong><%= client.phone %></strong></p>
+            <% } %>
+            <% if (client.email) { %>
+              <p>Email : <strong><%= client.email %></strong></p>
+            <% } %>
+            <p>Date prévue des travaux : <strong><%= quote.scheduled_date %></strong></p>
+          </div>
+        </section>
+
+        <section class="info-grid mt-8">
+          <div class="info-card">
+            <div class="block-title">Prime CEE</div>
+            <p><%= notes.prime_cee %></p>
+          </div>
+          <div class="info-card">
+            <div class="block-title">Modalités de règlement</div>
+            <p><%= notes.payment_terms %></p>
+          </div>
+        </section>
+      </main>
+
+      <footer>
+        <div class="footer-running">
+          <div class="footer-meta">
+            Ecoprorenove (EB.CONSEILS) - Devis #<%= quote.number %> · <span class="page-counter"></span>
+          </div>
+        </div>
+        <div class="footer-legal-running">
+          <div class="footer-legal"><%= company.legal_footer %></div>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>
