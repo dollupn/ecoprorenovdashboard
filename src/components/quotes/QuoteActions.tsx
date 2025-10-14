@@ -11,14 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { parseQuoteMetadata } from "./utils";
 import type { QuoteRecord } from "./types";
-import {
-  Eye,
-  Download,
-  Mail,
-  FolderOpen,
-  MoreHorizontal,
-  FileText,
-} from "lucide-react";
+import { Eye, Download, Mail, FolderOpen, MoreHorizontal, FileText, ListChecks } from "lucide-react";
 
 interface QuoteActionsProps {
   quote: QuoteRecord;
@@ -38,6 +31,7 @@ export const QuoteActions = ({
   const metadata = useMemo(() => parseQuoteMetadata(quote), [quote]);
 
   const hasDriveFolder = Boolean(metadata.driveFolderUrl);
+  const hasDriveFile = Boolean(metadata.driveFileUrl);
   const hasClientEmail = Boolean(metadata.clientEmail);
   const hasLineItems = Boolean(metadata.lineItems?.length);
 
@@ -83,9 +77,25 @@ export const QuoteActions = ({
             </Badge>
           ) : null}
         </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => {
+            if (metadata.driveFileUrl && typeof window !== "undefined") {
+              window.open(metadata.driveFileUrl, "_blank", "noopener,noreferrer");
+            }
+          }}
+          disabled={!hasDriveFile}
+        >
+          <FileText className="mr-2 h-4 w-4" />
+          Ouvrir le document
+          {!hasDriveFile ? (
+            <Badge variant="secondary" className="ml-auto">
+              Document manquant
+            </Badge>
+          ) : null}
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem disabled={!hasLineItems}>
-          <FileText className="mr-2 h-4 w-4" />
+          <ListChecks className="mr-2 h-4 w-4" />
           {hasLineItems ? `${metadata.lineItems?.length ?? 0} lignes` : "Lignes non définies"}
         </DropdownMenuItem>
       </DropdownMenuContent>

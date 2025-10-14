@@ -37,6 +37,8 @@ import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useToast } from "@/hooks/use-toast";
+import { DriveFileUploader } from "@/components/integrations/DriveFileUploader";
+import type { DriveFileMetadata } from "@/integrations/googleDrive";
 
 import {
   Dialog,
@@ -66,7 +68,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { GripVertical, Plus, PlusCircle, Trash2 } from "lucide-react";
 
-import { formatQuoteCurrency } from "./utils";
+import { formatQuoteCurrency, parseQuoteMetadata } from "./utils";
 import type { QuoteLineItem, QuoteMetadata } from "./types";
 import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
 
@@ -319,6 +321,46 @@ export const AddQuoteDialog = ({
   const { user } = useAuth();
   const { currentOrgId } = useOrg();
   const { toast } = useToast();
+  const [quoteDriveFile, setQuoteDriveFile] = useState<DriveFileMetadata | null>(null);
+  const parsedMetadata = useMemo(
+    () => parseQuoteMetadata({ notes: initialValues?.notes ?? "" }),
+    [initialValues?.notes],
+  );
+  const metadataLineItems = useMemo<QuoteFormValues["line_items"] | null>(() => {
+    if (!parsedMetadata.lineItems || parsedMetadata.lineItems.length === 0) {
+      return null;
+    }
+
+    return parsedMetadata.lineItems.map((item) => ({
+      reference: item.reference ?? "",
+      description: item.description ?? "",
+      quantity: item.quantity ?? 0,
+      unit_price: item.unitPrice ?? 0,
+      tax_rate: item.taxRate ?? undefined,
+    }));
+  }, [parsedMetadata.lineItems]);
+
+  const metadataDriveFile = useMemo<DriveFileMetadata | null>(() => {
+    if (parsedMetadata.driveFileUrl) {
+      return {
+        id: parsedMetadata.driveFileId ?? parsedMetadata.driveFileUrl,
+        name: parsedMetadata.driveFileName ?? "Document devis",
+        webViewLink: parsedMetadata.driveFileUrl,
+        webContentLink: parsedMetadata.driveFileUrl,
+      };
+    }
+
+    if (parsedMetadata.driveFileId) {
+      const baseUrl = `https://drive.google.com/file/d/${parsedMetadata.driveFileId}/view`;
+      return {
+        id: parsedMetadata.driveFileId,
+        name: parsedMetadata.driveFileName ?? "Document devis",
+        webViewLink: baseUrl,
+      };
+    }
+
+    return null;
+  }, [parsedMetadata.driveFileId, parsedMetadata.driveFileName, parsedMetadata.driveFileUrl]);
 
   const [internalOpen, setInternalOpen] = useState(false);
   const dialogOpen = open ?? internalOpen;
@@ -428,25 +470,56 @@ export const AddQuoteDialog = ({
   useEffect(() => {
     if (!dialogOpen) {
       form.reset(baseDefaultValues);
+      setQuoteDriveFile(null);
       return;
     }
 
     const values: QuoteFormValues = {
       ...baseDefaultValues,
       ...initialValues,
-      client_email: initialValues?.client_email ?? "",
-      client_phone: initialValues?.client_phone ?? "",
-      site_address: initialValues?.site_address ?? "",
-      site_city: initialValues?.site_city ?? "",
-      site_postal_code: initialValues?.site_postal_code ?? "",
     } as QuoteFormValues;
+
+    const pickValue = (current?: string | null, fallback?: string) => {
+      if (current && current.trim().length > 0) return current;
+      return fallback ?? "";
+    };
+
+    values.client_email = pickValue(initialValues?.client_email ?? undefined, parsedMetadata.clientEmail);
+    values.client_phone = pickValue(initialValues?.client_phone ?? undefined, parsedMetadata.clientPhone);
+    values.site_address = pickValue(initialValues?.site_address ?? undefined, parsedMetadata.siteAddress);
+    values.site_city = pickValue(initialValues?.site_city ?? undefined, parsedMetadata.siteCity);
+    values.site_postal_code = pickValue(
+      initialValues?.site_postal_code ?? undefined,
+      parsedMetadata.sitePostalCode,
+    );
+    values.payment_terms = pickValue(initialValues?.payment_terms ?? undefined, parsedMetadata.paymentTerms);
+    values.drive_folder_url = pickValue(
+      initialValues?.drive_folder_url ?? undefined,
+      parsedMetadata.driveFolderUrl,
+    );
+    values.email_message = pickValue(initialValues?.email_message ?? undefined, parsedMetadata.emailMessage);
+    values.notes =
+      parsedMetadata.internalNotes ??
+      (initialValues?.notes && initialValues.notes.trim().length > 0 ? initialValues.notes : "");
 
     if (typeof initialValues?.amount === "number") {
       values.amount = initialValues.amount.toString() as unknown as number;
+    } else if (typeof initialValues?.amount === "string" && initialValues.amount.trim().length > 0) {
+      values.amount = initialValues.amount as unknown as number;
+    } else if (metadataLineItems && metadataLineItems.length > 0) {
+      const total = metadataLineItems.reduce(
+        (sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.unit_price) || 0),
+        0,
+      );
+      values.amount = total.toString() as unknown as number;
     }
 
     if (!values.quote_ref) {
       values.quote_ref = generateQuoteReference();
+    }
+
+    if ((!initialValues?.line_items || initialValues.line_items.length === 0) && metadataLineItems) {
+      values.line_items = metadataLineItems;
     }
 
     if (!values.line_items || values.line_items.length === 0) {
@@ -454,7 +527,23 @@ export const AddQuoteDialog = ({
     }
 
     form.reset(values);
-  }, [dialogOpen, initialValues, form]);
+    setQuoteDriveFile(metadataDriveFile);
+  }, [
+    dialogOpen,
+    form,
+    initialValues,
+    metadataDriveFile,
+    metadataLineItems,
+    parsedMetadata.clientEmail,
+    parsedMetadata.clientPhone,
+    parsedMetadata.driveFolderUrl,
+    parsedMetadata.emailMessage,
+    parsedMetadata.internalNotes,
+    parsedMetadata.paymentTerms,
+    parsedMetadata.siteAddress,
+    parsedMetadata.siteCity,
+    parsedMetadata.sitePostalCode,
+  ]);
 
   const handleSubmit = async (data: QuoteFormValues) => {
     if (!user) {
@@ -490,6 +579,8 @@ export const AddQuoteDialog = ({
         return trimmed.length > 0 ? trimmed : undefined;
       };
 
+      const driveFileUrl = quoteDriveFile?.webViewLink ?? quoteDriveFile?.webContentLink ?? undefined;
+
       const metadata: QuoteMetadata = {
         clientEmail: toOptionalString(data.client_email),
         clientPhone: toOptionalString(data.client_phone),
@@ -501,6 +592,9 @@ export const AddQuoteDialog = ({
         emailMessage: toOptionalString(data.email_message),
         internalNotes: toOptionalString(data.notes),
         lineItems: normalizedLineItems && normalizedLineItems.length > 0 ? normalizedLineItems : undefined,
+        driveFileUrl,
+        driveFileId: driveFileUrl ? quoteDriveFile?.id : undefined,
+        driveFileName: driveFileUrl ? quoteDriveFile?.name : undefined,
       };
 
       const cleanedMetadataEntries = Object.entries(metadata).filter(([_, value]) => {
@@ -542,6 +636,7 @@ export const AddQuoteDialog = ({
 
       setDialogOpen(false);
       form.reset(baseDefaultValues);
+      setQuoteDriveFile(null);
       await onQuoteAdded?.();
     } catch (error) {
       const message =
@@ -893,6 +988,20 @@ export const AddQuoteDialog = ({
                   </FormItem>
                 )}
               />
+              <div className="space-y-2">
+                <FormLabel>Document du devis (PDF)</FormLabel>
+                <DriveFileUploader
+                  orgId={currentOrgId}
+                  value={quoteDriveFile}
+                  onChange={setQuoteDriveFile}
+                  accept="application/pdf"
+                  maxSizeMb={25}
+                  entityType="quote"
+                  description="Document de devis généré via Ecoprorenov"
+                  helperText="Le fichier est automatiquement stocké dans le Drive de l'organisation."
+                  disabled={form.formState.isSubmitting}
+                />
+              </div>
             </section>
 
             <section className="space-y-4">

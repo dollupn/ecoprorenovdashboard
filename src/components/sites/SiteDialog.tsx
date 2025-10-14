@@ -47,6 +47,8 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
+import { DriveFileUploader } from "@/components/integrations/DriveFileUploader";
+import type { DriveFileMetadata } from "@/integrations/googleDrive";
 import { GripVertical, Plus, Trash2 } from "lucide-react";
 
 const teamMemberSchema = z.object({
@@ -128,7 +130,8 @@ interface SiteDialogProps {
   mode: "create" | "edit";
   onOpenChange: (open: boolean) => void;
   onSubmit: (values: SiteFormValues) => void;
-  initialValues?: Partial<SiteFormValues>;
+  initialValues?: (Partial<SiteFormValues> & { org_id?: string | null }) | undefined;
+  orgId?: string | null;
 }
 
 const defaultValues: SiteFormValues = {
@@ -337,7 +340,45 @@ export const SiteDialog = ({
   onOpenChange,
   onSubmit,
   initialValues,
+  orgId,
 }: SiteDialogProps) => {
+  const parsedNotes = useMemo(() => {
+    if (!initialValues?.notes) {
+      return { text: initialValues?.notes ?? "", driveFile: null } as {
+        text: string;
+        driveFile: DriveFileMetadata | null;
+      };
+    }
+
+    try {
+      const raw = JSON.parse(initialValues.notes);
+      if (raw && typeof raw === "object") {
+        const record = raw as Record<string, unknown>;
+        const text = typeof record.internalNotes === "string" ? record.internalNotes : "";
+        const driveUrl = typeof record.driveFileUrl === "string" ? record.driveFileUrl : undefined;
+        const driveId = typeof record.driveFileId === "string" ? record.driveFileId : undefined;
+        const driveName = typeof record.driveFileName === "string" ? record.driveFileName : undefined;
+        const driveFile: DriveFileMetadata | null = driveUrl
+          ? {
+              id: driveId && driveId.trim() ? driveId : driveUrl,
+              name: driveName && driveName.trim() ? driveName : "Document chantier",
+              webViewLink: driveUrl,
+            }
+          : null;
+        return { text, driveFile };
+      }
+    } catch (error) {
+      console.warn("Unable to parse site notes metadata", error);
+    }
+
+    return { text: initialValues.notes ?? "", driveFile: null } as {
+      text: string;
+      driveFile: DriveFileMetadata | null;
+    };
+  }, [initialValues?.notes]);
+
+  const [siteDriveFile, setSiteDriveFile] = useState<DriveFileMetadata | null>(parsedNotes.driveFile);
+
   const mergedDefaults = useMemo(() => {
     const values: SiteFormValues = {
       ...defaultValues,
@@ -352,8 +393,10 @@ export const SiteDialog = ({
           : defaultValues.additional_costs,
     } as SiteFormValues;
 
+    values.notes = parsedNotes.text;
+
     return values;
-  }, [initialValues]);
+  }, [initialValues, parsedNotes.text]);
 
   const form = useForm<SiteFormValues>({
     resolver: zodResolver(siteSchema),
@@ -365,6 +408,14 @@ export const SiteDialog = ({
       form.reset(mergedDefaults);
     }
   }, [open, mergedDefaults, form]);
+
+  useEffect(() => {
+    if (open) {
+      setSiteDriveFile(parsedNotes.driveFile);
+    } else {
+      setSiteDriveFile(null);
+    }
+  }, [open, parsedNotes.driveFile]);
 
   const {
     fields: teamMemberFields,
@@ -446,10 +497,26 @@ export const SiteDialog = ({
       (cost) => cost.label.trim().length > 0,
     );
 
+    const driveFileUrl = siteDriveFile?.webViewLink ?? siteDriveFile?.webContentLink ?? undefined;
+    const notesMetadata: Record<string, unknown> = {};
+
+    if (driveFileUrl) {
+      notesMetadata.driveFileUrl = driveFileUrl;
+      notesMetadata.driveFileId = siteDriveFile?.id;
+      notesMetadata.driveFileName = siteDriveFile?.name;
+    }
+
+    if (values.notes && values.notes.trim()) {
+      notesMetadata.internalNotes = values.notes.trim();
+    }
+
+    const serializedNotes = Object.keys(notesMetadata).length > 0 ? JSON.stringify(notesMetadata) : null;
+
     onSubmit({
       ...values,
       team_members: filteredTeamMembers,
       additional_costs: filteredCosts,
+      notes: serializedNotes ?? "",
     });
   };
 
@@ -865,6 +932,21 @@ export const SiteDialog = ({
               >
                 <Plus className="w-4 h-4 mr-1" /> Ajouter un coût
               </Button>
+            </div>
+
+            <div className="space-y-2">
+              <FormLabel>Documents chantier</FormLabel>
+              <DriveFileUploader
+                orgId={orgId ?? initialValues?.org_id ?? null}
+                value={siteDriveFile}
+                onChange={setSiteDriveFile}
+                accept="application/pdf,image/*"
+                maxSizeMb={35}
+                entityType="site"
+                entityId={initialValues?.site_ref}
+                description="Documents liés au chantier"
+                helperText="Ajoutez des photos ou des fichiers stockés sur Google Drive."
+              />
             </div>
 
             <FormField

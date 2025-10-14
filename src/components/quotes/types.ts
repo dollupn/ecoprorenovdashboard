@@ -28,6 +28,9 @@ export interface QuoteMetadata {
   sitePostalCode?: string;
   paymentTerms?: string;
   driveFolderUrl?: string;
+  driveFileUrl?: string;
+  driveFileId?: string;
+  driveFileName?: string;
   emailMessage?: string;
   internalNotes?: string;
   lineItems?: QuoteLineItem[];

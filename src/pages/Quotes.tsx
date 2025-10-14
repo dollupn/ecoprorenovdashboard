@@ -539,17 +539,19 @@ const Quotes = () => {
                                 onOpenDrive={(value) => {
                                   const metadata = parseQuoteMetadata(value);
 
-                                  if (!metadata.driveFolderUrl) {
+                                  const targetUrl = metadata.driveFileUrl ?? metadata.driveFolderUrl;
+
+                                  if (!targetUrl) {
                                     toast({
-                                      title: "Dossier indisponible",
-                                      description: "Aucun dossier Google Drive n'est associé à ce devis.",
+                                      title: "Lien indisponible",
+                                      description: "Aucun document ou dossier Google Drive n'est associé à ce devis.",
                                       variant: "destructive",
                                     });
                                     return;
                                   }
 
                                   if (typeof window !== "undefined") {
-                                    window.open(metadata.driveFolderUrl, "_blank", "noopener,noreferrer");
+                                    window.open(targetUrl, "_blank", "noopener,noreferrer");
                                   }
                                 }}
                                 onSendEmail={(value) => {

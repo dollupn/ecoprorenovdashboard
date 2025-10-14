@@ -5,8 +5,11 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
+import { useOrg } from "@/features/organizations/OrgContext";
 import { useToast } from "@/hooks/use-toast";
 import * as z from "zod";
+import { DriveFileUploader } from "@/components/integrations/DriveFileUploader";
+import type { DriveFileMetadata } from "@/integrations/googleDrive";
 import {
   Dialog,
   DialogContent,
@@ -56,7 +59,9 @@ interface AddInvoiceDialogProps {
 export const AddInvoiceDialog = ({ onInvoiceAdded }: AddInvoiceDialogProps) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [invoiceDriveFile, setInvoiceDriveFile] = useState<DriveFileMetadata | null>(null);
   const { user } = useAuth();
+  const { currentOrgId } = useOrg();
   const { toast } = useToast();
 
   const { data: projects = [] } = useQuery({
@@ -120,6 +125,12 @@ export const AddInvoiceDialog = ({ onInvoiceAdded }: AddInvoiceDialogProps) => {
     }
   }, [selectedQuoteId, quotes, form]);
 
+  useEffect(() => {
+    if (!open) {
+      setInvoiceDriveFile(null);
+    }
+  }, [open]);
+
   const onSubmit = async (data: InvoiceFormValues) => {
     if (!user) {
       toast({
@@ -132,6 +143,21 @@ export const AddInvoiceDialog = ({ onInvoiceAdded }: AddInvoiceDialogProps) => {
 
     setLoading(true);
     try {
+      const driveFileUrl = invoiceDriveFile?.webViewLink ?? invoiceDriveFile?.webContentLink ?? undefined;
+      const notesMetadata: Record<string, unknown> = {};
+
+      if (driveFileUrl) {
+        notesMetadata.driveFileUrl = driveFileUrl;
+        notesMetadata.driveFileId = invoiceDriveFile?.id;
+        notesMetadata.driveFileName = invoiceDriveFile?.name;
+      }
+
+      if (data.notes && data.notes.trim()) {
+        notesMetadata.internalNotes = data.notes.trim();
+      }
+
+      const serializedNotes = Object.keys(notesMetadata).length > 0 ? JSON.stringify(notesMetadata) : null;
+
       const { error } = await supabase.from("invoices").insert([
         {
           user_id: user.id,
@@ -143,7 +169,7 @@ export const AddInvoiceDialog = ({ onInvoiceAdded }: AddInvoiceDialogProps) => {
           quote_id: data.quote_id || null,
           due_date: data.due_date || null,
           paid_date: data.paid_date || null,
-          notes: data.notes || null,
+          notes: serializedNotes,
         },
       ]);
 
@@ -155,6 +181,7 @@ export const AddInvoiceDialog = ({ onInvoiceAdded }: AddInvoiceDialogProps) => {
       });
 
       form.reset();
+      setInvoiceDriveFile(null);
       setOpen(false);
       await onInvoiceAdded?.();
     } catch (error) {
@@ -343,6 +370,21 @@ export const AddInvoiceDialog = ({ onInvoiceAdded }: AddInvoiceDialogProps) => {
                     <FormMessage />
                   </FormItem>
                 )}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <FormLabel>Document de facturation (PDF)</FormLabel>
+              <DriveFileUploader
+                orgId={currentOrgId}
+                value={invoiceDriveFile}
+                onChange={setInvoiceDriveFile}
+                accept="application/pdf"
+                maxSizeMb={25}
+                entityType="invoice"
+                description="Facture générée via Ecoprorenov"
+                helperText="Le document est stocké dans le Drive de votre organisation."
+                disabled={loading}
               />
             </div>
 

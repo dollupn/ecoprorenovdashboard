@@ -25,6 +25,7 @@ import CommercialLeadPOS from "./pages/CommercialLeadPOS";
 import Clients from "./pages/Clients";
 import Accounting from "./pages/Accounting";
 import LeadSettings from "./pages/LeadSettings";
+import GoogleDriveCallback from "./pages/GoogleDriveCallback";
 
 const queryClient = new QueryClient();
 
@@ -62,6 +63,14 @@ const App = () => (
               <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
               <Route path="/members" element={<ProtectedRoute><Members /></ProtectedRoute>} />
+              <Route
+                path="/integrations/google-drive/callback"
+                element={
+                  <ProtectedRoute>
+                    <GoogleDriveCallback />
+                  </ProtectedRoute>
+                }
+              />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

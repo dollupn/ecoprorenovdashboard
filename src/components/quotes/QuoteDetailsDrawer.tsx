@@ -209,6 +209,19 @@ export const QuoteDetailsDrawer = ({ quote, open, onOpenChange }: QuoteDetailsDr
                     <FolderOpen className="mr-2 h-4 w-4" />
                     Ouvrir Drive
                   </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (metadata?.driveFileUrl && typeof window !== "undefined") {
+                        window.open(metadata.driveFileUrl, "_blank", "noopener,noreferrer");
+                      }
+                    }}
+                    disabled={!metadata?.driveFileUrl}
+                  >
+                    <FileText className="mr-2 h-4 w-4" />
+                    Ouvrir le document
+                  </Button>
                 </div>
               </section>
 
