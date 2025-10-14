@@ -1,7 +1,28 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { useForm } from "react-hook-form";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useForm,
+  useFieldArray,
+  type Control,
+  type FieldArrayWithId,
+  type UseFormReturn,
+} from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
+
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
@@ -34,7 +55,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, X } from "lucide-react";
+import { GripVertical, Plus, X } from "lucide-react";
 import { DynamicFields } from "@/features/leads/DynamicFields";
 
 type ProductCatalogEntry = Pick<Tables<"product_catalog">, "id" | "name" | "code" | "category" | "is_active" | "params_schema" | "default_params">;
@@ -48,7 +69,187 @@ type SelectOption = {
 type ProjectProduct = {
   product_id: string;
   quantity: number;
-  dynamic_params: Record<string, any>;
+  dynamic_params: Record<string, unknown>;
+};
+
+type ProjectFormWithOptionalExtras = ProjectFormValues & {
+  extra_fields?: Record<string, unknown>;
+};
+
+type ProductParamField = {
+  name?: string;
+  type?: string;
+  [key: string]: unknown;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+};
+
+const extractProductParamFields = (
+  schema: ProductCatalogEntry["params_schema"]
+): ProductParamField[] => {
+  if (!schema) {
+    return [];
+  }
+
+  if (Array.isArray(schema)) {
+    return schema.filter((field): field is ProductParamField =>
+      typeof (field as ProductParamField | undefined)?.name === "string"
+    );
+  }
+
+  if (isRecord(schema)) {
+    const maybeFields = schema.fields;
+    if (Array.isArray(maybeFields)) {
+      return maybeFields.filter((field): field is ProductParamField =>
+        typeof (field as ProductParamField | undefined)?.name === "string"
+      );
+    }
+  }
+
+  return [];
+};
+
+interface SortableProjectProductRowProps {
+  field: FieldArrayWithId<ProjectFormValues, "products">;
+  index: number;
+  control: Control<ProjectFormValues>;
+  form: UseFormReturn<ProjectFormValues>;
+  onRemove: (index: number) => void;
+  canRemove: boolean;
+  productsLoading: boolean;
+  rawProductOptions: SelectOption[];
+  productsData: ProductCatalogEntry[] | undefined;
+  isSubmitting: boolean;
+}
+
+const SortableProjectProductRow = ({
+  field,
+  index,
+  control,
+  form,
+  onRemove,
+  canRemove,
+  productsLoading,
+  rawProductOptions,
+  productsData,
+  isSubmitting,
+}: SortableProjectProductRowProps) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: field.id,
+  });
+
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  const productId = form.watch(`products.${index}.product_id`);
+  const selectedProduct = productsData?.find((product) => product.id === productId);
+  const dynamicFields = selectedProduct
+    ? extractProductParamFields(selectedProduct.params_schema)
+    : [];
+  const hasDynamicFields = dynamicFields.length > 0;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`space-y-4 rounded-md border bg-background p-4 shadow-sm transition-shadow ${
+        isDragging ? "ring-2 ring-primary/40" : ""
+      }`}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="cursor-grab active:cursor-grabbing"
+            aria-label="Réorganiser le produit"
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical className="h-4 w-4" />
+          </Button>
+          <span className="text-sm font-medium text-muted-foreground">Produit {index + 1}</span>
+        </div>
+        {canRemove ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => onRemove(index)}
+            aria-label="Supprimer le produit"
+            disabled={isSubmitting}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        ) : null}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <FormField
+          control={control}
+          name={`products.${index}.product_id`}
+          render={({ field: productField }) => (
+            <FormItem>
+              <FormLabel>Produit *</FormLabel>
+              <Select
+                onValueChange={productField.onChange}
+                value={productField.value ?? ""}
+                disabled={productsLoading || isSubmitting}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionnez un code produit" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {rawProductOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={control}
+          name={`products.${index}.quantity`}
+          render={({ field: quantityField }) => (
+            <FormItem>
+              <FormLabel>Quantité *</FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  min="1"
+                  value={quantityField.value ?? 1}
+                  onChange={quantityField.onChange}
+                  disabled={isSubmitting}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+
+      {hasDynamicFields ? (
+        <DynamicFields
+          form={form as unknown as UseFormReturn<ProjectFormWithOptionalExtras>}
+          schema={{ fields: dynamicFields }}
+          disabled={isSubmitting}
+          fieldPrefix={`products.${index}.dynamic_params`}
+        />
+      ) : null}
+    </div>
+  );
 };
 
 const sirenSchema = z
@@ -122,20 +323,31 @@ const baseDefaultValues: Partial<ProjectFormValues> = {
 };
 
 // Fonction pour initialiser les champs dynamiques avec les valeurs par défaut
-const getInitialDynamicParams = (product: any) => {
-  if (!product?.params_schema) return {};
-  const schema = product.params_schema as any;
-  const initialParams: Record<string, any> = {};
-
-  if (schema.fields && Array.isArray(schema.fields)) {
-    schema.fields.forEach((field: any) => {
-      if (product.default_params && typeof product.default_params === "object" && field.name in product.default_params) {
-        initialParams[field.name] = (product.default_params as any)[field.name];
-      } else {
-        initialParams[field.name] = field.type === "number" ? 0 : "";
-      }
-    });
+const getInitialDynamicParams = (product?: ProductCatalogEntry | null) => {
+  if (!product) {
+    return {} as Record<string, unknown>;
   }
+
+  const fields = extractProductParamFields(product.params_schema);
+  const defaults = isRecord(product.default_params)
+    ? (product.default_params as Record<string, unknown>)
+    : undefined;
+
+  const initialParams: Record<string, unknown> = {};
+
+  fields.forEach((field) => {
+    const fieldName = field.name;
+    if (!fieldName) {
+      return;
+    }
+
+    if (defaults && fieldName in defaults) {
+      initialParams[fieldName] = defaults[fieldName];
+      return;
+    }
+
+    initialParams[fieldName] = field.type === "number" ? 0 : "";
+  });
 
   return initialParams;
 };
@@ -332,29 +544,40 @@ export const AddProjectDialog = ({
     } as ProjectFormValues,
   });
 
-  const addProduct = () => {
-    const currentProducts = form.getValues("products") || [];
-    form.setValue("products", [...currentProducts, createProductEntry()]);
-  };
+  const {
+    fields: productFields,
+    append: appendProductField,
+    remove: removeProductField,
+    move: moveProduct,
+    replace: replaceProducts,
+  } = useFieldArray({
+    control: form.control,
+    name: "products",
+  });
 
-  const removeProduct = (index: number) => {
-    const currentProducts = form.getValues("products") || [];
-    if (currentProducts.length <= 1) {
-      return;
-    }
+  const addProduct = useCallback(() => {
+    appendProductField(createProductEntry());
+  }, [appendProductField]);
 
-    const removed = currentProducts[index];
-    const updated = currentProducts.filter((_, i) => i !== index);
+  const removeProduct = useCallback(
+    (index: number) => {
+      if (productFields.length <= 1) {
+        form.setValue(`products.${index}`, createProductEntry());
+        return;
+      }
 
-    form.setValue(
-      "products",
-      updated.length ? updated : [createProductEntry()]
-    );
+      const removed = form.getValues(`products.${index}`);
+      removeProductField(index);
 
-    if (removed?.product_id && ecoProducts.some((product) => product.id === removed.product_id)) {
-      setSelectedEcoProductIds((prev) => prev.filter((id) => id !== removed.product_id));
-    }
-  };
+      if (
+        removed?.product_id &&
+        ecoProducts.some((product) => product.id === removed.product_id)
+      ) {
+        setSelectedEcoProductIds((prev) => prev.filter((id) => id !== removed.product_id));
+      }
+    },
+    [ecoProducts, form, productFields.length, removeProductField]
+  );
 
   const syncEcoProducts = useCallback(
     (nextSelected: string[]) => {
@@ -377,9 +600,39 @@ export const AddProjectDialog = ({
       );
 
       const merged = [...ecoEntries, ...nonEcoProducts];
-      form.setValue("products", merged.length ? merged : [createProductEntry()]);
+      replaceProducts(merged.length ? merged : [createProductEntry()]);
     },
-    [ecoProducts, form]
+    [ecoProducts, form, replaceProducts]
+  );
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    })
+  );
+
+  const productIds = useMemo(() => productFields.map((field) => field.id), [productFields]);
+
+  const handleProductDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+
+      if (!over || active.id === over.id) {
+        return;
+      }
+
+      const activeIndex = productIds.findIndex((id) => id === active.id);
+      const overIndex = productIds.findIndex((id) => id === over.id);
+
+      if (activeIndex === -1 || overIndex === -1 || activeIndex === overIndex) {
+        return;
+      }
+
+      moveProduct(activeIndex, overIndex);
+    },
+    [moveProduct, productIds]
   );
 
   useEffect(() => {
@@ -819,90 +1072,41 @@ export const AddProjectDialog = ({
                 </div>
               )}
 
-              {form.watch("products")?.map((_, index) => {
-                const productId = form.watch(`products.${index}.product_id`);
-                const selectedProduct = productsData?.find((p) => p.id === productId);
+              {productFields.length > 1 ? (
+                <p className="text-xs text-muted-foreground">
+                  Faites glisser les poignées pour réorganiser vos produits dans l&apos;ordre souhaité.
+                </p>
+              ) : null}
 
-                return (
-                  <div key={index} className="border p-4 rounded-md space-y-4 relative">
-                    {form.watch("products")!.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="absolute top-2 right-2"
-                        onClick={() => removeProduct(index)}
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    )}
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <FormField
+              {productFields.length === 0 ? (
+                <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
+                  Ajoutez au moins un produit au projet.
+                </div>
+              ) : (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleProductDragEnd}
+                >
+                  <SortableContext items={productIds} strategy={verticalListSortingStrategy}>
+                    {productFields.map((field, index) => (
+                      <SortableProjectProductRow
+                        key={field.id}
+                        field={field}
+                        index={index}
                         control={form.control}
-                        name={`products.${index}.product_id`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Produit *</FormLabel>
-                            <Select
-                              onValueChange={field.onChange}
-                              value={field.value ?? ""}
-                              disabled={productsLoading}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Sélectionnez un code produit" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {rawProductOptions.map((option) => (
-                                  <SelectItem key={option.value} value={option.value}>
-                                    {option.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
+                        form={form}
+                        onRemove={removeProduct}
+                        canRemove={productFields.length > 1}
+                        productsLoading={productsLoading}
+                        rawProductOptions={rawProductOptions}
+                        productsData={productsData}
+                        isSubmitting={loading}
                       />
-
-                      <FormField
-                        control={form.control}
-                        name={`products.${index}.quantity`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Quantité *</FormLabel>
-                            <FormControl>
-                              <Input
-                                type="number"
-                                min="1"
-                                value={field.value ?? 1}
-                                onChange={field.onChange}
-                                disabled={loading}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-
-                    {selectedProduct?.params_schema && (
-                      <DynamicFields
-                        form={form as any}
-                        schema={{
-                          fields: Array.isArray(selectedProduct.params_schema)
-                            ? selectedProduct.params_schema
-                            : (selectedProduct.params_schema as any)?.fields || [],
-                        }}
-                        disabled={loading}
-                        fieldPrefix={`products.${index}.dynamic_params`}
-                      />
-                    )}
-                  </div>
-                );
-              })}
+                    ))}
+                  </SortableContext>
+                </DndContext>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">

@@ -1,8 +1,36 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
+import {
+  useForm,
+  useFieldArray,
+  type Control,
+  type FieldArrayWithId,
+  type UseFormGetValues,
+} from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import * as z from "zod";
+
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -36,7 +64,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Plus, PlusCircle, Trash2 } from "lucide-react";
+import { GripVertical, Plus, PlusCircle, Trash2 } from "lucide-react";
 
 import { formatQuoteCurrency } from "./utils";
 import type { QuoteLineItem, QuoteMetadata } from "./types";
@@ -88,6 +116,168 @@ const createEmptyLineItem = (): QuoteFormValues["line_items"][number] => ({
   unit_price: 0,
   tax_rate: 0,
 });
+
+interface SortableQuoteLineItemProps {
+  field: FieldArrayWithId<QuoteFormValues, "line_items">;
+  index: number;
+  control: Control<QuoteFormValues>;
+  remove: (index: number) => void;
+  getValues: UseFormGetValues<QuoteFormValues>;
+}
+
+const SortableQuoteLineItem = ({
+  field,
+  index,
+  control,
+  remove,
+  getValues,
+}: SortableQuoteLineItemProps) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: field.id,
+  });
+
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  const quantity = Number(getValues(`line_items.${index}.quantity`)) || 0;
+  const unitPrice = Number(getValues(`line_items.${index}.unit_price`)) || 0;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`space-y-4 rounded-md border bg-background p-4 shadow-sm transition-shadow ${
+        isDragging ? "ring-2 ring-primary/40" : ""
+      }`}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="cursor-grab active:cursor-grabbing"
+            aria-label="Réorganiser la ligne du devis"
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical className="h-4 w-4" />
+          </Button>
+          <span className="text-sm font-medium text-muted-foreground">Ligne {index + 1}</span>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={() => remove(index)}
+          aria-label="Supprimer la ligne"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <FormField
+          control={control}
+          name={`line_items.${index}.reference`}
+          render={({ field: referenceField }) => (
+            <FormItem>
+              <FormLabel>Référence</FormLabel>
+              <FormControl>
+                <Input placeholder="REF-001" {...referenceField} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={control}
+          name={`line_items.${index}.quantity`}
+          render={({ field: quantityField }) => (
+            <FormItem>
+              <FormLabel>Quantité</FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  {...quantityField}
+                  onChange={(event) => quantityField.onChange(event.target.valueAsNumber)}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+
+      <FormField
+        control={control}
+        name={`line_items.${index}.description`}
+        render={({ field: descriptionField }) => (
+          <FormItem>
+            <FormLabel>Description *</FormLabel>
+            <FormControl>
+              <Textarea
+                placeholder="Détaillez la prestation proposée"
+                className="min-h-[80px]"
+                {...descriptionField}
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <FormField
+          control={control}
+          name={`line_items.${index}.unit_price`}
+          render={({ field: unitPriceField }) => (
+            <FormItem>
+              <FormLabel>Prix unitaire HT</FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  {...unitPriceField}
+                  onChange={(event) => unitPriceField.onChange(event.target.valueAsNumber)}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={control}
+          name={`line_items.${index}.tax_rate`}
+          render={({ field: taxRateField }) => (
+            <FormItem>
+              <FormLabel>TVA %</FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  {...taxRateField}
+                  onChange={(event) => taxRateField.onChange(event.target.valueAsNumber)}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <div className="flex flex-col justify-end rounded-md border bg-muted/40 px-3 py-2">
+          <p className="text-sm text-muted-foreground">Sous-total</p>
+          <p className="text-base font-semibold">{formatQuoteCurrency(quantity * unitPrice)}</p>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const baseDefaultValues: QuoteFormValues = {
   quote_ref: "",
@@ -144,10 +334,40 @@ export const AddQuoteDialog = ({
     defaultValues: baseDefaultValues,
   });
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields, append, remove, move } = useFieldArray({
     control: form.control,
     name: "line_items",
   });
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    })
+  );
+
+  const lineItemIds = useMemo(() => fields.map((field) => field.id), [fields]);
+
+  const handleLineItemsDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+
+      if (!over || active.id === over.id) {
+        return;
+      }
+
+      const activeIndex = lineItemIds.findIndex((id) => id === active.id);
+      const overIndex = lineItemIds.findIndex((id) => id === over.id);
+
+      if (activeIndex === -1 || overIndex === -1 || activeIndex === overIndex) {
+        return;
+      }
+
+      move(activeIndex, overIndex);
+    },
+    [lineItemIds, move]
+  );
 
   const watchedLineItems = form.watch("line_items");
 
@@ -543,123 +763,36 @@ export const AddQuoteDialog = ({
                 </Button>
               </div>
 
+              {fields.length > 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Glissez-déposez les lignes pour personnaliser l&apos;ordre d&apos;affichage du devis.
+                </p>
+              ) : null}
+
               <div className="space-y-3">
                 {fields.length === 0 ? (
                   <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
                     Ajoutez des lignes pour détailler votre devis.
                   </div>
                 ) : (
-                  fields.map((fieldItem, index) => (
-                    <div key={fieldItem.id} className="space-y-3 rounded-md border bg-background p-4">
-                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                        <div className="flex-1 grid grid-cols-1 gap-3 md:grid-cols-2">
-                          <FormField
-                            control={form.control}
-                            name={`line_items.${index}.reference`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Référence</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="REF-001" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={form.control}
-                            name={`line_items.${index}.quantity`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Quantité</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    {...field}
-                                    onChange={(event) => field.onChange(event.target.valueAsNumber)}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                        <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-
-                      <FormField
-                        control={form.control}
-                        name={`line_items.${index}.description`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Description *</FormLabel>
-                            <FormControl>
-                              <Textarea
-                                placeholder="Détaillez la prestation proposée"
-                                className="min-h-[80px]"
-                                {...field}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                        <FormField
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleLineItemsDragEnd}
+                  >
+                    <SortableContext items={lineItemIds} strategy={verticalListSortingStrategy}>
+                      {fields.map((fieldItem, index) => (
+                        <SortableQuoteLineItem
+                          key={fieldItem.id}
+                          field={fieldItem}
+                          index={index}
                           control={form.control}
-                          name={`line_items.${index}.unit_price`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Prix unitaire HT</FormLabel>
-                              <FormControl>
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  {...field}
-                                  onChange={(event) => field.onChange(event.target.valueAsNumber)}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
+                          remove={remove}
+                          getValues={form.getValues}
                         />
-                        <FormField
-                          control={form.control}
-                          name={`line_items.${index}.tax_rate`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>TVA %</FormLabel>
-                              <FormControl>
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  {...field}
-                                  onChange={(event) => field.onChange(event.target.valueAsNumber)}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <div className="flex flex-col justify-end">
-                          <p className="text-sm text-muted-foreground">Sous-total</p>
-                          <p className="text-base font-semibold">
-                            {formatQuoteCurrency(
-                              (Number(form.getValues(`line_items.${index}.quantity`)) || 0) *
-                                (Number(form.getValues(`line_items.${index}.unit_price`)) || 0)
-                            )}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))
+                      ))}
+                    </SortableContext>
+                  </DndContext>
                 )}
               </div>
 
