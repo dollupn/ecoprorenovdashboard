@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { FileText, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 
 type TechnicalSheetUploadProps = {
   orgId: string | null;
@@ -21,18 +22,21 @@ export const TechnicalSheetUpload = ({
   disabled,
 }: TechnicalSheetUploadProps) => {
   const [uploading, setUploading] = useState(false);
+  const [isDragActive, setIsDragActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { toast } = useToast();
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file || !orgId) return;
-
+  const processFile = async (file: File, input?: HTMLInputElement | null) => {
+    if (!orgId) return;
     if (file.type !== "application/pdf") {
       toast({
         title: "Format invalide",
         description: "Seuls les fichiers PDF sont acceptés",
         variant: "destructive",
       });
+      if (input) {
+        input.value = "";
+      }
       return;
     }
 
@@ -42,6 +46,9 @@ export const TechnicalSheetUpload = ({
         description: "La taille maximale est de 10 Mo",
         variant: "destructive",
       });
+      if (input) {
+        input.value = "";
+      }
       return;
     }
 
@@ -68,8 +75,18 @@ export const TechnicalSheetUpload = ({
         variant: "destructive",
       });
     } finally {
+      if (input) {
+        input.value = "";
+      }
       setUploading(false);
     }
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    await processFile(file, event.target);
   };
 
   const handleRemove = async () => {
@@ -116,17 +133,76 @@ export const TechnicalSheetUpload = ({
           </Button>
         </div>
       ) : (
-        <div className="flex items-center gap-2">
+        <div
+          className={cn(
+            "flex flex-col items-center justify-center gap-3 rounded-md border-2 border-dashed p-6 text-center transition-colors",
+            disabled || uploading
+              ? "cursor-not-allowed border-muted-foreground/20 bg-muted/30"
+              : "cursor-pointer border-muted-foreground/40 hover:border-primary hover:bg-primary/5",
+            isDragActive && !disabled && !uploading ? "border-primary bg-primary/5" : null
+          )}
+          onClick={() => {
+            if (disabled || uploading) return;
+            fileInputRef.current?.click();
+          }}
+          onDragOver={(event) => {
+            event.preventDefault();
+            if (disabled || uploading) return;
+            setIsDragActive(true);
+          }}
+          onDragEnter={(event) => {
+            event.preventDefault();
+            if (disabled || uploading) return;
+            setIsDragActive(true);
+          }}
+          onDragLeave={(event) => {
+            event.preventDefault();
+            setIsDragActive(false);
+          }}
+          onDrop={async (event) => {
+            event.preventDefault();
+            if (disabled || uploading) return;
+            setIsDragActive(false);
+            const file = event.dataTransfer.files?.[0];
+            if (!file) {
+              return;
+            }
+
+            if (fileInputRef.current && typeof DataTransfer !== "undefined") {
+              const dataTransfer = new DataTransfer();
+              dataTransfer.items.add(file);
+              fileInputRef.current.files = dataTransfer.files;
+            }
+
+            await processFile(file, fileInputRef.current);
+          }}
+        >
+          <Upload className="h-6 w-6 text-primary" />
+          <div>
+            <p className="text-sm font-medium">Glissez-déposez votre fiche technique</p>
+            <p className="text-xs text-muted-foreground">Format accepté : PDF (max 10 Mo)</p>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={disabled || uploading}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (disabled || uploading) return;
+              fileInputRef.current?.click();
+            }}
+          >
+            {uploading ? "Upload en cours..." : "Sélectionner un PDF"}
+          </Button>
           <Input
+            ref={fileInputRef}
             type="file"
             accept=".pdf"
             onChange={handleFileUpload}
             disabled={disabled || uploading}
-            className="flex-1"
+            className="hidden"
           />
-          {uploading && (
-            <Upload className="h-4 w-4 animate-pulse text-muted-foreground" />
-          )}
         </div>
       )}
     </div>

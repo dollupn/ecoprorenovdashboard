@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -50,6 +50,7 @@ import {
 import type { TablesInsert } from "@/integrations/supabase/types";
 import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 
 const LEAD_SOURCES = ["Commercial", "Campagne FB", "Régie Commercial"] as const;
 
@@ -102,6 +103,8 @@ interface LeadFormDialogProps {
 export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
   const [open, setOpen] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [isPhotoDragActive, setIsPhotoDragActive] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
   const { user } = useAuth();
   const { currentOrgId } = useOrg();
   const { toast } = useToast();
@@ -703,20 +706,116 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
             <FormField
               control={form.control}
               name="photo_file"
-              render={({ field: { value, onChange, ...field } }) => (
+              render={({ field: { onChange, ref, ...field } }) => (
                 <FormItem>
                   <FormLabel>Photo pré-visite</FormLabel>
                   <FormControl>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
+                    <div className="space-y-3">
+                      <div
+                        className={cn(
+                          "flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed p-6 text-center transition-colors",
+                          isPhotoDragActive ? "border-primary bg-primary/5" : "border-muted-foreground/30"
+                        )}
+                        onDragOver={(event) => {
+                          event.preventDefault();
+                          if (isSubmitting) return;
+                          setIsPhotoDragActive(true);
+                        }}
+                        onDragEnter={(event) => {
+                          event.preventDefault();
+                          if (isSubmitting) return;
+                          setIsPhotoDragActive(true);
+                        }}
+                        onDragLeave={(event) => {
+                          event.preventDefault();
+                          setIsPhotoDragActive(false);
+                        }}
+                        onDrop={(event) => {
+                          event.preventDefault();
+                          if (isSubmitting) return;
+                          setIsPhotoDragActive(false);
+                          const file = event.dataTransfer.files?.[0];
+                          if (!file) {
+                            return;
+                          }
+                          if (!file.type.startsWith("image/")) {
+                            toast({
+                              title: "Format invalide",
+                              description: "Seuls les fichiers image sont acceptés",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+
+                          if (file.size > 10 * 1024 * 1024) {
+                            toast({
+                              title: "Fichier trop volumineux",
+                              description: "La taille maximale est de 10 Mo",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+
+                          if (photoInputRef.current && typeof DataTransfer !== "undefined") {
+                            const dataTransfer = new DataTransfer();
+                            dataTransfer.items.add(file);
+                            photoInputRef.current.files = dataTransfer.files;
+                          }
+
+                          onChange(file);
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setPhotoPreview(reader.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                        }}
+                      >
+                        <Upload className="h-8 w-8 text-primary" />
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium">Glissez-déposez votre photo</p>
+                          <p className="text-xs text-muted-foreground">
+                            Formats acceptés : JPG, PNG – taille maximale 10 Mo
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => photoInputRef.current?.click()}
+                          disabled={isSubmitting}
+                        >
+                          Sélectionner une image
+                        </Button>
                         <Input
                           {...field}
+                          ref={(element) => {
+                            ref(element);
+                            photoInputRef.current = element;
+                          }}
                           type="file"
                           accept="image/*"
                           disabled={isSubmitting}
                           onChange={(e) => {
                             const file = e.target.files?.[0];
                             if (file) {
+                              if (!file.type.startsWith("image/")) {
+                                toast({
+                                  title: "Format invalide",
+                                  description: "Seuls les fichiers image sont acceptés",
+                                  variant: "destructive",
+                                });
+                                e.target.value = "";
+                                return;
+                              }
+                              if (file.size > 10 * 1024 * 1024) {
+                                toast({
+                                  title: "Fichier trop volumineux",
+                                  description: "La taille maximale est de 10 Mo",
+                                  variant: "destructive",
+                                });
+                                e.target.value = "";
+                                return;
+                              }
                               onChange(file);
                               const reader = new FileReader();
                               reader.onloadend = () => {
@@ -725,9 +824,18 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
                               reader.readAsDataURL(file);
                             }
                           }}
-                          className="cursor-pointer"
+                          className="hidden"
                         />
-                        {photoPreview && (
+                      </div>
+                      {photoPreview && (
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="relative w-full max-w-xs">
+                            <img
+                              src={photoPreview}
+                              alt="Aperçu"
+                              className="h-48 w-full rounded-lg border object-cover"
+                            />
+                          </div>
                           <Button
                             type="button"
                             variant="ghost"
@@ -735,19 +843,13 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
                             onClick={() => {
                               onChange(undefined);
                               setPhotoPreview(null);
+                              if (photoInputRef.current) {
+                                photoInputRef.current.value = "";
+                              }
                             }}
                           >
                             <X className="h-4 w-4" />
                           </Button>
-                        )}
-                      </div>
-                      {photoPreview && (
-                        <div className="relative w-full max-w-xs">
-                          <img
-                            src={photoPreview}
-                            alt="Aperçu"
-                            className="rounded-lg border object-cover w-full h-48"
-                          />
                         </div>
                       )}
                     </div>

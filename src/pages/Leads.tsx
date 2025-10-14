@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { Layout } from "@/components/layout/Layout";
@@ -72,8 +72,10 @@ import {
   Loader2,
   LayoutGrid,
   List,
+  Upload,
 } from "lucide-react";
 import { getOrganizationProducts } from "@/features/leads/api";
+import { cn } from "@/lib/utils";
 
 const CARD_SKELETON_COUNT = 4;
 
@@ -742,6 +744,7 @@ const Leads = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState<LeadStatus[]>([]);
   const [importing, setImporting] = useState(false);
+  const [isCsvDragActive, setIsCsvDragActive] = useState(false);
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const orgId = user?.id ?? null;
 
@@ -834,17 +837,28 @@ const Leads = () => {
     setImportDialogOpen(true);
   };
 
-  const handleCsvImport = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
+  const runCsvImport = async (file: File, input?: HTMLInputElement | null) => {
     if (!user) {
       toast({
         title: "Connexion requise",
         description: "Connectez-vous pour importer des leads",
         variant: "destructive",
       });
-      event.target.value = "";
+      if (input) {
+        input.value = "";
+      }
+      return;
+    }
+
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      toast({
+        title: "Format invalide",
+        description: "Seuls les fichiers CSV sont acceptés",
+        variant: "destructive",
+      });
+      if (input) {
+        input.value = "";
+      }
       return;
     }
 
@@ -866,7 +880,6 @@ const Leads = () => {
         return;
       }
 
-      // keep bulk product fallback + default status "À rappeler"
       const payload = rows.map((row) => {
         const rowProductName =
           row.product_name && row.product_name.trim().length > 0 ? row.product_name.trim() : null;
@@ -918,9 +931,37 @@ const Leads = () => {
         variant: "destructive",
       });
     } finally {
-      event.target.value = "";
+      if (input) {
+        input.value = "";
+      }
       setImporting(false);
     }
+  };
+
+  const handleCsvImport = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    await runCsvImport(file, event.target);
+  };
+
+  const handleCsvDrop = async (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    if (importing) return;
+    setIsCsvDragActive(false);
+
+    const file = event.dataTransfer.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    if (fileInputRef.current && typeof DataTransfer !== "undefined") {
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+      fileInputRef.current.files = dataTransfer.files;
+    }
+
+    await runCsvImport(file, fileInputRef.current);
   };
 
   const handleLeadAdded = async () => {
@@ -1025,6 +1066,55 @@ const Leads = () => {
                 {selectedImportProduct
                   ? `Le produit ${selectedImportProduct.label} sera appliqué aux leads sans produit.`
                   : "Laissez vide pour conserver le produit présent dans chaque ligne du CSV."}
+              </p>
+            </div>
+            <div
+              className={cn(
+                "flex flex-col items-center justify-center gap-3 rounded-md border-2 border-dashed p-6 text-center transition-colors",
+                importing
+                  ? "cursor-not-allowed border-muted-foreground/30 bg-muted/30 text-muted-foreground"
+                  : "cursor-pointer border-muted-foreground/40 hover:border-primary hover:bg-primary/5",
+                isCsvDragActive && !importing ? "border-primary bg-primary/5" : null
+              )}
+              role="button"
+              tabIndex={importing ? -1 : 0}
+              aria-disabled={importing}
+              onClick={() => {
+                if (importing) return;
+                fileInputRef.current?.click();
+              }}
+              onKeyDown={(event) => {
+                if (importing) return;
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  fileInputRef.current?.click();
+                }
+              }}
+              onDragOver={(event) => {
+                event.preventDefault();
+                if (importing) return;
+                setIsCsvDragActive(true);
+              }}
+              onDragEnter={(event) => {
+                event.preventDefault();
+                if (importing) return;
+                setIsCsvDragActive(true);
+              }}
+              onDragLeave={(event) => {
+                event.preventDefault();
+                setIsCsvDragActive(false);
+              }}
+              onDrop={handleCsvDrop}
+            >
+              <Upload className="h-6 w-6 text-primary" />
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Glissez-déposez votre fichier CSV</p>
+                <p className="text-xs text-muted-foreground">
+                  Encodage UTF-8 recommandé • séparateur virgule ou point-virgule détecté automatiquement
+                </p>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Vous pouvez aussi cliquer ou utiliser le bouton ci-dessous pour sélectionner un fichier.
               </p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
