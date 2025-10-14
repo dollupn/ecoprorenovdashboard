@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { formatDistanceToNow, parseISO } from "date-fns";
@@ -39,7 +40,18 @@ import {
   MonitorSmartphone,
   Clock,
   AlertCircle,
+  Palette,
+  Plus,
+  Trash2,
 } from "lucide-react";
+import {
+  DEFAULT_PROJECT_STATUSES,
+  getProjectStatusBadgeStyle,
+  getProjectStatusSettings,
+  resetProjectStatuses,
+  saveProjectStatuses,
+  type ProjectStatusSetting,
+} from "@/lib/projects";
 
 const ROLE_OPTIONS = ["Administrateur", "Manager", "Commercial", "Technicien"] as const;
 type RoleOption = (typeof ROLE_OPTIONS)[number];
@@ -222,12 +234,20 @@ export default function Settings() {
   });
 
   const [integrations, setIntegrations] = useState(initialIntegrations);
+  const syncedProjectStatuses = useProjectStatuses();
+  const [projectStatuses, setProjectStatuses] = useState<ProjectStatusSetting[]>(() =>
+    getProjectStatusSettings(),
+  );
 
   useEffect(() => {
     return () => {
       isMounted.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    setProjectStatuses(syncedProjectStatuses);
+  }, [syncedProjectStatuses]);
 
   const fetchTeamMembers = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -553,6 +573,125 @@ export default function Settings() {
     disconnected: "border-red-200/60 bg-red-500/10 text-red-700",
   };
 
+  const isDefaultProjectStatuses = useMemo(() => {
+    if (projectStatuses.length !== DEFAULT_PROJECT_STATUSES.length) {
+      return false;
+    }
+
+    const sortedCurrent = [...projectStatuses].sort((a, b) =>
+      a.value.localeCompare(b.value),
+    );
+    const sortedDefaults = [...DEFAULT_PROJECT_STATUSES].sort((a, b) =>
+      a.value.localeCompare(b.value),
+    );
+
+    return sortedCurrent.every((status, index) => {
+      const reference = sortedDefaults[index];
+      return (
+        status.value === reference.value &&
+        status.label === reference.label &&
+        status.color.toUpperCase() === reference.color.toUpperCase()
+      );
+    });
+  }, [projectStatuses]);
+
+  const persistProjectStatuses = useCallback(
+    (
+      updater: (prev: ProjectStatusSetting[]) => ProjectStatusSetting[],
+      toastOptions?: { title: string; description?: string },
+    ) => {
+      let sanitizedResult: ProjectStatusSetting[] = [];
+      setProjectStatuses((prev) => {
+        const next = updater(prev);
+        sanitizedResult = saveProjectStatuses(next);
+        return sanitizedResult;
+      });
+
+      if (toastOptions) {
+        toast(toastOptions);
+      }
+
+      return sanitizedResult;
+    },
+    [toast],
+  );
+
+  const handleStatusLabelChange = useCallback(
+    (id: string, label: string) => {
+      persistProjectStatuses((prev) =>
+        prev.map((status) => (status.id === id ? { ...status, label } : status)),
+      );
+    },
+    [persistProjectStatuses],
+  );
+
+  const handleStatusValueChange = useCallback(
+    (id: string, value: string) => {
+      persistProjectStatuses((prev) =>
+        prev.map((status) => (status.id === id ? { ...status, value } : status)),
+      );
+    },
+    [persistProjectStatuses],
+  );
+
+  const handleStatusColorChange = useCallback(
+    (id: string, color: string) => {
+      persistProjectStatuses((prev) =>
+        prev.map((status) => (status.id === id ? { ...status, color } : status)),
+      );
+    },
+    [persistProjectStatuses],
+  );
+
+  const handleAddStatus = useCallback(() => {
+    persistProjectStatuses(
+      (prev) => [
+        ...prev,
+        {
+          id: `custom-${Date.now()}`,
+          value: `NOUVEAU_STATUT_${prev.length + 1}`,
+          label: `Nouveau statut ${prev.length + 1}`,
+          color: DEFAULT_PROJECT_STATUSES[0]?.color ?? "#6B7280",
+        },
+      ],
+      {
+        title: "Statut ajouté",
+        description: "Personnalisez le libellé et la couleur pour l'utiliser immédiatement.",
+      },
+    );
+  }, [persistProjectStatuses]);
+
+  const handleRemoveStatus = useCallback(
+    (id: string) => {
+      if (projectStatuses.length <= 1) {
+        toast({
+          variant: "destructive",
+          title: "Au moins un statut requis",
+          description: "Ajoutez un nouveau statut avant de supprimer celui-ci.",
+        });
+        return;
+      }
+
+      persistProjectStatuses(
+        (prev) => prev.filter((status) => status.id !== id),
+        {
+          title: "Statut supprimé",
+          description: "Le statut ne sera plus proposé dans les projets.",
+        },
+      );
+    },
+    [persistProjectStatuses, projectStatuses.length, toast],
+  );
+
+  const handleResetStatuses = useCallback(() => {
+    const sanitized = resetProjectStatuses();
+    setProjectStatuses(sanitized);
+    toast({
+      title: "Statuts réinitialisés",
+      description: "Retour aux statuts standards d'EcoProRenov.",
+    });
+  }, [toast]);
+
   return (
     <Layout>
       <div className="space-y-8">
@@ -621,6 +760,110 @@ export default function Settings() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">{renderTeamMembers()}</CardContent>
+            </Card>
+
+            <Card className="border border-border/60 bg-card/70 shadow-sm">
+              <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-lg font-semibold text-foreground">
+                    <Palette className="h-5 w-5 text-primary" />
+                    Statuts des projets
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Personnalisez les libellés et les couleurs utilisés sur l&apos;ensemble du tableau de bord.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleResetStatuses}
+                    disabled={isDefaultProjectStatuses}
+                  >
+                    Réinitialiser
+                  </Button>
+                  <Button size="sm" variant="secondary" className="gap-2" onClick={handleAddStatus}>
+                    <Plus className="h-4 w-4" />
+                    Ajouter un statut
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {projectStatuses.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-border/60 bg-background/60 p-6 text-center text-sm text-muted-foreground">
+                    Aucun statut n&apos;est configuré. Ajoutez un statut pour commencer.
+                  </div>
+                ) : (
+                  projectStatuses.map((status) => {
+                    const badgeStyle = getProjectStatusBadgeStyle(status.color);
+                    return (
+                      <div
+                        key={status.id}
+                        className="space-y-4 rounded-2xl border border-border/60 bg-background/60 p-4"
+                      >
+                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                          <div className="flex items-center gap-3">
+                            <Badge variant="outline" style={badgeStyle} className="px-3 py-1">
+                              {status.label || status.value}
+                            </Badge>
+                            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                              {status.value}
+                            </span>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoveStatus(status.id)}
+                            disabled={projectStatuses.length <= 1}
+                            aria-label={`Supprimer le statut ${status.label || status.value}`}
+                            className="h-9 w-9 text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                          <div className="space-y-2">
+                            <Label>Nom affiché</Label>
+                            <Input
+                              value={status.label}
+                              placeholder="Nom du statut"
+                              onChange={(event) => handleStatusLabelChange(status.id, event.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Code interne</Label>
+                            <Input
+                              value={status.value}
+                              onChange={(event) => handleStatusValueChange(status.id, event.target.value)}
+                              placeholder="PROSPECTION"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Identifiant synchronisé avec vos exports et intégrations.
+                            </p>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Couleur du badge</Label>
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="color"
+                                value={status.color}
+                                onChange={(event) => handleStatusColorChange(status.id, event.target.value)}
+                                className="h-10 w-16 cursor-pointer rounded-md border border-border/60 bg-background p-1"
+                                aria-label={`Couleur du statut ${status.label || status.value}`}
+                              />
+                              <span className="text-sm text-muted-foreground">{status.color}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+                <div className="rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-4 text-sm text-muted-foreground">
+                  Les modifications sont appliquées instantanément aux listes, aux filtres et aux formulaires de création
+                  de projet.
+                </div>
+              </CardContent>
             </Card>
 
             <Card className="border border-border/60 bg-card/70 shadow-sm">
