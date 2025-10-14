@@ -36,6 +36,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, X } from "lucide-react";
 import { DynamicFields } from "@/features/leads/DynamicFields";
+import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 
 type ProductCatalogEntry = Pick<Tables<"product_catalog">, "id" | "name" | "code" | "category" | "is_active" | "params_schema" | "default_params">;
 type Profile = Tables<"profiles">;
@@ -61,35 +62,56 @@ const sirenSchema = z
     return /^\d{9}$/.test(sanitized);
   }, "Le SIREN doit contenir 9 chiffres");
 
-const projectSchema = z.object({
-  client_name: z.string().min(2, "Le nom du client est requis"),
-  company: z.string().optional(),
-  phone: z.string().optional(),
-  siren: sirenSchema,
-  products: z.array(z.object({
-    product_id: z.string().min(1, "Le produit est requis"),
-    quantity: z.coerce.number().min(1, "La quantité doit être >= 1").default(1),
-    dynamic_params: z.record(z.any()).optional(),
-  })).min(1, "Au moins un produit est requis"),
-  city: z.string().min(2, "La ville est requise"),
-  postal_code: z.string().min(5, "Code postal invalide"),
-  building_type: z.enum(["Entrepôt", "Hôtel"], { required_error: "Sélectionnez un type" }),
-  usage: z.enum(["Commercial", "Agricole"], { required_error: "Sélectionnez un usage" }),
-  prime_cee: z.coerce.number().optional(),
-  discount: z.coerce.number().optional(),
-  unit_price: z.coerce.number().optional(),
-  signatory_name: z.string().optional(),
-  signatory_title: z.string().optional(),
-  surface_batiment_m2: z.coerce.number().optional(),
-  status: z.enum(["PROSPECTION", "ETUDE", "DEVIS_ENVOYE", "ACCEPTE", "A_PLANIFIER", "EN_COURS", "LIVRE", "CLOTURE"]),
-  assigned_to: z.string().min(2, "Assignation requise"),
-  date_debut_prevue: z.string().optional(),
-  date_fin_prevue: z.string().optional(),
-  estimated_value: z.coerce.number().optional(),
-  lead_id: z.string().optional(),
-});
+const createProjectSchema = (allowedStatuses: readonly string[]) => {
+  const statusSchema =
+    allowedStatuses.length > 0
+      ? z
+          .string({ required_error: "Sélectionnez un statut" })
+          .min(1, "Sélectionnez un statut")
+          .refine((value) => allowedStatuses.includes(value), {
+            message: "Statut invalide",
+          })
+      : z.string({ required_error: "Sélectionnez un statut" }).min(
+          1,
+          "Sélectionnez un statut",
+        );
 
-export type ProjectFormValues = z.infer<typeof projectSchema>;
+  return z.object({
+    client_name: z.string().min(2, "Le nom du client est requis"),
+    company: z.string().optional(),
+    phone: z.string().optional(),
+    siren: sirenSchema,
+    products: z
+      .array(
+        z.object({
+          product_id: z.string().min(1, "Le produit est requis"),
+          quantity: z.coerce.number().min(1, "La quantité doit être >= 1").default(1),
+          dynamic_params: z.record(z.any()).optional(),
+        }),
+      )
+      .min(1, "Au moins un produit est requis"),
+    city: z.string().min(2, "La ville est requise"),
+    postal_code: z.string().min(5, "Code postal invalide"),
+    building_type: z.enum(["Entrepôt", "Hôtel"], { required_error: "Sélectionnez un type" }),
+    usage: z.enum(["Commercial", "Agricole"], { required_error: "Sélectionnez un usage" }),
+    prime_cee: z.coerce.number().optional(),
+    discount: z.coerce.number().optional(),
+    unit_price: z.coerce.number().optional(),
+    signatory_name: z.string().optional(),
+    signatory_title: z.string().optional(),
+    surface_batiment_m2: z.coerce.number().optional(),
+    status: statusSchema,
+    assigned_to: z.string().min(2, "Assignation requise"),
+    date_debut_prevue: z.string().optional(),
+    date_fin_prevue: z.string().optional(),
+    estimated_value: z.coerce.number().optional(),
+    lead_id: z.string().optional(),
+  });
+};
+
+type ProjectFormSchema = ReturnType<typeof createProjectSchema>;
+
+export type ProjectFormValues = z.infer<ProjectFormSchema>;
 
 interface AddProjectDialogProps {
   onProjectAdded?: () => void | Promise<void>;
@@ -113,7 +135,7 @@ const baseDefaultValues: Partial<ProjectFormValues> = {
   signatory_name: "",
   signatory_title: "",
   surface_batiment_m2: undefined,
-  status: "PROSPECTION",
+  status: "",
   assigned_to: "",
   date_debut_prevue: "",
   date_fin_prevue: "",
@@ -150,6 +172,27 @@ export const AddProjectDialog = ({
   const { user } = useAuth();
   const { currentOrgId } = useOrg();
   const { toast } = useToast();
+  const projectStatuses = useProjectStatuses();
+
+  const statusOptions = useMemo(
+    () => projectStatuses.map((status) => status.value),
+    [projectStatuses],
+  );
+
+  const projectSchema = useMemo(
+    () => createProjectSchema(statusOptions),
+    [statusOptions],
+  );
+
+  const resolver = useMemo(() => zodResolver(projectSchema), [projectSchema]);
+
+  const defaultStatus = useMemo(() => {
+    if (initialValues?.status && statusOptions.includes(initialValues.status)) {
+      return initialValues.status;
+    }
+
+    return statusOptions[0] ?? "";
+  }, [initialValues?.status, statusOptions]);
 
   const { data: profile } = useQuery({
     queryKey: ["profile", user?.id],
@@ -324,13 +367,28 @@ export const AddProjectDialog = ({
   }, [defaultAssignee, rawCommercialOptions, user?.email]);
 
   const form = useForm<ProjectFormValues>({
-    resolver: zodResolver(projectSchema),
+    resolver,
     defaultValues: {
       ...baseDefaultValues,
-      assigned_to: defaultAssignee ?? "",
-      products: [createProductEntry()],
+      ...initialValues,
+      status: defaultStatus,
+      assigned_to: initialValues?.assigned_to ?? defaultAssignee ?? "",
+      products: initialValues?.products ?? [createProductEntry()],
     } as ProjectFormValues,
   });
+
+  useEffect(() => {
+    const currentStatus = form.getValues("status");
+
+    if (!currentStatus && defaultStatus) {
+      form.setValue("status", defaultStatus);
+      return;
+    }
+
+    if (currentStatus && statusOptions.length > 0 && !statusOptions.includes(currentStatus)) {
+      form.setValue("status", defaultStatus);
+    }
+  }, [defaultStatus, form, statusOptions]);
 
   const addProduct = () => {
     const currentProducts = form.getValues("products") || [];
@@ -436,14 +494,29 @@ export const AddProjectDialog = ({
         ? ecoEntries
         : [createProductEntry()];
 
+    const nextStatus =
+      initialValues?.status && statusOptions.includes(initialValues.status)
+        ? initialValues.status
+        : defaultStatus;
+
     form.reset({
       ...baseDefaultValues,
       ...initialValues,
+      status: nextStatus,
       assigned_to: initialValues?.assigned_to ?? defaultAssignee ?? "",
       siren: initialValues?.siren ?? "",
       products: productList,
     } as ProjectFormValues);
-  }, [open, ecoProducts, form, defaultAssignee, initialValues, productsData]);
+  }, [
+    open,
+    ecoProducts,
+    form,
+    defaultAssignee,
+    initialValues,
+    productsData,
+    defaultStatus,
+    statusOptions,
+  ]);
   // **** end merged effect ****
 
   const handleEcoToggle = useCallback(
@@ -653,22 +726,26 @@ export const AddProjectDialog = ({
                   <FormLabel>Statut *</FormLabel>
                   <Select
                     onValueChange={field.onChange}
-                    defaultValue={field.value}
+                    value={field.value}
+                    disabled={projectStatuses.length === 0}
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue />
+                        <SelectValue
+                          placeholder={
+                            projectStatuses.length === 0
+                              ? "Aucun statut disponible"
+                              : "Sélectionnez un statut"
+                          }
+                        />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="PROSPECTION">Prospection</SelectItem>
-                      <SelectItem value="ETUDE">Étude</SelectItem>
-                      <SelectItem value="DEVIS_ENVOYE">Devis Envoyé</SelectItem>
-                      <SelectItem value="ACCEPTE">Accepté</SelectItem>
-                      <SelectItem value="A_PLANIFIER">À Planifier</SelectItem>
-                      <SelectItem value="EN_COURS">En Cours</SelectItem>
-                      <SelectItem value="LIVRE">Livré</SelectItem>
-                      <SelectItem value="CLOTURE">Clôturé</SelectItem>
+                      {projectStatuses.map((status) => (
+                        <SelectItem key={status.id} value={status.value}>
+                          {status.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <FormMessage />
