@@ -46,6 +46,62 @@ type ProjectWithProducts = Tables<"projects"> & {
   project_products?: ProjectProduct[] | null;
 };
 
+type SiteAdditionalCostFormValue = SiteFormValues["additional_costs"][number];
+
+const createEmptyAdditionalCost = (): SiteAdditionalCostFormValue => ({
+  label: "",
+  amount_ht: 0,
+  taxes: 0,
+  attachment: null,
+});
+
+const parseNumber = (value: unknown): number | null => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+};
+
+const normalizeAdditionalCosts = (costs: unknown): SiteAdditionalCostFormValue[] => {
+  if (!Array.isArray(costs)) {
+    return [createEmptyAdditionalCost()];
+  }
+
+  const normalized = costs
+    .map((cost) => {
+      if (!cost || typeof cost !== "object") {
+        return null;
+      }
+
+      const raw = cost as Record<string, unknown>;
+      const label = typeof raw.label === "string" ? raw.label : "";
+
+      const amountHTValue =
+        parseNumber(raw.amount_ht) ?? parseNumber(raw.amount) ?? parseNumber(raw.amount_ttc) ?? 0;
+      const taxesValue = parseNumber(raw.taxes) ?? 0;
+      const attachmentValue =
+        typeof raw.attachment === "string" && raw.attachment.trim().length > 0
+          ? raw.attachment.trim()
+          : null;
+
+      return {
+        label,
+        amount_ht: amountHTValue,
+        taxes: taxesValue,
+        attachment: attachmentValue,
+      } satisfies SiteAdditionalCostFormValue;
+    })
+    .filter((cost): cost is SiteAdditionalCostFormValue => cost !== null);
+
+  return normalized.length > 0 ? normalized : [createEmptyAdditionalCost()];
+};
+
 type Site = Tables<"sites"> & {
   revenue?: number | null;
   profit_margin?: number | null;
@@ -57,7 +113,6 @@ type Site = Tables<"sites"> & {
   valorisation_cee?: number | null;
   cofrac_status?: string | null;
   notes?: string | null;
-  additional_costs?: any;
 };
 
 const getStatusLabel = (status: SiteStatus) => {
@@ -247,12 +302,10 @@ const Sites = () => {
       montant_commission: site.montant_commission || 0,
       valorisation_cee: site.valorisation_cee || 0,
       notes: site.notes || "",
-      team_members: (site.team_members && site.team_members.length > 0) 
+      team_members: (site.team_members && site.team_members.length > 0)
         ? site.team_members.map(name => ({ name }))
         : [{ name: "" }],
-      additional_costs: Array.isArray(site.additional_costs) && site.additional_costs.length > 0
-        ? site.additional_costs as { label: string; amount: number }[]
-        : [{ label: "", amount: 0 }],
+      additional_costs: normalizeAdditionalCosts(site.additional_costs ?? []),
     });
     setDialogOpen(true);
   };
@@ -264,14 +317,23 @@ const Sites = () => {
     const sanitizedCosts = values.additional_costs
       ? values.additional_costs
           .filter((cost) => cost.label.trim().length > 0)
-          .map((cost) => ({ label: cost.label.trim(), amount: cost.amount }))
+          .map((cost) => {
+            const attachment = cost.attachment ? cost.attachment.trim() : "";
+
+            return {
+              label: cost.label.trim(),
+              amount_ht: Number.isFinite(cost.amount_ht) ? cost.amount_ht : 0,
+              taxes: Number.isFinite(cost.taxes) ? cost.taxes : 0,
+              attachment: attachment.length > 0 ? attachment : null,
+            };
+          })
       : [];
 
     const siteData = {
       site_ref: values.site_ref,
       project_ref: values.project_ref,
       client_name: values.client_name,
-      product_name: values.product_name,
+      product_name: values.product_name?.trim() || null,
       address: values.address,
       city: values.city,
       postal_code: values.postal_code,

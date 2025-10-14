@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -32,6 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -47,23 +48,32 @@ import {
   useCreateLead,
 } from "./api";
 import type { TablesInsert } from "@/integrations/supabase/types";
-import { AddressAutocomplete } from "@/components/leads/AddressAutocomplete";
+import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 
 const LEAD_SOURCES = ["Commercial", "Campagne FB", "Régie Commercial"] as const;
 
 const sirenSchema = z
+  .string({ required_error: "Le numéro SIREN est requis" })
+  .min(1, "Le numéro SIREN est requis")
+  .refine((value) => {
+    const sanitized = value.replace(/\s+/g, "").trim();
+    return /^\d{9}$/.test(sanitized);
+  }, "Le numéro SIREN doit contenir 9 chiffres");
+
+const optionalNumericString = z
   .string()
   .optional()
   .refine((value) => {
-    if (!value) return true;
-    const sanitized = value.replace(/\s+/g, "").trim();
-    if (sanitized.length === 0) return true;
-    return /^\d{9}$/.test(sanitized);
-  }, "Le SIREN doit contenir 9 chiffres");
+    if (!value || value.trim() === "") return true;
+    const normalized = value.replace(/,/g, ".").trim();
+    return !Number.isNaN(Number(normalized));
+  }, "Veuillez saisir un nombre valide");
 
 const leadSchema = z.object({
-  full_name: z.string().min(2, "Le nom doit contenir au moins 2 caractères"),
+  first_name: z.string().min(2, "Le prénom doit contenir au moins 2 caractères"),
+  last_name: z.string().min(2, "Le nom doit contenir au moins 2 caractères"),
   company: z.string().optional(),
   siren: sirenSchema,
   email: z.string().email("Email invalide"),
@@ -75,6 +85,10 @@ const leadSchema = z.object({
   utm_source: z.string().optional(),
   status: leadStatusEnum,
   commentaire: z.string().optional(),
+  remarks: z.string().optional(),
+  building_length: optionalNumericString,
+  building_width: optionalNumericString,
+  building_height: optionalNumericString,
   assigned_to: z.string().optional(),
   extra_fields: z.record(z.any()).default({}),
   photo_file: z.instanceof(File).optional().nullable(),
@@ -89,6 +103,8 @@ interface LeadFormDialogProps {
 export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
   const [open, setOpen] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [isPhotoDragActive, setIsPhotoDragActive] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
   const { user } = useAuth();
   const { currentOrgId } = useOrg();
   const { toast } = useToast();
@@ -98,7 +114,8 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
   const form = useForm<LeadFormValues>({
     resolver: zodResolver(leadSchema),
     defaultValues: {
-      full_name: "",
+      first_name: "",
+      last_name: "",
       company: "",
       siren: "",
       email: "",
@@ -110,6 +127,10 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
       utm_source: "",
       status: "À rappeler",
       commentaire: "",
+      remarks: "",
+      building_length: "",
+      building_width: "",
+      building_height: "",
       assigned_to: user?.id ?? "",
       extra_fields: {},
     },
@@ -167,7 +188,17 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         product.id === values.product_type
       );
     });
-    const normalizedSiren = (values.siren ?? "").replace(/\s+/g, "").trim();
+    const normalizedSiren = values.siren.replace(/\s+/g, "").trim();
+    const fullName = `${values.first_name} ${values.last_name}`.replace(/\s+/g, " ").trim();
+    const parseDimension = (input?: string) => {
+      if (!input || input.trim() === "") return null;
+      const normalized = input.replace(/,/g, ".").trim();
+      const parsed = Number(normalized);
+      return Number.isNaN(parsed) ? null : parsed;
+    };
+    const buildingLength = parseDimension(values.building_length);
+    const buildingWidth = parseDimension(values.building_width);
+    const buildingHeight = parseDimension(values.building_height);
 
     try {
       let photoUrl: string | null = null;
@@ -193,7 +224,9 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
       }
 
       const payload = {
-        full_name: values.full_name,
+        first_name: values.first_name,
+        last_name: values.last_name,
+        full_name: fullName,
         email: values.email,
         phone_raw: values.phone_raw,
         address: values.address,
@@ -201,11 +234,15 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         postal_code: values.postal_code,
         status: values.status,
         company: values.company?.trim() ? values.company : null,
-        siren: normalizedSiren ? normalizedSiren : null,
+        siren: normalizedSiren,
         product_name: selectedProduct?.label ?? values.product_type,
         product_type: selectedProduct?.category ?? values.product_type,
         utm_source: values.utm_source?.trim() ? values.utm_source : null,
         commentaire: values.commentaire?.trim() ? values.commentaire : null,
+        remarks: values.remarks?.trim() ? values.remarks : null,
+        building_length: buildingLength,
+        building_width: buildingWidth,
+        building_height: buildingHeight,
         photo_previsite_url: photoUrl,
         user_id: user.id,
         org_id: orgId,
@@ -221,7 +258,8 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
       });
 
       form.reset({
-        full_name: "",
+        first_name: "",
+        last_name: "",
         company: "",
         siren: "",
         email: "",
@@ -233,6 +271,10 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         utm_source: "",
         status: "À rappeler",
         commentaire: "",
+        remarks: "",
+        building_length: "",
+        building_width: "",
+        building_height: "",
         assigned_to: user.id,
         extra_fields: {},
         photo_file: undefined,
@@ -278,7 +320,8 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
     setOpen(value);
     if (!value) {
       form.reset({
-        full_name: "",
+        first_name: "",
+        last_name: "",
         company: "",
         siren: "",
         email: "",
@@ -290,9 +333,15 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         utm_source: "",
         status: "À rappeler",
         commentaire: "",
+        remarks: "",
+        building_length: "",
+        building_width: "",
+        building_height: "",
         assigned_to: user?.id ?? "",
         extra_fields: {},
+        photo_file: undefined,
       });
+      setPhotoPreview(null);
     }
   };
 
@@ -313,13 +362,13 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2">
               <FormField
                 control={form.control}
-                name="full_name"
+                name="first_name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Nom complet *</FormLabel>
+                    <FormLabel>Prénom *</FormLabel>
                     <FormControl>
                       <Input {...field} disabled={isSubmitting} />
                     </FormControl>
@@ -327,6 +376,22 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
                   </FormItem>
                 )}
               />
+              <FormField
+                control={form.control}
+                name="last_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nom *</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled={isSubmitting} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
               <FormField
                 control={form.control}
                 name="company"
@@ -345,7 +410,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
                 name="siren"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>SIREN (optionnel)</FormLabel>
+                    <FormLabel>Numéro SIREN *</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
@@ -366,7 +431,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email *</FormLabel>
+                    <FormLabel>Adresse e-mail *</FormLabel>
                     <FormControl>
                       <Input type="email" {...field} disabled={isSubmitting} />
                     </FormControl>
@@ -512,7 +577,72 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
               />
             </div>
 
-            
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Mesures du bâtiment</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-4 md:grid-cols-3">
+                <FormField
+                  control={form.control}
+                  name="building_length"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Longueur (m)</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="number"
+                          step="0.01"
+                          inputMode="decimal"
+                          disabled={isSubmitting}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="building_width"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Largeur (m)</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="number"
+                          step="0.01"
+                          inputMode="decimal"
+                          disabled={isSubmitting}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="building_height"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Hauteur (m)</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="number"
+                          step="0.01"
+                          inputMode="decimal"
+                          disabled={isSubmitting}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </CardContent>
+            </Card>
+
+
 
             <div className="grid gap-4 md:grid-cols-2">
               <FormField
@@ -576,20 +706,116 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
             <FormField
               control={form.control}
               name="photo_file"
-              render={({ field: { value, onChange, ...field } }) => (
+              render={({ field: { onChange, ref, ...field } }) => (
                 <FormItem>
                   <FormLabel>Photo pré-visite</FormLabel>
                   <FormControl>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
+                    <div className="space-y-3">
+                      <div
+                        className={cn(
+                          "flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed p-6 text-center transition-colors",
+                          isPhotoDragActive ? "border-primary bg-primary/5" : "border-muted-foreground/30"
+                        )}
+                        onDragOver={(event) => {
+                          event.preventDefault();
+                          if (isSubmitting) return;
+                          setIsPhotoDragActive(true);
+                        }}
+                        onDragEnter={(event) => {
+                          event.preventDefault();
+                          if (isSubmitting) return;
+                          setIsPhotoDragActive(true);
+                        }}
+                        onDragLeave={(event) => {
+                          event.preventDefault();
+                          setIsPhotoDragActive(false);
+                        }}
+                        onDrop={(event) => {
+                          event.preventDefault();
+                          if (isSubmitting) return;
+                          setIsPhotoDragActive(false);
+                          const file = event.dataTransfer.files?.[0];
+                          if (!file) {
+                            return;
+                          }
+                          if (!file.type.startsWith("image/")) {
+                            toast({
+                              title: "Format invalide",
+                              description: "Seuls les fichiers image sont acceptés",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+
+                          if (file.size > 10 * 1024 * 1024) {
+                            toast({
+                              title: "Fichier trop volumineux",
+                              description: "La taille maximale est de 10 Mo",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+
+                          if (photoInputRef.current && typeof DataTransfer !== "undefined") {
+                            const dataTransfer = new DataTransfer();
+                            dataTransfer.items.add(file);
+                            photoInputRef.current.files = dataTransfer.files;
+                          }
+
+                          onChange(file);
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setPhotoPreview(reader.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                        }}
+                      >
+                        <Upload className="h-8 w-8 text-primary" />
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium">Glissez-déposez votre photo</p>
+                          <p className="text-xs text-muted-foreground">
+                            Formats acceptés : JPG, PNG – taille maximale 10 Mo
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => photoInputRef.current?.click()}
+                          disabled={isSubmitting}
+                        >
+                          Sélectionner une image
+                        </Button>
                         <Input
                           {...field}
+                          ref={(element) => {
+                            ref(element);
+                            photoInputRef.current = element;
+                          }}
                           type="file"
                           accept="image/*"
                           disabled={isSubmitting}
                           onChange={(e) => {
                             const file = e.target.files?.[0];
                             if (file) {
+                              if (!file.type.startsWith("image/")) {
+                                toast({
+                                  title: "Format invalide",
+                                  description: "Seuls les fichiers image sont acceptés",
+                                  variant: "destructive",
+                                });
+                                e.target.value = "";
+                                return;
+                              }
+                              if (file.size > 10 * 1024 * 1024) {
+                                toast({
+                                  title: "Fichier trop volumineux",
+                                  description: "La taille maximale est de 10 Mo",
+                                  variant: "destructive",
+                                });
+                                e.target.value = "";
+                                return;
+                              }
                               onChange(file);
                               const reader = new FileReader();
                               reader.onloadend = () => {
@@ -598,9 +824,18 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
                               reader.readAsDataURL(file);
                             }
                           }}
-                          className="cursor-pointer"
+                          className="hidden"
                         />
-                        {photoPreview && (
+                      </div>
+                      {photoPreview && (
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="relative w-full max-w-xs">
+                            <img
+                              src={photoPreview}
+                              alt="Aperçu"
+                              className="h-48 w-full rounded-lg border object-cover"
+                            />
+                          </div>
                           <Button
                             type="button"
                             variant="ghost"
@@ -608,22 +843,30 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
                             onClick={() => {
                               onChange(undefined);
                               setPhotoPreview(null);
+                              if (photoInputRef.current) {
+                                photoInputRef.current.value = "";
+                              }
                             }}
                           >
                             <X className="h-4 w-4" />
                           </Button>
-                        )}
-                      </div>
-                      {photoPreview && (
-                        <div className="relative w-full max-w-xs">
-                          <img
-                            src={photoPreview}
-                            alt="Aperçu"
-                            className="rounded-lg border object-cover w-full h-48"
-                          />
                         </div>
                       )}
                     </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="remarks"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Remarques supplémentaires</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} rows={4} disabled={isSubmitting} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

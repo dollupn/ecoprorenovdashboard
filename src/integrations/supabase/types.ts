@@ -6,6 +6,13 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
+export type SiteAdditionalCost = {
+  label: string;
+  amount_ht: number;
+  taxes: number;
+  attachment: string | null;
+};
+
 export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
@@ -123,6 +130,9 @@ export type Database = {
         Row: {
           address: string
           assigned_to: string | null
+          building_height: number | null
+          building_length: number | null
+          building_width: number | null
           city: string
           commentaire: string | null
           company: string | null
@@ -130,24 +140,31 @@ export type Database = {
           created_by: string | null
           date_rdv: string | null
           email: string
+          first_name: string | null
           full_name: string
           heure_rdv: string | null
           id: string
+          last_name: string | null
           org_id: string | null
           phone_raw: string
           photo_previsite_url: string | null
           postal_code: string
           product_name: string | null
-          siren: string | null
+          remarks: string | null
+          siren: string
           status: string
           surface_m2: number | null
           updated_at: string
           user_id: string
           utm_source: string | null
+          extra_fields: Json
         }
         Insert: {
           address?: string
           assigned_to?: string | null
+          building_height?: number | null
+          building_length?: number | null
+          building_width?: number | null
           city: string
           commentaire?: string | null
           company?: string | null
@@ -155,24 +172,31 @@ export type Database = {
           created_by?: string | null
           date_rdv?: string | null
           email: string
+          first_name?: string | null
           full_name: string
           heure_rdv?: string | null
           id?: string
+          last_name?: string | null
           org_id?: string | null
           phone_raw: string
           photo_previsite_url?: string | null
           postal_code: string
           product_name?: string | null
-          siren?: string | null
+          remarks?: string | null
+          siren: string
           status?: string
           surface_m2?: number | null
           updated_at?: string
           user_id: string
           utm_source?: string | null
+          extra_fields?: Json
         }
         Update: {
           address?: string
           assigned_to?: string | null
+          building_height?: number | null
+          building_length?: number | null
+          building_width?: number | null
           city?: string
           commentaire?: string | null
           company?: string | null
@@ -180,20 +204,24 @@ export type Database = {
           created_by?: string | null
           date_rdv?: string | null
           email?: string
+          first_name?: string | null
           full_name?: string
           heure_rdv?: string | null
           id?: string
+          last_name?: string | null
           org_id?: string | null
           phone_raw?: string
           photo_previsite_url?: string | null
           postal_code?: string
           product_name?: string | null
-          siren?: string | null
+          remarks?: string | null
+          siren?: string
           status?: string
           surface_m2?: number | null
           updated_at?: string
           user_id?: string
           utm_source?: string | null
+          extra_fields?: Json
         }
         Relationships: [
           {
@@ -616,7 +644,7 @@ export type Database = {
       }
       sites: {
         Row: {
-          additional_costs: Json | null
+          additional_costs: SiteAdditionalCost[] | null
           address: string
           city: string
           client_name: string
@@ -647,7 +675,7 @@ export type Database = {
           valorisation_cee: number | null
         }
         Insert: {
-          additional_costs?: Json | null
+          additional_costs?: SiteAdditionalCost[] | null
           address: string
           city: string
           client_name: string
@@ -678,7 +706,7 @@ export type Database = {
           valorisation_cee?: number | null
         }
         Update: {
-          additional_costs?: Json | null
+          additional_costs?: SiteAdditionalCost[] | null
           address?: string
           city?: string
           client_name?: string

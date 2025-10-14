@@ -14,7 +14,10 @@ import {
   type QuoteFormValues,
 } from "@/components/quotes/AddQuoteDialog";
 import type { Tables } from "@/integrations/supabase/types";
-import { getStatusColor, getStatusLabel } from "@/lib/projects";
+import {
+  getProjectStatusBadgeStyle,
+  type ProjectStatusSetting,
+} from "@/lib/projects";
 import {
   Search,
   Filter,
@@ -40,6 +43,7 @@ import {
   getDynamicFieldEntries,
   formatDynamicFieldValue,
 } from "@/lib/product-params";
+import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 
 type Project = Tables<"projects">;
 type ProjectProduct = Tables<"project_products"> & {
@@ -65,6 +69,7 @@ const Projects = () => {
   const { user } = useAuth();
   const { currentOrgId } = useOrg();
   const { data: members = [], isLoading: membersLoading } = useMembers(currentOrgId);
+  const projectStatuses = useProjectStatuses();
   const [searchTerm, setSearchTerm] = useState("");
   const [assignedFilter, setAssignedFilter] = useState<string>("all");
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
@@ -117,6 +122,13 @@ const Projects = () => {
       setAssignedFilter("all");
     }
   }, [assignedFilter, assignedOptions]);
+
+  const statusMap = useMemo(() => {
+    return projectStatuses.reduce<Record<string, ProjectStatusSetting>>((acc, status) => {
+      acc[status.value] = status;
+      return acc;
+    }, {});
+  }, [projectStatuses]);
 
   const filteredProjects = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -185,6 +197,10 @@ const Projects = () => {
       quote_ref: project.project_ref
         ? `${project.project_ref}-DEV`
         : undefined,
+      client_phone: project.phone ?? "",
+      site_address: "", // Will be derived from city/postal_code if needed
+      site_city: project.city ?? "",
+      site_postal_code: project.postal_code ?? "",
     });
     setQuoteDialogOpen(true);
   };
@@ -262,6 +278,9 @@ const Projects = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredProjects.map((project) => {
             const displayedProducts = getDisplayedProducts(project.project_products);
+            const statusConfig = statusMap[project.status ?? ""];
+            const badgeStyle = getProjectStatusBadgeStyle(statusConfig?.color);
+            const statusLabel = statusConfig?.label ?? project.status ?? "Statut";
 
             return (
               <Card
@@ -294,8 +313,8 @@ const Projects = () => {
                         )}
                       </p>
                     </div>
-                    <Badge className={getStatusColor(project.status as any)}>
-                      {getStatusLabel(project.status as any)}
+                    <Badge variant="outline" style={badgeStyle}>
+                      {statusLabel}
                     </Badge>
                   </div>
                 </CardHeader>

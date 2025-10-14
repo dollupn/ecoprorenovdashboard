@@ -68,6 +68,7 @@ import { GripVertical, Plus, PlusCircle, Trash2 } from "lucide-react";
 
 import { formatQuoteCurrency } from "./utils";
 import type { QuoteLineItem, QuoteMetadata } from "./types";
+import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
 
 const quoteStatuses = ["DRAFT", "SENT", "ACCEPTED", "REJECTED", "EXPIRED"] as const;
 
@@ -91,6 +92,8 @@ const quoteSchema = z.object({
   client_email: z.string().email("Email invalide").optional().or(z.literal("")),
   client_phone: z.string().optional(),
   site_address: z.string().optional(),
+  site_city: z.string().optional(),
+  site_postal_code: z.string().optional(),
   payment_terms: z.string().optional(),
   drive_folder_url: z.string().url("URL invalide").optional().or(z.literal("")),
   email_message: z.string().optional(),
@@ -291,6 +294,8 @@ const baseDefaultValues: QuoteFormValues = {
   client_email: "",
   client_phone: "",
   site_address: "",
+  site_city: "",
+  site_postal_code: "",
   payment_terms: "",
   drive_folder_url: "",
   email_message: "",
@@ -429,6 +434,11 @@ export const AddQuoteDialog = ({
     const values: QuoteFormValues = {
       ...baseDefaultValues,
       ...initialValues,
+      client_email: initialValues?.client_email ?? "",
+      client_phone: initialValues?.client_phone ?? "",
+      site_address: initialValues?.site_address ?? "",
+      site_city: initialValues?.site_city ?? "",
+      site_postal_code: initialValues?.site_postal_code ?? "",
     } as QuoteFormValues;
 
     if (typeof initialValues?.amount === "number") {
@@ -484,6 +494,8 @@ export const AddQuoteDialog = ({
         clientEmail: toOptionalString(data.client_email),
         clientPhone: toOptionalString(data.client_phone),
         siteAddress: toOptionalString(data.site_address),
+        siteCity: toOptionalString(data.site_city),
+        sitePostalCode: toOptionalString(data.site_postal_code),
         paymentTerms: toOptionalString(data.payment_terms),
         driveFolderUrl: toOptionalString(data.drive_folder_url),
         emailMessage: toOptionalString(data.email_message),
@@ -702,16 +714,61 @@ export const AddQuoteDialog = ({
                   <FormItem>
                     <FormLabel>Adresse du chantier</FormLabel>
                     <FormControl>
-                      <Textarea
-                        placeholder="Adresse complète du site"
-                        className="min-h-[80px]"
-                        {...field}
+                      <AddressAutocomplete
+                        value={field.value ?? ""}
+                        onChange={(address, city, postalCode) => {
+                          field.onChange(address);
+                          form.setValue("site_city", city, { shouldDirty: true, shouldValidate: true });
+                          form.setValue("site_postal_code", postalCode, {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          });
+                        }}
+                        disabled={form.formState.isSubmitting}
                       />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="site_city"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Ville du chantier</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          value={field.value ?? ""}
+                          readOnly
+                          disabled={form.formState.isSubmitting}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="site_postal_code"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Code postal</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          value={field.value ?? ""}
+                          readOnly
+                          disabled={form.formState.isSubmitting}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
             </section>
 
             <section className="space-y-4">

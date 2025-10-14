@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   Sheet,
   SheetContent,
@@ -11,7 +11,8 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatQuoteCurrency, parseQuoteMetadata, computeLineItemsTotal } from "./utils";
 import type { QuoteRecord } from "./types";
-import { CalendarDays, FileText, FolderOpen, Mail, Phone, User } from "lucide-react";
+import { CalendarDays, FileText, FolderOpen, Mail, Phone, User, MapPin, Download } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
 
 interface QuoteDetailsDrawerProps {
   quote: QuoteRecord | null;
@@ -29,6 +30,7 @@ const statusLabels: Record<string, string> = {
 
 export const QuoteDetailsDrawer = ({ quote, open, onOpenChange }: QuoteDetailsDrawerProps) => {
   const metadata = useMemo(() => (quote ? parseQuoteMetadata(quote) : undefined), [quote]);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   const handleSendEmail = () => {
     if (!quote || !metadata?.clientEmail) {
@@ -45,6 +47,66 @@ export const QuoteDetailsDrawer = ({ quote, open, onOpenChange }: QuoteDetailsDr
 
     if (typeof window !== "undefined") {
       window.open(`mailto:${metadata.clientEmail}?subject=${subject}&body=${body}`);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!quote) {
+      return;
+    }
+
+    try {
+      setIsDownloadingPdf(true);
+      const response = await fetch(`/api/quotes/${quote.id}/pdf`, {
+        method: "GET",
+        headers: {
+          Accept: "application/pdf",
+        },
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        let message = "Le PDF n'a pas pu être généré.";
+        const contentType = response.headers.get("Content-Type") ?? "";
+
+        if (contentType.includes("application/json")) {
+          try {
+            const payload = await response.json();
+            if (typeof payload?.message === "string" && payload.message.trim()) {
+              message = payload.message;
+            }
+          } catch (error) {
+            console.warn("Impossible de lire la réponse d'erreur", error);
+          }
+        }
+
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const reference = quote.quote_ref ? quote.quote_ref.replace(/\s+/g, "-") : quote.id;
+      link.href = url;
+      link.download = `Devis-${reference}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "Devis généré",
+        description: `Le PDF du devis ${quote.quote_ref ?? ""} est en cours de téléchargement`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Le PDF n'a pas pu être généré.";
+      toast({
+        title: "Erreur lors du téléchargement",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsDownloadingPdf(false);
     }
   };
 
@@ -88,6 +150,14 @@ export const QuoteDetailsDrawer = ({ quote, open, onOpenChange }: QuoteDetailsDr
                     {quote.projects?.project_ref ?? "Sans projet"}
                   </span>
                 </div>
+                <Button
+                  className="mt-2"
+                  onClick={handleDownloadPdf}
+                  disabled={isDownloadingPdf}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  {isDownloadingPdf ? "Génération du PDF..." : "Télécharger le devis (PDF)"}
+                </Button>
               </section>
 
               <section className="space-y-4 rounded-lg border bg-background/60 p-4 text-sm">
@@ -110,6 +180,15 @@ export const QuoteDetailsDrawer = ({ quote, open, onOpenChange }: QuoteDetailsDr
                   ) : null}
                   {metadata?.siteAddress ? (
                     <p className="text-muted-foreground whitespace-pre-line">{metadata.siteAddress}</p>
+                  ) : null}
+                  {metadata?.siteCity || metadata?.sitePostalCode ? (
+                    <p className="flex items-center gap-2 text-muted-foreground">
+                      <MapPin className="h-4 w-4" />
+                      <span>
+                        {metadata.sitePostalCode ? `${metadata.sitePostalCode} ` : ""}
+                        {metadata.siteCity ?? ""}
+                      </span>
+                    </p>
                   ) : null}
                 </div>
                 <div className="flex flex-wrap gap-2">

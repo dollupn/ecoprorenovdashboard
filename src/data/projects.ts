@@ -9,15 +9,7 @@ export interface Project {
   postal_code: string;
   surface_batiment_m2?: number;
   surface_isolee_m2?: number;
-  status:
-    | "PROSPECTION"
-    | "ETUDE"
-    | "DEVIS_ENVOYE"
-    | "ACCEPTE"
-    | "A_PLANIFIER"
-    | "EN_COURS"
-    | "LIVRE"
-    | "CLOTURE";
+  status: string;
   assigned_to: string;
   date_debut_prevue?: string;
   date_fin_prevue?: string;

@@ -20,7 +20,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
-import { getStatusColor, getStatusLabel } from "@/lib/projects";
+import { getProjectStatusBadgeStyle } from "@/lib/projects";
 import {
   ArrowLeft,
   Calendar,
@@ -44,6 +44,7 @@ import {
   getDynamicFieldEntries,
   formatDynamicFieldValue,
 } from "@/lib/product-params";
+import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 
 type Project = Tables<"projects">;
 type ProjectProduct = Tables<"project_products"> & {
@@ -71,6 +72,7 @@ const ProjectDetails = () => {
   const { user } = useAuth();
   const { currentOrgId } = useOrg();
   const { data: members = [], isLoading: membersLoading } = useMembers(currentOrgId);
+  const projectStatuses = useProjectStatuses();
 
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
   const [quoteInitialValues, setQuoteInitialValues] = useState<Partial<QuoteFormValues>>({});
@@ -155,6 +157,10 @@ const ProjectDetails = () => {
     );
   }
 
+  const statusConfig = projectStatuses.find((status) => status.value === project.status);
+  const badgeStyle = getProjectStatusBadgeStyle(statusConfig?.color);
+  const statusLabel = statusConfig?.label ?? project.status ?? "Statut";
+
   const handleCreateSite = () => {
     navigate("/sites", { state: { createSite: { projectId: project.id } } });
     toast({
@@ -231,8 +237,8 @@ const ProjectDetails = () => {
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Retour
               </Button>
-              <Badge className={getStatusColor(project.status as any)}>
-                {getStatusLabel(project.status as any)}
+              <Badge variant="outline" style={badgeStyle}>
+                {statusLabel}
               </Badge>
             </div>
             <h1 className="mt-2 text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">

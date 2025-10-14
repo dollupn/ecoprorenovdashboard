@@ -42,22 +42,28 @@ export const QuoteActions = ({
   const hasLineItems = Boolean(metadata.lineItems?.length);
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon">
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
+    <div className="flex items-center justify-center gap-2">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => onDownload(quote)}
+        className="gap-1"
+      >
+        <Download className="h-3.5 w-3.5" />
+        Télécharger
+      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon">
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel>Actions devis</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => onView(quote)}>
           <Eye className="mr-2 h-4 w-4" />
           Consulter
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onDownload(quote)}>
-          <Download className="mr-2 h-4 w-4" />
-          Télécharger (JSON)
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => onSendEmail(quote)} disabled={!hasClientEmail}>
           <Mail className="mr-2 h-4 w-4" />
@@ -84,5 +90,6 @@ export const QuoteActions = ({
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    </div>
   );
 };

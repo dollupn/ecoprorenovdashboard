@@ -1,10 +1,11 @@
-import { useState, type ChangeEvent, type FormEvent } from "react";
+import { useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
 import {
   Select,
   SelectContent,
@@ -13,15 +14,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
-import {
-  Building2,
-  Camera,
-  Check,
-  ClipboardPlus,
-  MapPin,
-  Phone,
-  Upload,
-} from "lucide-react";
+import { Building2, Camera, Check, ClipboardPlus, Phone, Upload } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const PRODUCT_OPTIONS = [
   "Isolation thermique extérieure",
@@ -39,6 +33,8 @@ const initialFormState = {
   surface: "",
   phone: "",
   address: "",
+  city: "",
+  postalCode: "",
   product: "",
   notes: "",
 };
@@ -58,6 +54,8 @@ const CommercialLeadPOS = () => {
   const [formState, setFormState] = useState<FormState>(initialFormState);
   const [photos, setPhotos] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPhotoDragActive, setIsPhotoDragActive] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
   const { toast } = useToast();
 
   const handleInputChange = (field: keyof FormState) =>
@@ -71,7 +69,67 @@ const CommercialLeadPOS = () => {
 
   const handlePhotoChange = (event: ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(event.target.files ?? []);
-    setPhotos(selectedFiles);
+    if (selectedFiles.length === 0) {
+      setPhotos([]);
+      return;
+    }
+
+    const imageFiles = selectedFiles.filter((file) => file.type.startsWith("image/"));
+    if (imageFiles.length === 0) {
+      toast({
+        title: "Format invalide",
+        description: "Seuls les fichiers image sont acceptés",
+        variant: "destructive",
+      });
+      event.target.value = "";
+      return;
+    }
+
+    if (imageFiles.length !== selectedFiles.length) {
+      toast({
+        title: "Certains fichiers ignorés",
+        description: "Seules les images ont été ajoutées à la sélection.",
+      });
+    }
+
+    setPhotos(imageFiles);
+    setIsPhotoDragActive(false);
+  };
+
+  const handlePhotoDrop = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    if (isSubmitting) return;
+    setIsPhotoDragActive(false);
+
+    const droppedFiles = Array.from(event.dataTransfer.files ?? []);
+    if (droppedFiles.length === 0) {
+      return;
+    }
+
+    const imageFiles = droppedFiles.filter((file) => file.type.startsWith("image/"));
+    if (imageFiles.length === 0) {
+      toast({
+        title: "Format invalide",
+        description: "Seuls les fichiers image sont acceptés",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (imageFiles.length !== droppedFiles.length) {
+      toast({
+        title: "Certains fichiers ignorés",
+        description: "Seules les images ont été ajoutées à la sélection.",
+      });
+    }
+
+    if (photoInputRef.current && typeof DataTransfer !== "undefined") {
+      const dataTransfer = new DataTransfer();
+      imageFiles.forEach((file) => dataTransfer.items.add(file));
+      photoInputRef.current.files = dataTransfer.files;
+    }
+
+    setPhotos(imageFiles);
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -193,14 +251,39 @@ const CommercialLeadPOS = () => {
 
               <div className="grid gap-2">
                 <Label htmlFor="address">Adresse</Label>
-                <div className="relative">
-                  <MapPin className="absolute left-4 top-4 h-5 w-5 text-muted-foreground" />
-                  <Textarea
-                    id="address"
-                    value={formState.address}
-                    onChange={handleInputChange("address")}
-                    placeholder="Adresse complète du site visité"
-                    className="min-h-[120px] rounded-xl border-2 border-muted-foreground/30 bg-background/80 py-4 pl-12 text-lg"
+                <AddressAutocomplete
+                  value={formState.address}
+                  onChange={(address, city, postalCode) => {
+                    setFormState((prev) => ({
+                      ...prev,
+                      address,
+                      city,
+                      postalCode,
+                    }));
+                  }}
+                  disabled={isSubmitting}
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="city">Ville</Label>
+                  <Input
+                    id="city"
+                    value={formState.city}
+                    readOnly
+                    placeholder="Sélectionnez une adresse"
+                    className="h-14 text-lg"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="postalCode">Code postal</Label>
+                  <Input
+                    id="postalCode"
+                    value={formState.postalCode}
+                    readOnly
+                    placeholder="Sélectionnez une adresse"
+                    className="h-14 text-lg"
                   />
                 </div>
               </div>
@@ -243,7 +326,27 @@ const CommercialLeadPOS = () => {
                 <Label htmlFor="photos">Ajouter des photos</Label>
                 <label
                   htmlFor="photos"
-                  className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-primary/40 bg-background/90 p-10 text-center transition hover:border-primary hover:bg-primary/5"
+                  className={cn(
+                    "flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed bg-background/90 p-10 text-center transition",
+                    isPhotoDragActive
+                      ? "border-primary bg-primary/10"
+                      : "border-muted-foreground/30 hover:border-primary hover:bg-primary/5"
+                  )}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    if (isSubmitting) return;
+                    setIsPhotoDragActive(true);
+                  }}
+                  onDragEnter={(event) => {
+                    event.preventDefault();
+                    if (isSubmitting) return;
+                    setIsPhotoDragActive(true);
+                  }}
+                  onDragLeave={(event) => {
+                    event.preventDefault();
+                    setIsPhotoDragActive(false);
+                  }}
+                  onDrop={handlePhotoDrop}
                 >
                   <Upload className="h-8 w-8 text-primary" />
                   <div>
@@ -259,6 +362,7 @@ const CommercialLeadPOS = () => {
                   accept="image/*"
                   multiple
                   onChange={handlePhotoChange}
+                  ref={photoInputRef}
                   className="hidden"
                 />
               </div>

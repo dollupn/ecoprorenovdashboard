@@ -85,6 +85,72 @@ const formatDate = (value: string | null) => {
   }).format(new Date(value));
 };
 
+const normalizeProductCode = (code: string) => code.trim().toUpperCase();
+
+const filterUniqueProductCodes = (codes: (string | null | undefined)[]) => {
+  const seen = new Set<string>();
+  const filtered: string[] = [];
+
+  codes.forEach((rawCode) => {
+    if (!rawCode) return;
+    const normalized = normalizeProductCode(rawCode);
+
+    if (!normalized) return;
+    if (normalized.startsWith("ECO")) return;
+    if (normalized.includes(" ")) return;
+
+    const hasDigit = /\d/.test(normalized);
+    const hasSeparator = normalized.includes("-") || normalized.includes("_") || normalized.includes("/");
+
+    if (!hasDigit && !hasSeparator) return;
+    if (seen.has(normalized)) return;
+
+    seen.add(normalized);
+    filtered.push(normalized);
+  });
+
+  return filtered;
+};
+
+const splitPotentialCodes = (value?: string | null) => {
+  if (!value) {
+    return [] as string[];
+  }
+
+  return value
+    .split(/[\n,;|/]+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => part.split(/\s+-\s+/)[0]?.trim() ?? "")
+    .filter(Boolean);
+};
+
+const computeQuoteProductCodes = (quote: QuoteRecord) => {
+  const projectCodes = filterUniqueProductCodes(
+    (quote.projects?.project_products ?? []).map((item) => item.product?.code)
+  );
+
+  if (projectCodes.length > 0) {
+    return projectCodes;
+  }
+
+  const metadata = parseQuoteMetadata(quote);
+  const metadataCodes = filterUniqueProductCodes(
+    (metadata.lineItems ?? []).map((item) => item.reference ?? undefined)
+  );
+
+  if (metadataCodes.length > 0) {
+    return metadataCodes;
+  }
+
+  const fallbackCandidates = [
+    ...splitPotentialCodes(quote.product_name),
+    ...splitPotentialCodes(quote.projects?.product_name ?? null),
+  ];
+
+  return filterUniqueProductCodes(fallbackCandidates);
+};
+
 /** ---- Data ---- */
 const fetchQuotes = async ({
   userId,
@@ -95,7 +161,9 @@ const fetchQuotes = async ({
 }): Promise<QuoteRecord[]> => {
   let query = supabase
     .from("quotes")
-    .select("*, projects(project_ref, client_name, product_name)")
+    .select(
+      "*, projects(project_ref, client_name, product_name, project_products(product:product_catalog(code)))"
+    )
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
@@ -201,6 +269,16 @@ const Quotes = () => {
     };
   }, [quotes]);
 
+  const productCodesByQuote = useMemo(() => {
+    const map = new Map<string, string[]>();
+
+    quotes.forEach((quote) => {
+      map.set(quote.id, computeQuoteProductCodes(quote));
+    });
+
+    return map;
+  }, [quotes]);
+
   const filteredQuotes = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
@@ -211,19 +289,21 @@ const Quotes = () => {
     return quotes.filter((quote) => {
       const projectRef = quote.projects?.project_ref ?? "";
       const productName = quote.product_name ?? quote.projects?.product_name ?? "";
+      const productCodes = productCodesByQuote.get(quote.id) ?? [];
 
       const searchable = [
         quote.quote_ref,
         quote.client_name,
         projectRef,
         productName,
+        productCodes.join(" "),
       ]
         .join(" ")
         .toLowerCase();
 
       return searchable.includes(normalizedSearch);
     });
-  }, [quotes, searchTerm]);
+  }, [quotes, searchTerm, productCodesByQuote]);
 
   const renderStatus = (status: string) => {
     const normalized = (status?.toUpperCase() as QuoteStatus) || "DRAFT";
@@ -327,35 +407,6 @@ const Quotes = () => {
           </CardContent>
         </Card>
 
-        <Card className="shadow-card bg-gradient-card border-0">
-          <CardHeader>
-            <CardTitle>Parcours opérationnel</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Le devis s'inscrit dans la chaîne Lead → Projet → Devis → Chantier → Appel à Facture → Facture.
-            </p>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-stretch">
-              {processSteps.map((step, index) => {
-                const Icon = step.icon;
-                return (
-                  <div key={step.label} className="flex items-center gap-3">
-                    <div className="flex items-center gap-3 rounded-lg border bg-background/60 px-4 py-3 shadow-sm">
-                      <Icon className="h-5 w-5 text-primary" />
-                      <div>
-                        <p className="font-medium text-sm">{step.label}</p>
-                        <p className="text-xs text-muted-foreground">{step.description}</p>
-                      </div>
-                    </div>
-                    {index < processSteps.length - 1 && (
-                      <ArrowRight className="hidden md:block h-4 w-4 text-muted-foreground" />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Error state */}
         {isError && (
@@ -373,9 +424,9 @@ const Quotes = () => {
           </Alert>
         )}
 
-        {/* Table + Side actions */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          <Card className="shadow-card bg-gradient-card border-0 xl:col-span-2">
+        {/* Table */}
+        <div className="grid grid-cols-1 gap-6">
+          <Card className="shadow-card bg-gradient-card border-0">
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle>
@@ -409,7 +460,7 @@ const Quotes = () => {
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
-                      <TableRow>
+                       <TableRow>
                         <TableHead>Référence</TableHead>
                         <TableHead>Client</TableHead>
                         <TableHead>Projet</TableHead>
@@ -417,111 +468,117 @@ const Quotes = () => {
                         <TableHead className="text-right">Montant</TableHead>
                         <TableHead>Statut</TableHead>
                         <TableHead>Validité</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
+                        <TableHead className="text-center">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredQuotes.map((quote) => (
-                        <TableRow key={quote.id}>
-                          <TableCell className="font-medium">{quote.quote_ref}</TableCell>
-                          <TableCell>{quote.client_name}</TableCell>
-                          <TableCell>{quote.projects?.project_ref ?? "—"}</TableCell>
-                          <TableCell>{(quote as any).product_name ?? quote.projects?.product_name ?? "—"}</TableCell>
-                          <TableCell className="text-right">
-                            {formatQuoteCurrency(Number(quote.amount || 0))}
-                          </TableCell>
-                          <TableCell>{renderStatus(quote.status || "DRAFT")}</TableCell>
-                          <TableCell>{formatDate(quote.valid_until)}</TableCell>
-                          <TableCell className="text-right">
-                            <QuoteActions
-                              quote={quote}
-                              onView={(value) => {
-                                setSelectedQuote(value);
-                                setDetailsOpen(true);
-                              }}
-                              onDownload={(value) => {
-                                const metadata = parseQuoteMetadata(value);
+                      {filteredQuotes.map((quote) => {
+                        const productCodes = productCodesByQuote.get(quote.id) ?? [];
 
-                                if (typeof window === "undefined") {
-                                  return;
-                                }
+                        return (
+                          <TableRow key={quote.id}>
+                            <TableCell className="font-medium">{quote.quote_ref}</TableCell>
+                            <TableCell>{quote.client_name}</TableCell>
+                            <TableCell>{quote.projects?.project_ref ?? "—"}</TableCell>
+                            <TableCell>
+                              {productCodes.length > 0 ? productCodes.join(", ") : "—"}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {formatQuoteCurrency(Number(quote.amount || 0))}
+                            </TableCell>
+                            <TableCell>{renderStatus(quote.status || "DRAFT")}</TableCell>
+                            <TableCell>{formatDate(quote.valid_until)}</TableCell>
+                            <TableCell className="text-right">
+                              <QuoteActions
+                                quote={quote}
+                                onView={(value) => {
+                                  setSelectedQuote(value);
+                                  setDetailsOpen(true);
+                                }}
+                                onDownload={(value) => {
+                                  const metadata = parseQuoteMetadata(value);
 
-                                const payload = {
-                                  quote: {
-                                    id: value.id,
-                                    reference: value.quote_ref,
-                                    client: value.client_name,
-                                    product: value.product_name,
-                                    status: value.status,
-                                    amount: value.amount,
-                                    validUntil: value.valid_until,
-                                    projectRef: value.projects?.project_ref,
-                                    projectClient: value.projects?.client_name,
-                                    createdAt: value.created_at,
-                                  },
-                                  metadata,
-                                };
+                                  if (typeof window === "undefined") {
+                                    return;
+                                  }
 
-                                const blob = new Blob([JSON.stringify(payload, null, 2)], {
-                                  type: "application/json",
-                                });
+                                  const payload = {
+                                    quote: {
+                                      id: value.id,
+                                      reference: value.quote_ref,
+                                      client: value.client_name,
+                                      product: value.product_name,
+                                      status: value.status,
+                                      amount: value.amount,
+                                      validUntil: value.valid_until,
+                                      projectRef: value.projects?.project_ref,
+                                      projectClient: value.projects?.client_name,
+                                      createdAt: value.created_at,
+                                    },
+                                    metadata,
+                                  };
 
-                                const url = URL.createObjectURL(blob);
-                                const link = document.createElement("a");
-                                link.href = url;
-                                link.download = `${value.quote_ref || "devis"}.json`;
-                                document.body.appendChild(link);
-                                link.click();
-                                document.body.removeChild(link);
-                                URL.revokeObjectURL(url);
-
-                                toast({
-                                  title: "Téléchargement en cours",
-                                  description: `Le devis ${value.quote_ref} a été préparé au format JSON.`,
-                                });
-                              }}
-                              onOpenDrive={(value) => {
-                                const metadata = parseQuoteMetadata(value);
-
-                                if (!metadata.driveFolderUrl) {
-                                  toast({
-                                    title: "Dossier indisponible",
-                                    description: "Aucun dossier Google Drive n'est associé à ce devis.",
-                                    variant: "destructive",
+                                  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+                                    type: "application/json",
                                   });
-                                  return;
-                                }
 
-                                if (typeof window !== "undefined") {
-                                  window.open(metadata.driveFolderUrl, "_blank", "noopener,noreferrer");
-                                }
-                              }}
-                              onSendEmail={(value) => {
-                                const metadata = parseQuoteMetadata(value);
+                                  const url = URL.createObjectURL(blob);
+                                  const link = document.createElement("a");
+                                  link.href = url;
+                                  link.download = `${value.quote_ref || "devis"}.json`;
+                                  document.body.appendChild(link);
+                                  link.click();
+                                  document.body.removeChild(link);
+                                  URL.revokeObjectURL(url);
 
-                                if (!metadata.clientEmail) {
                                   toast({
-                                    title: "Email manquant",
-                                    description: "Renseignez l'adresse email du client pour envoyer le devis.",
-                                    variant: "destructive",
+                                    title: "Téléchargement en cours",
+                                    description: `Le devis ${value.quote_ref} a été préparé au format JSON.`,
                                   });
-                                  return;
-                                }
+                                }}
+                                onOpenDrive={(value) => {
+                                  const metadata = parseQuoteMetadata(value);
 
-                                const subject = encodeURIComponent(`Devis ${value.quote_ref}`);
-                                const defaultBody = `Bonjour,\n\nVeuillez trouver ci-joint le devis ${value.quote_ref}.\nMontant HT : ${formatQuoteCurrency(Number(
-                                  value.amount || 0
-                                ))}\n\n${metadata.emailMessage ?? "Restant à votre disposition."}`;
-                                const body = encodeURIComponent(defaultBody);
+                                  if (!metadata.driveFolderUrl) {
+                                    toast({
+                                      title: "Dossier indisponible",
+                                      description: "Aucun dossier Google Drive n'est associé à ce devis.",
+                                      variant: "destructive",
+                                    });
+                                    return;
+                                  }
 
-                                if (typeof window !== "undefined") {
-                                  window.open(`mailto:${metadata.clientEmail}?subject=${subject}&body=${body}`);
-                                }
-                              }}
-                            />
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                                  if (typeof window !== "undefined") {
+                                    window.open(metadata.driveFolderUrl, "_blank", "noopener,noreferrer");
+                                  }
+                                }}
+                                onSendEmail={(value) => {
+                                  const metadata = parseQuoteMetadata(value);
+
+                                  if (!metadata.clientEmail) {
+                                    toast({
+                                      title: "Email manquant",
+                                      description: "Renseignez l'adresse email du client pour envoyer le devis.",
+                                      variant: "destructive",
+                                    });
+                                    return;
+                                  }
+
+                                  const subject = encodeURIComponent(`Devis ${value.quote_ref}`);
+                                  const defaultBody = `Bonjour,\n\nVeuillez trouver ci-joint le devis ${value.quote_ref}.\nMontant HT : ${formatQuoteCurrency(Number(
+                                    value.amount || 0
+                                  ))}\n\n${metadata.emailMessage ?? "Restant à votre disposition."}`;
+                                  const body = encodeURIComponent(defaultBody);
+
+                                  if (typeof window !== "undefined") {
+                                    window.open(`mailto:${metadata.clientEmail}?subject=${subject}&body=${body}`);
+                                  }
+                                }}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
@@ -529,53 +586,7 @@ const Quotes = () => {
             </CardContent>
           </Card>
 
-          <Card className="shadow-card bg-gradient-card border-0">
-            <CardHeader>
-              <CardTitle>Prochaines actions</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex gap-3 p-3 rounded-lg border bg-background/60">
-                <Send className="w-5 h-5 text-blue-500 mt-1" />
-                <div>
-                  <p className="font-medium">Relancer les devis envoyés</p>
-                  <p className="text-sm text-muted-foreground">
-                    {metrics.sent} devis en attente de réponse
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-3 p-3 rounded-lg border bg-background/60">
-                <CheckCircle2 className="w-5 h-5 text-green-500 mt-1" />
-                <div>
-                  <p className="font-medium">Convertir en facture</p>
-                  <p className="text-sm text-muted-foreground">
-                    {metrics.accepted} devis acceptés prêts à être transformés
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-3 p-3 rounded-lg border bg-background/60">
-                <Timer className="w-5 h-5 text-orange-500 mt-1" />
-                <div>
-                  <p className="font-medium">Expiration prochaine (≤ 7 jours)</p>
-                  <p className="text-sm text-muted-foreground">
-                    {metrics.upcomingExpiry} devis à vérifier
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </div>
-
-        <Card className="shadow-card border-0">
-          <CardHeader>
-            <CardTitle>Aperçu Devis (gabarit)</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Modèle visuel aligné sur le gabarit facture pour générer les PDF et assurer la continuité commerciale.
-            </p>
-          </CardHeader>
-          <CardContent className="bg-slate-100">
-            <QuotePreview />
-          </CardContent>
-        </Card>
       </div>
 
       <QuoteDetailsDrawer
