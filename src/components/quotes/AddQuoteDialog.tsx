@@ -112,6 +112,8 @@ export interface AddQuoteDialogProps {
   initialValues?: Partial<QuoteFormValues>;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  mode?: "create" | "edit";
+  quoteId?: string;
 }
 
 const createEmptyLineItem = (): QuoteFormValues["line_items"][number] => ({
@@ -317,6 +319,8 @@ export const AddQuoteDialog = ({
   initialValues,
   open,
   onOpenChange,
+  mode = "create",
+  quoteId,
 }: AddQuoteDialogProps) => {
   const { user } = useAuth();
   const { currentOrgId } = useOrg();
@@ -612,27 +616,50 @@ export const AddQuoteDialog = ({
       const serializedMetadata =
         cleanedMetadataEntries.length > 0 ? JSON.stringify(Object.fromEntries(cleanedMetadataEntries)) : null;
 
-      const { error } = await supabase.from("quotes").insert([
-        {
-          user_id: user.id,
-          org_id: currentOrgId ?? null,
-          quote_ref: data.quote_ref,
-          client_name: data.client_name,
-          product_name: data.product_name,
-          amount: normalizedAmount,
-          status: data.status,
-          project_id: data.project_id || null,
-          valid_until: data.valid_until || null,
-          notes: serializedMetadata,
-        },
-      ]);
+      const basePayload = {
+        quote_ref: data.quote_ref,
+        client_name: data.client_name,
+        product_name: data.product_name,
+        amount: normalizedAmount,
+        status: data.status,
+        project_id: data.project_id || null,
+        valid_until: data.valid_until || null,
+        notes: serializedMetadata,
+      } as const;
 
-      if (error) throw error;
+      const isEditMode = mode === "edit" && Boolean(quoteId);
 
-      toast({
-        title: "Devis créé",
-        description: "Le devis a été ajouté avec succès.",
-      });
+      if (isEditMode && quoteId) {
+        const { error } = await supabase
+          .from("quotes")
+          .update({
+            ...basePayload,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", quoteId);
+
+        if (error) throw error;
+
+        toast({
+          title: "Devis mis à jour",
+          description: "Le devis a été modifié avec succès.",
+        });
+      } else {
+        const { error } = await supabase.from("quotes").insert([
+          {
+            user_id: user.id,
+            org_id: currentOrgId ?? null,
+            ...basePayload,
+          },
+        ]);
+
+        if (error) throw error;
+
+        toast({
+          title: "Devis créé",
+          description: "Le devis a été ajouté avec succès.",
+        });
+      }
 
       setDialogOpen(false);
       form.reset(baseDefaultValues);
@@ -657,9 +684,11 @@ export const AddQuoteDialog = ({
       {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null}
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Nouveau devis</DialogTitle>
+          <DialogTitle>{mode === "edit" ? "Modifier le devis" : "Nouveau devis"}</DialogTitle>
           <DialogDescription>
-            Renseignez les informations du devis à créer.
+            {mode === "edit"
+              ? "Mettez à jour les informations du devis et regénérez-le si nécessaire."
+              : "Renseignez les informations du devis à créer."}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
