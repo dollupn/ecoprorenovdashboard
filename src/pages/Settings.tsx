@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
 import { Label } from "@/components/ui/label";
 import {
@@ -46,6 +47,8 @@ import {
   Plus,
   Trash2,
   Loader2,
+  UserPlus,
+  FileText,
 } from "lucide-react";
 import {
   DEFAULT_PROJECT_STATUSES,
@@ -96,6 +99,15 @@ interface CompanyInfo {
   phone: string;
   email: string;
   description: string;
+}
+
+interface Delegataire {
+  id: string;
+  name: string;
+  contactName: string;
+  email: string;
+  phone: string;
+  textBlock: string;
 }
 
 interface NotificationSettings {
@@ -156,6 +168,14 @@ const formatRelativeExpiry = (iso?: string | null) => {
 
 const DRIVE_AUTH_STORAGE_PREFIX = "drive-auth:";
 const buildDriveAuthStateKey = (state: string) => `${DRIVE_AUTH_STORAGE_PREFIX}${state}`;
+
+const generateDelegataireId = () => {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return Math.random().toString(36).slice(2, 11);
+};
 
 const createDriveStateToken = () => {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -309,6 +329,7 @@ export default function Settings() {
   const [projectStatuses, setProjectStatuses] = useState<ProjectStatusSetting[]>(() =>
     getProjectStatusSettings(),
   );
+  const [delegataires, setDelegataires] = useState<Delegataire[]>([]);
 
   const driveConnectionLoading = driveStatusLoading || driveStatusFetching;
   const driveErrorMessage = driveConnection?.errorMessage ?? driveStatusError?.message ?? null;
@@ -919,6 +940,42 @@ export default function Settings() {
     });
   }, [toast]);
 
+  const handleAddDelegataire = useCallback(() => {
+    setDelegataires((prev) => [
+      ...prev,
+      {
+        id: generateDelegataireId(),
+        name: "",
+        contactName: "",
+        email: "",
+        phone: "",
+        textBlock: "",
+      },
+    ]);
+  }, []);
+
+  const handleRemoveDelegataire = useCallback((id: string) => {
+    setDelegataires((prev) => prev.filter((delegataire) => delegataire.id !== id));
+  }, []);
+
+  const handleDelegataireChange = useCallback(
+    (id: string, field: keyof Delegataire, value: string) => {
+      setDelegataires((prev) =>
+        prev.map((delegataire) =>
+          delegataire.id === id ? { ...delegataire, [field]: value } : delegataire,
+        ),
+      );
+    },
+    [],
+  );
+
+  const handleSaveDelegataires = useCallback(() => {
+    toast({
+      title: "Délégataires sauvegardés",
+      description: "Les informations seront utilisées lors de la génération des devis.",
+    });
+  }, [toast]);
+
   return (
     <Layout>
       <div className="space-y-8">
@@ -1104,104 +1161,272 @@ export default function Settings() {
                 </p>
               </CardHeader>
               <CardContent>
-                <form className="space-y-6" onSubmit={handleCompanySubmit}>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="company-name">Nom d&apos;usage</Label>
-                      <Input
-                        id="company-name"
-                        value={companyInfo.name}
-                        onChange={(e) => setCompanyInfo((p) => ({ ...p, name: e.target.value }))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="company-legal">Raison sociale</Label>
-                      <Input
-                        id="company-legal"
-                        value={companyInfo.legalName}
-                        onChange={(e) => setCompanyInfo((p) => ({ ...p, legalName: e.target.value }))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="company-registration">Enregistrement</Label>
-                      <Input
-                        id="company-registration"
-                        value={companyInfo.registration}
-                        onChange={(e) =>
-                          setCompanyInfo((p) => ({ ...p, registration: e.target.value }))
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="company-phone">Téléphone</Label>
-                      <Input
-                        id="company-phone"
-                        value={companyInfo.phone}
-                        onChange={(e) => setCompanyInfo((p) => ({ ...p, phone: e.target.value }))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="company-email">Email principal</Label>
-                      <Input
-                        id="company-email"
-                        type="email"
-                        value={companyInfo.email}
-                        onChange={(e) => setCompanyInfo((p) => ({ ...p, email: e.target.value }))}
-                      />
-                    </div>
-                    <div className="md:col-span-2 space-y-2">
-                      <Label htmlFor="company-address">Adresse</Label>
-                      <AddressAutocomplete
-                        value={companyInfo.address}
-                        onChange={(address, city, postalCode) =>
-                          setCompanyInfo((p) => ({
-                            ...p,
-                            address,
-                            city,
-                            postalCode,
-                          }))
-                        }
-                      />
-                    </div>
-                    <div className="grid gap-4 md:grid-cols-2 md:col-span-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="company-city">Ville</Label>
-                        <Input
-                          id="company-city"
-                          value={companyInfo.city}
-                          readOnly
-                          placeholder="Sélectionnez une adresse"
-                        />
+                <Tabs defaultValue="company" className="space-y-6">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="company">Entreprise</TabsTrigger>
+                    <TabsTrigger value="delegataire">Délégataires</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="company" className="space-y-6">
+                    <form className="space-y-6" onSubmit={handleCompanySubmit}>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="company-name">Nom d&apos;usage</Label>
+                          <Input
+                            id="company-name"
+                            value={companyInfo.name}
+                            onChange={(e) => setCompanyInfo((p) => ({ ...p, name: e.target.value }))}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="company-legal">Raison sociale</Label>
+                          <Input
+                            id="company-legal"
+                            value={companyInfo.legalName}
+                            onChange={(e) => setCompanyInfo((p) => ({ ...p, legalName: e.target.value }))}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="company-registration">Enregistrement</Label>
+                          <Input
+                            id="company-registration"
+                            value={companyInfo.registration}
+                            onChange={(e) =>
+                              setCompanyInfo((p) => ({ ...p, registration: e.target.value }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="company-phone">Téléphone</Label>
+                          <Input
+                            id="company-phone"
+                            value={companyInfo.phone}
+                            onChange={(e) => setCompanyInfo((p) => ({ ...p, phone: e.target.value }))}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="company-email">Email principal</Label>
+                          <Input
+                            id="company-email"
+                            type="email"
+                            value={companyInfo.email}
+                            onChange={(e) => setCompanyInfo((p) => ({ ...p, email: e.target.value }))}
+                          />
+                        </div>
+                        <div className="md:col-span-2 space-y-2">
+                          <Label htmlFor="company-address">Adresse</Label>
+                          <AddressAutocomplete
+                            value={companyInfo.address}
+                            onChange={(address, city, postalCode) =>
+                              setCompanyInfo((p) => ({
+                                ...p,
+                                address,
+                                city,
+                                postalCode,
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="grid gap-4 md:grid-cols-2 md:col-span-2">
+                          <div className="space-y-2">
+                            <Label htmlFor="company-city">Ville</Label>
+                            <Input
+                              id="company-city"
+                              value={companyInfo.city}
+                              readOnly
+                              placeholder="Sélectionnez une adresse"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="company-postal">Code postal</Label>
+                            <Input
+                              id="company-postal"
+                              value={companyInfo.postalCode}
+                              readOnly
+                              placeholder="Sélectionnez une adresse"
+                            />
+                          </div>
+                        </div>
+                        <div className="md:col-span-2 space-y-2">
+                          <Label htmlFor="company-description">Description publique</Label>
+                          <Textarea
+                            id="company-description"
+                            value={companyInfo.description}
+                            onChange={(e) =>
+                              setCompanyInfo((p) => ({ ...p, description: e.target.value }))
+                            }
+                            rows={3}
+                          />
+                        </div>
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="company-postal">Code postal</Label>
-                        <Input
-                          id="company-postal"
-                          value={companyInfo.postalCode}
-                          readOnly
-                          placeholder="Sélectionnez une adresse"
-                        />
+                      <div className="flex items-center justify-end gap-3">
+                        <Button type="button" variant="ghost">
+                          Annuler
+                        </Button>
+                        <Button type="submit">Enregistrer les modifications</Button>
+                      </div>
+                    </form>
+                  </TabsContent>
+
+                  <TabsContent value="delegataire" className="space-y-6">
+                    <div className="space-y-3">
+                      <p className="text-sm text-muted-foreground">
+                        Renseignez les délégataires avec leurs informations de contact et le bloc de texte qui sera
+                        automatiquement ajouté aux devis correspondants.
+                      </p>
+                      <div className="flex items-center justify-between rounded-xl border border-dashed border-primary/30 bg-primary/5 p-4 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-3">
+                          <UserPlus className="h-4 w-4 text-primary" />
+                          <span>Ajoutez un délégataire pour personnaliser vos documents commerciaux.</span>
+                        </div>
+                        <Button type="button" size="sm" onClick={handleAddDelegataire}>
+                          Nouveau délégataire
+                        </Button>
                       </div>
                     </div>
-                    <div className="md:col-span-2 space-y-2">
-                      <Label htmlFor="company-description">Description publique</Label>
-                      <Textarea
-                        id="company-description"
-                        value={companyInfo.description}
-                        onChange={(e) =>
-                          setCompanyInfo((p) => ({ ...p, description: e.target.value }))
-                        }
-                        rows={3}
-                      />
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-end gap-3">
-                    <Button type="button" variant="ghost">
-                      Annuler
-                    </Button>
-                    <Button type="submit">Enregistrer les modifications</Button>
-                  </div>
-                </form>
+
+                    {delegataires.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-border/60 bg-background/60 p-8 text-center text-sm text-muted-foreground">
+                        <FileText className="h-6 w-6 text-primary" />
+                        <p>Aucun délégataire n&apos;a encore été configuré.</p>
+                        <Button type="button" variant="secondary" onClick={handleAddDelegataire}>
+                          Ajouter un délégataire
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {delegataires.map((delegataire, index) => (
+                          <div
+                            key={delegataire.id}
+                            className="space-y-4 rounded-2xl border border-border/60 bg-background/60 p-5 shadow-sm"
+                          >
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <p className="text-sm font-medium text-foreground">
+                                  Délégataire {index + 1}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  Ces informations seront reprises sur les devis associés.
+                                </p>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleRemoveDelegataire(delegataire.id)}
+                                className="h-8 w-8 text-muted-foreground"
+                                aria-label={`Supprimer le délégataire ${index + 1}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <div className="space-y-2">
+                                <Label htmlFor={`delegataire-name-${delegataire.id}`}>
+                                  Nom du délégataire
+                                </Label>
+                                <Input
+                                  id={`delegataire-name-${delegataire.id}`}
+                                  value={delegataire.name}
+                                  onChange={(event) =>
+                                    handleDelegataireChange(
+                                      delegataire.id,
+                                      "name",
+                                      event.target.value,
+                                    )
+                                  }
+                                  placeholder="Société partenaire"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor={`delegataire-contact-${delegataire.id}`}>
+                                  Contact principal
+                                </Label>
+                                <Input
+                                  id={`delegataire-contact-${delegataire.id}`}
+                                  value={delegataire.contactName}
+                                  onChange={(event) =>
+                                    handleDelegataireChange(
+                                      delegataire.id,
+                                      "contactName",
+                                      event.target.value,
+                                    )
+                                  }
+                                  placeholder="Nom et prénom"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor={`delegataire-email-${delegataire.id}`}>
+                                  Email
+                                </Label>
+                                <Input
+                                  id={`delegataire-email-${delegataire.id}`}
+                                  type="email"
+                                  value={delegataire.email}
+                                  onChange={(event) =>
+                                    handleDelegataireChange(
+                                      delegataire.id,
+                                      "email",
+                                      event.target.value,
+                                    )
+                                  }
+                                  placeholder="delegataire@exemple.fr"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor={`delegataire-phone-${delegataire.id}`}>
+                                  Téléphone
+                                </Label>
+                                <Input
+                                  id={`delegataire-phone-${delegataire.id}`}
+                                  value={delegataire.phone}
+                                  onChange={(event) =>
+                                    handleDelegataireChange(
+                                      delegataire.id,
+                                      "phone",
+                                      event.target.value,
+                                    )
+                                  }
+                                  placeholder="+33 6 12 34 56 78"
+                                />
+                              </div>
+                              <div className="md:col-span-2 space-y-2">
+                                <Label htmlFor={`delegataire-text-${delegataire.id}`}>
+                                  Bloc de texte pour le devis
+                                </Label>
+                                <Textarea
+                                  id={`delegataire-text-${delegataire.id}`}
+                                  value={delegataire.textBlock}
+                                  onChange={(event) =>
+                                    handleDelegataireChange(
+                                      delegataire.id,
+                                      "textBlock",
+                                      event.target.value,
+                                    )
+                                  }
+                                  rows={3}
+                                  placeholder="Informations complémentaires affichées sur le devis"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                  Ce contenu sera affiché automatiquement dans la section dédiée du devis.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {delegataires.length > 0 && (
+                      <div className="flex items-center justify-end">
+                        <Button type="button" onClick={handleSaveDelegataires}>
+                          Sauvegarder les délégataires
+                        </Button>
+                      </div>
+                    )}
+                  </TabsContent>
+                </Tabs>
               </CardContent>
             </Card>
 
