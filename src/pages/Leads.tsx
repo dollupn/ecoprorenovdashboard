@@ -1368,16 +1368,17 @@ const Leads = () => {
                       <div className="flex flex-wrap gap-2 justify-end">
                         <LeadPhoningDialog lead={lead as LeadWithExtras} onCompleted={handlePhoningCompleted} />
                         <ScheduleLeadDialog lead={lead as LeadWithExtras} onScheduled={handleLeadScheduled} />
-                        <AddProjectDialog
-                          trigger={<Button size="sm">Créer Projet</Button>}
-                          initialValues={{
-                            client_name: lead.full_name,
-                            company: lead.company ?? "",
-                            siren: lead.siren ?? "",
-                            city: lead.city,
-                            postal_code: lead.postal_code,
-                            surface_batiment_m2: lead.surface_m2 ?? undefined,
-                                lead_id: lead.id,
+                          <AddProjectDialog
+                            trigger={<Button size="sm">Créer Projet</Button>}
+                            initialValues={{
+                              client_name: lead.full_name,
+                              company: lead.company ?? "",
+                              phone: lead.phone_raw ?? "",
+                              siren: lead.siren ?? "",
+                              city: lead.city,
+                              postal_code: lead.postal_code,
+                              surface_batiment_m2: lead.surface_m2 ?? undefined,
+                              lead_id: lead.id,
                               }}
                               onProjectAdded={() => handleProjectCreated(lead as LeadWithExtras)}
                         />
@@ -1491,6 +1492,7 @@ const Leads = () => {
                                 initialValues={{
                                   client_name: lead.full_name,
                                   company: lead.company ?? "",
+                                  phone: lead.phone_raw ?? "",
                                   siren: lead.siren ?? "",
                                   city: lead.city,
                                   postal_code: lead.postal_code,
