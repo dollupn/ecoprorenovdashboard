@@ -37,6 +37,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { PlusCircle } from "lucide-react";
+import { getProjectClientName } from "@/lib/projects";
 
 const invoiceSchema = z.object({
   invoice_ref: z.string().min(3, "La référence est requise"),
@@ -70,7 +71,7 @@ export const AddInvoiceDialog = ({ onInvoiceAdded }: AddInvoiceDialogProps) => {
       if (!user) return [];
       const { data, error } = await supabase
         .from("projects")
-        .select("id, project_ref, client_name")
+        .select("id, project_ref, client_name, client_first_name, client_last_name")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
@@ -305,7 +306,7 @@ export const AddInvoiceDialog = ({ onInvoiceAdded }: AddInvoiceDialogProps) => {
                     <SelectContent>
                       {projects.map((project) => (
                         <SelectItem key={project.id} value={project.id}>
-                          {project.project_ref} - {project.client_name}
+                          {project.project_ref} - {getProjectClientName(project)}
                         </SelectItem>
                       ))}
                     </SelectContent>

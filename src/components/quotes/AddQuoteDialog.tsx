@@ -34,6 +34,7 @@ import { CSS } from "@dnd-kit/utilities";
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
+import { getProjectClientName } from "@/lib/projects";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useToast } from "@/hooks/use-toast";
@@ -104,7 +105,10 @@ const quoteSchema = z.object({
 
 export type QuoteFormValues = z.infer<typeof quoteSchema>;
 
-type ProjectOption = Pick<Tables<"projects">, "id" | "project_ref" | "client_name">;
+type ProjectOption = Pick<
+  Tables<"projects">,
+  "id" | "project_ref" | "client_name" | "client_first_name" | "client_last_name"
+>;
 
 export interface AddQuoteDialogProps {
   onQuoteAdded?: () => void | Promise<void>;
@@ -448,7 +452,7 @@ export const AddQuoteDialog = ({
 
       const { data, error } = await supabase
         .from("projects")
-        .select("id, project_ref, client_name")
+        .select("id, project_ref, client_name, client_first_name, client_last_name")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
@@ -462,7 +466,7 @@ export const AddQuoteDialog = ({
       projects.map((project) => ({
         value: project.id,
         label: project.project_ref,
-        description: project.client_name,
+        description: getProjectClientName(project),
       })),
     [projects]
   );

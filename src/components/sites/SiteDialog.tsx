@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { getProjectClientName } from "@/lib/projects";
 import {
   Select,
   SelectContent,
@@ -753,7 +754,7 @@ export const SiteDialog = ({
                               key={project.id ?? project.project_ref}
                               value={project.project_ref}
                             >
-                              {project.project_ref} • {project.client_name}
+                            {project.project_ref} • {getProjectClientName(project)}
                             </SelectItem>
                           ))
                         ) : (
