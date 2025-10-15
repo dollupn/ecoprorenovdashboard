@@ -44,7 +44,7 @@ export const QuoteActions = ({
         className="gap-1"
       >
         <Download className="h-3.5 w-3.5" />
-        Télécharger
+        Télécharger (PDF)
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
