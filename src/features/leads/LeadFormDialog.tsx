@@ -55,9 +55,10 @@ import type { DriveFileMetadata } from "@/integrations/googleDrive";
 const LEAD_SOURCES = ["Commercial", "Campagne FB", "Régie Commercial"] as const;
 
 const sirenSchema = z
-  .string({ required_error: "Le numéro SIREN est requis" })
-  .min(1, "Le numéro SIREN est requis")
+  .string()
+  .optional()
   .refine((value) => {
+    if (!value || value.trim() === "") return true;
     const sanitized = value.replace(/\s+/g, "").trim();
     return /^\d{9}$/.test(sanitized);
   }, "Le numéro SIREN doit contenir 9 chiffres");
@@ -178,7 +179,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
 
     form.clearErrors();
 
-    const normalizedSiren = values.siren.replace(/\s+/g, "").trim();
+    const normalizedSiren = values.siren?.replace(/\s+/g, "").trim() || null;
     const fullName = `${values.first_name} ${values.last_name}`.replace(/\s+/g, " ").trim();
     const selectedProductType = values.product_type.trim();
     const parseDimension = (input?: string) => {
