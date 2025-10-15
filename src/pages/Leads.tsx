@@ -26,6 +26,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { useOrg } from "@/features/organizations/OrgContext";
 import { useLeadProductTypes, useLeadsList, useUpdateLead } from "@/features/leads/api";
 import {
   DropdownMenu,
@@ -739,6 +740,7 @@ const formatInitials = (fullName: string) => {
 
 const Leads = () => {
   const { user } = useAuth();
+  const { currentOrgId } = useOrg();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -746,7 +748,7 @@ const Leads = () => {
   const [importing, setImporting] = useState(false);
   const [isCsvDragActive, setIsCsvDragActive] = useState(false);
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
-  const orgId = user?.id ?? null;
+  const orgId = currentOrgId;
 
   const {
     data: leads = [],
