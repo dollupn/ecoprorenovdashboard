@@ -208,9 +208,18 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         delete (extraFields as Record<string, unknown>).drive_photo;
       }
 
-      const payload = {
+      // Store first_name, last_name, building dimensions, and remarks in extra_fields
+      const enrichedExtraFields = {
+        ...extraFields,
         first_name: values.first_name,
         last_name: values.last_name,
+        building_length: buildingLength,
+        building_width: buildingWidth,
+        building_height: buildingHeight,
+        remarks: values.remarks?.trim() || null,
+      };
+
+      const payload = {
         full_name: fullName,
         email: values.email,
         phone_raw: values.phone_raw,
@@ -221,15 +230,10 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         company: values.company?.trim() ? values.company : null,
         siren: normalizedSiren,
         product_name: selectedProductType,
-        product_type: selectedProductType,
         utm_source: values.utm_source?.trim() ? values.utm_source : null,
         commentaire: values.commentaire?.trim() ? values.commentaire : null,
-        remarks: values.remarks?.trim() ? values.remarks : null,
-        building_length: buildingLength,
-        building_width: buildingWidth,
-        building_height: buildingHeight,
         photo_previsite_url: drivePhotoMetadata?.webViewLink ?? drivePhotoMetadata?.webContentLink ?? null,
-        extra_fields: extraFields,
+        extra_fields: enrichedExtraFields,
         user_id: user.id,
         org_id: orgId,
         assigned_to: values.assigned_to || user.id,
