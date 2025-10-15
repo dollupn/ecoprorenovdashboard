@@ -11,13 +11,24 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatQuoteCurrency, parseQuoteMetadata, computeLineItemsTotal } from "./utils";
 import type { QuoteRecord } from "./types";
-import { CalendarDays, FileText, FolderOpen, Mail, Phone, User, MapPin, Download } from "lucide-react";
+import {
+  CalendarDays,
+  FileText,
+  FolderOpen,
+  Mail,
+  Phone,
+  User,
+  MapPin,
+  Download,
+  Pencil,
+} from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 interface QuoteDetailsDrawerProps {
   quote: QuoteRecord | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onEdit?: (quote: QuoteRecord) => void;
 }
 
 const statusLabels: Record<string, string> = {
@@ -28,7 +39,7 @@ const statusLabels: Record<string, string> = {
   EXPIRED: "Expiré",
 };
 
-export const QuoteDetailsDrawer = ({ quote, open, onOpenChange }: QuoteDetailsDrawerProps) => {
+export const QuoteDetailsDrawer = ({ quote, open, onOpenChange, onEdit }: QuoteDetailsDrawerProps) => {
   const metadata = useMemo(() => (quote ? parseQuoteMetadata(quote) : undefined), [quote]);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
@@ -150,14 +161,23 @@ export const QuoteDetailsDrawer = ({ quote, open, onOpenChange }: QuoteDetailsDr
                     {quote.projects?.project_ref ?? "Sans projet"}
                   </span>
                 </div>
-                <Button
-                  className="mt-2"
-                  onClick={handleDownloadPdf}
-                  disabled={isDownloadingPdf}
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  {isDownloadingPdf ? "Génération du PDF..." : "Télécharger le devis (PDF)"}
-                </Button>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button
+                    onClick={() => {
+                      if (quote && onEdit) {
+                        onEdit(quote);
+                      }
+                    }}
+                    variant="outline"
+                  >
+                    <Pencil className="mr-2 h-4 w-4" />
+                    Modifier le devis
+                  </Button>
+                  <Button onClick={handleDownloadPdf} disabled={isDownloadingPdf}>
+                    <Download className="mr-2 h-4 w-4" />
+                    {isDownloadingPdf ? "Génération du PDF..." : "Regénérer le devis (PDF)"}
+                  </Button>
+                </div>
               </section>
 
               <section className="space-y-4 rounded-lg border bg-background/60 p-4 text-sm">
