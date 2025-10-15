@@ -278,7 +278,8 @@ const createProjectSchema = (allowedStatuses: readonly string[]) => {
         );
 
   return z.object({
-    client_name: z.string().min(2, "Le nom du client est requis"),
+    client_first_name: z.string().min(2, "Le prénom du client est requis"),
+    client_last_name: z.string().min(2, "Le nom du client est requis"),
     company: z.string().optional(),
     phone: z.string().optional(),
     siren: sirenSchema,
@@ -303,6 +304,7 @@ const createProjectSchema = (allowedStatuses: readonly string[]) => {
     surface_batiment_m2: z.coerce.number().optional(),
     status: statusSchema,
     assigned_to: z.string().min(2, "Assignation requise"),
+    source: z.string().min(2, "La source est requise"),
     date_debut_prevue: z.string().optional(),
     date_fin_prevue: z.string().optional(),
     estimated_value: z.coerce.number().optional(),
@@ -321,7 +323,8 @@ interface AddProjectDialogProps {
 }
 
 const baseDefaultValues: Partial<ProjectFormValues> = {
-  client_name: "",
+  client_first_name: "",
+  client_last_name: "",
   company: "",
   phone: "",
   siren: "",
@@ -338,6 +341,7 @@ const baseDefaultValues: Partial<ProjectFormValues> = {
   surface_batiment_m2: undefined,
   status: "",
   assigned_to: "",
+  source: "",
   date_debut_prevue: "",
   date_fin_prevue: "",
   estimated_value: undefined,
@@ -558,6 +562,27 @@ export const AddProjectDialog = ({
     return user?.email ?? "";
   }, [initialValues?.assigned_to, profile?.full_name, salesRepsData, user?.email, user?.user_metadata?.full_name]);
 
+  const defaultSource = useMemo(() => {
+    if (initialValues?.source && initialValues.source.trim().length > 0) {
+      return initialValues.source;
+    }
+
+    if (profile?.full_name && profile.full_name.trim().length > 0) {
+      return profile.full_name;
+    }
+
+    const metadataName =
+      typeof user?.user_metadata?.full_name === "string"
+        ? user.user_metadata.full_name.trim()
+        : "";
+
+    if (metadataName) {
+      return metadataName;
+    }
+
+    return user?.email ?? "";
+  }, [initialValues?.source, profile?.full_name, user?.email, user?.user_metadata?.full_name]);
+
   const commercialOptions = useMemo(() => {
     if (!defaultAssignee) {
       return rawCommercialOptions;
@@ -585,6 +610,7 @@ export const AddProjectDialog = ({
       ...initialValues,
       status: defaultStatus,
       assigned_to: initialValues?.assigned_to ?? defaultAssignee ?? "",
+      source: initialValues?.source ?? defaultSource ?? "",
       products: initialValues?.products ?? [createProductEntry()],
     } as ProjectFormValues,
   });
@@ -702,6 +728,12 @@ export const AddProjectDialog = ({
     }
   }, [defaultAssignee, form]);
 
+  useEffect(() => {
+    if (defaultSource && form.getValues("source") !== defaultSource) {
+      form.setValue("source", defaultSource);
+    }
+  }, [defaultSource, form]);
+
   // **** Merged/conflict-resolved effect: honors initialValues + defaults ****
   useEffect(() => {
     if (!open) return;
@@ -760,6 +792,7 @@ export const AddProjectDialog = ({
       ...initialValues,
       status: nextStatus,
       assigned_to: initialValues?.assigned_to ?? defaultAssignee ?? "",
+      source: initialValues?.source ?? defaultSource ?? "",
       siren: initialValues?.siren ?? "",
       products: productList,
     } as ProjectFormValues);
@@ -768,6 +801,7 @@ export const AddProjectDialog = ({
     ecoProducts,
     form,
     defaultAssignee,
+    defaultSource,
     initialValues,
     productsData,
     defaultStatus,
@@ -871,6 +905,10 @@ export const AddProjectDialog = ({
 
       // Créer le projet
       const normalizedSiren = (data.siren ?? "").replace(/\s+/g, "").trim();
+      const clientFirstName = data.client_first_name.trim();
+      const clientLastName = data.client_last_name.trim();
+      const client_name = `${clientFirstName} ${clientLastName}`.replace(/\s+/g, " ").trim();
+      const projectSource = data.source.trim();
 
       const { data: createdProject, error: projectError } = await supabase
         .from("projects")
@@ -879,12 +917,15 @@ export const AddProjectDialog = ({
             user_id: user.id,
             org_id: currentOrgId,
             project_ref,
-            client_name: data.client_name,
+            client_name,
+            client_first_name: clientFirstName,
+            client_last_name: clientLastName,
             product_name, // Pour compatibilité
             city: data.city,
             postal_code: data.postal_code,
             status: data.status,
             assigned_to: data.assigned_to,
+            source: projectSource,
             company: data.company || undefined,
             phone: data.phone || undefined,
             siren: normalizedSiren ? normalizedSiren : undefined,
@@ -939,6 +980,7 @@ export const AddProjectDialog = ({
       form.reset({
         ...baseDefaultValues,
         assigned_to: defaultAssignee ?? "",
+        source: defaultSource ?? "",
         products: ecoEntries.length ? ecoEntries : [createProductEntry()],
       } as ProjectFormValues);
       setOpen(false);
@@ -1009,10 +1051,23 @@ export const AddProjectDialog = ({
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="client_name"
+                name="client_first_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Prénom du client *</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="client_last_name"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Nom du client *</FormLabel>
@@ -1031,6 +1086,19 @@ export const AddProjectDialog = ({
                     <FormLabel>Entreprise</FormLabel>
                     <FormControl>
                       <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="source"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Source du projet *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Propriétaire du projet" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

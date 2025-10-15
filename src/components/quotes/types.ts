@@ -4,7 +4,10 @@ type QuoteProjectProduct = {
   product: Pick<Tables<"product_catalog">, "code"> | null;
 };
 
-type QuoteProject = Pick<Tables<"projects">, "project_ref" | "client_name" | "product_name"> & {
+type QuoteProject = Pick<
+  Tables<"projects">,
+  "project_ref" | "client_name" | "client_first_name" | "client_last_name" | "product_name"
+> & {
   project_products?: QuoteProjectProduct[];
 };
 

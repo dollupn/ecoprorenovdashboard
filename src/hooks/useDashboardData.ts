@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { getProjectClientName } from "@/lib/projects";
 import {
   addDays,
   addMonths,
@@ -336,7 +337,9 @@ export const useActivityFeed = (
           .limit(20),
         supabase
           .from("projects")
-          .select("id, project_ref, client_name, city, status, updated_at")
+          .select(
+            "id, project_ref, client_name, client_first_name, client_last_name, city, status, updated_at"
+          )
           .eq("user_id", orgId)
           .eq("status", "ACCEPTED")
           .order("updated_at", { ascending: false })
@@ -398,13 +401,14 @@ export const useActivityFeed = (
       });
 
       (projects.data ?? []).forEach((project) => {
+        const projectClientName = getProjectClientName(project);
         items.push({
           id: `project-${project.id}`,
           type: "project",
           title: "Projet accepté",
-          description: `${project.project_ref ?? "Projet"} • ${project.client_name ?? "Client"}`,
+          description: `${project.project_ref ?? "Projet"} • ${projectClientName || "Client"}`,
           status: project.status?.toUpperCase(),
-          client: project.client_name,
+          client: projectClientName,
           city: project.city,
           date: project.updated_at,
         });
