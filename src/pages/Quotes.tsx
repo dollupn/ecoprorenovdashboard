@@ -311,6 +311,64 @@ const Quotes = () => {
     return <Badge className={meta.className}>{meta.label}</Badge>;
   };
 
+  const handleDownloadQuotePdf = async (value: QuoteRecord) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/quotes/${value.id}/pdf`, {
+        method: "GET",
+        headers: {
+          Accept: "application/pdf",
+        },
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        let message = "Le PDF n'a pas pu être généré.";
+        const contentType = response.headers.get("Content-Type") ?? "";
+
+        if (contentType.includes("application/json")) {
+          try {
+            const payload = await response.json();
+            if (typeof payload?.message === "string" && payload.message.trim()) {
+              message = payload.message;
+            }
+          } catch (error) {
+            console.warn("Impossible de lire la réponse d'erreur", error);
+          }
+        }
+
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const reference = value.quote_ref ? value.quote_ref.replace(/\s+/g, "-") : value.id;
+      link.href = url;
+      link.download = `Devis-${reference}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "Téléchargement du devis",
+        description: `Le PDF du devis ${value.quote_ref ?? ""} est en cours de téléchargement.`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Le PDF n'a pas pu être généré.";
+
+      toast({
+        title: "Erreur lors du téléchargement",
+        description: message,
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -496,45 +554,7 @@ const Quotes = () => {
                                   setDetailsOpen(true);
                                 }}
                                 onDownload={(value) => {
-                                  const metadata = parseQuoteMetadata(value);
-
-                                  if (typeof window === "undefined") {
-                                    return;
-                                  }
-
-                                  const payload = {
-                                    quote: {
-                                      id: value.id,
-                                      reference: value.quote_ref,
-                                      client: value.client_name,
-                                      product: value.product_name,
-                                      status: value.status,
-                                      amount: value.amount,
-                                      validUntil: value.valid_until,
-                                      projectRef: value.projects?.project_ref,
-                                      projectClient: value.projects?.client_name,
-                                      createdAt: value.created_at,
-                                    },
-                                    metadata,
-                                  };
-
-                                  const blob = new Blob([JSON.stringify(payload, null, 2)], {
-                                    type: "application/json",
-                                  });
-
-                                  const url = URL.createObjectURL(blob);
-                                  const link = document.createElement("a");
-                                  link.href = url;
-                                  link.download = `${value.quote_ref || "devis"}.json`;
-                                  document.body.appendChild(link);
-                                  link.click();
-                                  document.body.removeChild(link);
-                                  URL.revokeObjectURL(url);
-
-                                  toast({
-                                    title: "Téléchargement en cours",
-                                    description: `Le devis ${value.quote_ref} a été préparé au format JSON.`,
-                                  });
+                                  void handleDownloadQuotePdf(value);
                                 }}
                                 onOpenDrive={(value) => {
                                   const metadata = parseQuoteMetadata(value);
