@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
+import { useCallback, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 
 import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,6 +28,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useLeadProductTypes, useLeadsList, useUpdateLead } from "@/features/leads/api";
+import { useMembers, type MemberRole } from "@/features/members/api";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -73,6 +74,7 @@ import {
   LayoutGrid,
   List,
   Upload,
+  UserCircle,
 } from "lucide-react";
 import { getOrganizationProducts } from "@/features/leads/api";
 import { cn } from "@/lib/utils";
@@ -80,6 +82,7 @@ import { cn } from "@/lib/utils";
 const CARD_SKELETON_COUNT = 4;
 
 const SELECT_NONE_VALUE = "__none" as const;
+const UNASSIGNED_VALUE = "__unassigned" as const;
 
 type LeadRecord = Tables<"leads">;
 type LeadWithExtras = LeadRecord & { extra_fields?: Record<string, unknown> | null };
@@ -748,6 +751,7 @@ const Leads = () => {
   const [importing, setImporting] = useState(false);
   const [isCsvDragActive, setIsCsvDragActive] = useState(false);
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
+  const [assigningLeadId, setAssigningLeadId] = useState<string | null>(null);
   const orgId = currentOrgId;
 
   const {
@@ -782,6 +786,139 @@ const Leads = () => {
   }, [productTypeOptions, selectedImportProductTypeId]);
 
   const bulkProductTypeLabel = selectedImportProductType?.name ?? null;
+
+  const { data: members = [] } = useMembers(orgId);
+
+  const currentMemberRole = useMemo<MemberRole | null>(() => {
+    const member = members.find((m) => m.user_id === user?.id);
+    return member?.role ?? null;
+  }, [members, user?.id]);
+
+  const canAssignLead = currentMemberRole === "owner" || currentMemberRole === "admin";
+
+  const assignmentOptions = useMemo(() => {
+    const base: { value: string; label: string; role: MemberRole }[] = members
+      .map((member) => ({
+        value: member.user_id,
+        role: member.role,
+        label:
+          member.profiles?.full_name ??
+          (member as { profile?: { full_name?: string | null } }).profile?.full_name ??
+          member.user_id,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label, "fr", { sensitivity: "base" }));
+
+    if (user?.id && !base.some((option) => option.value === user.id)) {
+      base.push({
+        value: user.id,
+        role: (currentMemberRole ?? "member") as MemberRole,
+        label:
+          (user.user_metadata?.full_name as string | undefined) ??
+          user.email ??
+          user.id,
+      });
+    }
+
+    return base;
+  }, [members, user?.id, user?.email, user?.user_metadata, currentMemberRole]);
+
+  const assignmentLabelById = useMemo(() => {
+    const map = new Map<string, string>();
+    assignmentOptions.forEach((option) => {
+      map.set(option.value, option.label);
+    });
+    return map;
+  }, [assignmentOptions]);
+
+  const getAssigneeDisplay = useCallback(
+    (assigneeId: string | null) => {
+      if (!assigneeId) return "Non assigné";
+      return assignmentLabelById.get(assigneeId) ?? assigneeId;
+    },
+    [assignmentLabelById]
+  );
+
+  const handleAssignmentChange = useCallback(
+    async (leadId: string, newAssignee: string | null) => {
+      setAssigningLeadId(leadId);
+      try {
+        await updateLeadMutation.mutateAsync({
+          id: leadId,
+          values: {
+            assigned_to: newAssignee,
+            updated_at: new Date().toISOString(),
+          },
+        });
+
+        const assigneeLabel = getAssigneeDisplay(newAssignee);
+        toast({
+          title: "Lead assigné",
+          description: newAssignee
+            ? `Le lead est désormais suivi par ${assigneeLabel}.`
+            : "Le lead n'est plus assigné.",
+        });
+      } catch (error) {
+        console.error("Erreur lors de l'assignation du lead", error);
+        const message = error instanceof Error ? error.message : "Réessayez plus tard.";
+        toast({
+          title: "Assignation impossible",
+          description: message,
+          variant: "destructive",
+        });
+      } finally {
+        setAssigningLeadId(null);
+      }
+    },
+    [getAssigneeDisplay, toast, updateLeadMutation]
+  );
+
+  const renderAssignmentControl = (lead: LeadRecord, variant: "card" | "table") => {
+    const selectValue = lead.assigned_to ?? UNASSIGNED_VALUE;
+    const isAssigning = assigningLeadId === lead.id;
+
+    if (!canAssignLead) {
+      const displayValue = getAssigneeDisplay(lead.assigned_to ?? null);
+      const isUnassigned = !lead.assigned_to;
+      return (
+        <span
+          className={cn(
+            "text-sm font-medium",
+            isUnassigned ? "text-muted-foreground" : "text-foreground"
+          )}
+        >
+          {displayValue}
+        </span>
+      );
+    }
+
+    return (
+      <div className="flex items-center gap-2">
+        <Select
+          value={selectValue}
+          onValueChange={(value) =>
+            handleAssignmentChange(lead.id, value === UNASSIGNED_VALUE ? null : value)
+          }
+          disabled={isAssigning}
+        >
+          <SelectTrigger
+            className={cn("h-8 text-sm", variant === "table" ? "w-[180px]" : "w-[220px]")}
+          >
+            <SelectValue placeholder="Non assigné" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={UNASSIGNED_VALUE}>Non assigné</SelectItem>
+            {assignmentOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+                {option.role === "owner" || option.role === "admin" ? " (Admin)" : ""}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {isAssigning && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+      </div>
+    );
+  };
 
   const filteredLeads = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -1361,26 +1498,35 @@ const Leads = () => {
                       </div>
                     )}
 
-                    <div className="flex items-center justify-between pt-3 border-t">
-                      <span className="text-xs text-muted-foreground">
-                        Créé le {new Date(lead.created_at).toLocaleDateString("fr-FR")}
-                      </span>
+                    <div className="flex flex-col gap-3 pt-3 border-t md:flex-row md:items-center md:justify-between">
+                      <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-4">
+                        <span className="text-xs text-muted-foreground">
+                          Créé le {new Date(lead.created_at).toLocaleDateString("fr-FR")}
+                        </span>
+                        <div className="flex flex-wrap items-center gap-2 text-sm">
+                          <UserCircle className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                            Assigné à
+                          </span>
+                          {renderAssignmentControl(lead, "card")}
+                        </div>
+                      </div>
                       <div className="flex flex-wrap gap-2 justify-end">
                         <LeadPhoningDialog lead={lead as LeadWithExtras} onCompleted={handlePhoningCompleted} />
                         <ScheduleLeadDialog lead={lead as LeadWithExtras} onScheduled={handleLeadScheduled} />
-                          <AddProjectDialog
-                            trigger={<Button size="sm">Créer Projet</Button>}
-                            initialValues={{
-                              client_name: lead.full_name,
-                              company: lead.company ?? "",
-                              phone: lead.phone_raw ?? "",
-                              siren: lead.siren ?? "",
-                              city: lead.city,
-                              postal_code: lead.postal_code,
-                              surface_batiment_m2: lead.surface_m2 ?? undefined,
-                              lead_id: lead.id,
-                              }}
-                              onProjectAdded={() => handleProjectCreated(lead as LeadWithExtras)}
+                        <AddProjectDialog
+                          trigger={<Button size="sm">Convertir en Projet</Button>}
+                          initialValues={{
+                            client_name: lead.full_name,
+                            company: lead.company ?? "",
+                            phone: lead.phone_raw ?? "",
+                            siren: lead.siren ?? "",
+                            city: lead.city,
+                            postal_code: lead.postal_code,
+                            surface_batiment_m2: lead.surface_m2 ?? undefined,
+                            lead_id: lead.id,
+                          }}
+                          onProjectAdded={() => handleProjectCreated(lead as LeadWithExtras)}
                         />
                       </div>
                     </div>
@@ -1399,6 +1545,7 @@ const Leads = () => {
                       <TableHead>Statut</TableHead>
                       <TableHead>RDV</TableHead>
                       <TableHead>Source</TableHead>
+                      <TableHead>Assigné</TableHead>
                       <TableHead>Commentaire</TableHead>
                       <TableHead className="text-right">Créé / Actions</TableHead>
                     </TableRow>
@@ -1472,6 +1619,12 @@ const Leads = () => {
                         <TableCell className="text-sm">
                           {lead.utm_source ? lead.utm_source : <span className="text-muted-foreground">—</span>}
                         </TableCell>
+                        <TableCell className="text-sm">
+                          <div className="flex items-center gap-2">
+                            <UserCircle className="h-4 w-4 text-muted-foreground" />
+                            {renderAssignmentControl(lead, "table")}
+                          </div>
+                        </TableCell>
                         <TableCell className="max-w-[200px] text-sm">
                           {lead.commentaire ? (
                             <span className="line-clamp-2">{lead.commentaire}</span>
@@ -1488,7 +1641,7 @@ const Leads = () => {
                               <LeadPhoningDialog lead={lead as LeadWithExtras} onCompleted={handlePhoningCompleted} />
                               <ScheduleLeadDialog lead={lead as LeadWithExtras} onScheduled={handleLeadScheduled} />
                               <AddProjectDialog
-                                trigger={<Button size="sm">Créer Projet</Button>}
+                                trigger={<Button size="sm">Convertir en Projet</Button>}
                                 initialValues={{
                                   client_name: lead.full_name,
                                   company: lead.company ?? "",
