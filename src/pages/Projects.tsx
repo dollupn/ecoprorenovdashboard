@@ -15,6 +15,7 @@ import {
 } from "@/components/quotes/AddQuoteDialog";
 import type { Tables } from "@/integrations/supabase/types";
 import {
+  getProjectClientName,
   getProjectStatusBadgeStyle,
   type ProjectStatusSetting,
 } from "@/lib/projects";
@@ -146,6 +147,7 @@ const Projects = () => {
     }
 
     return base.filter((project) => {
+      const clientName = getProjectClientName(project);
       const displayedProducts = getDisplayedProducts(project.project_products);
 
       const productCodes = displayedProducts
@@ -163,13 +165,16 @@ const Projects = () => {
 
       const searchable = [
         project.project_ref,
-        project.client_name,
+        clientName,
+        project.client_first_name ?? "",
+        project.client_last_name ?? "",
         project.company ?? "",
         project.siren ?? "",
         project.city,
         project.postal_code,
         productCodes,
         project.assigned_to,
+        project.source ?? "",
         project.lead?.email ?? "",
         dynamicValues,
       ]
@@ -187,9 +192,10 @@ const Projects = () => {
   const handleCreateQuote = (project: ProjectWithRelations) => {
     const displayedProducts = getDisplayedProducts(project.project_products);
     const firstProduct = displayedProducts[0]?.product ?? project.project_products?.[0]?.product;
+    const clientName = getProjectClientName(project);
 
     setQuoteInitialValues({
-      client_name: project.client_name ?? "",
+      client_name: clientName,
       project_id: project.id,
       product_name:
         firstProduct?.name ||
@@ -284,6 +290,7 @@ const Projects = () => {
             const statusConfig = statusMap[project.status ?? ""];
             const badgeStyle = getProjectStatusBadgeStyle(statusConfig?.color);
             const statusLabel = statusConfig?.label ?? project.status ?? "Statut";
+            const clientName = getProjectClientName(project);
             const projectEmail =
               (project as Project & { email?: string | null; client_email?: string | null }).email ??
               (project as Project & { email?: string | null; client_email?: string | null }).client_email ??
@@ -303,13 +310,18 @@ const Projects = () => {
                       </CardTitle>
                       <p className="text-sm text-muted-foreground mt-1 space-y-1">
                         <span className="block">
-                          {project.client_name}
+                          {clientName}
                           {project.company && (
                             <span className="block text-xs">{project.company}</span>
                           )}
                           {project.siren && (
                             <span className="block text-xs text-muted-foreground/80">
                               SIREN : {project.siren}
+                            </span>
+                          )}
+                          {project.source && (
+                            <span className="block text-xs text-muted-foreground/80">
+                              Source : {project.source}
                             </span>
                           )}
                         </span>
@@ -448,6 +460,14 @@ const Projects = () => {
                         </div>
                       </div>
                     )}
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Source:</span>
+                      <span className="font-medium">
+                        {project.source && project.source.trim().length > 0
+                          ? project.source
+                          : "Non renseigné"}
+                      </span>
+                    </div>
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Assigné à:</span>
                       <span className="font-medium">{project.assigned_to}</span>

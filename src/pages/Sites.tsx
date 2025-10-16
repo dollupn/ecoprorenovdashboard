@@ -16,6 +16,7 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import type { Tables } from "@/integrations/supabase/types";
 import { useOrg } from "@/features/organizations/OrgContext";
+import { getProjectClientName } from "@/lib/projects";
 import {
   Plus,
   Search,
@@ -225,6 +226,7 @@ const Sites = () => {
 
   const projectOptions = useMemo<SiteProjectOption[]>(() => {
     return projects.map((project) => {
+      const clientName = getProjectClientName(project);
       const productCodes =
         project.project_products
           ?.map((item) => item.product?.code)
@@ -240,7 +242,7 @@ const Sites = () => {
       return {
         id: project.id,
         project_ref: project.project_ref ?? "",
-        client_name: project.client_name ?? "",
+        client_name: clientName,
         product_name: productLabel,
         address,
         city: project.city ?? "",
@@ -492,10 +494,11 @@ const Sites = () => {
           project.project_products
             ?.map((item) => item.product?.code)
             .filter((code): code is string => Boolean(code)) ?? [];
+        const clientName = getProjectClientName(project);
 
         handleOpenCreate({
           project_ref: project.project_ref ?? "",
-          client_name: project.client_name ?? "",
+          client_name: clientName,
           product_name: productCodes.join(", "),
           address: (project as { address?: string | null }).address ?? "",
           city: project.city ?? "",

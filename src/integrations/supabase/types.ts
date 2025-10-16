@@ -484,6 +484,8 @@ export type Database = {
           building_type: string | null
           city: string
           client_name: string
+          client_first_name: string | null
+          client_last_name: string | null
           company: string | null
           created_at: string
           date_debut_prevue: string | null
@@ -500,6 +502,7 @@ export type Database = {
           project_ref: string
           signatory_name: string | null
           signatory_title: string | null
+          source: string | null
           siren: string | null
           status: string
           surface_batiment_m2: number | null
@@ -514,6 +517,8 @@ export type Database = {
           building_type?: string | null
           city: string
           client_name: string
+          client_first_name?: string | null
+          client_last_name?: string | null
           company?: string | null
           created_at?: string
           date_debut_prevue?: string | null
@@ -530,6 +535,7 @@ export type Database = {
           project_ref: string
           signatory_name?: string | null
           signatory_title?: string | null
+          source?: string | null
           siren?: string | null
           status?: string
           surface_batiment_m2?: number | null
@@ -544,6 +550,8 @@ export type Database = {
           building_type?: string | null
           city?: string
           client_name?: string
+          client_first_name?: string | null
+          client_last_name?: string | null
           company?: string | null
           created_at?: string
           date_debut_prevue?: string | null
@@ -560,6 +568,7 @@ export type Database = {
           project_ref?: string
           signatory_name?: string | null
           signatory_title?: string | null
+          source?: string | null
           siren?: string | null
           status?: string
           surface_batiment_m2?: number | null

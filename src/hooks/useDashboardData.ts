@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { getProjectClientName } from "@/lib/projects";
 import {
   addDays,
   addMonths,
@@ -173,47 +174,54 @@ export const useDashboardMetrics = (
       const ninetyDaysAgo = subDays(now, 90);
       const previousPeriodStart = subDays(ninetyDaysAgo, 90);
 
-      const [activeLeads, projectsData, pendingQuotes, sitesData, leadsRdv, qualifiedLeads, acceptedProjects] =
-        await Promise.all([
-          supabase
-            .from("leads")
-            .select("id", { count: "exact", head: true })
-            .eq("org_id", orgId)
-            .in("status", ACTIVE_LEAD_STATUSES),
-          supabase
-            .from("projects")
-            .select("id, status, updated_at, surface_isolee_m2, city, client_name")
-            .eq("org_id", orgId)
-            .in("status", [...ACTIVE_PROJECT_STATUSES, ...PROJECT_SURFACE_STATUSES]),
-          supabase
-            .from("quotes")
-            .select("id, status, valid_until")
-            .eq("org_id", orgId)
-            .eq("status", QUOTE_PENDING_STATUS),
-          supabase
-            .from("sites")
-            .select("id, status, date_fin_prevue")
-            .eq("org_id", orgId)
-            .in("status", SITE_ACTIVE_STATUSES),
-          supabase
-            .from("leads")
-            .select("id, date_rdv")
-            .eq("org_id", orgId)
-            .gte("date_rdv", startWeek.toISOString())
-            .lte("date_rdv", endWeek.toISOString()),
-          supabase
-            .from("leads")
-            .select("id, updated_at")
-            .eq("org_id", orgId)
-            .eq("status", QUALIFIED_LEAD_STATUS)
-            .gte("updated_at", previousPeriodStart.toISOString()),
-          supabase
-            .from("projects")
-            .select("id, updated_at")
-            .eq("org_id", orgId)
-            .eq("status", ACCEPTED_PROJECT_STATUS)
-            .gte("updated_at", previousPeriodStart.toISOString()),
-        ]);
+      const [
+        activeLeads,
+        projectsData,
+        pendingQuotes,
+        sitesData,
+        leadsRdv,
+        qualifiedLeads,
+        acceptedProjects,
+      ] = await Promise.all([
+        supabase
+          .from("leads")
+          .select("id", { count: "exact", head: true })
+          .eq("org_id", orgId)
+          .in("status", ACTIVE_LEAD_STATUSES),
+        supabase
+          .from("projects")
+          .select("id, status, updated_at, surface_isolee_m2, city, client_name")
+          .eq("org_id", orgId)
+          .in("status", [...ACTIVE_PROJECT_STATUSES, ...PROJECT_SURFACE_STATUSES]),
+        supabase
+          .from("quotes")
+          .select("id, status, valid_until")
+          .eq("org_id", orgId)
+          .eq("status", QUOTE_PENDING_STATUS),
+        supabase
+          .from("sites")
+          .select("id, status, date_fin_prevue")
+          .eq("org_id", orgId)
+          .in("status", SITE_ACTIVE_STATUSES),
+        supabase
+          .from("leads")
+          .select("id, date_rdv")
+          .eq("org_id", orgId)
+          .gte("date_rdv", startWeek.toISOString())
+          .lte("date_rdv", endWeek.toISOString()),
+        supabase
+          .from("leads")
+          .select("id, updated_at")
+          .eq("org_id", orgId)
+          .eq("status", QUALIFIED_LEAD_STATUS)
+          .gte("updated_at", previousPeriodStart.toISOString()),
+        supabase
+          .from("projects")
+          .select("id, updated_at")
+          .eq("org_id", orgId)
+          .eq("status", ACCEPTED_PROJECT_STATUS)
+          .gte("updated_at", previousPeriodStart.toISOString()),
+      ]);
 
       if (activeLeads.error) throw activeLeads.error;
       if (projectsData.error) throw projectsData.error;
@@ -276,7 +284,9 @@ export const useDashboardMetrics = (
 
       const metrics: DashboardMetrics = {
         leadsActifs: activeLeads.count ?? 0,
-        projetsEnCours: projets.filter((project) => isStatusValue(ACTIVE_PROJECT_STATUSES, project.status)).length,
+        projetsEnCours: projets.filter((project) =>
+          isStatusValue(ACTIVE_PROJECT_STATUSES, project.status)
+        ).length,
         devisEnAttente: quotes.length,
         devisExpirantSous7Jours: quotes.filter((quote) => {
           if (!quote.valid_until) return false;
@@ -404,7 +414,9 @@ export const useActivityFeed = (
           .limit(20),
         supabase
           .from("projects")
-          .select("id, project_ref, client_name, city, status, updated_at")
+          .select(
+            "id, project_ref, client_name, client_first_name, client_last_name, city, status, updated_at"
+          )
           .eq("org_id", orgId)
           .eq("status", ACCEPTED_PROJECT_STATUS)
           .order("updated_at", { ascending: false })
@@ -465,15 +477,20 @@ export const useActivityFeed = (
         });
       });
 
-      (projects.data ?? []).forEach((project) => {
-        const statusLabel = project.status ? PROJECT_STATUS_LABELS[project.status] ?? project.status : null;
+      (projects.data ?? []).forEach((project: any) => {
+        const statusLabel = project.status
+          ? PROJECT_STATUS_LABELS[project.status] ?? project.status
+          : null;
+        const projectClientName =
+          project.client_name ?? getProjectClientName(project) ?? null;
+
         items.push({
           id: `project-${project.id}`,
           type: "project",
           title: "Projet accepté",
-          description: `${project.project_ref ?? "Projet"} • ${project.client_name ?? "Client"}`,
+          description: `${project.project_ref ?? "Projet"} • ${projectClientName || "Client"}`,
           status: statusLabel,
-          client: project.client_name,
+          client: projectClientName,
           city: project.city,
           date: project.updated_at,
         });
@@ -482,9 +499,10 @@ export const useActivityFeed = (
       (sites.data ?? []).forEach((site) => {
         const resolvedStatus = isStatusValue(SITE_ACTIVITY_STATUSES, site.status) ? site.status : null;
         const statusLabel = resolvedStatus ? SITE_STATUS_LABELS[resolvedStatus] : site.status ?? null;
-        const title = resolvedStatus && SITE_ACTIVITY_TITLES[resolvedStatus]
-          ? SITE_ACTIVITY_TITLES[resolvedStatus]!
-          : "Chantier en cours";
+        const title =
+          resolvedStatus && SITE_ACTIVITY_TITLES[resolvedStatus]
+            ? SITE_ACTIVITY_TITLES[resolvedStatus]!
+            : "Chantier en cours";
         items.push({
           id: `site-${site.id}`,
           type: "site",

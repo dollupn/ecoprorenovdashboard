@@ -20,7 +20,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
-import { getProjectStatusBadgeStyle } from "@/lib/projects";
+import { getProjectClientName, getProjectStatusBadgeStyle } from "@/lib/projects";
 import {
   ArrowLeft,
   Calendar,
@@ -174,8 +174,10 @@ const ProjectDetails = () => {
     const firstProduct =
       displayedProducts[0]?.product ?? project.project_products?.[0]?.product;
 
+    const clientName = getProjectClientName(project);
+
     setQuoteInitialValues({
-      client_name: project.client_name ?? "",
+      client_name: clientName,
       project_id: project.id,
       product_name:
         firstProduct?.name ||
@@ -296,7 +298,7 @@ const ProjectDetails = () => {
                   <p className="text-sm text-muted-foreground">Client</p>
                   <p className="font-medium flex items-center gap-2">
                     <UserRound className="w-4 h-4 text-primary" />
-                    {project.client_name}
+                    {getProjectClientName(project)}
                   </p>
                   {project.company && (
                     <p className="text-sm text-muted-foreground">{project.company}</p>
@@ -319,6 +321,15 @@ const ProjectDetails = () => {
                   <p className="font-medium flex items-center gap-2">
                     <MapPin className="w-4 h-4 text-primary" />
                     {project.city} ({project.postal_code})
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">Source</p>
+                  <p className="font-medium flex items-center gap-2">
+                    <UserRound className="w-4 h-4 text-primary" />
+                    {project.source && project.source.trim().length > 0
+                      ? project.source
+                      : "Non renseigné"}
                   </p>
                 </div>
                 <div className="space-y-2">
