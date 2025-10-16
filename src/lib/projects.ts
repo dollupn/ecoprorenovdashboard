@@ -1,6 +1,29 @@
 import type { CSSProperties } from "react";
 import type { Project } from "@/data/projects";
 
+type ProjectNameFields = {
+  client_first_name?: string | null;
+  client_last_name?: string | null;
+  client_name?: string | null;
+};
+
+const normalizeNamePart = (value?: string | null) =>
+  typeof value === "string" ? value.trim() : "";
+
+export const getProjectClientName = (project?: ProjectNameFields | null) => {
+  if (!project) return "";
+
+  const firstName = normalizeNamePart(project.client_first_name);
+  const lastName = normalizeNamePart(project.client_last_name);
+  const combined = `${firstName} ${lastName}`.trim();
+
+  if (combined.length > 0) {
+    return combined;
+  }
+
+  return normalizeNamePart(project.client_name);
+};
+
 export interface ProjectStatusSetting {
   id: string;
   value: string;
