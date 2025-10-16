@@ -58,6 +58,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { GripVertical, Plus, X } from "lucide-react";
 import { DynamicFields } from "@/features/leads/DynamicFields";
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
+import { useProjectBuildingTypes } from "@/hooks/useProjectBuildingTypes";
+import { useProjectUsages } from "@/hooks/useProjectUsages";
 
 type ProductCatalogEntry = Pick<Tables<"product_catalog">, "id" | "name" | "code" | "category" | "is_active" | "params_schema" | "default_params">;
 type Profile = Tables<"profiles">;
@@ -263,19 +265,38 @@ const sirenSchema = z
     return /^\d{9}$/.test(sanitized);
   }, "Le SIREN doit contenir 9 chiffres");
 
-const createProjectSchema = (allowedStatuses: readonly string[]) => {
-  const statusSchema =
-    allowedStatuses.length > 0
-      ? z
-          .string({ required_error: "Sélectionnez un statut" })
-          .min(1, "Sélectionnez un statut")
-          .refine((value) => allowedStatuses.includes(value), {
-            message: "Statut invalide",
-          })
-      : z.string({ required_error: "Sélectionnez un statut" }).min(
-          1,
-          "Sélectionnez un statut",
-        );
+const createSelectionSchema = (
+  options: readonly string[],
+  messages: { required: string; invalid: string },
+) =>
+  options.length > 0
+    ? z
+        .string({ required_error: messages.required })
+        .min(1, messages.required)
+        .refine((value) => options.includes(value), {
+          message: messages.invalid,
+        })
+    : z.string({ required_error: messages.required }).min(1, messages.required);
+
+const createProjectSchema = (
+  allowedStatuses: readonly string[],
+  buildingTypes: readonly string[],
+  usages: readonly string[],
+) => {
+  const statusSchema = createSelectionSchema(allowedStatuses, {
+    required: "Sélectionnez un statut",
+    invalid: "Statut invalide",
+  });
+
+  const buildingTypeSchema = createSelectionSchema(buildingTypes, {
+    required: "Sélectionnez un type",
+    invalid: "Type de bâtiment invalide",
+  });
+
+  const usageSchema = createSelectionSchema(usages, {
+    required: "Sélectionnez un usage",
+    invalid: "Usage invalide",
+  });
 
   return z.object({
     client_first_name: z.string().min(2, "Le prénom du client est requis"),
@@ -294,8 +315,8 @@ const createProjectSchema = (allowedStatuses: readonly string[]) => {
       .min(1, "Au moins un produit est requis"),
     city: z.string().min(2, "La ville est requise"),
     postal_code: z.string().min(5, "Code postal invalide"),
-    building_type: z.enum(["Entrepôt", "Hôtel"], { required_error: "Sélectionnez un type" }),
-    usage: z.enum(["Commercial", "Agricole"], { required_error: "Sélectionnez un usage" }),
+    building_type: buildingTypeSchema,
+    usage: usageSchema,
     prime_cee: z.coerce.number().optional(),
     discount: z.coerce.number().optional(),
     unit_price: z.coerce.number().optional(),
@@ -331,8 +352,8 @@ const baseDefaultValues: Partial<ProjectFormValues> = {
   products: [{ product_id: "", quantity: 1, dynamic_params: {} }],
   city: "",
   postal_code: "",
-  building_type: undefined,
-  usage: undefined,
+  building_type: "",
+  usage: "",
   prime_cee: undefined,
   discount: undefined,
   unit_price: undefined,
@@ -389,15 +410,20 @@ export const AddProjectDialog = ({
   const { currentOrgId } = useOrg();
   const { toast } = useToast();
   const projectStatuses = useProjectStatuses();
+  const buildingTypes = useProjectBuildingTypes();
+  const usages = useProjectUsages();
 
   const statusOptions = useMemo(
     () => projectStatuses.map((status) => status.value),
     [projectStatuses],
   );
 
+  const buildingTypeOptions = useMemo(() => [...buildingTypes], [buildingTypes]);
+  const usageOptions = useMemo(() => [...usages], [usages]);
+
   const projectSchema = useMemo(
-    () => createProjectSchema(statusOptions),
-    [statusOptions],
+    () => createProjectSchema(statusOptions, buildingTypeOptions, usageOptions),
+    [statusOptions, buildingTypeOptions, usageOptions],
   );
 
   const resolver = useMemo(() => zodResolver(projectSchema), [projectSchema]);
@@ -409,6 +435,25 @@ export const AddProjectDialog = ({
 
     return statusOptions[0] ?? "";
   }, [initialValues?.status, statusOptions]);
+
+  const defaultBuildingType = useMemo(() => {
+    if (
+      initialValues?.building_type &&
+      buildingTypeOptions.includes(initialValues.building_type)
+    ) {
+      return initialValues.building_type;
+    }
+
+    return buildingTypeOptions[0] ?? "";
+  }, [buildingTypeOptions, initialValues?.building_type]);
+
+  const defaultUsage = useMemo(() => {
+    if (initialValues?.usage && usageOptions.includes(initialValues.usage)) {
+      return initialValues.usage;
+    }
+
+    return usageOptions[0] ?? "";
+  }, [initialValues?.usage, usageOptions]);
 
   const { data: profile } = useQuery({
     queryKey: ["profile", user?.id],
@@ -609,6 +654,8 @@ export const AddProjectDialog = ({
       ...baseDefaultValues,
       ...initialValues,
       status: defaultStatus,
+      building_type: defaultBuildingType,
+      usage: defaultUsage,
       assigned_to: initialValues?.assigned_to ?? defaultAssignee ?? "",
       source: initialValues?.source ?? defaultSource ?? "",
       products: initialValues?.products ?? [createProductEntry()],
@@ -640,6 +687,36 @@ export const AddProjectDialog = ({
       form.setValue("status", defaultStatus);
     }
   }, [defaultStatus, form, statusOptions]);
+
+  useEffect(() => {
+    const currentType = form.getValues("building_type");
+
+    if (!currentType && defaultBuildingType) {
+      form.setValue("building_type", defaultBuildingType);
+      return;
+    }
+
+    if (
+      currentType &&
+      buildingTypeOptions.length > 0 &&
+      !buildingTypeOptions.includes(currentType)
+    ) {
+      form.setValue("building_type", defaultBuildingType || "");
+    }
+  }, [buildingTypeOptions, defaultBuildingType, form]);
+
+  useEffect(() => {
+    const currentUsage = form.getValues("usage");
+
+    if (!currentUsage && defaultUsage) {
+      form.setValue("usage", defaultUsage);
+      return;
+    }
+
+    if (currentUsage && usageOptions.length > 0 && !usageOptions.includes(currentUsage)) {
+      form.setValue("usage", defaultUsage || "");
+    }
+  }, [defaultUsage, form, usageOptions]);
 
   // single addProduct using fieldArray append
   const addProduct = useCallback(() => {
@@ -1145,15 +1222,31 @@ export const AddProjectDialog = ({
                     <Select
                       onValueChange={field.onChange}
                       value={field.value}
+                      disabled={buildingTypeOptions.length === 0}
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Sélectionnez un type" />
+                          <SelectValue
+                            placeholder={
+                              buildingTypeOptions.length === 0
+                                ? "Configurez les types dans les paramètres"
+                                : "Sélectionnez un type"
+                            }
+                          />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="Entrepôt">Entrepôt</SelectItem>
-                        <SelectItem value="Hôtel">Hôtel</SelectItem>
+                        {buildingTypeOptions.length === 0 ? (
+                          <SelectItem value="__no-building-type__" disabled>
+                            Aucun type disponible
+                          </SelectItem>
+                        ) : (
+                          buildingTypeOptions.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {option}
+                            </SelectItem>
+                          ))
+                        )}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -1169,15 +1262,31 @@ export const AddProjectDialog = ({
                     <Select
                       onValueChange={field.onChange}
                       value={field.value}
+                      disabled={usageOptions.length === 0}
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Sélectionnez un usage" />
+                          <SelectValue
+                            placeholder={
+                              usageOptions.length === 0
+                                ? "Configurez les usages dans les paramètres"
+                                : "Sélectionnez un usage"
+                            }
+                          />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="Commercial">Commercial</SelectItem>
-                        <SelectItem value="Agricole">Agricole</SelectItem>
+                        {usageOptions.length === 0 ? (
+                          <SelectItem value="__no-usage__" disabled>
+                            Aucun usage disponible
+                          </SelectItem>
+                        ) : (
+                          usageOptions.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {option}
+                            </SelectItem>
+                          ))
+                        )}
                       </SelectContent>
                     </Select>
                     <FormMessage />

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
 import { Label } from "@/components/ui/label";
 import {
@@ -22,6 +23,8 @@ import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
+import { useProjectBuildingTypes } from "@/hooks/useProjectBuildingTypes";
+import { useProjectUsages } from "@/hooks/useProjectUsages";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { formatDistanceToNow, parseISO } from "date-fns";
@@ -46,6 +49,9 @@ import {
   Plus,
   Trash2,
   Loader2,
+  UserPlus,
+  FileText,
+  List,
 } from "lucide-react";
 import {
   DEFAULT_PROJECT_STATUSES,
@@ -55,6 +61,16 @@ import {
   saveProjectStatuses,
   type ProjectStatusSetting,
 } from "@/lib/projects";
+import {
+  DEFAULT_BUILDING_TYPES,
+  DEFAULT_BUILDING_USAGES,
+  getProjectBuildingTypes,
+  getProjectUsages,
+  resetProjectBuildingTypes,
+  resetProjectUsages,
+  saveProjectBuildingTypes,
+  saveProjectUsages,
+} from "@/lib/buildings";
 import {
   useDriveAuthUrl,
   useDriveConnectionRefresh,
@@ -96,6 +112,15 @@ interface CompanyInfo {
   phone: string;
   email: string;
   description: string;
+}
+
+interface Delegataire {
+  id: string;
+  name: string;
+  contactName: string;
+  email: string;
+  phone: string;
+  textBlock: string;
 }
 
 interface NotificationSettings {
@@ -156,6 +181,14 @@ const formatRelativeExpiry = (iso?: string | null) => {
 
 const DRIVE_AUTH_STORAGE_PREFIX = "drive-auth:";
 const buildDriveAuthStateKey = (state: string) => `${DRIVE_AUTH_STORAGE_PREFIX}${state}`;
+
+const generateDelegataireId = () => {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return Math.random().toString(36).slice(2, 11);
+};
 
 const createDriveStateToken = () => {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -309,6 +342,11 @@ export default function Settings() {
   const [projectStatuses, setProjectStatuses] = useState<ProjectStatusSetting[]>(() =>
     getProjectStatusSettings(),
   );
+  const [delegataires, setDelegataires] = useState<Delegataire[]>([]);
+  const syncedBuildingTypes = useProjectBuildingTypes();
+  const [buildingTypes, setBuildingTypes] = useState<string[]>(() => getProjectBuildingTypes());
+  const syncedBuildingUsages = useProjectUsages();
+  const [buildingUsages, setBuildingUsages] = useState<string[]>(() => getProjectUsages());
 
   const driveConnectionLoading = driveStatusLoading || driveStatusFetching;
   const driveErrorMessage = driveConnection?.errorMessage ?? driveStatusError?.message ?? null;
@@ -471,6 +509,14 @@ export default function Settings() {
   useEffect(() => {
     setProjectStatuses(syncedProjectStatuses);
   }, [syncedProjectStatuses]);
+
+  useEffect(() => {
+    setBuildingTypes(syncedBuildingTypes);
+  }, [syncedBuildingTypes]);
+
+  useEffect(() => {
+    setBuildingUsages(syncedBuildingUsages);
+  }, [syncedBuildingUsages]);
 
   const fetchTeamMembers = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -822,6 +868,26 @@ export default function Settings() {
     });
   }, [projectStatuses]);
 
+  const isDefaultBuildingTypes = useMemo(() => {
+    if (buildingTypes.length !== DEFAULT_BUILDING_TYPES.length) {
+      return false;
+    }
+
+    return buildingTypes.every(
+      (type, index) => type === DEFAULT_BUILDING_TYPES[index],
+    );
+  }, [buildingTypes]);
+
+  const isDefaultBuildingUsages = useMemo(() => {
+    if (buildingUsages.length !== DEFAULT_BUILDING_USAGES.length) {
+      return false;
+    }
+
+    return buildingUsages.every(
+      (usage, index) => usage === DEFAULT_BUILDING_USAGES[index],
+    );
+  }, [buildingUsages]);
+
   const persistProjectStatuses = useCallback(
     (
       updater: (prev: ProjectStatusSetting[]) => ProjectStatusSetting[],
@@ -831,6 +897,42 @@ export default function Settings() {
       setProjectStatuses((prev) => {
         const next = updater(prev);
         sanitizedResult = saveProjectStatuses(next);
+        return sanitizedResult;
+      });
+
+      if (toastOptions) {
+        toast(toastOptions);
+      }
+
+      return sanitizedResult;
+    },
+    [toast],
+  );
+
+  const persistBuildingTypes = useCallback(
+    (updater: (prev: string[]) => string[], toastOptions?: { title: string; description?: string }) => {
+      let sanitizedResult: string[] = [];
+      setBuildingTypes((prev) => {
+        const next = updater(prev);
+        sanitizedResult = saveProjectBuildingTypes(next);
+        return sanitizedResult;
+      });
+
+      if (toastOptions) {
+        toast(toastOptions);
+      }
+
+      return sanitizedResult;
+    },
+    [toast],
+  );
+
+  const persistBuildingUsages = useCallback(
+    (updater: (prev: string[]) => string[], toastOptions?: { title: string; description?: string }) => {
+      let sanitizedResult: string[] = [];
+      setBuildingUsages((prev) => {
+        const next = updater(prev);
+        sanitizedResult = saveProjectUsages(next);
         return sanitizedResult;
       });
 
@@ -916,6 +1018,139 @@ export default function Settings() {
     toast({
       title: "Statuts réinitialisés",
       description: "Retour aux statuts standards d'EcoProRenov.",
+    });
+  }, [toast]);
+
+  const handleAddDelegataire = useCallback(() => {
+    setDelegataires((prev) => [
+      ...prev,
+      {
+        id: generateDelegataireId(),
+        name: "",
+        contactName: "",
+        email: "",
+        phone: "",
+        textBlock: "",
+      },
+    ]);
+  }, []);
+
+  const handleRemoveDelegataire = useCallback((id: string) => {
+    setDelegataires((prev) => prev.filter((delegataire) => delegataire.id !== id));
+  }, []);
+
+  const handleDelegataireChange = useCallback(
+    (id: string, field: keyof Delegataire, value: string) => {
+      setDelegataires((prev) =>
+        prev.map((delegataire) =>
+          delegataire.id === id ? { ...delegataire, [field]: value } : delegataire,
+        ),
+      );
+    },
+    [],
+  );
+
+  const handleSaveDelegataires = useCallback(() => {
+    toast({
+      title: "Délégataires sauvegardés",
+      description: "Les informations seront utilisées lors de la génération des devis.",
+  const handleBuildingTypeChange = useCallback(
+    (index: number, value: string) => {
+      persistBuildingTypes((prev) =>
+        prev.map((type, currentIndex) => (currentIndex === index ? value : type)),
+      );
+    },
+    [persistBuildingTypes],
+  );
+
+  const handleAddBuildingType = useCallback(() => {
+    persistBuildingTypes(
+      (prev) => [...prev, `Nouveau type ${prev.length + 1}`],
+      {
+        title: "Type de bâtiment ajouté",
+        description: "Modifiez le libellé pour l'utiliser immédiatement.",
+      },
+    );
+  }, [persistBuildingTypes]);
+
+  const handleRemoveBuildingType = useCallback(
+    (index: number) => {
+      if (buildingTypes.length <= 1) {
+        toast({
+          variant: "destructive",
+          title: "Au moins un type requis",
+          description: "Ajoutez un nouveau type avant de supprimer celui-ci.",
+        });
+        return;
+      }
+
+      persistBuildingTypes(
+        (prev) => prev.filter((_, currentIndex) => currentIndex !== index),
+        {
+          title: "Type de bâtiment supprimé",
+          description: "Ce type ne sera plus proposé dans les projets.",
+        },
+      );
+    },
+    [buildingTypes.length, persistBuildingTypes, toast],
+  );
+
+  const handleResetBuildingTypes = useCallback(() => {
+    const sanitized = resetProjectBuildingTypes();
+    setBuildingTypes(sanitized);
+    toast({
+      title: "Types de bâtiment réinitialisés",
+      description: "Retour à la liste standard proposée par EcoProRenov.",
+    });
+  }, [toast]);
+
+  const handleUsageChange = useCallback(
+    (index: number, value: string) => {
+      persistBuildingUsages((prev) =>
+        prev.map((usage, currentIndex) => (currentIndex === index ? value : usage)),
+      );
+    },
+    [persistBuildingUsages],
+  );
+
+  const handleAddUsage = useCallback(() => {
+    persistBuildingUsages(
+      (prev) => [...prev, `Nouvel usage ${prev.length + 1}`],
+      {
+        title: "Usage ajouté",
+        description: "Personnalisez le libellé pour qu'il apparaisse dans les formulaires.",
+      },
+    );
+  }, [persistBuildingUsages]);
+
+  const handleRemoveUsage = useCallback(
+    (index: number) => {
+      if (buildingUsages.length <= 1) {
+        toast({
+          variant: "destructive",
+          title: "Au moins un usage requis",
+          description: "Ajoutez un nouvel usage avant de supprimer celui-ci.",
+        });
+        return;
+      }
+
+      persistBuildingUsages(
+        (prev) => prev.filter((_, currentIndex) => currentIndex !== index),
+        {
+          title: "Usage supprimé",
+          description: "Cet usage ne sera plus proposé lors de la création d'un projet.",
+        },
+      );
+    },
+    [buildingUsages.length, persistBuildingUsages, toast],
+  );
+
+  const handleResetUsages = useCallback(() => {
+    const sanitized = resetProjectUsages();
+    setBuildingUsages(sanitized);
+    toast({
+      title: "Usages réinitialisés",
+      description: "Retour aux usages standards proposés par EcoProRenov.",
     });
   }, [toast]);
 
@@ -1094,6 +1329,125 @@ export default function Settings() {
             </Card>
 
             <Card className="border border-border/60 bg-card/70 shadow-sm">
+              <CardHeader className="flex flex-col gap-4">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-lg font-semibold text-foreground">
+                    <List className="h-5 w-5 text-primary" />
+                    Référentiel bâtiments
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Personnalisez les types de bâtiment et les usages proposés lors de la création de projet.
+                  </p>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-8">
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <h3 className="text-base font-medium text-foreground">Types de bâtiment</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Ces valeurs alimentent les formulaires de projets et les documents commerciaux.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleResetBuildingTypes}
+                        disabled={isDefaultBuildingTypes}
+                      >
+                        Réinitialiser
+                      </Button>
+                      <Button size="sm" variant="secondary" className="gap-2" onClick={handleAddBuildingType}>
+                        <Plus className="h-4 w-4" />
+                        Ajouter
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    {buildingTypes.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-border/60 bg-background/60 p-4 text-sm text-muted-foreground">
+                        Aucun type de bâtiment n&apos;est configuré. Ajoutez-en pour les proposer dans vos projets.
+                      </div>
+                    ) : (
+                      buildingTypes.map((type, index) => (
+                        <div key={`${type}-${index}`} className="flex items-center gap-2">
+                          <Input
+                            value={type}
+                            onChange={(event) => handleBuildingTypeChange(index, event.target.value)}
+                            placeholder="Type de bâtiment"
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoveBuildingType(index)}
+                            aria-label={`Supprimer le type ${type || index + 1}`}
+                            className="h-9 w-9 text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <Separator className="bg-border/60" />
+
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <h3 className="text-base font-medium text-foreground">Usages</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Gérez les usages disponibles lors de la qualification des projets.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleResetUsages}
+                        disabled={isDefaultBuildingUsages}
+                      >
+                        Réinitialiser
+                      </Button>
+                      <Button size="sm" variant="secondary" className="gap-2" onClick={handleAddUsage}>
+                        <Plus className="h-4 w-4" />
+                        Ajouter
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    {buildingUsages.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-border/60 bg-background/60 p-4 text-sm text-muted-foreground">
+                        Aucun usage n&apos;est configuré. Ajoutez un usage pour le rendre disponible.
+                      </div>
+                    ) : (
+                      buildingUsages.map((usage, index) => (
+                        <div key={`${usage}-${index}`} className="flex items-center gap-2">
+                          <Input
+                            value={usage}
+                            onChange={(event) => handleUsageChange(index, event.target.value)}
+                            placeholder="Usage"
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoveUsage(index)}
+                            aria-label={`Supprimer l'usage ${usage || index + 1}`}
+                            className="h-9 w-9 text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border border-border/60 bg-card/70 shadow-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg font-semibold text-foreground">
                   <Building2 className="h-5 w-5 text-primary" />
@@ -1104,104 +1458,272 @@ export default function Settings() {
                 </p>
               </CardHeader>
               <CardContent>
-                <form className="space-y-6" onSubmit={handleCompanySubmit}>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="company-name">Nom d&apos;usage</Label>
-                      <Input
-                        id="company-name"
-                        value={companyInfo.name}
-                        onChange={(e) => setCompanyInfo((p) => ({ ...p, name: e.target.value }))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="company-legal">Raison sociale</Label>
-                      <Input
-                        id="company-legal"
-                        value={companyInfo.legalName}
-                        onChange={(e) => setCompanyInfo((p) => ({ ...p, legalName: e.target.value }))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="company-registration">Enregistrement</Label>
-                      <Input
-                        id="company-registration"
-                        value={companyInfo.registration}
-                        onChange={(e) =>
-                          setCompanyInfo((p) => ({ ...p, registration: e.target.value }))
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="company-phone">Téléphone</Label>
-                      <Input
-                        id="company-phone"
-                        value={companyInfo.phone}
-                        onChange={(e) => setCompanyInfo((p) => ({ ...p, phone: e.target.value }))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="company-email">Email principal</Label>
-                      <Input
-                        id="company-email"
-                        type="email"
-                        value={companyInfo.email}
-                        onChange={(e) => setCompanyInfo((p) => ({ ...p, email: e.target.value }))}
-                      />
-                    </div>
-                    <div className="md:col-span-2 space-y-2">
-                      <Label htmlFor="company-address">Adresse</Label>
-                      <AddressAutocomplete
-                        value={companyInfo.address}
-                        onChange={(address, city, postalCode) =>
-                          setCompanyInfo((p) => ({
-                            ...p,
-                            address,
-                            city,
-                            postalCode,
-                          }))
-                        }
-                      />
-                    </div>
-                    <div className="grid gap-4 md:grid-cols-2 md:col-span-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="company-city">Ville</Label>
-                        <Input
-                          id="company-city"
-                          value={companyInfo.city}
-                          readOnly
-                          placeholder="Sélectionnez une adresse"
-                        />
+                <Tabs defaultValue="company" className="space-y-6">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="company">Entreprise</TabsTrigger>
+                    <TabsTrigger value="delegataire">Délégataires</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="company" className="space-y-6">
+                    <form className="space-y-6" onSubmit={handleCompanySubmit}>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="company-name">Nom d&apos;usage</Label>
+                          <Input
+                            id="company-name"
+                            value={companyInfo.name}
+                            onChange={(e) => setCompanyInfo((p) => ({ ...p, name: e.target.value }))}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="company-legal">Raison sociale</Label>
+                          <Input
+                            id="company-legal"
+                            value={companyInfo.legalName}
+                            onChange={(e) => setCompanyInfo((p) => ({ ...p, legalName: e.target.value }))}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="company-registration">Enregistrement</Label>
+                          <Input
+                            id="company-registration"
+                            value={companyInfo.registration}
+                            onChange={(e) =>
+                              setCompanyInfo((p) => ({ ...p, registration: e.target.value }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="company-phone">Téléphone</Label>
+                          <Input
+                            id="company-phone"
+                            value={companyInfo.phone}
+                            onChange={(e) => setCompanyInfo((p) => ({ ...p, phone: e.target.value }))}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="company-email">Email principal</Label>
+                          <Input
+                            id="company-email"
+                            type="email"
+                            value={companyInfo.email}
+                            onChange={(e) => setCompanyInfo((p) => ({ ...p, email: e.target.value }))}
+                          />
+                        </div>
+                        <div className="md:col-span-2 space-y-2">
+                          <Label htmlFor="company-address">Adresse</Label>
+                          <AddressAutocomplete
+                            value={companyInfo.address}
+                            onChange={(address, city, postalCode) =>
+                              setCompanyInfo((p) => ({
+                                ...p,
+                                address,
+                                city,
+                                postalCode,
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="grid gap-4 md:grid-cols-2 md:col-span-2">
+                          <div className="space-y-2">
+                            <Label htmlFor="company-city">Ville</Label>
+                            <Input
+                              id="company-city"
+                              value={companyInfo.city}
+                              readOnly
+                              placeholder="Sélectionnez une adresse"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="company-postal">Code postal</Label>
+                            <Input
+                              id="company-postal"
+                              value={companyInfo.postalCode}
+                              readOnly
+                              placeholder="Sélectionnez une adresse"
+                            />
+                          </div>
+                        </div>
+                        <div className="md:col-span-2 space-y-2">
+                          <Label htmlFor="company-description">Description publique</Label>
+                          <Textarea
+                            id="company-description"
+                            value={companyInfo.description}
+                            onChange={(e) =>
+                              setCompanyInfo((p) => ({ ...p, description: e.target.value }))
+                            }
+                            rows={3}
+                          />
+                        </div>
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="company-postal">Code postal</Label>
-                        <Input
-                          id="company-postal"
-                          value={companyInfo.postalCode}
-                          readOnly
-                          placeholder="Sélectionnez une adresse"
-                        />
+                      <div className="flex items-center justify-end gap-3">
+                        <Button type="button" variant="ghost">
+                          Annuler
+                        </Button>
+                        <Button type="submit">Enregistrer les modifications</Button>
+                      </div>
+                    </form>
+                  </TabsContent>
+
+                  <TabsContent value="delegataire" className="space-y-6">
+                    <div className="space-y-3">
+                      <p className="text-sm text-muted-foreground">
+                        Renseignez les délégataires avec leurs informations de contact et le bloc de texte qui sera
+                        automatiquement ajouté aux devis correspondants.
+                      </p>
+                      <div className="flex items-center justify-between rounded-xl border border-dashed border-primary/30 bg-primary/5 p-4 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-3">
+                          <UserPlus className="h-4 w-4 text-primary" />
+                          <span>Ajoutez un délégataire pour personnaliser vos documents commerciaux.</span>
+                        </div>
+                        <Button type="button" size="sm" onClick={handleAddDelegataire}>
+                          Nouveau délégataire
+                        </Button>
                       </div>
                     </div>
-                    <div className="md:col-span-2 space-y-2">
-                      <Label htmlFor="company-description">Description publique</Label>
-                      <Textarea
-                        id="company-description"
-                        value={companyInfo.description}
-                        onChange={(e) =>
-                          setCompanyInfo((p) => ({ ...p, description: e.target.value }))
-                        }
-                        rows={3}
-                      />
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-end gap-3">
-                    <Button type="button" variant="ghost">
-                      Annuler
-                    </Button>
-                    <Button type="submit">Enregistrer les modifications</Button>
-                  </div>
-                </form>
+
+                    {delegataires.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-border/60 bg-background/60 p-8 text-center text-sm text-muted-foreground">
+                        <FileText className="h-6 w-6 text-primary" />
+                        <p>Aucun délégataire n&apos;a encore été configuré.</p>
+                        <Button type="button" variant="secondary" onClick={handleAddDelegataire}>
+                          Ajouter un délégataire
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {delegataires.map((delegataire, index) => (
+                          <div
+                            key={delegataire.id}
+                            className="space-y-4 rounded-2xl border border-border/60 bg-background/60 p-5 shadow-sm"
+                          >
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <p className="text-sm font-medium text-foreground">
+                                  Délégataire {index + 1}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  Ces informations seront reprises sur les devis associés.
+                                </p>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleRemoveDelegataire(delegataire.id)}
+                                className="h-8 w-8 text-muted-foreground"
+                                aria-label={`Supprimer le délégataire ${index + 1}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <div className="space-y-2">
+                                <Label htmlFor={`delegataire-name-${delegataire.id}`}>
+                                  Nom du délégataire
+                                </Label>
+                                <Input
+                                  id={`delegataire-name-${delegataire.id}`}
+                                  value={delegataire.name}
+                                  onChange={(event) =>
+                                    handleDelegataireChange(
+                                      delegataire.id,
+                                      "name",
+                                      event.target.value,
+                                    )
+                                  }
+                                  placeholder="Société partenaire"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor={`delegataire-contact-${delegataire.id}`}>
+                                  Contact principal
+                                </Label>
+                                <Input
+                                  id={`delegataire-contact-${delegataire.id}`}
+                                  value={delegataire.contactName}
+                                  onChange={(event) =>
+                                    handleDelegataireChange(
+                                      delegataire.id,
+                                      "contactName",
+                                      event.target.value,
+                                    )
+                                  }
+                                  placeholder="Nom et prénom"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor={`delegataire-email-${delegataire.id}`}>
+                                  Email
+                                </Label>
+                                <Input
+                                  id={`delegataire-email-${delegataire.id}`}
+                                  type="email"
+                                  value={delegataire.email}
+                                  onChange={(event) =>
+                                    handleDelegataireChange(
+                                      delegataire.id,
+                                      "email",
+                                      event.target.value,
+                                    )
+                                  }
+                                  placeholder="delegataire@exemple.fr"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor={`delegataire-phone-${delegataire.id}`}>
+                                  Téléphone
+                                </Label>
+                                <Input
+                                  id={`delegataire-phone-${delegataire.id}`}
+                                  value={delegataire.phone}
+                                  onChange={(event) =>
+                                    handleDelegataireChange(
+                                      delegataire.id,
+                                      "phone",
+                                      event.target.value,
+                                    )
+                                  }
+                                  placeholder="+33 6 12 34 56 78"
+                                />
+                              </div>
+                              <div className="md:col-span-2 space-y-2">
+                                <Label htmlFor={`delegataire-text-${delegataire.id}`}>
+                                  Bloc de texte pour le devis
+                                </Label>
+                                <Textarea
+                                  id={`delegataire-text-${delegataire.id}`}
+                                  value={delegataire.textBlock}
+                                  onChange={(event) =>
+                                    handleDelegataireChange(
+                                      delegataire.id,
+                                      "textBlock",
+                                      event.target.value,
+                                    )
+                                  }
+                                  rows={3}
+                                  placeholder="Informations complémentaires affichées sur le devis"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                  Ce contenu sera affiché automatiquement dans la section dédiée du devis.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {delegataires.length > 0 && (
+                      <div className="flex items-center justify-end">
+                        <Button type="button" onClick={handleSaveDelegataires}>
+                          Sauvegarder les délégataires
+                        </Button>
+                      </div>
+                    )}
+                  </TabsContent>
+                </Tabs>
               </CardContent>
             </Card>
 

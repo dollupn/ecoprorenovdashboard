@@ -11,7 +11,16 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { parseQuoteMetadata } from "./utils";
 import type { QuoteRecord } from "./types";
-import { Eye, Download, Mail, FolderOpen, MoreHorizontal, FileText, ListChecks } from "lucide-react";
+import {
+  Eye,
+  Download,
+  Mail,
+  FolderOpen,
+  MoreHorizontal,
+  FileText,
+  ListChecks,
+  Pencil,
+} from "lucide-react";
 
 interface QuoteActionsProps {
   quote: QuoteRecord;
@@ -19,6 +28,7 @@ interface QuoteActionsProps {
   onDownload: (quote: QuoteRecord) => void;
   onOpenDrive: (quote: QuoteRecord) => void;
   onSendEmail: (quote: QuoteRecord) => void;
+  onEdit: (quote: QuoteRecord) => void;
 }
 
 export const QuoteActions = ({
@@ -27,6 +37,7 @@ export const QuoteActions = ({
   onDownload,
   onOpenDrive,
   onSendEmail,
+  onEdit,
 }: QuoteActionsProps) => {
   const metadata = useMemo(() => parseQuoteMetadata(quote), [quote]);
 
@@ -52,54 +63,58 @@ export const QuoteActions = ({
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel>Actions devis</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => onView(quote)}>
-          <Eye className="mr-2 h-4 w-4" />
-          Consulter
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onSendEmail(quote)} disabled={!hasClientEmail}>
-          <Mail className="mr-2 h-4 w-4" />
-          Envoyer par email
-          {!hasClientEmail ? (
-            <Badge variant="secondary" className="ml-auto">
-              Email requis
-            </Badge>
-          ) : null}
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onOpenDrive(quote)} disabled={!hasDriveFolder}>
-          <FolderOpen className="mr-2 h-4 w-4" />
-          Ouvrir dans Drive
-          {!hasDriveFolder ? (
-            <Badge variant="secondary" className="ml-auto">
-              Lien manquant
-            </Badge>
-          ) : null}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onClick={() => {
-            if (metadata.driveFileUrl && typeof window !== "undefined") {
-              window.open(metadata.driveFileUrl, "_blank", "noopener,noreferrer");
-            }
-          }}
-          disabled={!hasDriveFile}
-        >
-          <FileText className="mr-2 h-4 w-4" />
-          Ouvrir le document
-          {!hasDriveFile ? (
-            <Badge variant="secondary" className="ml-auto">
-              Document manquant
-            </Badge>
-          ) : null}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem disabled={!hasLineItems}>
-          <ListChecks className="mr-2 h-4 w-4" />
-          {hasLineItems ? `${metadata.lineItems?.length ?? 0} lignes` : "Lignes non définies"}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuLabel>Actions devis</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => onEdit(quote)}>
+            <Pencil className="mr-2 h-4 w-4" />
+            Modifier
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onView(quote)}>
+            <Eye className="mr-2 h-4 w-4" />
+            Consulter
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onSendEmail(quote)} disabled={!hasClientEmail}>
+            <Mail className="mr-2 h-4 w-4" />
+            Envoyer par email
+            {!hasClientEmail ? (
+              <Badge variant="secondary" className="ml-auto">
+                Email requis
+              </Badge>
+            ) : null}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onOpenDrive(quote)} disabled={!hasDriveFolder}>
+            <FolderOpen className="mr-2 h-4 w-4" />
+            Ouvrir dans Drive
+            {!hasDriveFolder ? (
+              <Badge variant="secondary" className="ml-auto">
+                Lien manquant
+              </Badge>
+            ) : null}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => {
+              if (metadata.driveFileUrl && typeof window !== "undefined") {
+                window.open(metadata.driveFileUrl, "_blank", "noopener,noreferrer");
+              }
+            }}
+            disabled={!hasDriveFile}
+          >
+            <FileText className="mr-2 h-4 w-4" />
+            Ouvrir le document
+            {!hasDriveFile ? (
+              <Badge variant="secondary" className="ml-auto">
+                Document manquant
+              </Badge>
+            ) : null}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem disabled={!hasLineItems}>
+            <ListChecks className="mr-2 h-4 w-4" />
+            {hasLineItems ? `${metadata.lineItems?.length ?? 0} lignes` : "Lignes non définies"}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { Layout } from "@/components/layout/Layout";
@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { QuotePreview } from "@/components/quotes/QuotePreview";
-import { AddQuoteDialog } from "@/components/quotes/AddQuoteDialog";
+import { AddQuoteDialog, type QuoteFormValues } from "@/components/quotes/AddQuoteDialog";
 import { QuoteDetailsDrawer } from "@/components/quotes/QuoteDetailsDrawer";
 import { QuoteActions } from "@/components/quotes/QuoteActions";
 import { parseQuoteMetadata, formatQuoteCurrency } from "@/components/quotes/utils";
@@ -188,6 +188,48 @@ const Quotes = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedQuote, setSelectedQuote] = useState<QuoteRecord | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
+  const [quoteInitialValues, setQuoteInitialValues] = useState<Partial<QuoteFormValues>>({});
+  const [quoteIdToEdit, setQuoteIdToEdit] = useState<string | null>(null);
+  const openEditDialog = useCallback(
+    (quote: QuoteRecord) => {
+      const metadata = parseQuoteMetadata(quote);
+
+      setQuoteInitialValues({
+        quote_ref: quote.quote_ref ?? "",
+        client_name: quote.client_name ?? "",
+        product_name: quote.product_name ?? "",
+        amount: Number(quote.amount ?? 0),
+        status: (quote.status ?? "DRAFT") as QuoteFormValues["status"],
+        project_id: quote.project_id ?? undefined,
+        valid_until: quote.valid_until ?? undefined,
+        notes: quote.notes ?? undefined,
+        client_email: metadata.clientEmail ?? "",
+        client_phone: metadata.clientPhone ?? "",
+        site_address: metadata.siteAddress ?? "",
+        site_city: metadata.siteCity ?? "",
+        site_postal_code: metadata.sitePostalCode ?? "",
+        payment_terms: metadata.paymentTerms ?? "",
+        drive_folder_url: metadata.driveFolderUrl ?? "",
+        email_message: metadata.emailMessage ?? "",
+        line_items: metadata.lineItems
+          ? metadata.lineItems.map((item) => ({
+              reference: item.reference ?? "",
+              description: item.description ?? "",
+              quantity: item.quantity ?? 0,
+              unit_price: item.unitPrice ?? 0,
+              tax_rate: item.taxRate ?? undefined,
+            }))
+          : undefined,
+      });
+
+      setQuoteIdToEdit(quote.id);
+      setQuoteDialogOpen(true);
+      setSelectedQuote(quote);
+      setDetailsOpen(false);
+    },
+    [],
+  );
   const processSteps = [
     {
       label: "Lead",
@@ -596,6 +638,7 @@ const Quotes = () => {
                                     window.open(`mailto:${metadata.clientEmail}?subject=${subject}&body=${body}`);
                                   }
                                 }}
+                                onEdit={openEditDialog}
                               />
                             </TableCell>
                           </TableRow>
@@ -619,6 +662,26 @@ const Quotes = () => {
           if (!open) {
             setSelectedQuote(null);
           }
+        }}
+        onEdit={(quote) => {
+          openEditDialog(quote);
+        }}
+      />
+
+      <AddQuoteDialog
+        open={quoteDialogOpen}
+        onOpenChange={(open) => {
+          setQuoteDialogOpen(open);
+          if (!open) {
+            setQuoteIdToEdit(null);
+            setQuoteInitialValues({});
+          }
+        }}
+        initialValues={quoteInitialValues}
+        mode="edit"
+        quoteId={quoteIdToEdit ?? undefined}
+        onQuoteAdded={async () => {
+          await refetch();
         }}
       />
     </Layout>
