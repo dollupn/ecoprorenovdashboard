@@ -12,15 +12,87 @@ import {
 } from "date-fns";
 import { fr } from "date-fns/locale";
 
-const ACTIVE_LEAD_STATUSES = ["NEW", "QUALIFIED"] as const;
-const ACTIVE_PROJECT_STATUSES = ["NEW", "QUOTE_SENT", "ACCEPTED", "IN_PROGRESS"] as const;
-const QUOTE_PENDING_STATUS = "SENT" as const;
-const SITE_ACTIVE_STATUSES = ["PREPARATION", "PLANIFIE", "EN_COURS", "CONTROLE"] as const;
-const SITE_ENDING_STATUSES = ["PLANIFIE", "EN_COURS", "CONTROLE"] as const;
-const PROJECT_SURFACE_STATUSES = ["IN_PROGRESS", "DONE"] as const;
-const QUOTE_ACTIVITY_STATUSES = ["SENT", "ACCEPTED", "REFUSED"] as const;
-const SITE_ACTIVITY_STATUSES = ["EN_COURS", "CLOTURE"] as const;
-const INVOICE_ACTIVITY_STATUSES = ["SENT", "PAID"] as const;
+import { getLeadStatusLabel, LEAD_STATUSES } from "@/components/leads/status";
+import { DEFAULT_PROJECT_STATUSES } from "@/lib/projects";
+
+const ACTIVE_LEAD_STATUSES = LEAD_STATUSES.filter((status) => status !== "Non éligible");
+const QUALIFIED_LEAD_STATUS = "Éligible" as const;
+
+const PROJECT_STATUS_VALUES = DEFAULT_PROJECT_STATUSES.map((status) => status.value);
+const PROJECT_STATUS_LABELS = DEFAULT_PROJECT_STATUSES.reduce<Record<string, string>>(
+  (acc, status) => {
+    acc[status.value] = status.label;
+    return acc;
+  },
+  {}
+);
+
+const ACTIVE_PROJECT_STATUSES = PROJECT_STATUS_VALUES.filter(
+  (status) => !["LIVRE", "CLOTURE"].includes(status)
+);
+const PROJECT_SURFACE_STATUSES = PROJECT_STATUS_VALUES.filter((status) =>
+  ["EN_COURS", "LIVRE"].includes(status)
+);
+
+const ACCEPTED_PROJECT_STATUS =
+  DEFAULT_PROJECT_STATUSES.find((status) => status.value === "ACCEPTE")?.value ?? "ACCEPTE";
+
+const QUOTE_STATUS_LABELS = {
+  SENT: "Envoyé",
+  ACCEPTED: "Accepté",
+  REJECTED: "Refusé",
+} as const;
+type QuoteActivityStatus = keyof typeof QUOTE_STATUS_LABELS;
+const QUOTE_ACTIVITY_STATUSES = Object.keys(QUOTE_STATUS_LABELS) as QuoteActivityStatus[];
+const QUOTE_PENDING_STATUS: QuoteActivityStatus = "SENT";
+const QUOTE_ACTIVITY_TITLES: Record<QuoteActivityStatus, string> = {
+  SENT: "Devis envoyé",
+  ACCEPTED: "Devis accepté",
+  REJECTED: "Devis refusé",
+};
+
+const SITE_STATUS_LABELS = {
+  PLANIFIE: "Planifié",
+  EN_PREPARATION: "En préparation",
+  EN_COURS: "En cours",
+  SUSPENDU: "Suspendu",
+  TERMINE: "Terminé",
+  LIVRE: "Livré",
+} as const;
+type SiteStatus = keyof typeof SITE_STATUS_LABELS;
+
+const SITE_ACTIVE_STATUSES: SiteStatus[] = [
+  "PLANIFIE",
+  "EN_PREPARATION",
+  "EN_COURS",
+  "SUSPENDU",
+];
+const SITE_ENDING_STATUSES: SiteStatus[] = ["EN_COURS", "TERMINE", "LIVRE"];
+const SITE_ACTIVITY_STATUSES: SiteStatus[] = ["EN_COURS", "TERMINE", "LIVRE"];
+const SITE_ACTIVITY_TITLES: Partial<Record<SiteStatus, string>> = {
+  EN_COURS: "Chantier en cours",
+  TERMINE: "Chantier terminé",
+  LIVRE: "Chantier livré",
+};
+
+const INVOICE_ACTIVITY_STATUS_LABELS = {
+  SENT: "Envoyée",
+  PAID: "Payée",
+} as const;
+type InvoiceActivityStatus = keyof typeof INVOICE_ACTIVITY_STATUS_LABELS;
+const INVOICE_ACTIVITY_STATUSES = Object.keys(
+  INVOICE_ACTIVITY_STATUS_LABELS
+) as InvoiceActivityStatus[];
+const DEFAULT_INVOICE_STATUS: InvoiceActivityStatus = "SENT";
+const INVOICE_ACTIVITY_TITLES: Record<InvoiceActivityStatus, string> = {
+  SENT: "Facture envoyée",
+  PAID: "Paiement reçu",
+};
+
+const isStatusValue = <T extends string>(
+  statuses: readonly T[],
+  value: string | null | undefined
+): value is T => (value ? (statuses as readonly string[]).includes(value) : false);
 
 export interface DashboardMetrics {
   leadsActifs: number;
@@ -106,40 +178,40 @@ export const useDashboardMetrics = (
           supabase
             .from("leads")
             .select("id", { count: "exact", head: true })
-            .eq("user_id", orgId)
+            .eq("org_id", orgId)
             .in("status", ACTIVE_LEAD_STATUSES),
           supabase
             .from("projects")
             .select("id, status, updated_at, surface_isolee_m2, city, client_name")
-            .eq("user_id", orgId)
+            .eq("org_id", orgId)
             .in("status", [...ACTIVE_PROJECT_STATUSES, ...PROJECT_SURFACE_STATUSES]),
           supabase
             .from("quotes")
             .select("id, status, valid_until")
-            .eq("user_id", orgId)
+            .eq("org_id", orgId)
             .eq("status", QUOTE_PENDING_STATUS),
           supabase
             .from("sites")
             .select("id, status, date_fin_prevue")
-            .eq("user_id", orgId)
+            .eq("org_id", orgId)
             .in("status", SITE_ACTIVE_STATUSES),
           supabase
             .from("leads")
             .select("id, date_rdv")
-            .eq("user_id", orgId)
+            .eq("org_id", orgId)
             .gte("date_rdv", startWeek.toISOString())
             .lte("date_rdv", endWeek.toISOString()),
           supabase
             .from("leads")
             .select("id, updated_at")
-            .eq("user_id", orgId)
-            .eq("status", "QUALIFIED")
+            .eq("org_id", orgId)
+            .eq("status", QUALIFIED_LEAD_STATUS)
             .gte("updated_at", previousPeriodStart.toISOString()),
           supabase
             .from("projects")
             .select("id, updated_at")
-            .eq("user_id", orgId)
-            .eq("status", "ACCEPTED")
+            .eq("org_id", orgId)
+            .eq("status", ACCEPTED_PROJECT_STATUS)
             .gte("updated_at", previousPeriodStart.toISOString()),
         ]);
 
@@ -160,16 +232,14 @@ export const useDashboardMetrics = (
         if (!site.date_fin_prevue) return false;
         const endDate = new Date(site.date_fin_prevue);
         return (
-          SITE_ENDING_STATUSES.includes(site.status as typeof SITE_ENDING_STATUSES[number]) &&
+          isStatusValue(SITE_ENDING_STATUSES, site.status) &&
           endDate >= now &&
           endDate <= sevenDaysLater
         );
       }).length;
 
       const surfaceIsolee = projets
-        .filter((project) =>
-          PROJECT_SURFACE_STATUSES.includes(project.status as typeof PROJECT_SURFACE_STATUSES[number])
-        )
+        .filter((project) => isStatusValue(PROJECT_SURFACE_STATUSES, project.status))
         .filter((project) => {
           if (!project.updated_at) return false;
           const updated = new Date(project.updated_at);
@@ -206,9 +276,7 @@ export const useDashboardMetrics = (
 
       const metrics: DashboardMetrics = {
         leadsActifs: activeLeads.count ?? 0,
-        projetsEnCours: projets.filter((project) =>
-          ACTIVE_PROJECT_STATUSES.includes(project.status as typeof ACTIVE_PROJECT_STATUSES[number])
-        ).length,
+        projetsEnCours: projets.filter((project) => isStatusValue(ACTIVE_PROJECT_STATUSES, project.status)).length,
         devisEnAttente: quotes.length,
         devisExpirantSous7Jours: quotes.filter((quote) => {
           if (!quote.valid_until) return false;
@@ -255,7 +323,7 @@ export const useRevenueData = (
       const { data, error } = await supabase
         .from("invoices")
         .select("id, amount, status, created_at, updated_at")
-        .eq("user_id", orgId)
+        .eq("org_id", orgId)
         .eq("status", "PAID")
         .gte("created_at", startPeriod.toISOString())
         .order("created_at", { ascending: true });
@@ -323,35 +391,35 @@ export const useActivityFeed = (
       const [leads, quotes, projects, sites, invoices] = await Promise.all([
         supabase
           .from("leads")
-          .select("id, full_name, city, created_at")
-          .eq("user_id", orgId)
+          .select("id, full_name, city, created_at, status")
+          .eq("org_id", orgId)
           .order("created_at", { ascending: false })
           .limit(20),
         supabase
           .from("quotes")
           .select("id, quote_ref, client_name, status, updated_at")
-          .eq("user_id", orgId)
+          .eq("org_id", orgId)
           .in("status", QUOTE_ACTIVITY_STATUSES)
           .order("updated_at", { ascending: false })
           .limit(20),
         supabase
           .from("projects")
           .select("id, project_ref, client_name, city, status, updated_at")
-          .eq("user_id", orgId)
-          .eq("status", "ACCEPTED")
+          .eq("org_id", orgId)
+          .eq("status", ACCEPTED_PROJECT_STATUS)
           .order("updated_at", { ascending: false })
           .limit(20),
         supabase
           .from("sites")
           .select("id, site_ref, client_name, city, status, updated_at")
-          .eq("user_id", orgId)
+          .eq("org_id", orgId)
           .in("status", SITE_ACTIVITY_STATUSES)
           .order("updated_at", { ascending: false })
           .limit(20),
         supabase
           .from("invoices")
           .select("id, invoice_ref, client_name, status, created_at, updated_at, amount")
-          .eq("user_id", orgId)
+          .eq("org_id", orgId)
           .in("status", INVOICE_ACTIVITY_STATUSES)
           .order("created_at", { ascending: false })
           .limit(20),
@@ -366,12 +434,13 @@ export const useActivityFeed = (
       const items: ActivityItem[] = [];
 
       (leads.data ?? []).forEach((lead) => {
+        const statusLabel = lead.status ? getLeadStatusLabel(lead.status) : null;
         items.push({
           id: `lead-${lead.id}`,
           type: "lead",
           title: "Nouveau lead reçu",
           description: `${lead.full_name} • ${lead.city ?? "Ville inconnue"}`,
-          status: "NEW",
+          status: statusLabel,
           client: lead.full_name,
           city: lead.city,
           date: lead.created_at,
@@ -379,18 +448,17 @@ export const useActivityFeed = (
       });
 
       (quotes.data ?? []).forEach((quote) => {
-        const status = quote.status?.toUpperCase() ?? "SENT";
+        const normalizedStatus = quote.status?.toUpperCase() ?? null;
+        const resolvedStatus = isStatusValue(QUOTE_ACTIVITY_STATUSES, normalizedStatus)
+          ? normalizedStatus
+          : QUOTE_PENDING_STATUS;
+        const statusLabel = QUOTE_STATUS_LABELS[resolvedStatus];
         items.push({
           id: `quote-${quote.id}`,
           type: "quote",
-          title:
-            status === "ACCEPTED"
-              ? "Devis accepté"
-              : status === "REFUSED"
-                ? "Devis refusé"
-                : "Devis envoyé",
+          title: QUOTE_ACTIVITY_TITLES[resolvedStatus],
           description: `${quote.quote_ref ?? "Devis"} • ${quote.client_name ?? "Client"}`,
-          status,
+          status: statusLabel,
           reference: quote.quote_ref,
           client: quote.client_name,
           date: quote.updated_at,
@@ -398,12 +466,13 @@ export const useActivityFeed = (
       });
 
       (projects.data ?? []).forEach((project) => {
+        const statusLabel = project.status ? PROJECT_STATUS_LABELS[project.status] ?? project.status : null;
         items.push({
           id: `project-${project.id}`,
           type: "project",
           title: "Projet accepté",
           description: `${project.project_ref ?? "Projet"} • ${project.client_name ?? "Client"}`,
-          status: project.status?.toUpperCase(),
+          status: statusLabel,
           client: project.client_name,
           city: project.city,
           date: project.updated_at,
@@ -411,13 +480,17 @@ export const useActivityFeed = (
       });
 
       (sites.data ?? []).forEach((site) => {
-        const status = site.status?.toUpperCase();
+        const resolvedStatus = isStatusValue(SITE_ACTIVITY_STATUSES, site.status) ? site.status : null;
+        const statusLabel = resolvedStatus ? SITE_STATUS_LABELS[resolvedStatus] : site.status ?? null;
+        const title = resolvedStatus && SITE_ACTIVITY_TITLES[resolvedStatus]
+          ? SITE_ACTIVITY_TITLES[resolvedStatus]!
+          : "Chantier en cours";
         items.push({
           id: `site-${site.id}`,
           type: "site",
-          title: status === "CLOTURE" ? "Chantier clôturé" : "Chantier en cours",
+          title,
           description: `${site.site_ref ?? "Chantier"} • ${site.client_name ?? "Client"}`,
-          status,
+          status: statusLabel,
           client: site.client_name,
           city: site.city,
           date: site.updated_at,
@@ -425,17 +498,22 @@ export const useActivityFeed = (
       });
 
       (invoices.data ?? []).forEach((invoice) => {
-        const status = invoice.status?.toUpperCase();
+        const normalizedStatus = invoice.status?.toUpperCase() ?? null;
+        const resolvedStatus = isStatusValue(INVOICE_ACTIVITY_STATUSES, normalizedStatus)
+          ? normalizedStatus
+          : DEFAULT_INVOICE_STATUS;
+        const statusLabel = INVOICE_ACTIVITY_STATUS_LABELS[resolvedStatus];
         items.push({
           id: `invoice-${invoice.id}`,
           type: "invoice",
-          title: status === "PAID" ? "Paiement reçu" : "Facture envoyée",
+          title: INVOICE_ACTIVITY_TITLES[resolvedStatus],
           description: `${invoice.invoice_ref ?? "Facture"} • ${invoice.client_name ?? "Client"}`,
-          status,
+          status: statusLabel,
           reference: invoice.invoice_ref,
           client: invoice.client_name,
           amount: invoice.amount,
-          date: status === "PAID" && invoice.updated_at ? invoice.updated_at : invoice.created_at,
+          date:
+            resolvedStatus === "PAID" && invoice.updated_at ? invoice.updated_at : invoice.created_at,
         });
       });
 
