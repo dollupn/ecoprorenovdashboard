@@ -29,6 +29,7 @@ import {
   Phone,
   Hammer,
   HandCoins,
+  Mail,
 } from "lucide-react";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useMembers } from "@/features/members/api";
@@ -52,6 +53,7 @@ type ProjectProduct = Tables<"project_products"> & {
 
 type ProjectWithRelations = Project & {
   project_products: ProjectProduct[];
+  lead?: Pick<Tables<"leads">, "email"> | null;
 };
 
 // Show all products except those whose code starts with "ECO"
@@ -87,7 +89,7 @@ const Projects = () => {
       let query = supabase
         .from("projects")
         .select(
-          "*, project_products(id, quantity, dynamic_params, product:product_catalog(code, name, params_schema))"
+          "*, lead:leads(email), project_products(id, quantity, dynamic_params, product:product_catalog(code, name, params_schema))"
         )
         .order("created_at", { ascending: false });
 
@@ -168,6 +170,7 @@ const Projects = () => {
         project.postal_code,
         productCodes,
         project.assigned_to,
+        project.lead?.email ?? "",
         dynamicValues,
       ]
         .join(" ")
@@ -281,6 +284,11 @@ const Projects = () => {
             const statusConfig = statusMap[project.status ?? ""];
             const badgeStyle = getProjectStatusBadgeStyle(statusConfig?.color);
             const statusLabel = statusConfig?.label ?? project.status ?? "Statut";
+            const projectEmail =
+              (project as Project & { email?: string | null; client_email?: string | null }).email ??
+              (project as Project & { email?: string | null; client_email?: string | null }).client_email ??
+              project.lead?.email ??
+              null;
 
             return (
               <Card
@@ -309,6 +317,12 @@ const Projects = () => {
                           <span className="flex items-center gap-1 text-xs text-muted-foreground/80">
                             <Phone className="w-3.5 h-3.5" />
                             {project.phone}
+                          </span>
+                        )}
+                        {projectEmail && (
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground/80">
+                            <Mail className="w-3.5 h-3.5" />
+                            {projectEmail}
                           </span>
                         )}
                       </p>

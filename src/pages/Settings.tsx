@@ -23,6 +23,8 @@ import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
+import { useProjectBuildingTypes } from "@/hooks/useProjectBuildingTypes";
+import { useProjectUsages } from "@/hooks/useProjectUsages";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { formatDistanceToNow, parseISO } from "date-fns";
@@ -49,6 +51,7 @@ import {
   Loader2,
   UserPlus,
   FileText,
+  List,
 } from "lucide-react";
 import {
   DEFAULT_PROJECT_STATUSES,
@@ -58,6 +61,16 @@ import {
   saveProjectStatuses,
   type ProjectStatusSetting,
 } from "@/lib/projects";
+import {
+  DEFAULT_BUILDING_TYPES,
+  DEFAULT_BUILDING_USAGES,
+  getProjectBuildingTypes,
+  getProjectUsages,
+  resetProjectBuildingTypes,
+  resetProjectUsages,
+  saveProjectBuildingTypes,
+  saveProjectUsages,
+} from "@/lib/buildings";
 import {
   useDriveAuthUrl,
   useDriveConnectionRefresh,
@@ -330,6 +343,10 @@ export default function Settings() {
     getProjectStatusSettings(),
   );
   const [delegataires, setDelegataires] = useState<Delegataire[]>([]);
+  const syncedBuildingTypes = useProjectBuildingTypes();
+  const [buildingTypes, setBuildingTypes] = useState<string[]>(() => getProjectBuildingTypes());
+  const syncedBuildingUsages = useProjectUsages();
+  const [buildingUsages, setBuildingUsages] = useState<string[]>(() => getProjectUsages());
 
   const driveConnectionLoading = driveStatusLoading || driveStatusFetching;
   const driveErrorMessage = driveConnection?.errorMessage ?? driveStatusError?.message ?? null;
@@ -492,6 +509,14 @@ export default function Settings() {
   useEffect(() => {
     setProjectStatuses(syncedProjectStatuses);
   }, [syncedProjectStatuses]);
+
+  useEffect(() => {
+    setBuildingTypes(syncedBuildingTypes);
+  }, [syncedBuildingTypes]);
+
+  useEffect(() => {
+    setBuildingUsages(syncedBuildingUsages);
+  }, [syncedBuildingUsages]);
 
   const fetchTeamMembers = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -843,6 +868,26 @@ export default function Settings() {
     });
   }, [projectStatuses]);
 
+  const isDefaultBuildingTypes = useMemo(() => {
+    if (buildingTypes.length !== DEFAULT_BUILDING_TYPES.length) {
+      return false;
+    }
+
+    return buildingTypes.every(
+      (type, index) => type === DEFAULT_BUILDING_TYPES[index],
+    );
+  }, [buildingTypes]);
+
+  const isDefaultBuildingUsages = useMemo(() => {
+    if (buildingUsages.length !== DEFAULT_BUILDING_USAGES.length) {
+      return false;
+    }
+
+    return buildingUsages.every(
+      (usage, index) => usage === DEFAULT_BUILDING_USAGES[index],
+    );
+  }, [buildingUsages]);
+
   const persistProjectStatuses = useCallback(
     (
       updater: (prev: ProjectStatusSetting[]) => ProjectStatusSetting[],
@@ -852,6 +897,42 @@ export default function Settings() {
       setProjectStatuses((prev) => {
         const next = updater(prev);
         sanitizedResult = saveProjectStatuses(next);
+        return sanitizedResult;
+      });
+
+      if (toastOptions) {
+        toast(toastOptions);
+      }
+
+      return sanitizedResult;
+    },
+    [toast],
+  );
+
+  const persistBuildingTypes = useCallback(
+    (updater: (prev: string[]) => string[], toastOptions?: { title: string; description?: string }) => {
+      let sanitizedResult: string[] = [];
+      setBuildingTypes((prev) => {
+        const next = updater(prev);
+        sanitizedResult = saveProjectBuildingTypes(next);
+        return sanitizedResult;
+      });
+
+      if (toastOptions) {
+        toast(toastOptions);
+      }
+
+      return sanitizedResult;
+    },
+    [toast],
+  );
+
+  const persistBuildingUsages = useCallback(
+    (updater: (prev: string[]) => string[], toastOptions?: { title: string; description?: string }) => {
+      let sanitizedResult: string[] = [];
+      setBuildingUsages((prev) => {
+        const next = updater(prev);
+        sanitizedResult = saveProjectUsages(next);
         return sanitizedResult;
       });
 
@@ -973,6 +1054,103 @@ export default function Settings() {
     toast({
       title: "Délégataires sauvegardés",
       description: "Les informations seront utilisées lors de la génération des devis.",
+  const handleBuildingTypeChange = useCallback(
+    (index: number, value: string) => {
+      persistBuildingTypes((prev) =>
+        prev.map((type, currentIndex) => (currentIndex === index ? value : type)),
+      );
+    },
+    [persistBuildingTypes],
+  );
+
+  const handleAddBuildingType = useCallback(() => {
+    persistBuildingTypes(
+      (prev) => [...prev, `Nouveau type ${prev.length + 1}`],
+      {
+        title: "Type de bâtiment ajouté",
+        description: "Modifiez le libellé pour l'utiliser immédiatement.",
+      },
+    );
+  }, [persistBuildingTypes]);
+
+  const handleRemoveBuildingType = useCallback(
+    (index: number) => {
+      if (buildingTypes.length <= 1) {
+        toast({
+          variant: "destructive",
+          title: "Au moins un type requis",
+          description: "Ajoutez un nouveau type avant de supprimer celui-ci.",
+        });
+        return;
+      }
+
+      persistBuildingTypes(
+        (prev) => prev.filter((_, currentIndex) => currentIndex !== index),
+        {
+          title: "Type de bâtiment supprimé",
+          description: "Ce type ne sera plus proposé dans les projets.",
+        },
+      );
+    },
+    [buildingTypes.length, persistBuildingTypes, toast],
+  );
+
+  const handleResetBuildingTypes = useCallback(() => {
+    const sanitized = resetProjectBuildingTypes();
+    setBuildingTypes(sanitized);
+    toast({
+      title: "Types de bâtiment réinitialisés",
+      description: "Retour à la liste standard proposée par EcoProRenov.",
+    });
+  }, [toast]);
+
+  const handleUsageChange = useCallback(
+    (index: number, value: string) => {
+      persistBuildingUsages((prev) =>
+        prev.map((usage, currentIndex) => (currentIndex === index ? value : usage)),
+      );
+    },
+    [persistBuildingUsages],
+  );
+
+  const handleAddUsage = useCallback(() => {
+    persistBuildingUsages(
+      (prev) => [...prev, `Nouvel usage ${prev.length + 1}`],
+      {
+        title: "Usage ajouté",
+        description: "Personnalisez le libellé pour qu'il apparaisse dans les formulaires.",
+      },
+    );
+  }, [persistBuildingUsages]);
+
+  const handleRemoveUsage = useCallback(
+    (index: number) => {
+      if (buildingUsages.length <= 1) {
+        toast({
+          variant: "destructive",
+          title: "Au moins un usage requis",
+          description: "Ajoutez un nouvel usage avant de supprimer celui-ci.",
+        });
+        return;
+      }
+
+      persistBuildingUsages(
+        (prev) => prev.filter((_, currentIndex) => currentIndex !== index),
+        {
+          title: "Usage supprimé",
+          description: "Cet usage ne sera plus proposé lors de la création d'un projet.",
+        },
+      );
+    },
+    [buildingUsages.length, persistBuildingUsages, toast],
+  );
+
+  const handleResetUsages = useCallback(() => {
+    const sanitized = resetProjectUsages();
+    setBuildingUsages(sanitized);
+    toast({
+      title: "Usages réinitialisés",
+      description: "Retour aux usages standards proposés par EcoProRenov.",
     });
   }, [toast]);
 
@@ -1146,6 +1324,125 @@ export default function Settings() {
                 <div className="rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-4 text-sm text-muted-foreground">
                   Les modifications sont appliquées instantanément aux listes, aux filtres et aux formulaires de création
                   de projet.
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border border-border/60 bg-card/70 shadow-sm">
+              <CardHeader className="flex flex-col gap-4">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-lg font-semibold text-foreground">
+                    <List className="h-5 w-5 text-primary" />
+                    Référentiel bâtiments
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Personnalisez les types de bâtiment et les usages proposés lors de la création de projet.
+                  </p>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-8">
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <h3 className="text-base font-medium text-foreground">Types de bâtiment</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Ces valeurs alimentent les formulaires de projets et les documents commerciaux.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleResetBuildingTypes}
+                        disabled={isDefaultBuildingTypes}
+                      >
+                        Réinitialiser
+                      </Button>
+                      <Button size="sm" variant="secondary" className="gap-2" onClick={handleAddBuildingType}>
+                        <Plus className="h-4 w-4" />
+                        Ajouter
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    {buildingTypes.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-border/60 bg-background/60 p-4 text-sm text-muted-foreground">
+                        Aucun type de bâtiment n&apos;est configuré. Ajoutez-en pour les proposer dans vos projets.
+                      </div>
+                    ) : (
+                      buildingTypes.map((type, index) => (
+                        <div key={`${type}-${index}`} className="flex items-center gap-2">
+                          <Input
+                            value={type}
+                            onChange={(event) => handleBuildingTypeChange(index, event.target.value)}
+                            placeholder="Type de bâtiment"
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoveBuildingType(index)}
+                            aria-label={`Supprimer le type ${type || index + 1}`}
+                            className="h-9 w-9 text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <Separator className="bg-border/60" />
+
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <h3 className="text-base font-medium text-foreground">Usages</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Gérez les usages disponibles lors de la qualification des projets.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleResetUsages}
+                        disabled={isDefaultBuildingUsages}
+                      >
+                        Réinitialiser
+                      </Button>
+                      <Button size="sm" variant="secondary" className="gap-2" onClick={handleAddUsage}>
+                        <Plus className="h-4 w-4" />
+                        Ajouter
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    {buildingUsages.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-border/60 bg-background/60 p-4 text-sm text-muted-foreground">
+                        Aucun usage n&apos;est configuré. Ajoutez un usage pour le rendre disponible.
+                      </div>
+                    ) : (
+                      buildingUsages.map((usage, index) => (
+                        <div key={`${usage}-${index}`} className="flex items-center gap-2">
+                          <Input
+                            value={usage}
+                            onChange={(event) => handleUsageChange(index, event.target.value)}
+                            placeholder="Usage"
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoveUsage(index)}
+                            aria-label={`Supprimer l'usage ${usage || index + 1}`}
+                            className="h-9 w-9 text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
