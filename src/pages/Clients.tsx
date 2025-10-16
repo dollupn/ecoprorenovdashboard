@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrg } from "@/features/organizations/OrgContext";
+import { getProjectClientName } from "@/lib/projects";
 
 import {
   Activity,
@@ -381,15 +382,16 @@ const fetchClients = async (
   });
 
   (projects.data ?? []).forEach((project) => {
+    const projectName = getProjectClientName(project);
     const key = getClientKey({
-      name: project.client_name,
+      name: projectName,
       company: project.company,
       phone: project.phone,
       fallbackId: project.id,
     });
     const aggregate = aggregates.get(key) ?? createEmptyAggregate(key);
 
-    setIfEmpty(aggregate, "name", project.client_name ?? "");
+    setIfEmpty(aggregate, "name", projectName ?? "");
     setIfEmpty(aggregate, "company", project.company);
     setIfEmpty(aggregate, "phone", project.phone);
     setIfEmpty(aggregate, "city", project.city);

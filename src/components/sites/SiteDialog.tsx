@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useId, type CSSProperties } from "react";
 import {
   useForm,
   useFieldArray,
@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { getProjectClientName } from "@/lib/projects";
 import {
   Select,
   SelectContent,
@@ -49,6 +50,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DriveFileUploader } from "@/components/integrations/DriveFileUploader";
 import type { DriveFileMetadata } from "@/integrations/googleDrive";
 import { GripVertical, Plus, Trash2, Upload } from "lucide-react";
+import { useSubcontractorDirectory } from "@/hooks/useSubcontractorDirectory";
 
 const teamMemberSchema = z.object({
   name: z.string().min(1, "Le nom est requis"),
@@ -150,6 +152,7 @@ interface SortableTeamMemberFieldProps {
   control: Control<SiteFormValues>;
   remove: (index: number) => void;
   canRemove: boolean;
+  suggestions: string[];
 }
 
 const SortableTeamMemberField = ({
@@ -158,12 +161,14 @@ const SortableTeamMemberField = ({
   control,
   remove,
   canRemove,
+  suggestions,
 }: SortableTeamMemberFieldProps) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: field.id,
   });
 
   const style: CSSProperties = { transform: CSS.Transform.toString(transform), transition };
+  const datalistId = useId();
 
   return (
     <div
@@ -190,9 +195,20 @@ const SortableTeamMemberField = ({
         render={({ field: memberField }) => (
           <FormItem className="flex-1">
             <FormControl>
-              <Input placeholder="Nom du membre" {...memberField} />
+              <Input
+                placeholder="Nom du sous-traitant ou de l'équipe"
+                list={suggestions.length > 0 ? datalistId : undefined}
+                {...memberField}
+              />
             </FormControl>
             <FormMessage />
+            {suggestions.length > 0 ? (
+              <datalist id={datalistId}>
+                {suggestions.map((option) => (
+                  <option key={option} value={option} />
+                ))}
+              </datalist>
+            ) : null}
           </FormItem>
         )}
       />
@@ -253,14 +269,18 @@ const SortableAdditionalCostRow = ({
         >
           <GripVertical className="h-4 w-4" />
         </Button>
-        <div className="grid flex-1 grid-cols-1 gap-2 md:grid-cols-12 md:items-start">
+        <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-12 md:items-start">
           <FormField
             control={control}
             name={`additional_costs.${index}.label`}
             render={({ field: labelField }) => (
-              <FormItem className="md:col-span-4">
+              <FormItem className="md:col-span-5">
                 <FormControl>
-                  <Input placeholder="Intitulé du coût" {...labelField} />
+                  <Input
+                    placeholder="Intitulé du coût"
+                    title={typeof labelField.value === "string" ? labelField.value : undefined}
+                    {...labelField}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -272,7 +292,25 @@ const SortableAdditionalCostRow = ({
             render={({ field: amountHTField }) => (
               <FormItem className="md:col-span-2">
                 <FormControl>
-                  <Input type="number" min={0} step="0.01" placeholder="Montant HT" {...amountHTField} />
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    step="0.01"
+                    placeholder="Montant HT"
+                    name={amountHTField.name}
+                    ref={amountHTField.ref}
+                    value={
+                      amountHTField.value === undefined || amountHTField.value === null
+                        ? ""
+                        : amountHTField.value
+                    }
+                    onChange={(event) => {
+                      const newValue = event.target.value;
+                      amountHTField.onChange(newValue === "" ? "" : Number(newValue));
+                    }}
+                    onBlur={amountHTField.onBlur}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -284,7 +322,23 @@ const SortableAdditionalCostRow = ({
             render={({ field: taxesField }) => (
               <FormItem className="md:col-span-2">
                 <FormControl>
-                  <Input type="number" min={0} step="0.01" placeholder="Taxes" {...taxesField} />
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    step="0.01"
+                    placeholder="Taxes"
+                    name={taxesField.name}
+                    ref={taxesField.ref}
+                    value={
+                      taxesField.value === undefined || taxesField.value === null ? "" : taxesField.value
+                    }
+                    onChange={(event) => {
+                      const newValue = event.target.value;
+                      taxesField.onChange(newValue === "" ? "" : Number(newValue));
+                    }}
+                    onBlur={taxesField.onBlur}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -409,6 +463,8 @@ export const SiteDialog = ({
   }, [initialValues?.notes]);
 
   const [siteDriveFile, setSiteDriveFile] = useState<DriveFileMetadata | null>(parsedNotes.driveFile);
+  const resolvedOrgId = orgId ?? initialValues?.org_id ?? null;
+  const { subcontractors, saveSubcontractors } = useSubcontractorDirectory(resolvedOrgId);
 
   const mergedDefaults = useMemo(() => {
     const normalizedAdditionalCosts =
@@ -616,6 +672,7 @@ export const SiteDialog = ({
 
   const handleSubmit = (values: SiteFormValues) => {
     const filteredTeamMembers = values.team_members.filter((m) => m.name.trim().length > 0);
+    saveSubcontractors(filteredTeamMembers.map((member) => member.name.trim()));
 
     const filteredCosts = values.additional_costs
       .filter((c) => c.label.trim().length > 0)
@@ -753,7 +810,7 @@ export const SiteDialog = ({
                               key={project.id ?? project.project_ref}
                               value={project.project_ref}
                             >
-                              {project.project_ref} • {project.client_name}
+                            {project.project_ref} • {getProjectClientName(project)}
                             </SelectItem>
                           ))
                         ) : (
@@ -958,6 +1015,11 @@ export const SiteDialog = ({
               {teamMemberFields.length > 1 ? (
                 <p className="text-xs text-muted-foreground">Faites glisser les membres pour définir l&apos;ordre de votre équipe.</p>
               ) : null}
+              {subcontractors.length > 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Sélectionnez un sous-traitant habituel dans la liste ou saisissez un nouveau nom pour l&apos;enregistrer.
+                </p>
+              ) : null}
               <div className="space-y-3">
                 {teamMemberFields.length === 0 ? (
                   <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
@@ -974,6 +1036,7 @@ export const SiteDialog = ({
                           control={form.control}
                           remove={removeTeamMember}
                           canRemove={teamMemberFields.length > 1}
+                          suggestions={subcontractors}
                         />
                       ))}
                     </SortableContext>
@@ -1016,8 +1079,8 @@ export const SiteDialog = ({
                 onClick={() =>
                   appendCost({
                     label: "",
-                    amount_ht: 0,
-                    taxes: 0,
+                    amount_ht: undefined as unknown as number,
+                    taxes: undefined as unknown as number,
                     attachment: null,
                   })
                 }

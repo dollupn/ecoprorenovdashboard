@@ -87,6 +87,33 @@ const UNASSIGNED_VALUE = "__unassigned" as const;
 type LeadRecord = Tables<"leads">;
 type LeadWithExtras = LeadRecord & { extra_fields?: Record<string, unknown> | null };
 
+const getLeadNameParts = (lead: LeadWithExtras | LeadRecord) => {
+  const rawExtraFields = (lead as LeadWithExtras).extra_fields;
+  const extraFields =
+    rawExtraFields && typeof rawExtraFields === "object"
+      ? (rawExtraFields as Record<string, unknown>)
+      : null;
+
+  const extraFirstValue = extraFields?.["first_name"];
+  const extraLastValue = extraFields?.["last_name"];
+  const extraFirst =
+    typeof extraFirstValue === "string" ? extraFirstValue.trim() : "";
+  const extraLast = typeof extraLastValue === "string" ? extraLastValue.trim() : "";
+
+  if (extraFirst || extraLast) {
+    return { firstName: extraFirst, lastName: extraLast };
+  }
+
+  const normalizedFullName = typeof lead.full_name === "string" ? lead.full_name.trim() : "";
+
+  if (!normalizedFullName) {
+    return { firstName: "", lastName: "" };
+  }
+
+  const [firstName, ...rest] = normalizedFullName.split(/\s+/);
+  return { firstName: firstName ?? "", lastName: rest.join(" ") };
+};
+
 type CsvLead = {
   full_name: string;
   email: string;
@@ -1414,11 +1441,15 @@ const Leads = () => {
               </div>
             ) : viewMode === "cards" ? (
               <div className="space-y-4">
-                {filteredLeads.map((lead) => (
-                  <div
-                    key={lead.id}
-                    className="p-4 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
-                  >
+                {filteredLeads.map((lead) => {
+                  const leadWithExtras = lead as LeadWithExtras;
+                  const nameParts = getLeadNameParts(leadWithExtras);
+
+                  return (
+                    <div
+                      key={lead.id}
+                      className="p-4 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
+                    >
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
@@ -1518,6 +1549,19 @@ const Leads = () => {
                           trigger={<Button size="sm">Convertir en Projet</Button>}
                           initialValues={{
                             client_name: lead.full_name,
+                        <LeadPhoningDialog
+                          lead={leadWithExtras}
+                          onCompleted={handlePhoningCompleted}
+                        />
+                        <ScheduleLeadDialog
+                          lead={leadWithExtras}
+                          onScheduled={handleLeadScheduled}
+                        />
+                        <AddProjectDialog
+                          trigger={<Button size="sm">Créer Projet</Button>}
+                          initialValues={{
+                            client_first_name: nameParts.firstName,
+                            client_last_name: nameParts.lastName,
                             company: lead.company ?? "",
                             phone: lead.phone_raw ?? "",
                             siren: lead.siren ?? "",
@@ -1527,11 +1571,13 @@ const Leads = () => {
                             lead_id: lead.id,
                           }}
                           onProjectAdded={() => handleProjectCreated(lead as LeadWithExtras)}
+                          onProjectAdded={() => handleProjectCreated(leadWithExtras)}
                         />
                       </div>
                     </div>
                   </div>
-                ))}
+                );
+              })}
               </div>
             ) : (
               <div className="rounded-lg border overflow-x-auto">
@@ -1551,65 +1597,43 @@ const Leads = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredLeads.map((lead) => (
-                      <TableRow key={lead.id}>
-                        <TableCell>
-                          <div className="font-semibold text-foreground">{lead.full_name}</div>
-                          {lead.company && (
-                            <div className="text-sm text-muted-foreground flex items-center gap-1">
-                              <Building className="h-3 w-3" />
-                              {lead.company}
+                    {filteredLeads.map((lead) => {
+                      const leadWithExtras = lead as LeadWithExtras;
+                      const nameParts = getLeadNameParts(leadWithExtras);
+
+                      return (
+                        <TableRow key={lead.id}>
+                          <TableCell>
+                            <div className="font-semibold text-foreground">{lead.full_name}</div>
+                            {lead.company && (
+                              <div className="text-sm text-muted-foreground flex items-center gap-1">
+                                <Building className="h-3 w-3" />
+                                {lead.company}
+                              </div>
+                            )}
+                            {lead.siren && (
+                              <div className="text-[11px] text-muted-foreground uppercase tracking-wide">
+                                SIREN : {lead.siren}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1 text-sm">
+                              <div className="flex items-center gap-2">
+                                <Phone className="h-4 w-4 text-muted-foreground" />
+                                {lead.phone_raw}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Mail className="h-4 w-4 text-muted-foreground" />
+                                {lead.email}
+                              </div>
                             </div>
-                          )}
-                          {lead.siren && (
-                            <div className="text-[11px] text-muted-foreground uppercase tracking-wide">
-                              SIREN : {lead.siren}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-1 text-sm">
+                          </TableCell>
+                          <TableCell className="text-sm">
                             <div className="flex items-center gap-2">
-                              <Phone className="h-4 w-4 text-muted-foreground" />
-                              {lead.phone_raw}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Mail className="h-4 w-4 text-muted-foreground" />
-                              {lead.email}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          <div className="flex items-center gap-2">
-                            <MapPin className="h-4 w-4 text-muted-foreground" />
-                            <span>
-                              {lead.city} ({lead.postal_code})
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {lead.product_name ? (
-                            <div>
-                              <span className="font-medium">{lead.product_name}</span>
-                              {lead.surface_m2 && (
-                                <span className="text-muted-foreground"> • {lead.surface_m2} m²</span>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={getLeadStatusColor(lead.status)}>
-                            {getLeadStatusLabel(lead.status)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {lead.date_rdv && lead.heure_rdv ? (
-                            <div className="flex items-center gap-2 text-primary font-medium">
-                              <Calendar className="h-4 w-4" />
+                              <MapPin className="h-4 w-4 text-muted-foreground" />
                               <span>
-                                {new Date(lead.date_rdv).toLocaleDateString("fr-FR")} à {lead.heure_rdv}
+                                {lead.city} ({lead.postal_code})
                               </span>
                             </div>
                           ) : (
@@ -1654,11 +1678,81 @@ const Leads = () => {
                                 }}
                                 onProjectAdded={() => handleProjectCreated(lead as LeadWithExtras)}
                               />
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {lead.product_name ? (
+                              <div>
+                                <span className="font-medium">{lead.product_name}</span>
+                                {lead.surface_m2 && (
+                                  <span className="text-muted-foreground"> • {lead.surface_m2} m²</span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={getLeadStatusColor(lead.status)}>
+                              {getLeadStatusLabel(lead.status)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {lead.date_rdv && lead.heure_rdv ? (
+                              <div className="flex items-center gap-2 text-primary font-medium">
+                                <Calendar className="h-4 w-4" />
+                                <span>
+                                  {new Date(lead.date_rdv).toLocaleDateString("fr-FR")} à {lead.heure_rdv}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {lead.utm_source ? lead.utm_source : <span className="text-muted-foreground">—</span>}
+                          </TableCell>
+                          <TableCell className="max-w-[200px] text-sm">
+                            {lead.commentaire ? (
+                              <span className="line-clamp-2">{lead.commentaire}</span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right text-sm">
+                            <div className="flex flex-col items-end gap-2">
+                              <span className="text-xs text-muted-foreground">
+                                Créé le {new Date(lead.created_at).toLocaleDateString("fr-FR")}
+                              </span>
+                              <div className="flex flex-wrap gap-2 justify-end">
+                                <LeadPhoningDialog
+                                  lead={leadWithExtras}
+                                  onCompleted={handlePhoningCompleted}
+                                />
+                                <ScheduleLeadDialog
+                                  lead={leadWithExtras}
+                                  onScheduled={handleLeadScheduled}
+                                />
+                                <AddProjectDialog
+                                  trigger={<Button size="sm">Créer Projet</Button>}
+                                  initialValues={{
+                                    client_first_name: nameParts.firstName,
+                                    client_last_name: nameParts.lastName,
+                                    company: lead.company ?? "",
+                                    phone: lead.phone_raw ?? "",
+                                    siren: lead.siren ?? "",
+                                    city: lead.city,
+                                    postal_code: lead.postal_code,
+                                    surface_batiment_m2: lead.surface_m2 ?? undefined,
+                                    lead_id: lead.id,
+                                  }}
+                                  onProjectAdded={() => handleProjectCreated(leadWithExtras)}
+                                />
+                              </div>
                             </div>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>

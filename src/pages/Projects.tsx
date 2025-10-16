@@ -15,6 +15,7 @@ import {
 } from "@/components/quotes/AddQuoteDialog";
 import type { Tables } from "@/integrations/supabase/types";
 import {
+  getProjectClientName,
   getProjectStatusBadgeStyle,
   type ProjectStatusSetting,
 } from "@/lib/projects";
@@ -29,6 +30,7 @@ import {
   Phone,
   Hammer,
   HandCoins,
+  Mail,
 } from "lucide-react";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useMembers } from "@/features/members/api";
@@ -52,6 +54,7 @@ type ProjectProduct = Tables<"project_products"> & {
 
 type ProjectWithRelations = Project & {
   project_products: ProjectProduct[];
+  lead?: Pick<Tables<"leads">, "email"> | null;
 };
 
 // Show all products except those whose code starts with "ECO"
@@ -87,7 +90,7 @@ const Projects = () => {
       let query = supabase
         .from("projects")
         .select(
-          "*, project_products(id, quantity, dynamic_params, product:product_catalog(code, name, params_schema))"
+          "*, lead:leads(email), project_products(id, quantity, dynamic_params, product:product_catalog(code, name, params_schema))"
         )
         .order("created_at", { ascending: false });
 
@@ -144,6 +147,7 @@ const Projects = () => {
     }
 
     return base.filter((project) => {
+      const clientName = getProjectClientName(project);
       const displayedProducts = getDisplayedProducts(project.project_products);
 
       const productCodes = displayedProducts
@@ -161,13 +165,17 @@ const Projects = () => {
 
       const searchable = [
         project.project_ref,
-        project.client_name,
+        clientName,
+        project.client_first_name ?? "",
+        project.client_last_name ?? "",
         project.company ?? "",
         project.siren ?? "",
         project.city,
         project.postal_code,
         productCodes,
         project.assigned_to,
+        project.source ?? "",
+        project.lead?.email ?? "",
         dynamicValues,
       ]
         .join(" ")
@@ -184,9 +192,10 @@ const Projects = () => {
   const handleCreateQuote = (project: ProjectWithRelations) => {
     const displayedProducts = getDisplayedProducts(project.project_products);
     const firstProduct = displayedProducts[0]?.product ?? project.project_products?.[0]?.product;
+    const clientName = getProjectClientName(project);
 
     setQuoteInitialValues({
-      client_name: project.client_name ?? "",
+      client_name: clientName,
       project_id: project.id,
       product_name:
         firstProduct?.name ||
@@ -281,6 +290,12 @@ const Projects = () => {
             const statusConfig = statusMap[project.status ?? ""];
             const badgeStyle = getProjectStatusBadgeStyle(statusConfig?.color);
             const statusLabel = statusConfig?.label ?? project.status ?? "Statut";
+            const clientName = getProjectClientName(project);
+            const projectEmail =
+              (project as Project & { email?: string | null; client_email?: string | null }).email ??
+              (project as Project & { email?: string | null; client_email?: string | null }).client_email ??
+              project.lead?.email ??
+              null;
 
             return (
               <Card
@@ -295,7 +310,7 @@ const Projects = () => {
                       </CardTitle>
                       <p className="text-sm text-muted-foreground mt-1 space-y-1">
                         <span className="block">
-                          {project.client_name}
+                          {clientName}
                           {project.company && (
                             <span className="block text-xs">{project.company}</span>
                           )}
@@ -304,11 +319,22 @@ const Projects = () => {
                               SIREN : {project.siren}
                             </span>
                           )}
+                          {project.source && (
+                            <span className="block text-xs text-muted-foreground/80">
+                              Source : {project.source}
+                            </span>
+                          )}
                         </span>
                         {project.phone && (
                           <span className="flex items-center gap-1 text-xs text-muted-foreground/80">
                             <Phone className="w-3.5 h-3.5" />
                             {project.phone}
+                          </span>
+                        )}
+                        {projectEmail && (
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground/80">
+                            <Mail className="w-3.5 h-3.5" />
+                            {projectEmail}
                           </span>
                         )}
                       </p>
@@ -434,6 +460,14 @@ const Projects = () => {
                         </div>
                       </div>
                     )}
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Source:</span>
+                      <span className="font-medium">
+                        {project.source && project.source.trim().length > 0
+                          ? project.source
+                          : "Non renseigné"}
+                      </span>
+                    </div>
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Assigné à:</span>
                       <span className="font-medium">{project.assigned_to}</span>
