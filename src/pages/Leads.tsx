@@ -1543,10 +1543,14 @@ const Leads = () => {
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-2 justify-end">
-                        <LeadPhoningDialog lead={lead as LeadWithExtras} onCompleted={handlePhoningCompleted} />
-                        <ScheduleLeadDialog lead={lead as LeadWithExtras} onScheduled={handleLeadScheduled} />
-                        <LeadPhoningDialog lead={leadWithExtras} onCompleted={handlePhoningCompleted} />
-                        <ScheduleLeadDialog lead={leadWithExtras} onScheduled={handleLeadScheduled} />
+                        <LeadPhoningDialog
+                          lead={leadWithExtras}
+                          onCompleted={handlePhoningCompleted}
+                        />
+                        <ScheduleLeadDialog
+                          lead={leadWithExtras}
+                          onScheduled={handleLeadScheduled}
+                        />
                         <AddProjectDialog
                           trigger={<Button size="sm">Créer Projet</Button>}
                           initialValues={{
