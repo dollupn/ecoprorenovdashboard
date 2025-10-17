@@ -985,7 +985,6 @@ export const AddProjectDialog = ({
       const clientFirstName = data.client_first_name.trim();
       const clientLastName = data.client_last_name.trim();
       const client_name = `${clientFirstName} ${clientLastName}`.replace(/\s+/g, " ").trim();
-      const projectSource = data.source.trim();
 
       const { data: createdProject, error: projectError } = await supabase
         .from("projects")
@@ -995,12 +994,14 @@ export const AddProjectDialog = ({
             org_id: currentOrgId,
             project_ref,
             client_name,
+            client_first_name: clientFirstName,
+            client_last_name: clientLastName,
             product_name, // Pour compatibilité
             city: data.city,
             postal_code: data.postal_code,
             status: data.status,
             assigned_to: data.assigned_to,
-            source: projectSource,
+            source: data.source || undefined,
             company: data.company || undefined,
             phone: data.phone || undefined,
             siren: normalizedSiren ? normalizedSiren : undefined,

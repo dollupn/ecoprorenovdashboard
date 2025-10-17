@@ -49,6 +49,8 @@ export type Database = {
       invoices: {
         Row: {
           amount: number
+          client_first_name: string | null
+          client_last_name: string | null
           client_name: string
           created_at: string
           due_date: string | null
@@ -65,6 +67,8 @@ export type Database = {
         }
         Insert: {
           amount: number
+          client_first_name?: string | null
+          client_last_name?: string | null
           client_name: string
           created_at?: string
           due_date?: string | null
@@ -81,6 +85,8 @@ export type Database = {
         }
         Update: {
           amount?: number
+          client_first_name?: string | null
+          client_last_name?: string | null
           client_name?: string
           created_at?: string
           due_date?: string | null
@@ -163,9 +169,11 @@ export type Database = {
           date_rdv: string | null
           email: string
           extra_fields: Json | null
+          first_name: string | null
           full_name: string
           heure_rdv: string | null
           id: string
+          last_name: string | null
           org_id: string | null
           phone_raw: string
           photo_previsite_url: string | null
@@ -189,9 +197,11 @@ export type Database = {
           date_rdv?: string | null
           email: string
           extra_fields?: Json | null
+          first_name?: string | null
           full_name: string
           heure_rdv?: string | null
           id?: string
+          last_name?: string | null
           org_id?: string | null
           phone_raw: string
           photo_previsite_url?: string | null
@@ -215,9 +225,11 @@ export type Database = {
           date_rdv?: string | null
           email?: string
           extra_fields?: Json | null
+          first_name?: string | null
           full_name?: string
           heure_rdv?: string | null
           id?: string
+          last_name?: string | null
           org_id?: string | null
           phone_raw?: string
           photo_previsite_url?: string | null
@@ -483,9 +495,9 @@ export type Database = {
           assigned_to: string
           building_type: string | null
           city: string
-          client_name: string
           client_first_name: string | null
           client_last_name: string | null
+          client_name: string
           company: string | null
           created_at: string
           date_debut_prevue: string | null
@@ -502,8 +514,8 @@ export type Database = {
           project_ref: string
           signatory_name: string | null
           signatory_title: string | null
-          source: string | null
           siren: string | null
+          source: string | null
           status: string
           surface_batiment_m2: number | null
           surface_isolee_m2: number | null
@@ -516,9 +528,9 @@ export type Database = {
           assigned_to: string
           building_type?: string | null
           city: string
-          client_name: string
           client_first_name?: string | null
           client_last_name?: string | null
+          client_name: string
           company?: string | null
           created_at?: string
           date_debut_prevue?: string | null
@@ -535,8 +547,8 @@ export type Database = {
           project_ref: string
           signatory_name?: string | null
           signatory_title?: string | null
-          source?: string | null
           siren?: string | null
+          source?: string | null
           status?: string
           surface_batiment_m2?: number | null
           surface_isolee_m2?: number | null
@@ -549,9 +561,9 @@ export type Database = {
           assigned_to?: string
           building_type?: string | null
           city?: string
-          client_name?: string
           client_first_name?: string | null
           client_last_name?: string | null
+          client_name?: string
           company?: string | null
           created_at?: string
           date_debut_prevue?: string | null
@@ -568,8 +580,8 @@ export type Database = {
           project_ref?: string
           signatory_name?: string | null
           signatory_title?: string | null
-          source?: string | null
           siren?: string | null
+          source?: string | null
           status?: string
           surface_batiment_m2?: number | null
           surface_isolee_m2?: number | null
@@ -598,6 +610,8 @@ export type Database = {
       quotes: {
         Row: {
           amount: number
+          client_first_name: string | null
+          client_last_name: string | null
           client_name: string
           created_at: string
           id: string
@@ -613,6 +627,8 @@ export type Database = {
         }
         Insert: {
           amount: number
+          client_first_name?: string | null
+          client_last_name?: string | null
           client_name: string
           created_at?: string
           id?: string
@@ -628,6 +644,8 @@ export type Database = {
         }
         Update: {
           amount?: number
+          client_first_name?: string | null
+          client_last_name?: string | null
           client_name?: string
           created_at?: string
           id?: string
@@ -663,6 +681,8 @@ export type Database = {
           additional_costs: Json | null
           address: string
           city: string
+          client_first_name: string | null
+          client_last_name: string | null
           client_name: string
           cofrac_status: string | null
           cout_isolation_m2: number | null
@@ -694,6 +714,8 @@ export type Database = {
           additional_costs?: Json | null
           address: string
           city: string
+          client_first_name?: string | null
+          client_last_name?: string | null
           client_name: string
           cofrac_status?: string | null
           cout_isolation_m2?: number | null
@@ -725,6 +747,8 @@ export type Database = {
           additional_costs?: Json | null
           address?: string
           city?: string
+          client_first_name?: string | null
+          client_last_name?: string | null
           client_name?: string
           cofrac_status?: string | null
           cout_isolation_m2?: number | null
