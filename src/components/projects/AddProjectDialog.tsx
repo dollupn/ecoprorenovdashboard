@@ -995,8 +995,6 @@ export const AddProjectDialog = ({
             org_id: currentOrgId,
             project_ref,
             client_name,
-            client_first_name: clientFirstName,
-            client_last_name: clientLastName,
             product_name, // Pour compatibilité
             city: data.city,
             postal_code: data.postal_code,
