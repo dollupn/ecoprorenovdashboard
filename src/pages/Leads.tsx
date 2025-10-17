@@ -1545,18 +1545,8 @@ const Leads = () => {
                       <div className="flex flex-wrap gap-2 justify-end">
                         <LeadPhoningDialog lead={lead as LeadWithExtras} onCompleted={handlePhoningCompleted} />
                         <ScheduleLeadDialog lead={lead as LeadWithExtras} onScheduled={handleLeadScheduled} />
-                        <AddProjectDialog
-                          trigger={<Button size="sm">Convertir en Projet</Button>}
-                          initialValues={{
-                            client_name: lead.full_name,
-                        <LeadPhoningDialog
-                          lead={leadWithExtras}
-                          onCompleted={handlePhoningCompleted}
-                        />
-                        <ScheduleLeadDialog
-                          lead={leadWithExtras}
-                          onScheduled={handleLeadScheduled}
-                        />
+                        <LeadPhoningDialog lead={leadWithExtras} onCompleted={handlePhoningCompleted} />
+                        <ScheduleLeadDialog lead={leadWithExtras} onScheduled={handleLeadScheduled} />
                         <AddProjectDialog
                           trigger={<Button size="sm">Créer Projet</Button>}
                           initialValues={{
@@ -1570,7 +1560,6 @@ const Leads = () => {
                             surface_batiment_m2: lead.surface_m2 ?? undefined,
                             lead_id: lead.id,
                           }}
-                          onProjectAdded={() => handleProjectCreated(lead as LeadWithExtras)}
                           onProjectAdded={() => handleProjectCreated(leadWithExtras)}
                         />
                       </div>
@@ -1636,48 +1625,6 @@ const Leads = () => {
                                 {lead.city} ({lead.postal_code})
                               </span>
                             </div>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {lead.utm_source ? lead.utm_source : <span className="text-muted-foreground">—</span>}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          <div className="flex items-center gap-2">
-                            <UserCircle className="h-4 w-4 text-muted-foreground" />
-                            {renderAssignmentControl(lead, "table")}
-                          </div>
-                        </TableCell>
-                        <TableCell className="max-w-[200px] text-sm">
-                          {lead.commentaire ? (
-                            <span className="line-clamp-2">{lead.commentaire}</span>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right text-sm">
-                          <div className="flex flex-col items-end gap-2">
-                            <span className="text-xs text-muted-foreground">
-                              Créé le {new Date(lead.created_at).toLocaleDateString("fr-FR")}
-                            </span>
-                            <div className="flex flex-wrap gap-2 justify-end">
-                              <LeadPhoningDialog lead={lead as LeadWithExtras} onCompleted={handlePhoningCompleted} />
-                              <ScheduleLeadDialog lead={lead as LeadWithExtras} onScheduled={handleLeadScheduled} />
-                              <AddProjectDialog
-                                trigger={<Button size="sm">Convertir en Projet</Button>}
-                                initialValues={{
-                                  client_name: lead.full_name,
-                                  company: lead.company ?? "",
-                                  phone: lead.phone_raw ?? "",
-                                  siren: lead.siren ?? "",
-                                  city: lead.city,
-                                  postal_code: lead.postal_code,
-                                  surface_batiment_m2: lead.surface_m2 ?? undefined,
-                                  lead_id: lead.id,
-                                }}
-                                onProjectAdded={() => handleProjectCreated(lead as LeadWithExtras)}
-                              />
                           </TableCell>
                           <TableCell className="text-sm">
                             {lead.product_name ? (
@@ -1710,6 +1657,12 @@ const Leads = () => {
                           </TableCell>
                           <TableCell className="text-sm">
                             {lead.utm_source ? lead.utm_source : <span className="text-muted-foreground">—</span>}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            <div className="flex items-center gap-2">
+                              <UserCircle className="h-4 w-4 text-muted-foreground" />
+                              {renderAssignmentControl(lead, "table")}
+                            </div>
                           </TableCell>
                           <TableCell className="max-w-[200px] text-sm">
                             {lead.commentaire ? (

@@ -1054,6 +1054,9 @@ export default function Settings() {
     toast({
       title: "Délégataires sauvegardés",
       description: "Les informations seront utilisées lors de la génération des devis.",
+    });
+  }, [toast]);
+
   const handleBuildingTypeChange = useCallback(
     (index: number, value: string) => {
       persistBuildingTypes((prev) =>
