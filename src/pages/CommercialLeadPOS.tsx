@@ -14,8 +14,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
-import { Building2, Camera, Check, ClipboardPlus, Phone, Upload } from "lucide-react";
+import { Building2, Camera, Check, ClipboardPlus, Phone, Upload, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Progress } from "@/components/ui/progress";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const PRODUCT_OPTIONS = [
   "Isolation thermique extérieure",
@@ -26,20 +29,58 @@ const PRODUCT_OPTIONS = [
   "Audit énergétique",
 ];
 
+const BUILDING_TYPES = [
+  "Maison individuelle",
+  "Appartement",
+  "Immeuble",
+  "Bureau",
+  "Commerce",
+  "Entrepôt",
+  "Autre",
+];
+
+const BUILDING_USAGES = [
+  "Résidentiel",
+  "Professionnel",
+  "Mixte",
+  "Industriel",
+];
+
 const initialFormState = {
-  fullName: "",
+  creationDate: new Date().toISOString().split('T')[0],
+  visitDate: "",
+  contactRole: "",
+  firstName: "",
+  lastName: "",
   company: "",
   siren: "",
-  surface: "",
+  email: "",
   phone: "",
   address: "",
   city: "",
   postalCode: "",
-  product: "",
+  buildingArea: "",
+  insultationArea: "",
+  buildingType: "",
+  buildingUsage: "",
+  subsidyReceived: "no",
+  subsidyDetails: "",
+  selectedProducts: [] as string[],
+  technicalSize: "",
+  technicalHighPoint: "",
+  technicalLowPoint: "",
   notes: "",
 };
 
 type FormState = typeof initialFormState;
+
+type PhotoStep = {
+  id: number;
+  title: string;
+  description: string;
+  maxPhotos: number;
+  photos: File[];
+};
 
 const formatFileSize = (sizeInBytes: number) => {
   if (sizeInBytes === 0) return "0 Ko";
@@ -52,10 +93,19 @@ const formatFileSize = (sizeInBytes: number) => {
 
 const CommercialLeadPOS = () => {
   const [formState, setFormState] = useState<FormState>(initialFormState);
-  const [photos, setPhotos] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isPhotoDragActive, setIsPhotoDragActive] = useState(false);
-  const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const [currentPhotoStep, setCurrentPhotoStep] = useState(0);
+  const [photoSteps, setPhotoSteps] = useState<PhotoStep[]>([
+    { id: 1, title: "Intérieur", description: "Photos de l'intérieur du bâtiment", maxPhotos: 3, photos: [] },
+    { id: 2, title: "Plafond", description: "Photos du plafond", maxPhotos: 3, photos: [] },
+    { id: 3, title: "Luminaires LED", description: "Photos des luminaires si LED", maxPhotos: 6, photos: [] },
+  ]);
+  const [sectionsOpen, setSectionsOpen] = useState({
+    general: true,
+    technical: false,
+    photos: false,
+  });
+  const photoInputRefs = useRef<(HTMLInputElement | null)[]>([null, null, null]);
   const { toast } = useToast();
 
   const handleInputChange = (field: keyof FormState) =>
@@ -63,18 +113,30 @@ const CommercialLeadPOS = () => {
       setFormState((prev) => ({ ...prev, [field]: event.target.value }));
     };
 
-  const handleProductChange = (value: string) => {
-    setFormState((prev) => ({ ...prev, product: value }));
+  const handleSelectChange = (field: keyof FormState) => (value: string) => {
+    setFormState((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handlePhotoChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = Array.from(event.target.files ?? []);
-    if (selectedFiles.length === 0) {
-      setPhotos([]);
-      return;
-    }
+  const handleProductToggle = (product: string) => {
+    setFormState((prev) => ({
+      ...prev,
+      selectedProducts: prev.selectedProducts.includes(product)
+        ? prev.selectedProducts.filter((p) => p !== product)
+        : [...prev.selectedProducts, product],
+    }));
+  };
 
+  const toggleSection = (section: keyof typeof sectionsOpen) => {
+    setSectionsOpen((prev) => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const handleStepPhotoChange = (stepIndex: number, event: ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(event.target.files ?? []);
+    if (selectedFiles.length === 0) return;
+
+    const step = photoSteps[stepIndex];
     const imageFiles = selectedFiles.filter((file) => file.type.startsWith("image/"));
+    
     if (imageFiles.length === 0) {
       toast({
         title: "Format invalide",
@@ -85,52 +147,36 @@ const CommercialLeadPOS = () => {
       return;
     }
 
-    if (imageFiles.length !== selectedFiles.length) {
+    const availableSlots = step.maxPhotos - step.photos.length;
+    const filesToAdd = imageFiles.slice(0, availableSlots);
+
+    if (filesToAdd.length < imageFiles.length) {
       toast({
-        title: "Certains fichiers ignorés",
-        description: "Seules les images ont été ajoutées à la sélection.",
+        title: "Limite atteinte",
+        description: `Maximum ${step.maxPhotos} photos pour cette étape`,
       });
     }
 
-    setPhotos(imageFiles);
-    setIsPhotoDragActive(false);
+    setPhotoSteps((prev) =>
+      prev.map((s, i) =>
+        i === stepIndex ? { ...s, photos: [...s.photos, ...filesToAdd] } : s
+      )
+    );
   };
 
-  const handlePhotoDrop = (event: DragEvent<HTMLLabelElement>) => {
-    event.preventDefault();
-    if (isSubmitting) return;
-    setIsPhotoDragActive(false);
-
-    const droppedFiles = Array.from(event.dataTransfer.files ?? []);
-    if (droppedFiles.length === 0) {
-      return;
-    }
-
-    const imageFiles = droppedFiles.filter((file) => file.type.startsWith("image/"));
-    if (imageFiles.length === 0) {
-      toast({
-        title: "Format invalide",
-        description: "Seuls les fichiers image sont acceptés",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (imageFiles.length !== droppedFiles.length) {
-      toast({
-        title: "Certains fichiers ignorés",
-        description: "Seules les images ont été ajoutées à la sélection.",
-      });
-    }
-
-    if (photoInputRef.current && typeof DataTransfer !== "undefined") {
-      const dataTransfer = new DataTransfer();
-      imageFiles.forEach((file) => dataTransfer.items.add(file));
-      photoInputRef.current.files = dataTransfer.files;
-    }
-
-    setPhotos(imageFiles);
+  const removeStepPhoto = (stepIndex: number, photoIndex: number) => {
+    setPhotoSteps((prev) =>
+      prev.map((s, i) =>
+        i === stepIndex
+          ? { ...s, photos: s.photos.filter((_, idx) => idx !== photoIndex) }
+          : s
+      )
+    );
   };
+
+  const getTotalPhotos = () => photoSteps.reduce((sum, step) => sum + step.photos.length, 0);
+  const getMaxPhotos = () => photoSteps.reduce((sum, step) => sum + step.maxPhotos, 0);
+  const getPhotoProgress = () => (getTotalPhotos() / getMaxPhotos()) * 100;
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -139,7 +185,12 @@ const CommercialLeadPOS = () => {
     setTimeout(() => {
       setIsSubmitting(false);
       setFormState(initialFormState);
-      setPhotos([]);
+      setPhotoSteps([
+        { id: 1, title: "Intérieur", description: "Photos de l'intérieur du bâtiment", maxPhotos: 3, photos: [] },
+        { id: 2, title: "Plafond", description: "Photos du plafond", maxPhotos: 3, photos: [] },
+        { id: 3, title: "Luminaires LED", description: "Photos des luminaires si LED", maxPhotos: 6, photos: [] },
+      ]);
+      setCurrentPhotoStep(0);
       toast({
         title: "Lead enregistré",
         description:
@@ -172,226 +223,466 @@ const CommercialLeadPOS = () => {
         </div>
 
         <form onSubmit={handleSubmit} className="grid gap-6" autoComplete="off">
-          <Card className="border-2 border-dashed border-muted-foreground/30 shadow-lg">
-            <CardHeader className="space-y-1 border-b bg-muted/40">
-              <CardTitle className="text-lg font-semibold">Informations générales</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Cette interface est optimisée pour une utilisation sur tablette lors de vos visites terrain.
-              </p>
-            </CardHeader>
-            <CardContent className="grid gap-6 p-6">
-              <div className="grid gap-4 md:grid-cols-3">
-                <div className="grid gap-2">
-                  <Label htmlFor="fullName">Nom</Label>
-                  <Input
-                    id="fullName"
-                    value={formState.fullName}
-                    onChange={handleInputChange("fullName")}
-                    placeholder="Nom et prénom du contact"
-                    className="h-14 text-lg"
-                    required
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="company">Nom de la société</Label>
-                  <div className="relative">
-                    <Building2 className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+          {/* General Information Section */}
+          <Collapsible open={sectionsOpen.general} onOpenChange={() => toggleSection("general")}>
+            <Card className="border-2 border-muted shadow-lg">
+              <CollapsibleTrigger asChild>
+                <CardHeader className="cursor-pointer border-b bg-muted/40 transition-colors hover:bg-muted/60">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg font-semibold">Informations générales</CardTitle>
+                    {sectionsOpen.general ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                  </div>
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent className="grid gap-6 p-6">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="creationDate">Date de création lead</Label>
+                      <Input
+                        id="creationDate"
+                        type="date"
+                        value={formState.creationDate}
+                        onChange={handleInputChange("creationDate")}
+                        className="h-12"
+                        required
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="visitDate">Date de visite</Label>
+                      <Input
+                        id="visitDate"
+                        type="date"
+                        value={formState.visitDate}
+                        onChange={handleInputChange("visitDate")}
+                        className="h-12"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="contactRole">Fonction interlocuteur</Label>
                     <Input
-                      id="company"
-                      value={formState.company}
-                      onChange={handleInputChange("company")}
-                      placeholder="Entreprise visitée"
-                      className="h-14 pl-12 text-lg"
+                      id="contactRole"
+                      value={formState.contactRole}
+                      onChange={handleInputChange("contactRole")}
+                      placeholder="Ex: Directeur, Gérant, Responsable..."
+                      className="h-12"
                     />
                   </div>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="siren">SIREN (optionnel)</Label>
-                  <Input
-                    id="siren"
-                    value={formState.siren}
-                    onChange={handleInputChange("siren")}
-                    placeholder="000000000"
-                    maxLength={11}
-                    className="h-14 text-lg"
-                  />
-                </div>
-              </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="grid gap-2">
-                  <Label htmlFor="surface">Surface du bâtiment</Label>
-                  <Input
-                    id="surface"
-                    type="number"
-                    inputMode="decimal"
-                    min="0"
-                    value={formState.surface}
-                    onChange={handleInputChange("surface")}
-                    placeholder="Surface en m²"
-                    className="h-14 text-lg"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="phone">Téléphone</Label>
-                  <div className="relative">
-                    <Phone className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      id="phone"
-                      type="tel"
-                      value={formState.phone}
-                      onChange={handleInputChange("phone")}
-                      placeholder="Numéro de téléphone"
-                      className="h-14 pl-12 text-lg"
-                      required
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="firstName">Prénom</Label>
+                      <Input
+                        id="firstName"
+                        value={formState.firstName}
+                        onChange={handleInputChange("firstName")}
+                        placeholder="Prénom du contact"
+                        className="h-12"
+                        required
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="lastName">Nom</Label>
+                      <Input
+                        id="lastName"
+                        value={formState.lastName}
+                        onChange={handleInputChange("lastName")}
+                        placeholder="Nom du contact"
+                        className="h-12"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="company">Nom de la société</Label>
+                      <div className="relative">
+                        <Building2 className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          id="company"
+                          value={formState.company}
+                          onChange={handleInputChange("company")}
+                          placeholder="Entreprise visitée"
+                          className="h-12 pl-10"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="siren">SIREN (optionnel)</Label>
+                      <Input
+                        id="siren"
+                        value={formState.siren}
+                        onChange={handleInputChange("siren")}
+                        placeholder="000000000"
+                        maxLength={11}
+                        className="h-12"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={formState.email}
+                        onChange={handleInputChange("email")}
+                        placeholder="contact@entreprise.fr"
+                        className="h-12"
+                        required
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="phone">Téléphone</Label>
+                      <div className="relative">
+                        <Phone className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          id="phone"
+                          type="tel"
+                          value={formState.phone}
+                          onChange={handleInputChange("phone")}
+                          placeholder="Numéro de téléphone"
+                          className="h-12 pl-10"
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="address">Adresse</Label>
+                    <AddressAutocomplete
+                      value={formState.address}
+                      onChange={(address, city, postalCode) => {
+                        setFormState((prev) => ({
+                          ...prev,
+                          address,
+                          city,
+                          postalCode,
+                        }));
+                      }}
+                      disabled={isSubmitting}
                     />
                   </div>
-                </div>
-              </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="address">Adresse</Label>
-                <AddressAutocomplete
-                  value={formState.address}
-                  onChange={(address, city, postalCode) => {
-                    setFormState((prev) => ({
-                      ...prev,
-                      address,
-                      city,
-                      postalCode,
-                    }));
-                  }}
-                  disabled={isSubmitting}
-                />
-              </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="city">Ville</Label>
+                      <Input
+                        id="city"
+                        value={formState.city}
+                        readOnly
+                        placeholder="Sélectionnez une adresse"
+                        className="h-12"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="postalCode">Code postal</Label>
+                      <Input
+                        id="postalCode"
+                        value={formState.postalCode}
+                        readOnly
+                        placeholder="Sélectionnez une adresse"
+                        className="h-12"
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="grid gap-2">
-                  <Label htmlFor="city">Ville</Label>
-                  <Input
-                    id="city"
-                    value={formState.city}
-                    readOnly
-                    placeholder="Sélectionnez une adresse"
-                    className="h-14 text-lg"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="postalCode">Code postal</Label>
-                  <Input
-                    id="postalCode"
-                    value={formState.postalCode}
-                    readOnly
-                    placeholder="Sélectionnez une adresse"
-                    className="h-14 text-lg"
-                  />
-                </div>
-              </div>
+          {/* Technical Details Section */}
+          <Collapsible open={sectionsOpen.technical} onOpenChange={() => toggleSection("technical")}>
+            <Card className="border-2 border-muted shadow-lg">
+              <CollapsibleTrigger asChild>
+                <CardHeader className="cursor-pointer border-b bg-muted/40 transition-colors hover:bg-muted/60">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg font-semibold">Détails techniques</CardTitle>
+                    {sectionsOpen.technical ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                  </div>
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent className="grid gap-6 p-6">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="buildingArea">Surface bâtiment (m²)</Label>
+                      <Input
+                        id="buildingArea"
+                        type="number"
+                        min="0"
+                        value={formState.buildingArea}
+                        onChange={handleInputChange("buildingArea")}
+                        placeholder="Surface totale"
+                        className="h-12"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="insultationArea">Surface à isoler (m²)</Label>
+                      <Input
+                        id="insultationArea"
+                        type="number"
+                        min="0"
+                        value={formState.insultationArea}
+                        onChange={handleInputChange("insultationArea")}
+                        placeholder="Surface à traiter"
+                        className="h-12"
+                      />
+                    </div>
+                  </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="product">Produit intéressé</Label>
-                <Select value={formState.product} onValueChange={handleProductChange}>
-                  <SelectTrigger id="product" className="h-14 text-lg">
-                    <SelectValue placeholder="Sélectionnez le produit proposé" />
-                  </SelectTrigger>
-                  <SelectContent className="text-base">
-                    {PRODUCT_OPTIONS.map((option) => (
-                      <SelectItem key={option} value={option} className="text-base">
-                        {option}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="buildingType">Type bâtiment</Label>
+                      <Select value={formState.buildingType} onValueChange={handleSelectChange("buildingType")}>
+                        <SelectTrigger id="buildingType" className="h-12">
+                          <SelectValue placeholder="Sélectionner le type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {BUILDING_TYPES.map((type) => (
+                            <SelectItem key={type} value={type}>
+                              {type}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="buildingUsage">Usage bâtiment</Label>
+                      <Select value={formState.buildingUsage} onValueChange={handleSelectChange("buildingUsage")}>
+                        <SelectTrigger id="buildingUsage" className="h-12">
+                          <SelectValue placeholder="Sélectionner l'usage" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {BUILDING_USAGES.map((usage) => (
+                            <SelectItem key={usage} value={usage}>
+                              {usage}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="notes">Notes complémentaires</Label>
-                <Textarea
-                  id="notes"
-                  value={formState.notes}
-                  onChange={handleInputChange("notes")}
-                  placeholder="Ajoutez des détails sur le besoin, la décision ou les contraintes rencontrées"
-                  className="min-h-[120px] rounded-xl border-2 border-muted-foreground/30 bg-background/80 p-4 text-lg"
-                />
-              </div>
-            </CardContent>
-          </Card>
+                  <div className="grid gap-2">
+                    <Label>Subvention déjà reçue ?</Label>
+                    <div className="flex gap-4">
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="subsidyReceived"
+                          value="no"
+                          checked={formState.subsidyReceived === "no"}
+                          onChange={(e) => setFormState((prev) => ({ ...prev, subsidyReceived: e.target.value, subsidyDetails: "" }))}
+                          className="h-4 w-4"
+                        />
+                        Non
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="subsidyReceived"
+                          value="yes"
+                          checked={formState.subsidyReceived === "yes"}
+                          onChange={(e) => setFormState((prev) => ({ ...prev, subsidyReceived: e.target.value }))}
+                          className="h-4 w-4"
+                        />
+                        Oui
+                      </label>
+                    </div>
+                  </div>
 
-          <Card className="border-2 border-dashed border-muted-foreground/30 shadow-lg">
-            <CardHeader className="border-b bg-muted/40">
-              <CardTitle className="text-lg font-semibold">Photos de la visite</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-6 p-6">
-              <div className="grid gap-3">
-                <Label htmlFor="photos">Ajouter des photos</Label>
-                <label
-                  htmlFor="photos"
-                  className={cn(
-                    "flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed bg-background/90 p-10 text-center transition",
-                    isPhotoDragActive
-                      ? "border-primary bg-primary/10"
-                      : "border-muted-foreground/30 hover:border-primary hover:bg-primary/5"
+                  {formState.subsidyReceived === "yes" && (
+                    <div className="grid gap-2">
+                      <Label htmlFor="subsidyDetails">Détails de la subvention</Label>
+                      <Textarea
+                        id="subsidyDetails"
+                        value={formState.subsidyDetails}
+                        onChange={handleInputChange("subsidyDetails")}
+                        placeholder="Précisez le type et le montant de la subvention reçue"
+                        className="min-h-[80px]"
+                      />
+                    </div>
                   )}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                    if (isSubmitting) return;
-                    setIsPhotoDragActive(true);
-                  }}
-                  onDragEnter={(event) => {
-                    event.preventDefault();
-                    if (isSubmitting) return;
-                    setIsPhotoDragActive(true);
-                  }}
-                  onDragLeave={(event) => {
-                    event.preventDefault();
-                    setIsPhotoDragActive(false);
-                  }}
-                  onDrop={handlePhotoDrop}
-                >
-                  <Upload className="h-8 w-8 text-primary" />
-                  <div>
-                    <p className="text-lg font-medium">Déposez vos photos ici</p>
-                    <p className="text-sm text-muted-foreground">
-                      Formats acceptés : JPG, PNG – vous pouvez sélectionner plusieurs fichiers
-                    </p>
-                  </div>
-                </label>
-                <Input
-                  id="photos"
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handlePhotoChange}
-                  ref={photoInputRef}
-                  className="hidden"
-                />
-              </div>
 
-              {photos.length > 0 && (
-                <div className="grid gap-3">
-                  <p className="text-sm font-medium text-muted-foreground">
-                    {photos.length} fichier{photos.length > 1 ? "s" : ""} sélectionné{photos.length > 1 ? "s" : ""}
-                  </p>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {photos.map((file) => (
-                      <div
-                        key={file.name}
-                        className="flex items-center gap-3 rounded-xl border border-muted-foreground/30 bg-muted/20 p-4"
-                      >
-                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                          <Camera className="h-5 w-5" />
+                  <div className="grid gap-3">
+                    <Label>Produits intéressés</Label>
+                    <div className="grid gap-2">
+                      {PRODUCT_OPTIONS.map((product) => (
+                        <div key={product} className="flex items-center gap-2">
+                          <Checkbox
+                            id={`product-${product}`}
+                            checked={formState.selectedProducts.includes(product)}
+                            onCheckedChange={() => handleProductToggle(product)}
+                          />
+                          <label
+                            htmlFor={`product-${product}`}
+                            className="cursor-pointer text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                          >
+                            {product}
+                          </label>
                         </div>
-                        <div className="min-w-0">
-                          <p className="truncate font-medium">{file.name}</p>
-                          <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label className="text-base font-semibold">Infos techniques</Label>
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <div className="grid gap-2">
+                        <Label htmlFor="technicalSize">Taille</Label>
+                        <Input
+                          id="technicalSize"
+                          value={formState.technicalSize}
+                          onChange={handleInputChange("technicalSize")}
+                          placeholder="Ex: 100m"
+                          className="h-12"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="technicalHighPoint">Point haut</Label>
+                        <Input
+                          id="technicalHighPoint"
+                          value={formState.technicalHighPoint}
+                          onChange={handleInputChange("technicalHighPoint")}
+                          placeholder="Ex: 4m"
+                          className="h-12"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="technicalLowPoint">Point bas</Label>
+                        <Input
+                          id="technicalLowPoint"
+                          value={formState.technicalLowPoint}
+                          onChange={handleInputChange("technicalLowPoint")}
+                          placeholder="Ex: 2.5m"
+                          className="h-12"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="notes">Notes complémentaires</Label>
+                    <Textarea
+                      id="notes"
+                      value={formState.notes}
+                      onChange={handleInputChange("notes")}
+                      placeholder="Ajoutez des détails sur le besoin, la décision ou les contraintes rencontrées"
+                      className="min-h-[100px]"
+                    />
+                  </div>
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
+
+          {/* Photo Upload Section with Steps */}
+          <Collapsible open={sectionsOpen.photos} onOpenChange={() => toggleSection("photos")}>
+            <Card className="border-2 border-muted shadow-lg">
+              <CollapsibleTrigger asChild>
+                <CardHeader className="cursor-pointer border-b bg-muted/40 transition-colors hover:bg-muted/60">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-lg font-semibold">Photos de la visite</CardTitle>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {getTotalPhotos()} / {getMaxPhotos()} photos ajoutées
+                      </p>
+                    </div>
+                    {sectionsOpen.photos ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                  </div>
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent className="grid gap-6 p-6">
+                  {/* Progress Bar */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium">Progression</span>
+                      <span className="text-muted-foreground">{Math.round(getPhotoProgress())}%</span>
+                    </div>
+                    <Progress value={getPhotoProgress()} className="h-2" />
+                  </div>
+
+                  {/* Photo Steps */}
+                  <div className="grid gap-4">
+                    {photoSteps.map((step, index) => (
+                      <div key={step.id} className="space-y-3">
+                        <div className="flex items-center gap-3">
+                          <div className={cn(
+                            "flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold",
+                            currentPhotoStep === index ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                          )}>
+                            {index + 1}
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="font-semibold">{step.title}</h4>
+                            <p className="text-sm text-muted-foreground">{step.description}</p>
+                          </div>
+                          <span className="text-sm text-muted-foreground">
+                            {step.photos.length}/{step.maxPhotos}
+                          </span>
+                        </div>
+
+                        <div className="grid gap-3 pl-11">
+                          <label
+                            htmlFor={`photo-step-${index}`}
+                            className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/30 bg-muted/20 p-4 transition hover:border-primary hover:bg-primary/5"
+                          >
+                            <Upload className="h-5 w-5 text-muted-foreground" />
+                            <span className="text-sm font-medium">
+                              Ajouter des photos ({step.maxPhotos - step.photos.length} restantes)
+                            </span>
+                          </label>
+                          <Input
+                            id={`photo-step-${index}`}
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            onChange={(e) => handleStepPhotoChange(index, e)}
+                            ref={(el) => (photoInputRefs.current[index] = el)}
+                            className="hidden"
+                            disabled={step.photos.length >= step.maxPhotos}
+                          />
+
+                          {step.photos.length > 0 && (
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              {step.photos.map((file, photoIndex) => (
+                                <div
+                                  key={`${file.name}-${photoIndex}`}
+                                  className="flex items-center gap-3 rounded-lg border bg-card p-3"
+                                >
+                                  <Camera className="h-5 w-5 text-primary" />
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate text-sm font-medium">{file.name}</p>
+                                    <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => removeStepPhoto(index, photoIndex)}
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    ×
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
 
           <div className="sticky bottom-4 z-10 flex justify-end">
             <Button
