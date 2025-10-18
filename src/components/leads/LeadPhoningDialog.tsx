@@ -2,7 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { PhoneCall, Loader2 } from "lucide-react";
+import { PhoneCall, Loader2, CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +28,10 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { useToast } from "@/hooks/use-toast";
 import { useUpdateLead } from "@/features/leads/api";
 import {
@@ -36,37 +43,43 @@ import {
 } from "@/components/leads/status";
 import type { Tables } from "@/integrations/supabase/types";
 
-const CALL_STATUS_OPTIONS = [
-  "En attente",
-  "Répondu - Intéressé",
-  "Répondu - À recontacter",
-  "Répondu - Non intéressé",
+const CONTACT_RESULT_OPTIONS = [
+  "Éligible",
+  "Pas éligible",
   "Pas de réponse",
+  "À recontacter",
+  "Autres",
 ] as const;
 
-type CallStatusOption = (typeof CALL_STATUS_OPTIONS)[number];
+type ContactResultOption = (typeof CONTACT_RESULT_OPTIONS)[number];
 
 type LeadWithExtras = Tables<"leads"> & { extra_fields?: Record<string, unknown> | null };
 
 type PhoningSnapshot = {
-  call_status?: CallStatusOption;
-  contact_person?: string;
-  need_summary?: string;
-  timeline?: string;
-  budget?: string;
+  contact_result?: ContactResultOption;
+  recontact_date?: string;
+  recontact_time?: string;
+  site_address?: string;
+  headquarters_address?: string;
+  estimated_area?: string;
+  previsit_date?: string;
+  previsit_time?: string;
   notes?: string;
   next_status?: LeadStatus;
   last_updated_at?: string;
 };
 
 const phoningSchema = z.object({
-  call_status: z.enum(CALL_STATUS_OPTIONS, {
-    required_error: "Sélectionnez le résultat de l'appel",
+  contact_result: z.enum(CONTACT_RESULT_OPTIONS, {
+    required_error: "Sélectionnez le résultat du contact",
   }),
-  contact_person: z.string().optional(),
-  need_summary: z.string().optional(),
-  timeline: z.string().optional(),
-  budget: z.string().optional(),
+  recontact_date: z.string().optional(),
+  recontact_time: z.string().optional(),
+  site_address: z.string().optional(),
+  headquarters_address: z.string().optional(),
+  estimated_area: z.string().optional(),
+  previsit_date: z.string().optional(),
+  previsit_time: z.string().optional(),
   notes: z.string().optional(),
   next_status: leadStatusEnum,
 });
@@ -99,13 +112,16 @@ const extractPhoningSnapshot = (lead: LeadWithExtras): PhoningSnapshot => {
   const nextStatus = raw.next_status;
 
   return {
-    call_status: CALL_STATUS_OPTIONS.includes(raw.call_status as CallStatusOption)
-      ? (raw.call_status as CallStatusOption)
+    contact_result: CONTACT_RESULT_OPTIONS.includes(raw.contact_result as ContactResultOption)
+      ? (raw.contact_result as ContactResultOption)
       : undefined,
-    contact_person: typeof raw.contact_person === "string" ? raw.contact_person : undefined,
-    need_summary: typeof raw.need_summary === "string" ? raw.need_summary : undefined,
-    timeline: typeof raw.timeline === "string" ? raw.timeline : undefined,
-    budget: typeof raw.budget === "string" ? raw.budget : undefined,
+    recontact_date: typeof raw.recontact_date === "string" ? raw.recontact_date : undefined,
+    recontact_time: typeof raw.recontact_time === "string" ? raw.recontact_time : undefined,
+    site_address: typeof raw.site_address === "string" ? raw.site_address : undefined,
+    headquarters_address: typeof raw.headquarters_address === "string" ? raw.headquarters_address : undefined,
+    estimated_area: typeof raw.estimated_area === "string" ? raw.estimated_area : undefined,
+    previsit_date: typeof raw.previsit_date === "string" ? raw.previsit_date : undefined,
+    previsit_time: typeof raw.previsit_time === "string" ? raw.previsit_time : undefined,
     notes: typeof raw.notes === "string" ? raw.notes : undefined,
     next_status: isLeadStatus(nextStatus as string) ? (nextStatus as LeadStatus) : undefined,
     last_updated_at: typeof raw.last_updated_at === "string" ? raw.last_updated_at : undefined,
@@ -129,6 +145,8 @@ const resolveInitialNextStatus = (lead: LeadWithExtras, snapshot: PhoningSnapsho
 
 export const LeadPhoningDialog = ({ lead, onCompleted }: LeadPhoningDialogProps) => {
   const [open, setOpen] = useState(false);
+  const [recontactDate, setRecontactDate] = useState<Date | undefined>();
+  const [previsitDate, setPrevisitDate] = useState<Date | undefined>();
   const { toast } = useToast();
   const updateLead = useUpdateLead(null);
 
@@ -137,37 +155,62 @@ export const LeadPhoningDialog = ({ lead, onCompleted }: LeadPhoningDialogProps)
   const form = useForm<PhoningFormValues>({
     resolver: zodResolver(phoningSchema),
     defaultValues: {
-      call_status: snapshot.call_status ?? "En attente",
-      contact_person: snapshot.contact_person ?? "",
-      need_summary: snapshot.need_summary ?? "",
-      timeline: snapshot.timeline ?? "",
-      budget: snapshot.budget ?? "",
+      contact_result: snapshot.contact_result ?? "Éligible",
+      recontact_date: snapshot.recontact_date ?? "",
+      recontact_time: snapshot.recontact_time ?? "",
+      site_address: snapshot.site_address ?? "",
+      headquarters_address: snapshot.headquarters_address ?? "",
+      estimated_area: snapshot.estimated_area ?? "",
+      previsit_date: snapshot.previsit_date ?? "",
+      previsit_time: snapshot.previsit_time ?? "",
       notes: snapshot.notes ?? "",
       next_status: resolveInitialNextStatus(lead, snapshot),
     },
   });
 
+  const watchContactResult = form.watch("contact_result");
+  const watchPrevisitDate = form.watch("previsit_date");
+
   useEffect(() => {
     if (!open) return;
 
+    const prevDate = snapshot.recontact_date ? new Date(snapshot.recontact_date) : undefined;
+    const prevPrevisitDate = snapshot.previsit_date ? new Date(snapshot.previsit_date) : undefined;
+    
+    setRecontactDate(prevDate);
+    setPrevisitDate(prevPrevisitDate);
+
     form.reset({
-      call_status: snapshot.call_status ?? "En attente",
-      contact_person: snapshot.contact_person ?? "",
-      need_summary: snapshot.need_summary ?? "",
-      timeline: snapshot.timeline ?? "",
-      budget: snapshot.budget ?? "",
+      contact_result: snapshot.contact_result ?? "Éligible",
+      recontact_date: snapshot.recontact_date ?? "",
+      recontact_time: snapshot.recontact_time ?? "",
+      site_address: snapshot.site_address ?? "",
+      headquarters_address: snapshot.headquarters_address ?? "",
+      estimated_area: snapshot.estimated_area ?? "",
+      previsit_date: snapshot.previsit_date ?? "",
+      previsit_time: snapshot.previsit_time ?? "",
       notes: snapshot.notes ?? "",
       next_status: resolveInitialNextStatus(lead, snapshot),
     });
   }, [open, form, snapshot, lead]);
 
+  // Auto-update status when pre-visit is scheduled
+  useEffect(() => {
+    if (watchPrevisitDate && watchPrevisitDate.length > 0) {
+      form.setValue("next_status", "Programmer pré-visite");
+    }
+  }, [watchPrevisitDate, form]);
+
   const onSubmit = async (values: PhoningFormValues) => {
     const phoningPayload: PhoningSnapshot = {
-      call_status: values.call_status,
-      contact_person: sanitizeText(values.contact_person),
-      need_summary: sanitizeText(values.need_summary),
-      timeline: sanitizeText(values.timeline),
-      budget: sanitizeText(values.budget),
+      contact_result: values.contact_result,
+      recontact_date: sanitizeText(values.recontact_date),
+      recontact_time: sanitizeText(values.recontact_time),
+      site_address: sanitizeText(values.site_address),
+      headquarters_address: sanitizeText(values.headquarters_address),
+      estimated_area: sanitizeText(values.estimated_area),
+      previsit_date: sanitizeText(values.previsit_date),
+      previsit_time: sanitizeText(values.previsit_time),
       notes: sanitizeText(values.notes),
       next_status: values.next_status,
       last_updated_at: new Date().toISOString(),
@@ -194,8 +237,8 @@ export const LeadPhoningDialog = ({ lead, onCompleted }: LeadPhoningDialogProps)
       });
 
       toast({
-        title: "Script phoning enregistré",
-        description: "Les réponses ont été sauvegardées.",
+        title: "Phoning enregistré",
+        description: "Les informations ont été sauvegardées.",
       });
 
       setOpen(false);
@@ -219,14 +262,14 @@ export const LeadPhoningDialog = ({ lead, onCompleted }: LeadPhoningDialogProps)
       <DialogTrigger asChild>
         <Button size="sm" variant="outline">
           <PhoneCall className="mr-2 h-4 w-4" />
-          Script Phoning
+          Phoning Lead
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Script d'appel phoning</DialogTitle>
+          <DialogTitle>Phoning Lead</DialogTitle>
           <DialogDescription>
-            Suivez les questions proposées pendant votre appel et enregistrez les réponses clés.
+            Enregistrez le résultat du contact et planifiez les prochaines étapes.
           </DialogDescription>
         </DialogHeader>
 
@@ -237,81 +280,110 @@ export const LeadPhoningDialog = ({ lead, onCompleted }: LeadPhoningDialogProps)
         ) : null}
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="mt-4 space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="mt-4 space-y-6">
             <FormField
               control={form.control}
-              name="call_status"
+              name="contact_result"
               render={({ field }) => (
-                <FormItem>
+                <FormItem className="space-y-3">
                   <FormLabel>Résultat du contact *</FormLabel>
-                  <FormDescription>
-                    Choisissez le résultat le plus fidèle à l'appel en cours.
-                  </FormDescription>
-                  <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner un résultat" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {CALL_STATUS_OPTIONS.map((option) => (
-                        <SelectItem key={option} value={option}>
-                          {option}
-                        </SelectItem>
+                  <FormControl>
+                    <RadioGroup
+                      onValueChange={field.onChange}
+                      value={field.value}
+                      className="flex flex-col space-y-2"
+                    >
+                      {CONTACT_RESULT_OPTIONS.map((option) => (
+                        <div key={option} className="flex items-center space-x-2">
+                          <RadioGroupItem value={option} id={`contact-${option}`} />
+                          <Label htmlFor={`contact-${option}`} className="cursor-pointer font-normal">
+                            {option}
+                          </Label>
+                        </div>
                       ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="contact_person"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Interlocuteur principal</FormLabel>
-                  <FormDescription>
-                    Notez avec qui vous avez échangé et son rôle dans le projet.
-                  </FormDescription>
-                  <FormControl>
-                    <Input placeholder="Ex. Directeur des travaux" {...field} />
+                    </RadioGroup>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="need_summary"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Besoin principal du prospect</FormLabel>
-                  <FormDescription>
-                    Résumez la problématique ou le besoin exprimé lors de l'appel.
-                  </FormDescription>
-                  <FormControl>
-                    <Textarea rows={4} placeholder="Quel est le projet envisagé ?" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Conditional recontact date/time picker */}
+            {watchContactResult === "À recontacter" && (
+              <div className="space-y-4 rounded-lg border bg-muted/30 p-4">
+                <h4 className="font-semibold text-sm">Planifier le recontact</h4>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="recontact_date"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-col">
+                        <FormLabel>Date de recontact</FormLabel>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  "pl-3 text-left font-normal",
+                                  !field.value && "text-muted-foreground"
+                                )}
+                              >
+                                {recontactDate ? (
+                                  format(recontactDate, "PPP", { locale: fr })
+                                ) : (
+                                  <span>Choisir une date</span>
+                                )}
+                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={recontactDate}
+                              onSelect={(date) => {
+                                setRecontactDate(date);
+                                field.onChange(date ? format(date, "yyyy-MM-dd") : "");
+                              }}
+                              disabled={(date) => date < new Date()}
+                              initialFocus
+                              className="pointer-events-auto"
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-            <div className="grid gap-4 md:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="recontact_time"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Heure de recontact</FormLabel>
+                        <FormControl>
+                          <Input type="time" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Address and Area Fields */}
+            <div className="space-y-4">
               <FormField
                 control={form.control}
-                name="timeline"
+                name="site_address"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Échéance souhaitée</FormLabel>
-                    <FormDescription>
-                      Demandez quand le prospect aimerait démarrer les travaux.
-                    </FormDescription>
+                    <FormLabel>Adresse chantier</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ex. Sous 3 mois" {...field} />
+                      <Input placeholder="Adresse du site de travaux" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -320,15 +392,26 @@ export const LeadPhoningDialog = ({ lead, onCompleted }: LeadPhoningDialogProps)
 
               <FormField
                 control={form.control}
-                name="budget"
+                name="headquarters_address"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Budget estimé</FormLabel>
-                    <FormDescription>
-                      Mentionnez le budget évoqué ou la fourchette estimée.
-                    </FormDescription>
+                    <FormLabel>Adresse siège social</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ex. 25 000 €" {...field} />
+                      <Input placeholder="Adresse administrative" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="estimated_area"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Surface estimée (m²)</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="Surface en m²" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -342,25 +425,93 @@ export const LeadPhoningDialog = ({ lead, onCompleted }: LeadPhoningDialogProps)
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Notes complémentaires</FormLabel>
-                  <FormDescription>
-                    Ajoutez tout élément bloquant ou information utile pour la suite.
-                  </FormDescription>
                   <FormControl>
-                    <Textarea rows={4} placeholder="Commentaires supplémentaires" {...field} />
+                    <Textarea rows={3} placeholder="Informations additionnelles" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
+            {/* Pre-visit Scheduling Section */}
+            <div className="space-y-4 rounded-lg border-2 border-primary/20 bg-primary/5 p-4">
+              <h4 className="font-semibold">Programmer une pré-visite</h4>
+              <p className="text-sm text-muted-foreground">
+                Planifier une pré-visite changera automatiquement le statut du lead
+              </p>
+              
+              <div className="grid gap-4 md:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="previsit_date"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel>Date de pré-visite</FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "pl-3 text-left font-normal",
+                                !field.value && "text-muted-foreground"
+                              )}
+                            >
+                              {previsitDate ? (
+                                format(previsitDate, "PPP", { locale: fr })
+                              ) : (
+                                <span>Choisir une date</span>
+                              )}
+                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={previsitDate}
+                            onSelect={(date) => {
+                              setPrevisitDate(date);
+                              field.onChange(date ? format(date, "yyyy-MM-dd") : "");
+                            }}
+                            disabled={(date) => date < new Date()}
+                            initialFocus
+                            className="pointer-events-auto"
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="previsit_time"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Heure de pré-visite</FormLabel>
+                      <FormControl>
+                        <Input type="time" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
             <FormField
               control={form.control}
               name="next_status"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Statut après l'appel</FormLabel>
+                  <FormLabel>Statut après le phoning</FormLabel>
                   <FormDescription>
-                    Sélectionnez le statut du lead après ce phoning.
+                    {watchPrevisitDate && watchPrevisitDate.length > 0 
+                      ? "Statut mis à jour automatiquement lors de la planification d'une pré-visite"
+                      : "Sélectionnez le statut du lead après ce phoning"
+                    }
                   </FormDescription>
                   <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                     <FormControl>
@@ -387,7 +538,7 @@ export const LeadPhoningDialog = ({ lead, onCompleted }: LeadPhoningDialogProps)
               </Button>
               <Button type="submit" disabled={updateLead.isPending}>
                 {updateLead.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Enregistrer le phoning
+                Enregistrer
               </Button>
             </div>
           </form>
