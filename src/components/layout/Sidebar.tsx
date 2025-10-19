@@ -58,7 +58,17 @@ const businessItems = [
   { title: "Planning RDV", url: "/calendar", icon: Calendar },
   { title: "Reporting", url: "/reports", icon: TrendingUp },
   { title: "Membres", url: "/members", icon: Users },
-  { title: "Paramètres", url: "/settings", icon: Settings },
+  { 
+    title: "Paramètres", 
+    url: "/settings", 
+    icon: Settings,
+    subItems: [
+      { title: "Paramètres généraux", url: "/settings", icon: Settings },
+      { title: "Paramètres Lead", url: "/leads/settings", icon: Settings2 },
+      { title: "Paramètres Devis", url: "/quotes/settings", icon: FileText },
+      { title: "Types de RDV", url: "/calendar/settings", icon: Calendar },
+    ]
+  },
 ];
 
 export function AppSidebar() {

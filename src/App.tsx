@@ -25,6 +25,8 @@ import CommercialLeadPOS from "./pages/CommercialLeadPOS";
 import Clients from "./pages/Clients";
 import Accounting from "./pages/Accounting";
 import LeadSettings from "./pages/LeadSettings";
+import QuoteSettings from "./pages/QuoteSettings";
+import AppointmentSettings from "./pages/AppointmentSettings";
 import GoogleDriveCallback from "./pages/GoogleDriveCallback";
 
 const queryClient = new QueryClient();
@@ -44,6 +46,8 @@ const App = () => (
               <Route path="/leads" element={<ProtectedRoute><Leads /></ProtectedRoute>} />
               <Route path="/leads/pos" element={<ProtectedRoute><CommercialLeadPOS /></ProtectedRoute>} />
               <Route path="/leads/settings" element={<ProtectedRoute><LeadSettings /></ProtectedRoute>} />
+              <Route path="/quotes/settings" element={<ProtectedRoute><QuoteSettings /></ProtectedRoute>} />
+              <Route path="/calendar/settings" element={<ProtectedRoute><AppointmentSettings /></ProtectedRoute>} />
               <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
               <Route
                 path="/projects/:id"
