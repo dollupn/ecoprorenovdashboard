@@ -13,6 +13,7 @@ import {
   type SiteFormValues,
   type SiteProjectOption,
 } from "@/components/sites/SiteDialog";
+import { CreateSiteStepDialog, type CreateSiteStepValues } from "@/components/sites/CreateSiteStepDialog";
 import { useToast } from "@/components/ui/use-toast";
 import type { Tables } from "@/integrations/supabase/types";
 import { useOrg } from "@/features/organizations/OrgContext";
@@ -179,6 +180,7 @@ const formatPercent = (value: number) =>
 
 const Sites = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [stepDialogOpen, setStepDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<"create" | "edit">("create");
   const [activeSiteId, setActiveSiteId] = useState<string | null>(null);
   const [dialogInitialValues, setDialogInitialValues] = useState<Partial<SiteFormValues>>();
@@ -340,6 +342,85 @@ const Sites = () => {
       additional_costs: normalizeAdditionalCosts(site.additional_costs ?? []),
     });
     setDialogOpen(true);
+  };
+
+  const handleSubmitStepSite = async (values: CreateSiteStepValues) => {
+    if (!user || !currentOrgId) return;
+
+    // Générer une référence unique
+    const today = new Date();
+    const datePrefix = `SITE-${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(today.getDate()).padStart(2, "0")}`;
+    
+    const { data: existingSites } = await supabase
+      .from("sites")
+      .select("site_ref")
+      .eq("org_id", currentOrgId)
+      .like("site_ref", `${datePrefix}-%`)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    let nextNumber = 1;
+    if (existingSites && existingSites.length > 0) {
+      const lastRef = existingSites[0].site_ref;
+      const lastNumber = parseInt(lastRef.split("-").pop() || "0");
+      nextNumber = lastNumber + 1;
+    }
+
+    const site_ref = `${datePrefix}-${String(nextNumber).padStart(3, "0")}`;
+
+    const teamMembers = values.team_members
+      ?.split("\n")
+      .map(name => name.trim())
+      .filter(Boolean) || [];
+
+    const siteData = {
+      site_ref,
+      project_ref: values.project_ref,
+      client_name: values.client_name,
+      product_name: values.product_name?.trim() || "",
+      address: values.address,
+      city: values.city,
+      postal_code: values.postal_code,
+      status: "PLANIFIE",
+      cofrac_status: "EN_ATTENTE",
+      date_debut: values.date_debut,
+      date_fin_prevue: null,
+      progress_percentage: 0,
+      revenue: 0,
+      profit_margin: 0,
+      surface_facturee: values.surface_facturee || 0,
+      cout_main_oeuvre_m2_ht: 0,
+      cout_isolation_m2: 0,
+      isolation_utilisee_m2: 0,
+      montant_commission: 0,
+      valorisation_cee: 0,
+      notes: values.notes?.trim() || null,
+      team_members: teamMembers.length > 0 ? teamMembers : null,
+      additional_costs: [],
+      user_id: user.id,
+      org_id: currentOrgId,
+    };
+
+    try {
+      const { error } = await supabase.from("sites").insert([siteData]);
+
+      if (error) throw error;
+
+      toast({
+        title: "Chantier créé",
+        description: `${siteData.site_ref} a été ajouté à la liste des chantiers.`,
+      });
+
+      refetch();
+      setStepDialogOpen(false);
+    } catch (error) {
+      console.error("Error saving site:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de créer le chantier.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleSubmitSite = async (values: SiteFormValues) => {
@@ -540,10 +621,16 @@ const Sites = () => {
               Suivi en temps réel de vos chantiers de rénovation énergétique
             </p>
           </div>
-          <Button onClick={() => handleOpenCreate()}>
-            <Plus className="w-4 h-4 mr-2" />
-            Nouveau chantier
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => handleOpenCreate()}>
+              <Plus className="w-4 h-4 mr-2" />
+              Mode avancé
+            </Button>
+            <Button onClick={() => setStepDialogOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Nouveau chantier
+            </Button>
+          </div>
         </div>
 
         <Card className="shadow-card bg-gradient-card border-0">
@@ -612,12 +699,15 @@ const Sites = () => {
                       <p className="font-semibold">{formatPercent(site.profit_margin || 0)}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-sky-600" />
-                    <Badge className={getCofracStatusColor((site.cofrac_status || "EN_ATTENTE") as CofracStatus)}>
-                      {getCofracStatusLabel((site.cofrac_status || "EN_ATTENTE") as CofracStatus)}
-                    </Badge>
-                  </div>
+                  {/* Masquer COFRAC avant la fin des travaux */}
+                  {(site.status === "TERMINE" || site.status === "LIVRE") && (
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-sky-600" />
+                      <Badge className={getCofracStatusColor((site.cofrac_status || "EN_ATTENTE") as CofracStatus)}>
+                        {getCofracStatusLabel((site.cofrac_status || "EN_ATTENTE") as CofracStatus)}
+                      </Badge>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
                     <Ruler className="w-4 h-4 text-amber-600" />
                     <div>
@@ -725,6 +815,13 @@ const Sites = () => {
           ))}
         </div>
       </div>
+
+      <CreateSiteStepDialog
+        open={stepDialogOpen}
+        onOpenChange={setStepDialogOpen}
+        onSubmit={handleSubmitStepSite}
+        projects={projectOptions}
+      />
 
       <SiteDialog
         open={dialogOpen}
