@@ -552,6 +552,7 @@ export type Database = {
       }
       projects: {
         Row: {
+          address: string | null
           assigned_to: string
           building_type: string | null
           city: string
@@ -563,6 +564,7 @@ export type Database = {
           date_debut_prevue: string | null
           date_fin_prevue: string | null
           discount: number | null
+          email: string | null
           estimated_value: number | null
           id: string
           lead_id: string | null
@@ -570,6 +572,7 @@ export type Database = {
           phone: string | null
           postal_code: string
           prime_cee: number | null
+          project_cost: number | null
           product_name: string
           project_ref: string
           signatory_name: string | null
@@ -587,6 +590,7 @@ export type Database = {
         Insert: {
           assigned_to: string
           building_type?: string | null
+          address?: string | null
           city: string
           client_first_name?: string | null
           client_last_name?: string | null
@@ -596,6 +600,7 @@ export type Database = {
           date_debut_prevue?: string | null
           date_fin_prevue?: string | null
           discount?: number | null
+          email?: string | null
           estimated_value?: number | null
           id?: string
           lead_id?: string | null
@@ -603,6 +608,7 @@ export type Database = {
           phone?: string | null
           postal_code: string
           prime_cee?: number | null
+          project_cost?: number | null
           product_name: string
           project_ref: string
           signatory_name?: string | null
@@ -620,6 +626,7 @@ export type Database = {
         Update: {
           assigned_to?: string
           building_type?: string | null
+          address?: string | null
           city?: string
           client_first_name?: string | null
           client_last_name?: string | null
@@ -629,6 +636,7 @@ export type Database = {
           date_debut_prevue?: string | null
           date_fin_prevue?: string | null
           discount?: number | null
+          email?: string | null
           estimated_value?: number | null
           id?: string
           lead_id?: string | null
@@ -636,6 +644,7 @@ export type Database = {
           phone?: string | null
           postal_code?: string
           prime_cee?: number | null
+          project_cost?: number | null
           product_name?: string
           project_ref?: string
           signatory_name?: string | null
