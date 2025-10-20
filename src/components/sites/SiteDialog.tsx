@@ -269,128 +269,133 @@ const SortableAdditionalCostRow = ({
         >
           <GripVertical className="h-4 w-4" />
         </Button>
-        <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-12 md:items-start">
-          <FormField
-            control={control}
-            name={`additional_costs.${index}.label`}
-            render={({ field: labelField }) => (
-              <FormItem className="md:col-span-5">
-                <FormControl>
-                  <Input
-                    placeholder="Intitulé du coût"
-                    title={typeof labelField.value === "string" ? labelField.value : undefined}
-                    {...labelField}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={control}
-            name={`additional_costs.${index}.amount_ht`}
-            render={({ field: amountHTField }) => (
-              <FormItem className="md:col-span-2">
-                <FormControl>
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    min={0}
-                    step="0.01"
-                    placeholder="Montant HT"
-                    name={amountHTField.name}
-                    ref={amountHTField.ref}
-                    value={
-                      amountHTField.value === undefined || amountHTField.value === null
-                        ? ""
-                        : amountHTField.value
-                    }
-                    onChange={(event) => {
-                      const newValue = event.target.value;
-                      amountHTField.onChange(newValue === "" ? "" : Number(newValue));
-                    }}
-                    onBlur={amountHTField.onBlur}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={control}
-            name={`additional_costs.${index}.taxes`}
-            render={({ field: taxesField }) => (
-              <FormItem className="md:col-span-2">
-                <FormControl>
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    min={0}
-                    step="0.01"
-                    placeholder="Taxes"
-                    name={taxesField.name}
-                    ref={taxesField.ref}
-                    value={
-                      taxesField.value === undefined || taxesField.value === null ? "" : taxesField.value
-                    }
-                    onChange={(event) => {
-                      const newValue = event.target.value;
-                      taxesField.onChange(newValue === "" ? "" : Number(newValue));
-                    }}
-                    onBlur={taxesField.onBlur}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={control}
-            name={`additional_costs.${index}.attachment`}
-            render={({ field: attachmentField }) => (
-              <FormItem className="md:col-span-3">
-                <FormControl>
-                  <div className="flex items-center gap-2">
+        <div className="flex flex-1 flex-col gap-3 md:flex-row md:items-start">
+          <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-12 md:items-start">
+            <FormField
+              control={control}
+              name={`additional_costs.${index}.label`}
+              render={({ field: labelField }) => (
+                <FormItem className="md:col-span-5">
+                  <FormControl>
                     <Input
-                      placeholder="Lien ou identifiant"
-                      value={attachmentField.value ?? ""}
-                      onChange={(event) => attachmentField.onChange(event.target.value)}
+                      placeholder="Intitulé du coût"
+                      title={typeof labelField.value === "string" ? labelField.value : undefined}
+                      {...labelField}
                     />
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      className="hidden"
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={control}
+              name={`additional_costs.${index}.amount_ht`}
+              render={({ field: amountHTField }) => (
+                <FormItem className="md:col-span-2">
+                  <FormControl>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      min={0}
+                      step="0.01"
+                      placeholder="Montant HT"
+                      name={amountHTField.name}
+                      ref={amountHTField.ref}
+                      value={
+                        amountHTField.value === undefined || amountHTField.value === null
+                          ? ""
+                          : amountHTField.value
+                      }
                       onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        if (!file) return;
-                        // Replace with actual upload; keeping file name as placeholder
-                        attachmentField.onChange(file.name);
-                        event.target.value = "";
+                        const newValue = event.target.value;
+                        amountHTField.onChange(newValue === "" ? "" : Number(newValue));
                       }}
+                      onBlur={amountHTField.onBlur}
                     />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => fileInputRef.current?.click()}
-                      aria-label="Ajouter une pièce jointe"
-                    >
-                      <Upload className="h-4 w-4 mr-2" /> Joindre
-                    </Button>
-                  </div>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={control}
+              name={`additional_costs.${index}.taxes`}
+              render={({ field: taxesField }) => (
+                <FormItem className="md:col-span-2">
+                  <FormControl>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      min={0}
+                      step="0.01"
+                      placeholder="Taxes"
+                      name={taxesField.name}
+                      ref={taxesField.ref}
+                      value={
+                        taxesField.value === undefined || taxesField.value === null ? "" : taxesField.value
+                      }
+                      onChange={(event) => {
+                        const newValue = event.target.value;
+                        taxesField.onChange(newValue === "" ? "" : Number(newValue));
+                      }}
+                      onBlur={taxesField.onBlur}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={control}
+              name={`additional_costs.${index}.attachment`}
+              render={({ field: attachmentField }) => (
+                <FormItem className="md:col-span-3">
+                  <FormControl>
+                    <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+                      <Input
+                        placeholder="Lien ou identifiant"
+                        value={attachmentField.value ?? ""}
+                        onChange={(event) => attachmentField.onChange(event.target.value)}
+                        className="sm:flex-1"
+                      />
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        className="hidden"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (!file) return;
+                          // Replace with actual upload; keeping file name as placeholder
+                          attachmentField.onChange(file.name);
+                          event.target.value = "";
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0"
+                        onClick={() => fileInputRef.current?.click()}
+                        aria-label="Ajouter une pièce jointe"
+                      >
+                        <Upload className="h-4 w-4 mr-2" /> Joindre
+                      </Button>
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
           {canRemove ? (
-            <div className="flex justify-end md:col-span-1">
+            <div className="flex justify-end md:ml-2 md:flex-none md:justify-start md:self-start">
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
                 onClick={() => remove(index)}
                 aria-label="Supprimer le coût"
+                className="self-start"
               >
                 <Trash2 className="w-4 h-4" />
               </Button>
