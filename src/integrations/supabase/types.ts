@@ -555,6 +555,7 @@ export type Database = {
       }
       projects: {
         Row: {
+          address: string | null
           assigned_to: string
           building_type: string | null
           city: string
@@ -593,6 +594,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          address?: string | null
           assigned_to: string
           building_type?: string | null
           city: string
@@ -631,6 +633,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          address?: string | null
           assigned_to?: string
           building_type?: string | null
           city?: string
