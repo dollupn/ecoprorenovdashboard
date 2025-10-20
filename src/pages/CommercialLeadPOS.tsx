@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,32 +19,10 @@ import { cn } from "@/lib/utils";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
-
-const PRODUCT_OPTIONS = [
-  "Isolation thermique extérieure",
-  "Pompe à chaleur",
-  "Panneaux solaires",
-  "Chaudière haute performance",
-  "Isolation des combles",
-  "Audit énergétique",
-];
-
-const BUILDING_TYPES = [
-  "Maison individuelle",
-  "Appartement",
-  "Immeuble",
-  "Bureau",
-  "Commerce",
-  "Entrepôt",
-  "Autre",
-];
-
-const BUILDING_USAGES = [
-  "Résidentiel",
-  "Professionnel",
-  "Mixte",
-  "Industriel",
-];
+import { useOrg } from "@/features/organizations/OrgContext";
+import { useLeadProductTypes } from "@/features/leads/api";
+import { useProjectBuildingTypes } from "@/hooks/useProjectBuildingTypes";
+import { useProjectUsages } from "@/hooks/useProjectUsages";
 
 const initialFormState = {
   creationDate: new Date().toISOString().split('T')[0],
@@ -66,9 +44,10 @@ const initialFormState = {
   subsidyReceived: "no",
   subsidyDetails: "",
   selectedProducts: [] as string[],
-  technicalSize: "",
-  technicalHighPoint: "",
-  technicalLowPoint: "",
+  buildingLength: "",
+  buildingWidth: "",
+  buildingHeight: "",
+  luminaireCount: "",
   notes: "",
 };
 
@@ -92,6 +71,11 @@ const formatFileSize = (sizeInBytes: number) => {
 };
 
 const CommercialLeadPOS = () => {
+  const { currentOrgId } = useOrg();
+  const orgId = currentOrgId;
+  const { data: productTypes = [] } = useLeadProductTypes(orgId);
+  const buildingTypes = useProjectBuildingTypes();
+  const buildingUsages = useProjectUsages();
   const [formState, setFormState] = useState<FormState>(initialFormState);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentPhotoStep, setCurrentPhotoStep] = useState(0);
@@ -108,6 +92,42 @@ const CommercialLeadPOS = () => {
   const photoInputRefs = useRef<(HTMLInputElement | null)[]>([null, null, null]);
   const { toast } = useToast();
 
+  const availableProducts = useMemo(
+    () =>
+      productTypes
+        .map((product) => product.name?.trim() ?? "")
+        .filter((name): name is string => Boolean(name)),
+    [productTypes],
+  );
+
+  useEffect(() => {
+    setFormState((prev) => {
+      const filteredProducts = prev.selectedProducts.filter((product) => availableProducts.includes(product));
+      if (filteredProducts.length === prev.selectedProducts.length) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        selectedProducts: filteredProducts,
+      };
+    });
+  }, [availableProducts]);
+
+  const isLedSelected = useMemo(
+    () => formState.selectedProducts.some((product) => product.toLowerCase().includes("led")),
+    [formState.selectedProducts],
+  );
+
+  useEffect(() => {
+    if (!isLedSelected && formState.luminaireCount) {
+      setFormState((prev) => ({
+        ...prev,
+        luminaireCount: "",
+      }));
+    }
+  }, [isLedSelected, formState.luminaireCount]);
+
   const handleInputChange = (field: keyof FormState) =>
     (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       setFormState((prev) => ({ ...prev, [field]: event.target.value }));
@@ -118,6 +138,8 @@ const CommercialLeadPOS = () => {
   };
 
   const handleProductToggle = (product: string) => {
+    if (!product) return;
+
     setFormState((prev) => ({
       ...prev,
       selectedProducts: prev.selectedProducts.includes(product)
@@ -391,6 +413,42 @@ const CommercialLeadPOS = () => {
                       />
                     </div>
                   </div>
+
+                  <div className="grid gap-3">
+                    <Label className="text-base font-semibold">Produits intéressés</Label>
+                    {availableProducts.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        Configurez vos produits dans les paramètres lead pour les proposer ici.
+                      </p>
+                    ) : (
+                      <div className="grid gap-2">
+                        {productTypes.map((product) => {
+                          const rawName = product.name ?? "";
+                          const trimmedName = rawName.trim();
+
+                          if (!trimmedName) {
+                            return null;
+                          }
+
+                          return (
+                            <div key={product.id} className="flex items-center gap-2">
+                              <Checkbox
+                                id={`product-${product.id}`}
+                                checked={formState.selectedProducts.includes(trimmedName)}
+                                onCheckedChange={() => handleProductToggle(trimmedName)}
+                              />
+                              <label
+                                htmlFor={`product-${product.id}`}
+                                className="cursor-pointer text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                              >
+                                {trimmedName}
+                              </label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </CardContent>
               </CollapsibleContent>
             </Card>
@@ -444,11 +502,17 @@ const CommercialLeadPOS = () => {
                           <SelectValue placeholder="Sélectionner le type" />
                         </SelectTrigger>
                         <SelectContent>
-                          {BUILDING_TYPES.map((type) => (
-                            <SelectItem key={type} value={type}>
-                              {type}
+                          {buildingTypes.length === 0 ? (
+                            <SelectItem value="" disabled>
+                              Aucun type disponible
                             </SelectItem>
-                          ))}
+                          ) : (
+                            buildingTypes.map((type) => (
+                              <SelectItem key={type} value={type}>
+                                {type}
+                              </SelectItem>
+                            ))
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
@@ -459,11 +523,17 @@ const CommercialLeadPOS = () => {
                           <SelectValue placeholder="Sélectionner l'usage" />
                         </SelectTrigger>
                         <SelectContent>
-                          {BUILDING_USAGES.map((usage) => (
-                            <SelectItem key={usage} value={usage}>
-                              {usage}
+                          {buildingUsages.length === 0 ? (
+                            <SelectItem value="" disabled>
+                              Aucun usage disponible
                             </SelectItem>
-                          ))}
+                          ) : (
+                            buildingUsages.map((usage) => (
+                              <SelectItem key={usage} value={usage}>
+                                {usage}
+                              </SelectItem>
+                            ))
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
@@ -510,62 +580,65 @@ const CommercialLeadPOS = () => {
                     </div>
                   )}
 
-                  <div className="grid gap-3">
-                    <Label>Produits intéressés</Label>
-                    <div className="grid gap-2">
-                      {PRODUCT_OPTIONS.map((product) => (
-                        <div key={product} className="flex items-center gap-2">
-                          <Checkbox
-                            id={`product-${product}`}
-                            checked={formState.selectedProducts.includes(product)}
-                            onCheckedChange={() => handleProductToggle(product)}
-                          />
-                          <label
-                            htmlFor={`product-${product}`}
-                            className="cursor-pointer text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                          >
-                            {product}
-                          </label>
-                        </div>
-                      ))}
+                  <div className="grid gap-2">
+                    <Label className="text-base font-semibold">Mesures du bâtiment</Label>
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <div className="grid gap-2">
+                        <Label htmlFor="buildingLength">Longueur (m)</Label>
+                        <Input
+                          id="buildingLength"
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          value={formState.buildingLength}
+                          onChange={handleInputChange("buildingLength")}
+                          placeholder="Longueur totale"
+                          className="h-12"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="buildingWidth">Largeur (m)</Label>
+                        <Input
+                          id="buildingWidth"
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          value={formState.buildingWidth}
+                          onChange={handleInputChange("buildingWidth")}
+                          placeholder="Largeur totale"
+                          className="h-12"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="buildingHeight">Hauteur (m)</Label>
+                        <Input
+                          id="buildingHeight"
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          value={formState.buildingHeight}
+                          onChange={handleInputChange("buildingHeight")}
+                          placeholder="Hauteur totale"
+                          className="h-12"
+                        />
+                      </div>
                     </div>
                   </div>
 
-                  <div className="grid gap-2">
-                    <Label className="text-base font-semibold">Infos techniques</Label>
-                    <div className="grid gap-4 md:grid-cols-3">
-                      <div className="grid gap-2">
-                        <Label htmlFor="technicalSize">Taille</Label>
-                        <Input
-                          id="technicalSize"
-                          value={formState.technicalSize}
-                          onChange={handleInputChange("technicalSize")}
-                          placeholder="Ex: 100m"
-                          className="h-12"
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="technicalHighPoint">Point haut</Label>
-                        <Input
-                          id="technicalHighPoint"
-                          value={formState.technicalHighPoint}
-                          onChange={handleInputChange("technicalHighPoint")}
-                          placeholder="Ex: 4m"
-                          className="h-12"
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="technicalLowPoint">Point bas</Label>
-                        <Input
-                          id="technicalLowPoint"
-                          value={formState.technicalLowPoint}
-                          onChange={handleInputChange("technicalLowPoint")}
-                          placeholder="Ex: 2.5m"
-                          className="h-12"
-                        />
-                      </div>
+                  {isLedSelected && (
+                    <div className="grid gap-2">
+                      <Label htmlFor="luminaireCount">Nombre de luminaires</Label>
+                      <Input
+                        id="luminaireCount"
+                        type="number"
+                        min="0"
+                        value={formState.luminaireCount}
+                        onChange={handleInputChange("luminaireCount")}
+                        placeholder="Indiquez le nombre de luminaires"
+                        className="h-12"
+                      />
                     </div>
-                  </div>
+                  )}
 
                   <div className="grid gap-2">
                     <Label htmlFor="notes">Notes complémentaires</Label>
