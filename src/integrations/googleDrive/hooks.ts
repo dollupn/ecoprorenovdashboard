@@ -27,10 +27,12 @@ export const useDriveConnectionStatus = (orgId: string | null | undefined) =>
       return await getDriveConnectionStatus(orgId);
     },
     retry: (failureCount, error) => {
-      if (error instanceof Error && /credentials/i.test(error.message)) {
-        return false;
+      if (error instanceof Error) {
+        if (/credentials/i.test(error.message) || /serveur.*disponible/i.test(error.message)) {
+          return false;
+        }
       }
-      return failureCount < 2;
+      return failureCount < 1;
     },
   });
 

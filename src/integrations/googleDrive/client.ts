@@ -29,22 +29,34 @@ const fetchJson = async <T>(input: RequestInfo, init?: RequestInit): Promise<T> 
     headers.set("Content-Type", "application/json");
   }
 
-  const response = await fetch(input, {
-    credentials: "include",
-    ...init,
-    headers,
-  });
+  try {
+    const response = await fetch(input, {
+      credentials: "include",
+      ...init,
+      headers,
+    });
 
-  if (!response.ok) {
-    const message = await parseError(response);
-    throw new Error(message);
+    if (!response.ok) {
+      const message = await parseError(response);
+      throw new Error(message);
+    }
+
+    if (response.status === 204) {
+      return {} as T;
+    }
+
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      throw new Error("Le serveur Google Drive n'est pas disponible");
+    }
+
+    return (await response.json()) as T;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error("Erreur de connexion au serveur Google Drive");
   }
-
-  if (response.status === 204) {
-    return {} as T;
-  }
-
-  return (await response.json()) as T;
 };
 
 export const getDriveConnectionStatus = async (orgId: string): Promise<DriveConnectionStatus> => {

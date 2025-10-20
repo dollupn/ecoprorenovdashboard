@@ -38,6 +38,7 @@ import {
   Mail,
   Phone,
   Settings as SettingsIcon,
+  Settings2,
   RefreshCw,
   Plug,
   ShieldCheck,
@@ -52,6 +53,7 @@ import {
   UserPlus,
   FileText,
   List,
+  Calendar,
 } from "lucide-react";
 import {
   DEFAULT_PROJECT_STATUSES,
@@ -317,12 +319,14 @@ export default function Settings() {
   };
   const isMounted = useRef(true);
 
+  // Disable Google Drive integration check temporarily to prevent white screen errors
+  // The backend server needs to be running for this to work
   const {
     data: driveConnection,
     isLoading: driveStatusLoading,
     isFetching: driveStatusFetching,
     error: driveStatusError,
-  } = useDriveConnectionStatus(currentOrgId);
+  } = useDriveConnectionStatus(null); // Pass null to disable the query
   const driveAuthUrlMutation = useDriveAuthUrl();
   const driveRefreshMutation = useDriveConnectionRefresh();
   const driveDisconnectMutation = useDriveDisconnect();
@@ -541,7 +545,8 @@ export default function Settings() {
       });
   };
 
-  const generalSection = (
+  // Define as function component to avoid "used before declaration" errors
+  const GeneralSection = () => (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.65fr,1fr]">
       <div className="space-y-6">
         <Card className="border border-border/60 bg-card/70 shadow-sm">
@@ -2107,7 +2112,7 @@ export default function Settings() {
             </CardContent>
           </Card>
           <div className="space-y-6">
-            {activeSection === "general" && generalSection}
+            {activeSection === "general" && <GeneralSection />}
             {activeSection === "lead" && <LeadSettingsPanel />}
             {activeSection === "quotes" && <QuoteSettingsPanel />}
             {activeSection === "calendar" && <AppointmentSettingsPanel />}
