@@ -1558,9 +1558,11 @@ const Leads = () => {
                             client_last_name: nameParts.lastName,
                             company: lead.company ?? "",
                             phone: lead.phone_raw ?? "",
+                            email: lead.email ?? "",
                             siren: lead.siren ?? "",
                             city: lead.city,
                             postal_code: lead.postal_code,
+                            address: (lead as LeadWithExtras).address ?? "",
                             surface_batiment_m2: lead.surface_m2 ?? undefined,
                             lead_id: lead.id,
                           }}
@@ -1696,9 +1698,11 @@ const Leads = () => {
                                     client_last_name: nameParts.lastName,
                                     company: lead.company ?? "",
                                     phone: lead.phone_raw ?? "",
+                                    email: lead.email ?? "",
                                     siren: lead.siren ?? "",
                                     city: lead.city,
                                     postal_code: lead.postal_code,
+                                    address: (lead as LeadWithExtras).address ?? "",
                                     surface_batiment_m2: lead.surface_m2 ?? undefined,
                                     lead_id: lead.id,
                                   }}

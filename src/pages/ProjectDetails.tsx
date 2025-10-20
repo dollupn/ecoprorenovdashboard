@@ -33,6 +33,7 @@ import {
   Building2,
   FileText,
   Trash2,
+  Mail,
 } from "lucide-react";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useMembers } from "@/features/members/api";
@@ -184,7 +185,7 @@ const ProjectDetails = () => {
         firstProduct?.code ||
         (project as Project & { product_name?: string }).product_name ||
         "",
-      amount: project.estimated_value ?? undefined,
+      amount: project.project_cost ?? project.estimated_value ?? undefined,
       quote_ref: project.project_ref ? `${project.project_ref}-DEV` : undefined,
     });
     setQuoteDialogOpen(true);
@@ -228,6 +229,9 @@ const ProjectDetails = () => {
       setIsDeleting(false);
     }
   };
+
+  const projectCostValue = project?.project_cost ?? project?.estimated_value ?? null;
+  const projectEmail = project?.email ?? null;
 
   return (
     <Layout>
@@ -316,11 +320,27 @@ const ProjectDetails = () => {
                     {project.phone ?? "Non renseigné"}
                   </p>
                 </div>
+                {projectEmail && (
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">Email</p>
+                    <p className="font-medium flex items-center gap-2">
+                      <Mail className="w-4 h-4 text-primary" />
+                      {projectEmail}
+                    </p>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <p className="text-sm text-muted-foreground">Adresse</p>
                   <p className="font-medium flex items-center gap-2">
                     <MapPin className="w-4 h-4 text-primary" />
-                    {project.city} ({project.postal_code})
+                    {project.address
+                      ? [
+                          project.address,
+                          [project.postal_code, project.city].filter(Boolean).join(" "),
+                        ]
+                          .filter((part) => part && part.toString().trim().length > 0)
+                          .join(", ")
+                      : `${project.city} (${project.postal_code})`}
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -377,10 +397,10 @@ const ProjectDetails = () => {
             <CardContent className="space-y-4 text-sm">
               <div className="flex items-center gap-2">
                 <Euro className="w-4 h-4 text-primary" />
-                <span className="text-muted-foreground">Montant estimé:</span>
+                <span className="text-muted-foreground">Coût du chantier:</span>
                 <span className="font-medium">
-                  {typeof project.estimated_value === "number"
-                    ? formatCurrency(project.estimated_value)
+                  {typeof projectCostValue === "number"
+                    ? formatCurrency(projectCostValue)
                     : "Non défini"}
                 </span>
               </div>
@@ -391,22 +411,6 @@ const ProjectDetails = () => {
                   {typeof project.prime_cee === "number"
                     ? formatCurrency(project.prime_cee)
                     : "Non définie"}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">Remise:</span>
-                <span className="font-medium">
-                  {typeof project.discount === "number"
-                    ? formatCurrency(project.discount)
-                    : "Aucune"}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">Prix unitaire:</span>
-                <span className="font-medium">
-                  {typeof project.unit_price === "number"
-                    ? formatCurrency(project.unit_price)
-                    : "Non défini"}
                 </span>
               </div>
               <div className="flex items-center gap-2">

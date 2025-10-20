@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import {
   useForm,
   useFieldArray,
@@ -23,6 +30,8 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { addMonths, format, parseISO } from "date-fns";
+import { fr } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
@@ -55,7 +64,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { GripVertical, Plus, X } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { Calendar as CalendarIcon, GripVertical, Plus, X } from "lucide-react";
 import { DynamicFields } from "@/features/leads/DynamicFields";
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 import { useProjectBuildingTypes } from "@/hooks/useProjectBuildingTypes";
@@ -303,6 +315,12 @@ const createProjectSchema = (
     client_last_name: z.string().min(2, "Le nom du client est requis"),
     company: z.string().optional(),
     phone: z.string().optional(),
+    email: z
+      .string()
+      .email("Email invalide")
+      .optional()
+      .or(z.literal("")),
+    address: z.string().optional().or(z.literal("")),
     siren: sirenSchema,
     products: z
       .array(
@@ -318,8 +336,6 @@ const createProjectSchema = (
     building_type: buildingTypeSchema,
     usage: usageSchema,
     prime_cee: z.coerce.number().optional(),
-    discount: z.coerce.number().optional(),
-    unit_price: z.coerce.number().optional(),
     signatory_name: z.string().optional(),
     signatory_title: z.string().optional(),
     surface_batiment_m2: z.coerce.number().optional(),
@@ -328,7 +344,7 @@ const createProjectSchema = (
     source: z.string().min(2, "La source est requise"),
     date_debut_prevue: z.string().optional(),
     date_fin_prevue: z.string().optional(),
-    estimated_value: z.coerce.number().optional(),
+    project_cost: z.coerce.number().optional(),
     lead_id: z.string().optional(),
   });
 };
@@ -348,6 +364,8 @@ const baseDefaultValues: Partial<ProjectFormValues> = {
   client_last_name: "",
   company: "",
   phone: "",
+  email: "",
+  address: "",
   siren: "",
   products: [{ product_id: "", quantity: 1, dynamic_params: {} }],
   city: "",
@@ -355,8 +373,6 @@ const baseDefaultValues: Partial<ProjectFormValues> = {
   building_type: "",
   usage: "",
   prime_cee: undefined,
-  discount: undefined,
-  unit_price: undefined,
   signatory_name: "",
   signatory_title: "",
   surface_batiment_m2: undefined,
@@ -365,7 +381,7 @@ const baseDefaultValues: Partial<ProjectFormValues> = {
   source: "",
   date_debut_prevue: "",
   date_fin_prevue: "",
-  estimated_value: undefined,
+  project_cost: undefined,
   lead_id: undefined,
 };
 
@@ -454,6 +470,14 @@ export const AddProjectDialog = ({
 
     return usageOptions[0] ?? "";
   }, [initialValues?.usage, usageOptions]);
+
+  const defaultStartDate = useMemo(() => {
+    if (initialValues?.date_debut_prevue) {
+      return initialValues.date_debut_prevue;
+    }
+
+    return format(addMonths(new Date(), 1), "yyyy-MM-dd");
+  }, [initialValues?.date_debut_prevue]);
 
   const { data: profile } = useQuery({
     queryKey: ["profile", user?.id],
@@ -666,7 +690,6 @@ export const AddProjectDialog = ({
   const {
     fields: productFields,
     append: appendProductField,
-    remove: removeProductField,
     move: moveProduct,
     replace: replaceProducts,
   } = useFieldArray({
@@ -725,22 +748,32 @@ export const AddProjectDialog = ({
 
   const removeProduct = useCallback(
     (index: number) => {
-      if (productFields.length <= 1) {
+      const currentProducts = form.getValues("products") ?? [];
+
+      if (currentProducts.length <= 1) {
         form.setValue(`products.${index}`, createProductEntry());
         return;
       }
 
-      const removed = form.getValues(`products.${index}`);
-      removeProductField(index);
+      const ecoMap = new Map(ecoProducts.map((product) => [product.id, product]));
+      const removed = currentProducts[index];
+      const updated = currentProducts.filter((_, idx) => idx !== index);
 
-      if (
-        removed?.product_id &&
-        ecoProducts.some((product) => product.id === removed.product_id)
-      ) {
+      const hasNonEcoProduct = updated.some(
+        (item) => !item?.product_id || !ecoMap.has(item.product_id)
+      );
+
+      if (!hasNonEcoProduct) {
+        updated.push(createProductEntry());
+      }
+
+      replaceProducts(updated);
+
+      if (removed?.product_id && ecoMap.has(removed.product_id)) {
         setSelectedEcoProductIds((prev) => prev.filter((id) => id !== removed.product_id));
       }
     },
-    [ecoProducts, form, productFields.length, removeProductField]
+    [ecoProducts, form, replaceProducts]
   );
 
   const syncEcoProducts = useCallback(
@@ -764,7 +797,20 @@ export const AddProjectDialog = ({
       );
 
       const merged = [...ecoEntries, ...nonEcoProducts];
-      replaceProducts(merged.length ? merged : [createProductEntry()]);
+
+      if (merged.length === 0) {
+        merged.push(createProductEntry());
+      } else {
+        const hasNonEcoProduct = merged.some(
+          (item) => !item.product_id || !ecoMap.has(item.product_id)
+        );
+
+        if (!hasNonEcoProduct) {
+          merged.push(createProductEntry());
+        }
+      }
+
+      replaceProducts(merged);
     },
     [ecoProducts, form, replaceProducts]
   );
@@ -777,7 +823,51 @@ export const AddProjectDialog = ({
     })
   );
 
-  const productIds = useMemo(() => productFields.map((field) => field.id), [productFields]);
+  const productsValues = form.watch("products");
+  const startDateValue = form.watch("date_debut_prevue");
+  const endDateValue = form.watch("date_fin_prevue");
+
+  const productFieldEntries = useMemo(
+    () =>
+      productFields.map((field, index) => ({
+        field,
+        index,
+        productId: productsValues?.[index]?.product_id ?? "",
+      })),
+    [productFields, productsValues]
+  );
+
+  const visibleProductEntries = useMemo(
+    () =>
+      productFieldEntries.filter((entry) => {
+        const productId = entry.productId;
+        return !productId || !selectedEcoProductIds.includes(productId);
+      }),
+    [productFieldEntries, selectedEcoProductIds]
+  );
+
+  const visibleProductIds = useMemo(
+    () => visibleProductEntries.map((entry) => entry.field.id),
+    [visibleProductEntries]
+  );
+
+  const startDate = useMemo(() => {
+    if (!startDateValue) {
+      return undefined;
+    }
+
+    const parsed = parseISO(startDateValue);
+    return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+  }, [startDateValue]);
+
+  const endDate = useMemo(() => {
+    if (!endDateValue) {
+      return undefined;
+    }
+
+    const parsed = parseISO(endDateValue);
+    return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+  }, [endDateValue]);
 
   const handleProductDragEnd = useCallback(
     (event: DragEndEvent) => {
@@ -787,16 +877,27 @@ export const AddProjectDialog = ({
         return;
       }
 
-      const activeIndex = productIds.findIndex((id) => id === active.id);
-      const overIndex = productIds.findIndex((id) => id === over.id);
+      const activeIndex = visibleProductIds.findIndex((id) => id === active.id);
+      const overIndex = visibleProductIds.findIndex((id) => id === over.id);
 
-      if (activeIndex === -1 || overIndex === -1 || activeIndex === overIndex) {
+      if (activeIndex === -1 || overIndex === -1) {
         return;
       }
 
-      moveProduct(activeIndex, overIndex);
+      const activeActualIndex = visibleProductEntries[activeIndex]?.index;
+      const overActualIndex = visibleProductEntries[overIndex]?.index;
+
+      if (
+        activeActualIndex === undefined ||
+        overActualIndex === undefined ||
+        activeActualIndex === overActualIndex
+      ) {
+        return;
+      }
+
+      moveProduct(activeActualIndex, overActualIndex);
     },
-    [moveProduct, productIds]
+    [moveProduct, visibleProductEntries, visibleProductIds]
   );
 
   useEffect(() => {
@@ -856,7 +957,7 @@ export const AddProjectDialog = ({
       initialProductEntries.length > 0
         ? initialProductEntries
         : ecoEntries.length
-        ? ecoEntries
+        ? [...ecoEntries, createProductEntry()]
         : [createProductEntry()];
 
     const nextStatus =
@@ -871,6 +972,9 @@ export const AddProjectDialog = ({
       assigned_to: initialValues?.assigned_to ?? defaultAssignee ?? "",
       source: initialValues?.source ?? defaultSource ?? "",
       siren: initialValues?.siren ?? "",
+      email: initialValues?.email ?? "",
+      address: initialValues?.address ?? "",
+      date_debut_prevue: initialValues?.date_debut_prevue ?? defaultStartDate ?? "",
       products: productList,
     } as ProjectFormValues);
   }, [
@@ -883,6 +987,7 @@ export const AddProjectDialog = ({
     productsData,
     defaultStatus,
     statusOptions,
+    defaultStartDate,
   ]);
   // **** end merged effect ****
 
@@ -986,6 +1091,10 @@ export const AddProjectDialog = ({
       const clientLastName = data.client_last_name.trim();
       const client_name = `${clientFirstName} ${clientLastName}`.replace(/\s+/g, " ").trim();
 
+      const normalizedEmail = data.email?.trim();
+      const normalizedAddress = data.address?.trim();
+      const projectCost = data.project_cost ?? undefined;
+
       const { data: createdProject, error: projectError } = await supabase
         .from("projects")
         .insert([
@@ -997,6 +1106,8 @@ export const AddProjectDialog = ({
             client_first_name: clientFirstName,
             client_last_name: clientLastName,
             product_name, // Pour compatibilité
+            email: normalizedEmail ? normalizedEmail : undefined,
+            address: normalizedAddress ? normalizedAddress : undefined,
             city: data.city,
             postal_code: data.postal_code,
             status: data.status,
@@ -1008,14 +1119,13 @@ export const AddProjectDialog = ({
             building_type: data.building_type || undefined,
             usage: data.usage || undefined,
             prime_cee: data.prime_cee || undefined,
-            discount: data.discount || undefined,
-            unit_price: data.unit_price || undefined,
+            project_cost: projectCost,
             signatory_name: data.signatory_name || undefined,
             signatory_title: data.signatory_title || undefined,
             surface_batiment_m2: data.surface_batiment_m2 || undefined,
             date_debut_prevue: data.date_debut_prevue || undefined,
             date_fin_prevue: data.date_fin_prevue || undefined,
-            estimated_value: data.estimated_value || undefined,
+            estimated_value: projectCost,
             lead_id: data.lead_id || undefined,
           },
         ])
@@ -1182,7 +1292,7 @@ export const AddProjectDialog = ({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="phone"
@@ -1198,12 +1308,84 @@ export const AddProjectDialog = ({
               />
               <FormField
                 control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input type="email" placeholder="client@email.com" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="address"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Adresse</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Adresse complète du client" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="city"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Ville *</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="postal_code"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Code postal *</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
                 name="siren"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>SIREN (optionnel)</FormLabel>
                     <FormControl>
                       <Input placeholder="000000000" maxLength={11} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="surface_batiment_m2"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Surface bâtiment (m²)</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -1328,15 +1510,16 @@ export const AddProjectDialog = ({
                 </div>
               )}
 
-              {productFields.length > 1 ? (
+              {visibleProductEntries.length > 1 ? (
                 <p className="text-xs text-muted-foreground">
                   Faites glisser les poignées pour réorganiser vos produits dans l&apos;ordre souhaité.
                 </p>
               ) : null}
 
-              {productFields.length === 0 ? (
+              {visibleProductEntries.length === 0 ? (
                 <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
-                  Ajoutez au moins un produit au projet.
+                  Les produits ECO sélectionnés sont ajoutés automatiquement. Cliquez sur « Ajouter un produit » pour en
+                  ajouter d&apos;autres.
                 </div>
               ) : (
                 <DndContext
@@ -1344,8 +1527,8 @@ export const AddProjectDialog = ({
                   collisionDetection={closestCenter}
                   onDragEnd={handleProductDragEnd}
                 >
-                  <SortableContext items={productIds} strategy={verticalListSortingStrategy}>
-                    {productFields.map((field, index) => (
+                  <SortableContext items={visibleProductIds} strategy={verticalListSortingStrategy}>
+                    {visibleProductEntries.map(({ field, index }) => (
                       <SortableProjectProductRow
                         key={field.id}
                         field={field}
@@ -1353,7 +1536,9 @@ export const AddProjectDialog = ({
                         control={form.control}
                         form={form}
                         onRemove={removeProduct}
-                        canRemove={productFields.length > 1}
+                        canRemove={
+                          visibleProductEntries.length > 1 || selectedEcoProductIds.length > 0
+                        }
                         productsLoading={productsLoading}
                         rawProductOptions={rawProductOptions}
                         productsData={productsData}
@@ -1365,52 +1550,7 @@ export const AddProjectDialog = ({
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="city"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Ville *</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="postal_code"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Code postal *</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="surface_batiment_m2"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Surface bâtiment (m²)</FormLabel>
-                    <FormControl>
-                      <Input type="number" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="prime_cee"
@@ -1426,23 +1566,10 @@ export const AddProjectDialog = ({
               />
               <FormField
                 control={form.control}
-                name="discount"
+                name="project_cost"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Remise (€)</FormLabel>
-                    <FormControl>
-                      <Input type="number" step="0.01" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="unit_price"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Prix unitaire (€)</FormLabel>
+                    <FormLabel>Coût du chantier (€)</FormLabel>
                     <FormControl>
                       <Input type="number" step="0.01" {...field} />
                     </FormControl>
@@ -1506,16 +1633,41 @@ export const AddProjectDialog = ({
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="date_debut_prevue"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="flex flex-col">
                     <FormLabel>Date de début prévue</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "pl-3 text-left font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {startDate
+                              ? format(startDate, "PPP", { locale: fr })
+                              : "Choisir une date"}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={startDate}
+                          onSelect={(date) => {
+                            field.onChange(date ? format(date, "yyyy-MM-dd") : "");
+                          }}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -1524,30 +1676,41 @@ export const AddProjectDialog = ({
                 control={form.control}
                 name="date_fin_prevue"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="flex flex-col">
                     <FormLabel>Date de fin prévue</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "pl-3 text-left font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {endDate
+                              ? format(endDate, "PPP", { locale: fr })
+                              : "Choisir une date"}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={endDate}
+                          onSelect={(date) => {
+                            field.onChange(date ? format(date, "yyyy-MM-dd") : "");
+                          }}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
-
-            <FormField
-              control={form.control}
-              name="estimated_value"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Montant estimé (€)</FormLabel>
-                  <FormControl>
-                    <Input type="number" step="0.01" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
             <div className="grid grid-cols-2 gap-4">
               <FormField

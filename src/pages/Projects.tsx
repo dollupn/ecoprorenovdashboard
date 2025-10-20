@@ -202,7 +202,7 @@ const Projects = () => {
         firstProduct?.code ||
         (project as Project & { product_name?: string }).product_name ||
         "",
-      amount: project.estimated_value ?? undefined,
+      amount: project.project_cost ?? project.estimated_value ?? undefined,
       quote_ref: project.project_ref
         ? `${project.project_ref}-DEV`
         : undefined,
@@ -296,6 +296,7 @@ const Projects = () => {
               (project as Project & { email?: string | null; client_email?: string | null }).client_email ??
               project.lead?.email ??
               null;
+            const projectCostValue = project.project_cost ?? project.estimated_value ?? null;
 
             return (
               <Card
@@ -367,7 +368,9 @@ const Projects = () => {
                     </div>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <MapPin className="w-4 h-4" />
-                      {project.city} ({project.postal_code})
+                      {project.address
+                        ? `${project.address} • ${project.postal_code} ${project.city}`
+                        : `${project.city} (${project.postal_code})`}
                     </div>
 
                     {displayedProducts.map((item, index) => {
@@ -442,12 +445,12 @@ const Projects = () => {
 
                   {/* Value & Assignment */}
                   <div className="pt-2 border-t space-y-2">
-                    {project.estimated_value && (
+                    {typeof projectCostValue === "number" && (
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Montant estimé:</span>
+                        <span className="text-sm text-muted-foreground">Coût du chantier:</span>
                         <div className="flex items-center gap-1 text-sm font-bold text-primary">
                           <Euro className="w-4 h-4" />
-                          {formatCurrency(project.estimated_value)}
+                          {formatCurrency(projectCostValue)}
                         </div>
                       </div>
                     )}
