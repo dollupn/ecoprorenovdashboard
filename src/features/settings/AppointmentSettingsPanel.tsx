@@ -5,16 +5,25 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Trash2, Calendar, Check } from "lucide-react";
+import { Plus, Trash2, Calendar, Check, Mail } from "lucide-react";
 
 interface AppointmentType {
   id: string;
   name: string;
   is_default: boolean;
+  email_template_id: string | null;
 }
+
+const EMAIL_TEMPLATES = [
+  { id: "confirmation", label: "Email de confirmation" },
+  { id: "reminder_24h", label: "Rappel 24h avant" },
+  { id: "reminder_1h", label: "Rappel 1h avant" },
+  { id: "followup", label: "Email de suivi" },
+];
 
 const DEFAULT_APPOINTMENT_TYPES = [
   "Pré-visite",
@@ -29,6 +38,7 @@ export function AppointmentSettingsPanel() {
   const { currentOrgId } = useOrg();
   const queryClient = useQueryClient();
   const [newTypeName, setNewTypeName] = useState("");
+  const [newTypeEmailTemplate, setNewTypeEmailTemplate] = useState<string>("");
   const [isInitializing, setIsInitializing] = useState(false);
 
   const { data: appointmentTypes = [], isLoading } = useQuery({
@@ -76,10 +86,11 @@ export function AppointmentSettingsPanel() {
   }, [currentOrgId, appointmentTypes.length, isLoading, isInitializing, queryClient]);
 
   const createAppointmentType = useMutation({
-    mutationFn: async (name: string) => {
+    mutationFn: async (data: { name: string; email_template_id: string | null }) => {
       const { error } = await supabase.from("appointment_types").insert({
         org_id: currentOrgId!,
-        name,
+        name: data.name,
+        email_template_id: data.email_template_id,
         is_default: false,
       });
       if (error) throw error;
@@ -87,6 +98,7 @@ export function AppointmentSettingsPanel() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["appointmentTypes", currentOrgId] });
       setNewTypeName("");
+      setNewTypeEmailTemplate("");
       toast({ title: "Type de RDV créé avec succès" });
     },
     onError: () => {
@@ -108,9 +120,26 @@ export function AppointmentSettingsPanel() {
     },
   });
 
+  const updateAppointmentType = useMutation({
+    mutationFn: async (data: { id: string; email_template_id: string | null }) => {
+      const { error } = await supabase
+        .from("appointment_types")
+        .update({ email_template_id: data.email_template_id })
+        .eq("id", data.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["appointmentTypes", currentOrgId] });
+      toast({ title: "Automation mise à jour" });
+    },
+  });
+
   const handleCreateType = () => {
     if (!newTypeName.trim()) return;
-    createAppointmentType.mutate(newTypeName.trim());
+    createAppointmentType.mutate({
+      name: newTypeName.trim(),
+      email_template_id: newTypeEmailTemplate || null,
+    });
   };
 
   return (
@@ -130,8 +159,8 @@ export function AppointmentSettingsPanel() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex gap-2">
-            <div className="flex-1">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
               <Label htmlFor="new-type">Nouveau type de rendez-vous</Label>
               <Input
                 id="new-type"
@@ -146,11 +175,27 @@ export function AppointmentSettingsPanel() {
                 }}
               />
             </div>
-            <Button onClick={handleCreateType} disabled={!newTypeName.trim() || createAppointmentType.isPending} className="self-end">
-              <Plus className="mr-2 h-4 w-4" />
-              Ajouter
-            </Button>
+            <div className="space-y-2">
+              <Label htmlFor="email-template">Automation email (optionnel)</Label>
+              <Select value={newTypeEmailTemplate} onValueChange={setNewTypeEmailTemplate}>
+                <SelectTrigger id="email-template">
+                  <SelectValue placeholder="Sélectionner un template" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Aucun</SelectItem>
+                  {EMAIL_TEMPLATES.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
+          <Button onClick={handleCreateType} disabled={!newTypeName.trim() || createAppointmentType.isPending}>
+            <Plus className="mr-2 h-4 w-4" />
+            Ajouter
+          </Button>
 
           <div className="space-y-2 border-t pt-4">
             {isLoading || isInitializing ? (
@@ -165,23 +210,53 @@ export function AppointmentSettingsPanel() {
               appointmentTypes.map((type) => (
                 <div
                   key={type.id}
-                  className="flex items-center justify-between rounded-lg border p-3 transition-colors hover:bg-muted/50"
+                  className="rounded-lg border p-4 transition-colors hover:bg-muted/50"
                 >
-                  <div className="flex items-center gap-3">
-                    <Calendar className="h-4 w-4 text-primary" />
-                    <span className="font-medium">{type.name}</span>
-                    {type.is_default && (
-                      <Badge variant="secondary" className="text-xs">
-                        <Check className="mr-1 h-3 w-3" />
-                        Par défaut
-                      </Badge>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Calendar className="h-4 w-4 text-primary" />
+                      <span className="font-medium">{type.name}</span>
+                      {type.is_default && (
+                        <Badge variant="secondary" className="text-xs">
+                          <Check className="mr-1 h-3 w-3" />
+                          Par défaut
+                        </Badge>
+                      )}
+                    </div>
+                    {!type.is_default && (
+                      <Button variant="ghost" size="sm" onClick={() => deleteAppointmentType.mutate(type.id)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
                     )}
                   </div>
-                  {!type.is_default && (
-                    <Button variant="ghost" size="sm" onClick={() => deleteAppointmentType.mutate(type.id)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  )}
+                  
+                  <div className="mt-3 flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-muted-foreground" />
+                    <Label htmlFor={`template-${type.id}`} className="text-sm text-muted-foreground">
+                      Automation:
+                    </Label>
+                    <Select
+                      value={type.email_template_id || "none"}
+                      onValueChange={(value) =>
+                        updateAppointmentType.mutate({
+                          id: type.id,
+                          email_template_id: value === "none" ? null : value,
+                        })
+                      }
+                    >
+                      <SelectTrigger id={`template-${type.id}`} className="h-8 w-[200px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Aucun</SelectItem>
+                        {EMAIL_TEMPLATES.map((template) => (
+                          <SelectItem key={template.id} value={template.id}>
+                            {template.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               ))
             )}

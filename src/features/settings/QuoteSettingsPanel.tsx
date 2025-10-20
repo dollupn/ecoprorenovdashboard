@@ -324,13 +324,11 @@ export function QuoteSettingsPanel() {
                   onChange={(e) => setNewDelegate((prev) => ({ ...prev, name: e.target.value }))}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="delegate-description">Description</Label>
-                <Textarea
-                  id="delegate-description"
-                  placeholder="Informations complémentaires"
-                  value={newDelegate.description}
-                  onChange={(e) => setNewDelegate((prev) => ({ ...prev, description: e.target.value }))}
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="delegate-description">Contenu par défaut</Label>
+                <RichTextEditor 
+                  content={newDelegate.description || "<p>Décrivez ici votre prestation...</p>"} 
+                  onChange={(html) => setNewDelegate((prev) => ({ ...prev, description: html }))} 
                 />
               </div>
             </div>
@@ -359,11 +357,12 @@ export function QuoteSettingsPanel() {
                     key={delegate.id}
                     className="flex items-start justify-between rounded-lg border border-border/60 p-3"
                   >
-                    <div>
+                    <div className="flex-1">
                       <p className="font-medium text-foreground">{delegate.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {delegate.description ?? "Aucune description"}
-                      </p>
+                      <div 
+                        className="prose prose-sm mt-1 max-w-none text-muted-foreground"
+                        dangerouslySetInnerHTML={{ __html: delegate.description ?? "<p>Aucune description</p>" }}
+                      />
                     </div>
                     <Button
                       variant="ghost"

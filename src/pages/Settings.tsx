@@ -2054,63 +2054,34 @@ export default function Settings() {
 
   return (
     <Layout>
-      <div className="space-y-8">
-        <div className="rounded-3xl border bg-card/60 p-10 shadow-sm backdrop-blur">
-          <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-            <div className="space-y-3">
-              <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1 text-sm font-medium text-primary">
-                <SettingsIcon className="h-4 w-4" />
-                Centre de configuration
-              </span>
-              <div className="space-y-2">
-                <h1 className="text-3xl font-semibold text-foreground">Paramètres</h1>
-                <p className="text-lg text-muted-foreground">
-                  Centralisez les préférences de votre organisation et pilotez les accès en toute sérénité.
-                </p>
-              </div>
-            </div>
-            <Card className="w-full max-w-sm border border-primary/10 bg-background/80 shadow-none">
-              <CardContent className="space-y-4 p-6 text-sm text-muted-foreground">
-                <div className="flex items-start gap-3">
-                  <Shield className="h-4 w-4 text-primary" />
-                  <div>
-                    <p className="font-medium text-foreground">Sécurité renforcée</p>
-                    <p>{activeMembers} collaborateurs actifs avec authentification sécurisée.</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Database className="h-4 w-4 text-primary" />
-                  <div>
-                    <p className="font-medium text-foreground">Sauvegardes automatiques</p>
-                    <p>Dernière sauvegarde complète effectuée il y a 2 heures.</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+      <div className="min-h-screen bg-background">
+        <div className="mx-auto max-w-5xl px-4 py-8 lg:px-8">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">Settings</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Manage your account settings and preferences.
+            </p>
           </div>
-        </div>
 
-        <div className="grid gap-6 lg:grid-cols-[260px,1fr]">
-          <Card className="h-fit border border-border/60 bg-card/70 shadow-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold text-foreground">Sections</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
+          <div className="mb-6 border-b border-border">
+            <nav className="flex gap-6">
               {SETTINGS_SECTIONS.map(({ id, label, icon: Icon }) => (
-                <Button
+                <button
                   key={id}
-                  variant={activeSection === id ? "secondary" : "ghost"}
-                  className={`w-full justify-start gap-2 ${
-                    activeSection === id ? "text-foreground" : "text-muted-foreground"
-                  }`}
                   onClick={() => handleSectionSelect(id)}
+                  className={`flex items-center gap-2 border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
+                    activeSection === id
+                      ? "border-primary text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
                 >
                   <Icon className="h-4 w-4" />
                   {label}
-                </Button>
+                </button>
               ))}
-            </CardContent>
-          </Card>
+            </nav>
+          </div>
+
           <div className="space-y-6">
             {activeSection === "general" && <GeneralSection />}
             {activeSection === "lead" && <LeadSettingsPanel />}

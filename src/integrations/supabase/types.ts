@@ -17,6 +17,7 @@ export type Database = {
       appointment_types: {
         Row: {
           created_at: string
+          email_template_id: string | null
           id: string
           is_active: boolean
           is_default: boolean
@@ -26,6 +27,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          email_template_id?: string | null
           id?: string
           is_active?: boolean
           is_default?: boolean
@@ -35,6 +37,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          email_template_id?: string | null
           id?: string
           is_active?: boolean
           is_default?: boolean
