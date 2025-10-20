@@ -1102,7 +1102,6 @@ export const AddProjectDialog = ({
       const clientLastName = data.client_last_name.trim();
       const client_name = `${clientFirstName} ${clientLastName}`.replace(/\s+/g, " ").trim();
 
-      const normalizedEmail = data.email?.trim();
       const normalizedAddress = data.address?.trim();
       const normalizedHqAddress = data.hq_address?.trim();
       const normalizedExternalRef = data.external_reference?.trim();
@@ -1119,7 +1118,6 @@ export const AddProjectDialog = ({
             client_first_name: clientFirstName,
             client_last_name: clientLastName,
             product_name, // Pour compatibilité
-            email: normalizedEmail ? normalizedEmail : undefined,
             hq_address: normalizedHqAddress ? normalizedHqAddress : undefined,
             hq_city: data.hq_city || undefined,
             hq_postal_code: data.hq_postal_code || undefined,
