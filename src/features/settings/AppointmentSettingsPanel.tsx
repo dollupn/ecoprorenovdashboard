@@ -65,6 +65,19 @@ export function AppointmentSettingsPanel() {
 
       setIsInitializing(true);
       try {
+        // Check one more time to prevent race conditions
+        const { data: existing } = await supabase
+          .from("appointment_types")
+          .select("id")
+          .eq("org_id", currentOrgId)
+          .eq("is_active", true)
+          .limit(1);
+
+        if (existing && existing.length > 0) {
+          setIsInitializing(false);
+          return;
+        }
+
         const defaultTypes = DEFAULT_APPOINTMENT_TYPES.map((name) => ({
           org_id: currentOrgId,
           name,
@@ -83,7 +96,8 @@ export function AppointmentSettingsPanel() {
     };
 
     void initializeDefaults();
-  }, [currentOrgId, appointmentTypes.length, isLoading, isInitializing, queryClient]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentOrgId]);
 
   const createAppointmentType = useMutation({
     mutationFn: async (data: { name: string; email_template_id: string | null }) => {
