@@ -325,7 +325,7 @@ const createProjectSchema = (
     hq_city: z.string().min(2, "La ville du siège est requise"),
     hq_postal_code: z.string().min(5, "Code postal du siège invalide"),
     same_address: z.boolean().default(false),
-    address: z.string().optional().or(z.literal("")),
+    address: z.string().min(3, "L'adresse du chantier est requise"),
     siren: sirenSchema,
     external_reference: z.string().optional().or(z.literal("")),
     products: z
@@ -337,8 +337,8 @@ const createProjectSchema = (
         }),
       )
       .min(1, "Au moins un produit est requis"),
-    city: z.string().min(2, "La ville est requise"),
-    postal_code: z.string().min(5, "Code postal invalide"),
+    city: z.string().min(2, "La ville du chantier est requise"),
+    postal_code: z.string().min(5, "Code postal du chantier invalide"),
     building_type: buildingTypeSchema,
     usage: usageSchema,
     prime_cee: z.coerce.number().optional(),
@@ -376,11 +376,11 @@ const baseDefaultValues: Partial<ProjectFormValues> = {
   hq_postal_code: "",
   same_address: false,
   address: "",
+  city: "",
+  postal_code: "",
   siren: "",
   external_reference: "",
   products: [{ product_id: "", quantity: 1, dynamic_params: {} }],
-  city: "",
-  postal_code: "",
   building_type: "",
   usage: "",
   prime_cee: undefined,
@@ -1410,7 +1410,7 @@ export const AddProjectDialog = ({
                   <FormControl>
                     <Checkbox
                       checked={field.value}
-                      onCheckedChange={(checked) => {
+                      onCheckedChange={async (checked) => {
                         field.onChange(checked);
                         if (checked) {
                           // Copy headquarters address to site address
@@ -1420,6 +1420,8 @@ export const AddProjectDialog = ({
                           form.setValue("address", hqAddress);
                           form.setValue("city", hqCity);
                           form.setValue("postal_code", hqPostalCode);
+                          // Trigger validation for the updated fields
+                          await form.trigger(["address", "city", "postal_code"]);
                         }
                       }}
                     />
