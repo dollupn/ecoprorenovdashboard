@@ -1,7 +1,6 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./Sidebar";
-import { Bell, MessageCircle, Search, User } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ModeToggle } from "@/components/theme/ModeToggle";
 import { OrgSelector } from "@/features/organizations/OrgSelector";
@@ -10,6 +9,7 @@ import { useOrg } from "@/features/organizations/OrgContext";
 import { useMembers } from "@/features/members/api";
 import { UserRoleBadge } from "@/features/members/UserRoleBadge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -56,9 +56,7 @@ export function Layout({ children }: LayoutProps) {
               <div className="flex items-center gap-3 flex-wrap justify-end">
                 <OrgSelector />
                 <ModeToggle />
-                <Button variant="ghost" size="icon" className="rounded-full">
-                  <Bell className="w-4 h-4" />
-                </Button>
+                <NotificationBell />
 
                 <div className="flex items-center gap-2 min-w-0">
                   <Avatar>
