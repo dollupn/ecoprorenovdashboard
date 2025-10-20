@@ -322,6 +322,7 @@ const createProjectSchema = (
       .or(z.literal("")),
     address: z.string().optional().or(z.literal("")),
     siren: sirenSchema,
+    external_reference: z.string().optional().or(z.literal("")),
     products: z
       .array(
         z.object({
@@ -344,7 +345,7 @@ const createProjectSchema = (
     source: z.string().min(2, "La source est requise"),
     date_debut_prevue: z.string().optional(),
     date_fin_prevue: z.string().optional(),
-    project_cost: z.coerce.number().optional(),
+    estimated_value: z.coerce.number().optional(),
     lead_id: z.string().optional(),
   });
 };
@@ -367,6 +368,7 @@ const baseDefaultValues: Partial<ProjectFormValues> = {
   email: "",
   address: "",
   siren: "",
+  external_reference: "",
   products: [{ product_id: "", quantity: 1, dynamic_params: {} }],
   city: "",
   postal_code: "",
@@ -381,7 +383,7 @@ const baseDefaultValues: Partial<ProjectFormValues> = {
   source: "",
   date_debut_prevue: "",
   date_fin_prevue: "",
-  project_cost: undefined,
+  estimated_value: undefined,
   lead_id: undefined,
 };
 
@@ -1093,7 +1095,8 @@ export const AddProjectDialog = ({
 
       const normalizedEmail = data.email?.trim();
       const normalizedAddress = data.address?.trim();
-      const projectCost = data.project_cost ?? undefined;
+      const normalizedExternalRef = data.external_reference?.trim();
+      const projectCost = data.estimated_value ?? undefined;
 
       const { data: createdProject, error: projectError } = await supabase
         .from("projects")
@@ -1108,6 +1111,7 @@ export const AddProjectDialog = ({
             product_name, // Pour compatibilité
             email: normalizedEmail ? normalizedEmail : undefined,
             address: normalizedAddress ? normalizedAddress : undefined,
+            external_reference: normalizedExternalRef ? normalizedExternalRef : undefined,
             city: data.city,
             postal_code: data.postal_code,
             status: data.status,
@@ -1119,7 +1123,6 @@ export const AddProjectDialog = ({
             building_type: data.building_type || undefined,
             usage: data.usage || undefined,
             prime_cee: data.prime_cee || undefined,
-            project_cost: projectCost,
             signatory_name: data.signatory_name || undefined,
             signatory_title: data.signatory_title || undefined,
             surface_batiment_m2: data.surface_batiment_m2 || undefined,
@@ -1380,6 +1383,22 @@ export const AddProjectDialog = ({
               />
               <FormField
                 control={form.control}
+                name="external_reference"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Référence Externe</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Référence délégataire..." {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
                 name="surface_batiment_m2"
                 render={({ field }) => (
                   <FormItem>
@@ -1566,10 +1585,10 @@ export const AddProjectDialog = ({
               />
               <FormField
                 control={form.control}
-                name="project_cost"
+                name="estimated_value"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Coût du chantier (€)</FormLabel>
+                    <FormLabel>Valeur estimée (€)</FormLabel>
                     <FormControl>
                       <Input type="number" step="0.01" {...field} />
                     </FormControl>

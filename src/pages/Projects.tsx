@@ -202,7 +202,7 @@ const Projects = () => {
         firstProduct?.code ||
         (project as Project & { product_name?: string }).product_name ||
         "",
-      amount: project.project_cost ?? project.estimated_value ?? undefined,
+      amount: project.estimated_value ?? undefined,
       quote_ref: project.project_ref
         ? `${project.project_ref}-DEV`
         : undefined,
@@ -296,7 +296,7 @@ const Projects = () => {
               (project as Project & { email?: string | null; client_email?: string | null }).client_email ??
               project.lead?.email ??
               null;
-            const projectCostValue = project.project_cost ?? project.estimated_value ?? null;
+            const projectCostValue = project.estimated_value ?? null;
 
             return (
               <Card
@@ -368,8 +368,8 @@ const Projects = () => {
                     </div>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <MapPin className="w-4 h-4" />
-                      {project.address
-                        ? `${project.address} • ${project.postal_code} ${project.city}`
+                      {(project as Project & { address?: string }).address
+                        ? `${(project as Project & { address?: string }).address} • ${project.postal_code} ${project.city}`
                         : `${project.city} (${project.postal_code})`}
                     </div>
 

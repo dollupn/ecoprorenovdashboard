@@ -185,7 +185,7 @@ const ProjectDetails = () => {
         firstProduct?.code ||
         (project as Project & { product_name?: string }).product_name ||
         "",
-      amount: project.project_cost ?? project.estimated_value ?? undefined,
+      amount: project.estimated_value ?? undefined,
       quote_ref: project.project_ref ? `${project.project_ref}-DEV` : undefined,
     });
     setQuoteDialogOpen(true);
@@ -230,8 +230,8 @@ const ProjectDetails = () => {
     }
   };
 
-  const projectCostValue = project?.project_cost ?? project?.estimated_value ?? null;
-  const projectEmail = project?.email ?? null;
+  const projectCostValue = project?.estimated_value ?? null;
+  const projectEmail = (project as Project & { email?: string })?.email ?? null;
 
   return (
     <Layout>
@@ -333,9 +333,9 @@ const ProjectDetails = () => {
                   <p className="text-sm text-muted-foreground">Adresse</p>
                   <p className="font-medium flex items-center gap-2">
                     <MapPin className="w-4 h-4 text-primary" />
-                    {project.address
+                    {(project as Project & { address?: string }).address
                       ? [
-                          project.address,
+                          (project as Project & { address?: string }).address,
                           [project.postal_code, project.city].filter(Boolean).join(" "),
                         ]
                           .filter((part) => part && part.toString().trim().length > 0)
