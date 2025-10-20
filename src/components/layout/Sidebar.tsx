@@ -42,7 +42,7 @@ const mainItems = [
     subItems: [
       { title: "Liste des leads", url: "/leads", icon: Users },
       { title: "Lead terrain", url: "/leads/pos", icon: ClipboardPlus },
-      { title: "Paramètres Lead", url: "/leads/settings", icon: Settings2 },
+      { title: "Paramètres Lead", url: "/settings?section=lead", icon: Settings2 },
     ]
   },
   { title: "Projets", url: "/projects", icon: FolderOpen },
@@ -64,9 +64,9 @@ const businessItems = [
     icon: Settings,
     subItems: [
       { title: "Paramètres généraux", url: "/settings", icon: Settings },
-      { title: "Paramètres Lead", url: "/leads/settings", icon: Settings2 },
-      { title: "Paramètres Devis", url: "/quotes/settings", icon: FileText },
-      { title: "Types de RDV", url: "/calendar/settings", icon: Calendar },
+      { title: "Paramètres Lead", url: "/settings?section=lead", icon: Settings2 },
+      { title: "Paramètres Devis", url: "/settings?section=quotes", icon: FileText },
+      { title: "Types de RDV", url: "/settings?section=calendar", icon: Calendar },
     ]
   },
 ];
@@ -79,12 +79,34 @@ export function AppSidebar() {
   const { signOut } = useAuth();
   const [openGroups, setOpenGroups] = React.useState<Record<string, boolean>>({});
 
-  const isActive = (path: string, subItems?: any[]) => {
-    if (path === "/") return currentPath === "/";
-    if (subItems) {
-      return subItems.some(sub => currentPath === sub.url || currentPath.startsWith(sub.url + "/"));
+  const matchesPathWithSearch = (path: string) => {
+    const [basePath, search] = path.split("?");
+    const pathMatch = currentPath === basePath || currentPath.startsWith(`${basePath}/`);
+    if (!search) {
+      return pathMatch;
     }
-    return currentPath === path || currentPath.startsWith(path + "/");
+
+    if (!pathMatch) {
+      return false;
+    }
+
+    const currentParams = new URLSearchParams(location.search);
+    const targetParams = new URLSearchParams(search);
+
+    for (const [key, value] of targetParams.entries()) {
+      if (currentParams.get(key) !== value) {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  const isActive = (path: string, subItems?: any[]) => {
+    if (subItems?.length) {
+      return matchesPathWithSearch(path) || subItems.some((sub) => matchesPathWithSearch(sub.url));
+    }
+    return matchesPathWithSearch(path);
   };
 
   const getNavClassName = (active: boolean) =>

@@ -77,6 +77,9 @@ import {
   useDriveConnectionStatus,
   useDriveDisconnect,
 } from "@/integrations/googleDrive";
+import { LeadSettingsPanel } from "@/features/settings/LeadSettingsPanel";
+import { QuoteSettingsPanel } from "@/features/settings/QuoteSettingsPanel";
+import { AppointmentSettingsPanel } from "@/features/settings/AppointmentSettingsPanel";
 
 const ROLE_OPTIONS = ["Administrateur", "Manager", "Commercial", "Technicien"] as const;
 type RoleOption = (typeof ROLE_OPTIONS)[number];
@@ -261,11 +264,25 @@ const initialIntegrations: Integration[] = [
   },
 ];
 
+
 const sessionOptions = [
   { value: "15", label: "15 minutes" },
   { value: "30", label: "30 minutes" },
   { value: "60", label: "1 heure" },
   { value: "120", label: "2 heures" },
+];
+
+type SettingsSection = "general" | "lead" | "quotes" | "calendar";
+
+const SETTINGS_SECTIONS: Array<{
+  id: SettingsSection;
+  label: string;
+  icon: typeof SettingsIcon;
+}> = [
+  { id: "general", label: "Paramètres généraux", icon: SettingsIcon },
+  { id: "lead", label: "Paramètres Lead", icon: Settings2 },
+  { id: "quotes", label: "Paramètres Devis", icon: FileText },
+  { id: "calendar", label: "Types de RDV", icon: Calendar },
 ];
 
 export default function Settings() {
@@ -274,6 +291,30 @@ export default function Settings() {
   const location = useLocation();
   const navigate = useNavigate();
   const { currentOrgId } = useOrg();
+  const activeSection = useMemo<SettingsSection>(() => {
+    const params = new URLSearchParams(location.search);
+    const section = params.get("section");
+    return SETTINGS_SECTIONS.some(({ id }) => id === section)
+      ? (section as SettingsSection)
+      : "general";
+  }, [location.search]);
+
+  const handleSectionSelect = (section: SettingsSection) => {
+    const params = new URLSearchParams(location.search);
+    if (section === "general") {
+      params.delete("section");
+    } else {
+      params.set("section", section);
+    }
+
+    navigate(
+      {
+        pathname: location.pathname,
+        search: params.toString() ? `?${params.toString()}` : "",
+      },
+      { replace: true },
+    );
+  };
   const isMounted = useRef(true);
 
   const {
@@ -500,6 +541,855 @@ export default function Settings() {
       });
   };
 
+  const generalSection = (
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.65fr,1fr]">
+      <div className="space-y-6">
+        <Card className="border border-border/60 bg-card/70 shadow-sm">
+          <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-lg font-semibold text-foreground">
+                <Users className="h-5 w-5 text-primary" />
+                Gestion des utilisateurs
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Administrez les accès, les rôles et le statut d&apos;activité de vos collaborateurs.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleManualRefresh}
+                disabled={loadingMembers}
+                className="h-9 w-9 border-border/60"
+                aria-label="Rafraîchir la liste des membres"
+              >
+                <RefreshCw className={`h-4 w-4 ${loadingMembers ? "animate-spin" : ""}`} />
+              </Button>
+              <Button onClick={handleInviteMember} variant="secondary">
+                Inviter un membre
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">{renderTeamMembers()}</CardContent>
+        </Card>
+
+        <Card className="border border-border/60 bg-card/70 shadow-sm">
+          <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-lg font-semibold text-foreground">
+                <Palette className="h-5 w-5 text-primary" />
+                Statuts des projets
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Personnalisez les libellés et les couleurs utilisés sur l&apos;ensemble du tableau de bord.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleResetStatuses}
+                disabled={isDefaultProjectStatuses}
+              >
+                Réinitialiser
+              </Button>
+              <Button size="sm" variant="secondary" className="gap-2" onClick={handleAddStatus}>
+                <Plus className="h-4 w-4" />
+                Ajouter un statut
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {projectStatuses.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-border/60 bg-background/60 p-6 text-center text-sm text-muted-foreground">
+                Aucun statut n&apos;est configuré. Ajoutez un statut pour commencer.
+              </div>
+            ) : (
+              projectStatuses.map((status) => {
+                const badgeStyle = getProjectStatusBadgeStyle(status.color);
+                return (
+                  <div
+                    key={status.id}
+                    className="space-y-4 rounded-2xl border border-border/60 bg-background/60 p-4"
+                  >
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div className="flex items-center gap-3">
+                        <Badge variant="outline" style={badgeStyle} className="px-3 py-1">
+                          {status.label || status.value}
+                        </Badge>
+                        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          {status.value}
+                        </span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemoveStatus(status.id)}
+                        disabled={projectStatuses.length <= 1}
+                        aria-label={`Supprimer le statut ${status.label || status.value}`}
+                        className="h-9 w-9 text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                      <div className="space-y-2">
+                        <Label>Nom affiché</Label>
+                        <Input
+                          value={status.label}
+                          placeholder="Nom du statut"
+                          onChange={(event) => handleStatusLabelChange(status.id, event.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Code interne</Label>
+                        <Input
+                          value={status.value}
+                          onChange={(event) => handleStatusValueChange(status.id, event.target.value)}
+                          placeholder="PROSPECTION"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Identifiant synchronisé avec vos exports et intégrations.
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Couleur du badge</Label>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="color"
+                            value={status.color}
+                            onChange={(event) => handleStatusColorChange(status.id, event.target.value)}
+                            className="h-10 w-16 cursor-pointer rounded-md border border-border/60 bg-background p-1"
+                            aria-label={`Couleur du statut ${status.label || status.value}`}
+                          />
+                          <span className="text-sm text-muted-foreground">{status.color}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+            <div className="rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-4 text-sm text-muted-foreground">
+              Les modifications sont appliquées instantanément aux listes, aux filtres et aux formulaires de création
+              de projet.
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border border-border/60 bg-card/70 shadow-sm">
+          <CardHeader className="flex flex-col gap-4">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-lg font-semibold text-foreground">
+                <List className="h-5 w-5 text-primary" />
+                Référentiel bâtiments
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Personnalisez les types de bâtiment et les usages proposés lors de la création de projet.
+              </p>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-8">
+            <div className="space-y-4">
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h3 className="text-base font-medium text-foreground">Types de bâtiment</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Ces valeurs alimentent les formulaires de projets et les documents commerciaux.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleResetBuildingTypes}
+                    disabled={isDefaultBuildingTypes}
+                  >
+                    Réinitialiser
+                  </Button>
+                  <Button size="sm" variant="secondary" className="gap-2" onClick={handleAddBuildingType}>
+                    <Plus className="h-4 w-4" />
+                    Ajouter
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {buildingTypes.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-border/60 bg-background/60 p-4 text-sm text-muted-foreground">
+                    Aucun type de bâtiment n&apos;est configuré. Ajoutez-en pour les proposer dans vos projets.
+                  </div>
+                ) : (
+                  buildingTypes.map((type, index) => (
+                    <div key={`${type}-${index}`} className="flex items-center gap-2">
+                      <Input
+                        value={type}
+                        onChange={(event) => handleBuildingTypeChange(index, event.target.value)}
+                        placeholder="Type de bâtiment"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemoveBuildingType(index)}
+                        aria-label={`Supprimer le type ${type || index + 1}`}
+                        className="h-9 w-9 text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <Separator className="bg-border/60" />
+
+            <div className="space-y-4">
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h3 className="text-base font-medium text-foreground">Usages</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Gérez les usages disponibles lors de la qualification des projets.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleResetUsages}
+                    disabled={isDefaultBuildingUsages}
+                  >
+                    Réinitialiser
+                  </Button>
+                  <Button size="sm" variant="secondary" className="gap-2" onClick={handleAddUsage}>
+                    <Plus className="h-4 w-4" />
+                    Ajouter
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {buildingUsages.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-border/60 bg-background/60 p-4 text-sm text-muted-foreground">
+                    Aucun usage n&apos;est configuré. Ajoutez un usage pour le rendre disponible.
+                  </div>
+                ) : (
+                  buildingUsages.map((usage, index) => (
+                    <div key={`${usage}-${index}`} className="flex items-center gap-2">
+                      <Input
+                        value={usage}
+                        onChange={(event) => handleUsageChange(index, event.target.value)}
+                        placeholder="Usage"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemoveUsage(index)}
+                        aria-label={`Supprimer l'usage ${usage || index + 1}`}
+                        className="h-9 w-9 text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border border-border/60 bg-card/70 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg font-semibold text-foreground">
+              <Building2 className="h-5 w-5 text-primary" />
+              Informations sur l&apos;entreprise
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Ces informations sont utilisées pour vos documents commerciaux et la communication client.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="company" className="space-y-6">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="company">Entreprise</TabsTrigger>
+                <TabsTrigger value="delegataire">Délégataires</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="company" className="space-y-6">
+                <form className="space-y-6" onSubmit={handleCompanySubmit}>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="company-name">Nom d&apos;usage</Label>
+                      <Input
+                        id="company-name"
+                        value={companyInfo.name}
+                        onChange={(e) => setCompanyInfo((p) => ({ ...p, name: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="company-legal">Raison sociale</Label>
+                      <Input
+                        id="company-legal"
+                        value={companyInfo.legalName}
+                        onChange={(e) => setCompanyInfo((p) => ({ ...p, legalName: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="company-registration">Enregistrement</Label>
+                      <Input
+                        id="company-registration"
+                        value={companyInfo.registration}
+                        onChange={(e) =>
+                          setCompanyInfo((p) => ({ ...p, registration: e.target.value }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="company-phone">Téléphone</Label>
+                      <Input
+                        id="company-phone"
+                        value={companyInfo.phone}
+                        onChange={(e) => setCompanyInfo((p) => ({ ...p, phone: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="company-email">Email principal</Label>
+                      <Input
+                        id="company-email"
+                        type="email"
+                        value={companyInfo.email}
+                        onChange={(e) => setCompanyInfo((p) => ({ ...p, email: e.target.value }))}
+                      />
+                    </div>
+                    <div className="md:col-span-2 space-y-2">
+                      <Label htmlFor="company-address">Adresse</Label>
+                      <AddressAutocomplete
+                        value={companyInfo.address}
+                        onChange={(address, city, postalCode) =>
+                          setCompanyInfo((p) => ({
+                            ...p,
+                            address,
+                            city,
+                            postalCode,
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2 md:col-span-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="company-city">Ville</Label>
+                        <Input
+                          id="company-city"
+                          value={companyInfo.city}
+                          readOnly
+                          placeholder="Sélectionnez une adresse"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="company-postal">Code postal</Label>
+                        <Input
+                          id="company-postal"
+                          value={companyInfo.postalCode}
+                          readOnly
+                          placeholder="Sélectionnez une adresse"
+                        />
+                      </div>
+                    </div>
+                    <div className="md:col-span-2 space-y-2">
+                      <Label htmlFor="company-description">Description publique</Label>
+                      <Textarea
+                        id="company-description"
+                        value={companyInfo.description}
+                        onChange={(e) =>
+                          setCompanyInfo((p) => ({ ...p, description: e.target.value }))
+                        }
+                        rows={3}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-end gap-3">
+                    <Button type="button" variant="ghost">
+                      Annuler
+                    </Button>
+                    <Button type="submit">Enregistrer les modifications</Button>
+                  </div>
+                </form>
+              </TabsContent>
+
+              <TabsContent value="delegataire" className="space-y-6">
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Renseignez les délégataires avec leurs informations de contact et le bloc de texte qui sera
+                    automatiquement ajouté aux devis correspondants.
+                  </p>
+                  <div className="flex items-center justify-between rounded-xl border border-dashed border-primary/30 bg-primary/5 p-4 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-3">
+                      <UserPlus className="h-4 w-4 text-primary" />
+                      <span>Ajoutez un délégataire pour personnaliser vos documents commerciaux.</span>
+                    </div>
+                    <Button type="button" size="sm" onClick={handleAddDelegataire}>
+                      Nouveau délégataire
+                    </Button>
+                  </div>
+                </div>
+
+                {delegataires.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-border/60 bg-background/60 p-8 text-center text-sm text-muted-foreground">
+                    <FileText className="h-6 w-6 text-primary" />
+                    <p>Aucun délégataire n&apos;a encore été configuré.</p>
+                    <Button type="button" variant="secondary" onClick={handleAddDelegataire}>
+                      Ajouter un délégataire
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {delegataires.map((delegataire, index) => (
+                      <div
+                        key={delegataire.id}
+                        className="space-y-4 rounded-2xl border border-border/60 bg-background/60 p-5 shadow-sm"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-foreground">
+                              Délégataire {index + 1}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Ces informations seront reprises sur les devis associés.
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoveDelegataire(delegataire.id)}
+                            className="h-8 w-8 text-muted-foreground"
+                            aria-label={`Supprimer le délégataire ${index + 1}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label htmlFor={`delegataire-name-${delegataire.id}`}>
+                              Nom du délégataire
+                            </Label>
+                            <Input
+                              id={`delegataire-name-${delegataire.id}`}
+                              value={delegataire.name}
+                              onChange={(event) =>
+                                handleDelegataireChange(
+                                  delegataire.id,
+                                  "name",
+                                  event.target.value,
+                                )
+                              }
+                              placeholder="Société partenaire"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor={`delegataire-contact-${delegataire.id}`}>
+                              Contact principal
+                            </Label>
+                            <Input
+                              id={`delegataire-contact-${delegataire.id}`}
+                              value={delegataire.contactName}
+                              onChange={(event) =>
+                                handleDelegataireChange(
+                                  delegataire.id,
+                                  "contactName",
+                                  event.target.value,
+                                )
+                              }
+                              placeholder="Nom et prénom"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor={`delegataire-email-${delegataire.id}`}>
+                              Email
+                            </Label>
+                            <Input
+                              id={`delegataire-email-${delegataire.id}`}
+                              type="email"
+                              value={delegataire.email}
+                              onChange={(event) =>
+                                handleDelegataireChange(
+                                  delegataire.id,
+                                  "email",
+                                  event.target.value,
+                                )
+                              }
+                              placeholder="delegataire@exemple.fr"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor={`delegataire-phone-${delegataire.id}`}>
+                              Téléphone
+                            </Label>
+                            <Input
+                              id={`delegataire-phone-${delegataire.id}`}
+                              value={delegataire.phone}
+                              onChange={(event) =>
+                                handleDelegataireChange(
+                                  delegataire.id,
+                                  "phone",
+                                  event.target.value,
+                                )
+                              }
+                              placeholder="+33 6 12 34 56 78"
+                            />
+                          </div>
+                          <div className="md:col-span-2 space-y-2">
+                            <Label htmlFor={`delegataire-text-${delegataire.id}`}>
+                              Bloc de texte pour le devis
+                            </Label>
+                            <Textarea
+                              id={`delegataire-text-${delegataire.id}`}
+                              value={delegataire.textBlock}
+                              onChange={(event) =>
+                                handleDelegataireChange(
+                                  delegataire.id,
+                                  "textBlock",
+                                  event.target.value,
+                                )
+                              }
+                              rows={3}
+                              placeholder="Informations complémentaires affichées sur le devis"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Ce contenu sera affiché automatiquement dans la section dédiée du devis.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {delegataires.length > 0 && (
+                  <div className="flex items-center justify-end">
+                    <Button type="button" onClick={handleSaveDelegataires}>
+                      Sauvegarder les délégataires
+                    </Button>
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+
+        <Card className="border border-border/60 bg-card/70 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg font-semibold text-foreground">
+              <Bell className="h-5 w-5 text-primary" />
+              Préférences de notifications
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Personnalisez les canaux de communication pour chaque événement métier important.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-4">
+              {[
+                {
+                  key: "commercialEmails" as const,
+                  title: "Suivi commercial",
+                  description:
+                    "Alertes sur les nouveaux leads, rappels de relance et devis en attente.",
+                },
+                {
+                  key: "operationalEmails" as const,
+                  title: "Opérations & chantiers",
+                  description:
+                    "Notifications de planification, pointages d'équipes et suivi de chantier.",
+                },
+                {
+                  key: "smsReminders" as const,
+                  title: "SMS automatiques",
+                  description:
+                    "Rappels de rendez-vous clients et confirmations d'interventions.",
+                },
+                {
+                  key: "pushNotifications" as const,
+                  title: "Notifications mobiles",
+                  description:
+                    "Alertes en temps réel sur mobile pour les demandes critiques.",
+                },
+                {
+                  key: "weeklyDigest" as const,
+                  title: "Rapport hebdomadaire",
+                  description:
+                    "Synthèse des indicateurs clés envoyée chaque lundi matin.",
+                },
+              ].map((item) => (
+                <div
+                  key={item.key}
+                  className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-background/60 p-4 md:flex-row md:items-center md:justify-between"
+                >
+                  <div>
+                    <p className="font-medium text-foreground">{item.title}</p>
+                    <p className="text-sm text-muted-foreground">{item.description}</p>
+                  </div>
+                  <Switch
+                    checked={notifications[item.key]}
+                    onCheckedChange={() => toggleNotification(item.key)}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center justify-end">
+              <Button onClick={handleSaveNotifications}>Sauvegarder les préférences</Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="space-y-6">
+        <Card className="border border-border/60 bg-card/70 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg font-semibold text-foreground">
+              <Plug className="h-5 w-5 text-primary" />
+              Intégrations & API
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Connectez vos outils métiers pour fluidifier vos process commerciaux et opérationnels.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {displayedIntegrations.map((integration) => {
+              const isDrive = integration.id === "google-drive";
+              const badgeLabel = isDrive && driveConnectionLoading
+                ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Vérification
+                    </span>
+                  )
+                : integration.status === "connected"
+                ? "Connecté"
+                : integration.status === "pending"
+                ? "En attente"
+                : "Déconnecté";
+
+              return (
+                <div
+                  key={integration.id}
+                  className="space-y-3 rounded-2xl border border-border/60 bg-background/60 p-4"
+                >
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-foreground">{integration.name}</p>
+                      <Badge
+                        className={integrationStatusStyles[integration.status]}
+                        variant="outline"
+                      >
+                        {badgeLabel}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">{integration.description}</p>
+                  </div>
+                  {isDrive ? (
+                    <div className="flex flex-col gap-2 md:items-end">
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          variant={driveConnection?.connected ? "outline" : "secondary"}
+                          onClick={() =>
+                            driveConnection?.connected
+                              ? handleDriveRefreshClick()
+                              : handleDriveConnectClick()
+                          }
+                          disabled={
+                            driveConnectLoading ||
+                            driveRefreshLoading ||
+                            (!currentOrgId && !driveConnection?.connected)
+                          }
+                          className="gap-2"
+                        >
+                          {driveConnectLoading || driveRefreshLoading ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : driveConnection?.connected ? (
+                            <RefreshCw className="h-4 w-4" />
+                          ) : (
+                            <Plug className="h-4 w-4" />
+                          )}
+                          {driveConnection?.connected ? "Actualiser l'accès" : "Connecter"}
+                        </Button>
+                        {driveConnection?.connected ? (
+                          <Button
+                            variant="ghost"
+                            onClick={handleDriveDisconnectClick}
+                            disabled={driveDisconnectLoading}
+                            className="gap-2"
+                          >
+                            {driveDisconnectLoading ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                            Déconnecter
+                          </Button>
+                        ) : null}
+                      </div>
+                      {driveConnection?.rootFolderId ? (
+                        <p className="text-xs text-muted-foreground">
+                          Dossier racine : {driveConnection.rootFolderId}
+                        </p>
+                      ) : null}
+                      {driveConnection?.sharedDriveId ? (
+                        <p className="text-xs text-muted-foreground">
+                          Drive partagé : {driveConnection.sharedDriveId}
+                        </p>
+                      ) : null}
+                      {driveErrorMessage ? (
+                        <p className="flex items-center gap-2 text-xs text-destructive">
+                          <AlertCircle className="h-3.5 w-3.5" />
+                          {driveErrorMessage}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <Button
+                      variant={integration.status === "connected" ? "ghost" : "secondary"}
+                      onClick={() => handleIntegrationAction(integration)}
+                      className="gap-2"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                      {integration.status === "connected" ? "Désactiver" : "Connecter"}
+                    </Button>
+                  )}
+                </div>
+                <Separator className="bg-border/60" />
+                <p className="text-xs text-muted-foreground">
+                  Dernière synchronisation : {integration.lastSync}
+                </p>
+              </div>
+            );
+            })}
+            <div className="rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-4 text-sm text-muted-foreground">
+              Besoin d&apos;une intégration personnalisée ? Contactez notre équipe pour accéder à l&apos;API et aux
+              webhooks sécurisés.
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border border-border/60 bg-card/70 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg font-semibold text-foreground">
+              <ShieldCheck className="h-5 w-5 text-primary" />
+              Sécurité & conformité
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Définissez des politiques de sécurité avancées pour protéger vos données sensibles.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="space-y-4">
+              {[
+                {
+                  key: "twoFactor" as const,
+                  title: "Double authentification",
+                  description:
+                    "Obliger l&apos;activation de la double authentification pour tous les comptes.",
+                  icon: KeyRound,
+                },
+                {
+                  key: "passwordRotation" as const,
+                  title: "Rotation des mots de passe",
+                  description: "Demander un renouvellement de mot de passe tous les 90 jours.",
+                  icon: RefreshCw,
+                },
+                {
+                  key: "loginAlerts" as const,
+                  title: "Alertes de connexion",
+                  description:
+                    "Notifier l&apos;équipe sécurité des connexions depuis de nouveaux appareils.",
+                  icon: MonitorSmartphone,
+                },
+              ].map((setting) => (
+                <div
+                  key={setting.key}
+                  className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-background/60 p-4 md:flex-row md:items-center md:justify-between"
+                >
+                  <div className="flex items-start gap-3">
+                    <setting.icon className="h-5 w-5 text-primary" />
+                    <div>
+                      <p className="font-medium text-foreground">{setting.title}</p>
+                      <p className="text-sm text-muted-foreground">{setting.description}</p>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={securitySettings[setting.key]}
+                    onCheckedChange={(checked) =>
+                      setSecuritySettings((prev) => ({ ...prev, [setting.key]: checked }))
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div className="rounded-2xl border border-border/60 bg-background/60 p-4">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div className="flex items-center gap-3">
+                  <Clock className="h-5 w-5 text-primary" />
+                  <div>
+                    <p className="font-medium text-foreground">Durée des sessions</p>
+                    <p className="text-sm text-muted-foreground">
+                      Limitez la durée des sessions inactives avant déconnexion automatique.
+                    </p>
+                  </div>
+                </div>
+                <Select
+                  value={securitySettings.sessionDuration}
+                  onValueChange={handleSessionDurationChange}
+                >
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Durée" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sessionOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-3 rounded-2xl border border-border/60 bg-background/60 p-4">
+              <p className="text-sm font-medium text-foreground">Sessions actives</p>
+              <div className="space-y-3 text-sm text-muted-foreground">
+                {activeSessions.map((session) => (
+                  <div
+                    key={session.device}
+                    className="flex flex-col gap-1 rounded-xl border border-border/50 bg-background p-3 md:flex-row md:items-center md:justify-between"
+                  >
+                    <div>
+                      <p className="font-medium text-foreground">{session.device}</p>
+                      <p>{session.browser}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Badge
+                        variant="outline"
+                        className="border-emerald-200/60 bg-emerald-500/10 text-emerald-700"
+                      >
+                        Sécurisé
+                      </Badge>
+                      <span>{session.lastActive}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end">
+              <Button onClick={handleSecuritySave}>Appliquer les règles de sécurité</Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
   useEffect(() => {
     return () => {
       isMounted.current = false;
@@ -1195,851 +2085,32 @@ export default function Settings() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.65fr,1fr]">
+        <div className="grid gap-6 lg:grid-cols-[260px,1fr]">
+          <Card className="h-fit border border-border/60 bg-card/70 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold text-foreground">Sections</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {SETTINGS_SECTIONS.map(({ id, label, icon: Icon }) => (
+                <Button
+                  key={id}
+                  variant={activeSection === id ? "secondary" : "ghost"}
+                  className={`w-full justify-start gap-2 ${
+                    activeSection === id ? "text-foreground" : "text-muted-foreground"
+                  }`}
+                  onClick={() => handleSectionSelect(id)}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </Button>
+              ))}
+            </CardContent>
+          </Card>
           <div className="space-y-6">
-            <Card className="border border-border/60 bg-card/70 shadow-sm">
-              <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2 text-lg font-semibold text-foreground">
-                    <Users className="h-5 w-5 text-primary" />
-                    Gestion des utilisateurs
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    Administrez les accès, les rôles et le statut d&apos;activité de vos collaborateurs.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={handleManualRefresh}
-                    disabled={loadingMembers}
-                    className="h-9 w-9 border-border/60"
-                    aria-label="Rafraîchir la liste des membres"
-                  >
-                    <RefreshCw className={`h-4 w-4 ${loadingMembers ? "animate-spin" : ""}`} />
-                  </Button>
-                  <Button onClick={handleInviteMember} variant="secondary">
-                    Inviter un membre
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">{renderTeamMembers()}</CardContent>
-            </Card>
-
-            <Card className="border border-border/60 bg-card/70 shadow-sm">
-              <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2 text-lg font-semibold text-foreground">
-                    <Palette className="h-5 w-5 text-primary" />
-                    Statuts des projets
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    Personnalisez les libellés et les couleurs utilisés sur l&apos;ensemble du tableau de bord.
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleResetStatuses}
-                    disabled={isDefaultProjectStatuses}
-                  >
-                    Réinitialiser
-                  </Button>
-                  <Button size="sm" variant="secondary" className="gap-2" onClick={handleAddStatus}>
-                    <Plus className="h-4 w-4" />
-                    Ajouter un statut
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {projectStatuses.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-border/60 bg-background/60 p-6 text-center text-sm text-muted-foreground">
-                    Aucun statut n&apos;est configuré. Ajoutez un statut pour commencer.
-                  </div>
-                ) : (
-                  projectStatuses.map((status) => {
-                    const badgeStyle = getProjectStatusBadgeStyle(status.color);
-                    return (
-                      <div
-                        key={status.id}
-                        className="space-y-4 rounded-2xl border border-border/60 bg-background/60 p-4"
-                      >
-                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                          <div className="flex items-center gap-3">
-                            <Badge variant="outline" style={badgeStyle} className="px-3 py-1">
-                              {status.label || status.value}
-                            </Badge>
-                            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                              {status.value}
-                            </span>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRemoveStatus(status.id)}
-                            disabled={projectStatuses.length <= 1}
-                            aria-label={`Supprimer le statut ${status.label || status.value}`}
-                            className="h-9 w-9 text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                          <div className="space-y-2">
-                            <Label>Nom affiché</Label>
-                            <Input
-                              value={status.label}
-                              placeholder="Nom du statut"
-                              onChange={(event) => handleStatusLabelChange(status.id, event.target.value)}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Code interne</Label>
-                            <Input
-                              value={status.value}
-                              onChange={(event) => handleStatusValueChange(status.id, event.target.value)}
-                              placeholder="PROSPECTION"
-                            />
-                            <p className="text-xs text-muted-foreground">
-                              Identifiant synchronisé avec vos exports et intégrations.
-                            </p>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Couleur du badge</Label>
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="color"
-                                value={status.color}
-                                onChange={(event) => handleStatusColorChange(status.id, event.target.value)}
-                                className="h-10 w-16 cursor-pointer rounded-md border border-border/60 bg-background p-1"
-                                aria-label={`Couleur du statut ${status.label || status.value}`}
-                              />
-                              <span className="text-sm text-muted-foreground">{status.color}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-                <div className="rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-4 text-sm text-muted-foreground">
-                  Les modifications sont appliquées instantanément aux listes, aux filtres et aux formulaires de création
-                  de projet.
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border border-border/60 bg-card/70 shadow-sm">
-              <CardHeader className="flex flex-col gap-4">
-                <div>
-                  <CardTitle className="flex items-center gap-2 text-lg font-semibold text-foreground">
-                    <List className="h-5 w-5 text-primary" />
-                    Référentiel bâtiments
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    Personnalisez les types de bâtiment et les usages proposés lors de la création de projet.
-                  </p>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-8">
-                <div className="space-y-4">
-                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <h3 className="text-base font-medium text-foreground">Types de bâtiment</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Ces valeurs alimentent les formulaires de projets et les documents commerciaux.
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleResetBuildingTypes}
-                        disabled={isDefaultBuildingTypes}
-                      >
-                        Réinitialiser
-                      </Button>
-                      <Button size="sm" variant="secondary" className="gap-2" onClick={handleAddBuildingType}>
-                        <Plus className="h-4 w-4" />
-                        Ajouter
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    {buildingTypes.length === 0 ? (
-                      <div className="rounded-2xl border border-dashed border-border/60 bg-background/60 p-4 text-sm text-muted-foreground">
-                        Aucun type de bâtiment n&apos;est configuré. Ajoutez-en pour les proposer dans vos projets.
-                      </div>
-                    ) : (
-                      buildingTypes.map((type, index) => (
-                        <div key={`${type}-${index}`} className="flex items-center gap-2">
-                          <Input
-                            value={type}
-                            onChange={(event) => handleBuildingTypeChange(index, event.target.value)}
-                            placeholder="Type de bâtiment"
-                          />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRemoveBuildingType(index)}
-                            aria-label={`Supprimer le type ${type || index + 1}`}
-                            className="h-9 w-9 text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                <Separator className="bg-border/60" />
-
-                <div className="space-y-4">
-                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <h3 className="text-base font-medium text-foreground">Usages</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Gérez les usages disponibles lors de la qualification des projets.
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleResetUsages}
-                        disabled={isDefaultBuildingUsages}
-                      >
-                        Réinitialiser
-                      </Button>
-                      <Button size="sm" variant="secondary" className="gap-2" onClick={handleAddUsage}>
-                        <Plus className="h-4 w-4" />
-                        Ajouter
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    {buildingUsages.length === 0 ? (
-                      <div className="rounded-2xl border border-dashed border-border/60 bg-background/60 p-4 text-sm text-muted-foreground">
-                        Aucun usage n&apos;est configuré. Ajoutez un usage pour le rendre disponible.
-                      </div>
-                    ) : (
-                      buildingUsages.map((usage, index) => (
-                        <div key={`${usage}-${index}`} className="flex items-center gap-2">
-                          <Input
-                            value={usage}
-                            onChange={(event) => handleUsageChange(index, event.target.value)}
-                            placeholder="Usage"
-                          />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRemoveUsage(index)}
-                            aria-label={`Supprimer l'usage ${usage || index + 1}`}
-                            className="h-9 w-9 text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border border-border/60 bg-card/70 shadow-sm">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg font-semibold text-foreground">
-                  <Building2 className="h-5 w-5 text-primary" />
-                  Informations sur l&apos;entreprise
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Ces informations sont utilisées pour vos documents commerciaux et la communication client.
-                </p>
-              </CardHeader>
-              <CardContent>
-                <Tabs defaultValue="company" className="space-y-6">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="company">Entreprise</TabsTrigger>
-                    <TabsTrigger value="delegataire">Délégataires</TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="company" className="space-y-6">
-                    <form className="space-y-6" onSubmit={handleCompanySubmit}>
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
-                          <Label htmlFor="company-name">Nom d&apos;usage</Label>
-                          <Input
-                            id="company-name"
-                            value={companyInfo.name}
-                            onChange={(e) => setCompanyInfo((p) => ({ ...p, name: e.target.value }))}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="company-legal">Raison sociale</Label>
-                          <Input
-                            id="company-legal"
-                            value={companyInfo.legalName}
-                            onChange={(e) => setCompanyInfo((p) => ({ ...p, legalName: e.target.value }))}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="company-registration">Enregistrement</Label>
-                          <Input
-                            id="company-registration"
-                            value={companyInfo.registration}
-                            onChange={(e) =>
-                              setCompanyInfo((p) => ({ ...p, registration: e.target.value }))
-                            }
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="company-phone">Téléphone</Label>
-                          <Input
-                            id="company-phone"
-                            value={companyInfo.phone}
-                            onChange={(e) => setCompanyInfo((p) => ({ ...p, phone: e.target.value }))}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="company-email">Email principal</Label>
-                          <Input
-                            id="company-email"
-                            type="email"
-                            value={companyInfo.email}
-                            onChange={(e) => setCompanyInfo((p) => ({ ...p, email: e.target.value }))}
-                          />
-                        </div>
-                        <div className="md:col-span-2 space-y-2">
-                          <Label htmlFor="company-address">Adresse</Label>
-                          <AddressAutocomplete
-                            value={companyInfo.address}
-                            onChange={(address, city, postalCode) =>
-                              setCompanyInfo((p) => ({
-                                ...p,
-                                address,
-                                city,
-                                postalCode,
-                              }))
-                            }
-                          />
-                        </div>
-                        <div className="grid gap-4 md:grid-cols-2 md:col-span-2">
-                          <div className="space-y-2">
-                            <Label htmlFor="company-city">Ville</Label>
-                            <Input
-                              id="company-city"
-                              value={companyInfo.city}
-                              readOnly
-                              placeholder="Sélectionnez une adresse"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="company-postal">Code postal</Label>
-                            <Input
-                              id="company-postal"
-                              value={companyInfo.postalCode}
-                              readOnly
-                              placeholder="Sélectionnez une adresse"
-                            />
-                          </div>
-                        </div>
-                        <div className="md:col-span-2 space-y-2">
-                          <Label htmlFor="company-description">Description publique</Label>
-                          <Textarea
-                            id="company-description"
-                            value={companyInfo.description}
-                            onChange={(e) =>
-                              setCompanyInfo((p) => ({ ...p, description: e.target.value }))
-                            }
-                            rows={3}
-                          />
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-end gap-3">
-                        <Button type="button" variant="ghost">
-                          Annuler
-                        </Button>
-                        <Button type="submit">Enregistrer les modifications</Button>
-                      </div>
-                    </form>
-                  </TabsContent>
-
-                  <TabsContent value="delegataire" className="space-y-6">
-                    <div className="space-y-3">
-                      <p className="text-sm text-muted-foreground">
-                        Renseignez les délégataires avec leurs informations de contact et le bloc de texte qui sera
-                        automatiquement ajouté aux devis correspondants.
-                      </p>
-                      <div className="flex items-center justify-between rounded-xl border border-dashed border-primary/30 bg-primary/5 p-4 text-sm text-muted-foreground">
-                        <div className="flex items-center gap-3">
-                          <UserPlus className="h-4 w-4 text-primary" />
-                          <span>Ajoutez un délégataire pour personnaliser vos documents commerciaux.</span>
-                        </div>
-                        <Button type="button" size="sm" onClick={handleAddDelegataire}>
-                          Nouveau délégataire
-                        </Button>
-                      </div>
-                    </div>
-
-                    {delegataires.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-border/60 bg-background/60 p-8 text-center text-sm text-muted-foreground">
-                        <FileText className="h-6 w-6 text-primary" />
-                        <p>Aucun délégataire n&apos;a encore été configuré.</p>
-                        <Button type="button" variant="secondary" onClick={handleAddDelegataire}>
-                          Ajouter un délégataire
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {delegataires.map((delegataire, index) => (
-                          <div
-                            key={delegataire.id}
-                            className="space-y-4 rounded-2xl border border-border/60 bg-background/60 p-5 shadow-sm"
-                          >
-                            <div className="flex items-start justify-between">
-                              <div>
-                                <p className="text-sm font-medium text-foreground">
-                                  Délégataire {index + 1}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  Ces informations seront reprises sur les devis associés.
-                                </p>
-                              </div>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleRemoveDelegataire(delegataire.id)}
-                                className="h-8 w-8 text-muted-foreground"
-                                aria-label={`Supprimer le délégataire ${index + 1}`}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-
-                            <div className="grid gap-4 md:grid-cols-2">
-                              <div className="space-y-2">
-                                <Label htmlFor={`delegataire-name-${delegataire.id}`}>
-                                  Nom du délégataire
-                                </Label>
-                                <Input
-                                  id={`delegataire-name-${delegataire.id}`}
-                                  value={delegataire.name}
-                                  onChange={(event) =>
-                                    handleDelegataireChange(
-                                      delegataire.id,
-                                      "name",
-                                      event.target.value,
-                                    )
-                                  }
-                                  placeholder="Société partenaire"
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor={`delegataire-contact-${delegataire.id}`}>
-                                  Contact principal
-                                </Label>
-                                <Input
-                                  id={`delegataire-contact-${delegataire.id}`}
-                                  value={delegataire.contactName}
-                                  onChange={(event) =>
-                                    handleDelegataireChange(
-                                      delegataire.id,
-                                      "contactName",
-                                      event.target.value,
-                                    )
-                                  }
-                                  placeholder="Nom et prénom"
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor={`delegataire-email-${delegataire.id}`}>
-                                  Email
-                                </Label>
-                                <Input
-                                  id={`delegataire-email-${delegataire.id}`}
-                                  type="email"
-                                  value={delegataire.email}
-                                  onChange={(event) =>
-                                    handleDelegataireChange(
-                                      delegataire.id,
-                                      "email",
-                                      event.target.value,
-                                    )
-                                  }
-                                  placeholder="delegataire@exemple.fr"
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor={`delegataire-phone-${delegataire.id}`}>
-                                  Téléphone
-                                </Label>
-                                <Input
-                                  id={`delegataire-phone-${delegataire.id}`}
-                                  value={delegataire.phone}
-                                  onChange={(event) =>
-                                    handleDelegataireChange(
-                                      delegataire.id,
-                                      "phone",
-                                      event.target.value,
-                                    )
-                                  }
-                                  placeholder="+33 6 12 34 56 78"
-                                />
-                              </div>
-                              <div className="md:col-span-2 space-y-2">
-                                <Label htmlFor={`delegataire-text-${delegataire.id}`}>
-                                  Bloc de texte pour le devis
-                                </Label>
-                                <Textarea
-                                  id={`delegataire-text-${delegataire.id}`}
-                                  value={delegataire.textBlock}
-                                  onChange={(event) =>
-                                    handleDelegataireChange(
-                                      delegataire.id,
-                                      "textBlock",
-                                      event.target.value,
-                                    )
-                                  }
-                                  rows={3}
-                                  placeholder="Informations complémentaires affichées sur le devis"
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                  Ce contenu sera affiché automatiquement dans la section dédiée du devis.
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {delegataires.length > 0 && (
-                      <div className="flex items-center justify-end">
-                        <Button type="button" onClick={handleSaveDelegataires}>
-                          Sauvegarder les délégataires
-                        </Button>
-                      </div>
-                    )}
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
-
-            <Card className="border border-border/60 bg-card/70 shadow-sm">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg font-semibold text-foreground">
-                  <Bell className="h-5 w-5 text-primary" />
-                  Préférences de notifications
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Personnalisez les canaux de communication pour chaque événement métier important.
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  {[
-                    {
-                      key: "commercialEmails" as const,
-                      title: "Suivi commercial",
-                      description:
-                        "Alertes sur les nouveaux leads, rappels de relance et devis en attente.",
-                    },
-                    {
-                      key: "operationalEmails" as const,
-                      title: "Opérations & chantiers",
-                      description:
-                        "Notifications de planification, pointages d'équipes et suivi de chantier.",
-                    },
-                    {
-                      key: "smsReminders" as const,
-                      title: "SMS automatiques",
-                      description:
-                        "Rappels de rendez-vous clients et confirmations d'interventions.",
-                    },
-                    {
-                      key: "pushNotifications" as const,
-                      title: "Notifications mobiles",
-                      description:
-                        "Alertes en temps réel sur mobile pour les demandes critiques.",
-                    },
-                    {
-                      key: "weeklyDigest" as const,
-                      title: "Rapport hebdomadaire",
-                      description:
-                        "Synthèse des indicateurs clés envoyée chaque lundi matin.",
-                    },
-                  ].map((item) => (
-                    <div
-                      key={item.key}
-                      className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-background/60 p-4 md:flex-row md:items-center md:justify-between"
-                    >
-                      <div>
-                        <p className="font-medium text-foreground">{item.title}</p>
-                        <p className="text-sm text-muted-foreground">{item.description}</p>
-                      </div>
-                      <Switch
-                        checked={notifications[item.key]}
-                        onCheckedChange={() => toggleNotification(item.key)}
-                      />
-                    </div>
-                  ))}
-                </div>
-                <div className="flex items-center justify-end">
-                  <Button onClick={handleSaveNotifications}>Sauvegarder les préférences</Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="space-y-6">
-            <Card className="border border-border/60 bg-card/70 shadow-sm">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg font-semibold text-foreground">
-                  <Plug className="h-5 w-5 text-primary" />
-                  Intégrations & API
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Connectez vos outils métiers pour fluidifier vos process commerciaux et opérationnels.
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {displayedIntegrations.map((integration) => {
-                  const isDrive = integration.id === "google-drive";
-                  const badgeLabel = isDrive && driveConnectionLoading
-                    ? (
-                        <span className="flex items-center gap-2">
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          Vérification
-                        </span>
-                      )
-                    : integration.status === "connected"
-                    ? "Connecté"
-                    : integration.status === "pending"
-                    ? "En attente"
-                    : "Déconnecté";
-
-                  return (
-                    <div
-                      key={integration.id}
-                      className="space-y-3 rounded-2xl border border-border/60 bg-background/60 p-4"
-                    >
-                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-foreground">{integration.name}</p>
-                          <Badge
-                            className={integrationStatusStyles[integration.status]}
-                            variant="outline"
-                          >
-                            {badgeLabel}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground">{integration.description}</p>
-                      </div>
-                      {isDrive ? (
-                        <div className="flex flex-col gap-2 md:items-end">
-                          <div className="flex flex-wrap gap-2">
-                            <Button
-                              variant={driveConnection?.connected ? "outline" : "secondary"}
-                              onClick={() =>
-                                driveConnection?.connected
-                                  ? handleDriveRefreshClick()
-                                  : handleDriveConnectClick()
-                              }
-                              disabled={
-                                driveConnectLoading ||
-                                driveRefreshLoading ||
-                                (!currentOrgId && !driveConnection?.connected)
-                              }
-                              className="gap-2"
-                            >
-                              {driveConnectLoading || driveRefreshLoading ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : driveConnection?.connected ? (
-                                <RefreshCw className="h-4 w-4" />
-                              ) : (
-                                <Plug className="h-4 w-4" />
-                              )}
-                              {driveConnection?.connected ? "Actualiser l'accès" : "Connecter"}
-                            </Button>
-                            {driveConnection?.connected ? (
-                              <Button
-                                variant="ghost"
-                                onClick={handleDriveDisconnectClick}
-                                disabled={driveDisconnectLoading}
-                                className="gap-2"
-                              >
-                                {driveDisconnectLoading ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Trash2 className="h-4 w-4" />
-                                )}
-                                Déconnecter
-                              </Button>
-                            ) : null}
-                          </div>
-                          {driveConnection?.rootFolderId ? (
-                            <p className="text-xs text-muted-foreground">
-                              Dossier racine : {driveConnection.rootFolderId}
-                            </p>
-                          ) : null}
-                          {driveConnection?.sharedDriveId ? (
-                            <p className="text-xs text-muted-foreground">
-                              Drive partagé : {driveConnection.sharedDriveId}
-                            </p>
-                          ) : null}
-                          {driveErrorMessage ? (
-                            <p className="flex items-center gap-2 text-xs text-destructive">
-                              <AlertCircle className="h-3.5 w-3.5" />
-                              {driveErrorMessage}
-                            </p>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <Button
-                          variant={integration.status === "connected" ? "ghost" : "secondary"}
-                          onClick={() => handleIntegrationAction(integration)}
-                          className="gap-2"
-                        >
-                          <RefreshCw className="h-4 w-4" />
-                          {integration.status === "connected" ? "Désactiver" : "Connecter"}
-                        </Button>
-                      )}
-                    </div>
-                    <Separator className="bg-border/60" />
-                    <p className="text-xs text-muted-foreground">
-                      Dernière synchronisation : {integration.lastSync}
-                    </p>
-                  </div>
-                );
-                })}
-                <div className="rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-4 text-sm text-muted-foreground">
-                  Besoin d&apos;une intégration personnalisée ? Contactez notre équipe pour accéder à l&apos;API et aux
-                  webhooks sécurisés.
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border border-border/60 bg-card/70 shadow-sm">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg font-semibold text-foreground">
-                  <ShieldCheck className="h-5 w-5 text-primary" />
-                  Sécurité & conformité
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Définissez des politiques de sécurité avancées pour protéger vos données sensibles.
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-5">
-                <div className="space-y-4">
-                  {[
-                    {
-                      key: "twoFactor" as const,
-                      title: "Double authentification",
-                      description:
-                        "Obliger l&apos;activation de la double authentification pour tous les comptes.",
-                      icon: KeyRound,
-                    },
-                    {
-                      key: "passwordRotation" as const,
-                      title: "Rotation des mots de passe",
-                      description: "Demander un renouvellement de mot de passe tous les 90 jours.",
-                      icon: RefreshCw,
-                    },
-                    {
-                      key: "loginAlerts" as const,
-                      title: "Alertes de connexion",
-                      description:
-                        "Notifier l&apos;équipe sécurité des connexions depuis de nouveaux appareils.",
-                      icon: MonitorSmartphone,
-                    },
-                  ].map((setting) => (
-                    <div
-                      key={setting.key}
-                      className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-background/60 p-4 md:flex-row md:items-center md:justify-between"
-                    >
-                      <div className="flex items-start gap-3">
-                        <setting.icon className="h-5 w-5 text-primary" />
-                        <div>
-                          <p className="font-medium text-foreground">{setting.title}</p>
-                          <p className="text-sm text-muted-foreground">{setting.description}</p>
-                        </div>
-                      </div>
-                      <Switch
-                        checked={securitySettings[setting.key]}
-                        onCheckedChange={(checked) =>
-                          setSecuritySettings((prev) => ({ ...prev, [setting.key]: checked }))
-                        }
-                      />
-                    </div>
-                  ))}
-                </div>
-
-                <div className="rounded-2xl border border-border/60 bg-background/60 p-4">
-                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                    <div className="flex items-center gap-3">
-                      <Clock className="h-5 w-5 text-primary" />
-                      <div>
-                        <p className="font-medium text-foreground">Durée des sessions</p>
-                        <p className="text-sm text-muted-foreground">
-                          Limitez la durée des sessions inactives avant déconnexion automatique.
-                        </p>
-                      </div>
-                    </div>
-                    <Select
-                      value={securitySettings.sessionDuration}
-                      onValueChange={handleSessionDurationChange}
-                    >
-                      <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="Durée" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {sessionOptions.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-3 rounded-2xl border border-border/60 bg-background/60 p-4">
-                  <p className="text-sm font-medium text-foreground">Sessions actives</p>
-                  <div className="space-y-3 text-sm text-muted-foreground">
-                    {activeSessions.map((session) => (
-                      <div
-                        key={session.device}
-                        className="flex flex-col gap-1 rounded-xl border border-border/50 bg-background p-3 md:flex-row md:items-center md:justify-between"
-                      >
-                        <div>
-                          <p className="font-medium text-foreground">{session.device}</p>
-                          <p>{session.browser}</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <Badge
-                            variant="outline"
-                            className="border-emerald-200/60 bg-emerald-500/10 text-emerald-700"
-                          >
-                            Sécurisé
-                          </Badge>
-                          <span>{session.lastActive}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-end">
-                  <Button onClick={handleSecuritySave}>Appliquer les règles de sécurité</Button>
-                </div>
-              </CardContent>
-            </Card>
+            {activeSection === "general" && generalSection}
+            {activeSection === "lead" && <LeadSettingsPanel />}
+            {activeSection === "quotes" && <QuoteSettingsPanel />}
+            {activeSection === "calendar" && <AppointmentSettingsPanel />}
           </div>
         </div>
       </div>
