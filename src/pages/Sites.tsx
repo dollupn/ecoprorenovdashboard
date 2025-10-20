@@ -184,6 +184,7 @@ const Sites = () => {
   const [dialogMode, setDialogMode] = useState<"create" | "edit">("create");
   const [activeSiteId, setActiveSiteId] = useState<string | null>(null);
   const [dialogInitialValues, setDialogInitialValues] = useState<Partial<SiteFormValues>>();
+  const [initialProjectIdForStep, setInitialProjectIdForStep] = useState<string | undefined>();
   
   const location = useLocation();
   const navigate = useNavigate();
@@ -571,20 +572,8 @@ const Sites = () => {
       const project = projects.find((item) => item.id === locationState.createSite?.projectId);
 
       if (project) {
-        const productCodes =
-          project.project_products
-            ?.map((item) => item.product?.code)
-            .filter((code): code is string => Boolean(code)) ?? [];
-        const clientName = getProjectClientName(project);
-
-        handleOpenCreate({
-          project_ref: project.project_ref ?? "",
-          client_name: clientName,
-          product_name: productCodes.join(", "),
-          address: (project as { address?: string | null }).address ?? "",
-          city: project.city ?? "",
-          postal_code: project.postal_code ?? "",
-        });
+        setInitialProjectIdForStep(project.id);
+        setStepDialogOpen(true);
         toast({
           title: "Préparation du chantier",
           description: `Chantier pré-rempli à partir de ${project.project_ref}.`,
@@ -601,7 +590,6 @@ const Sites = () => {
     }
   }, [
     locationState,
-    handleOpenCreate,
     navigate,
     location.pathname,
     toast,
@@ -816,12 +804,18 @@ const Sites = () => {
         </div>
       </div>
 
-      <CreateSiteStepDialog
-        open={stepDialogOpen}
-        onOpenChange={setStepDialogOpen}
-        onSubmit={handleSubmitStepSite}
-        projects={projectOptions}
-      />
+        <CreateSiteStepDialog
+          open={stepDialogOpen}
+          onOpenChange={(open) => {
+            setStepDialogOpen(open);
+            if (!open) {
+              setInitialProjectIdForStep(undefined);
+            }
+          }}
+          onSubmit={handleSubmitStepSite}
+          projects={projectOptions}
+          initialProjectId={initialProjectIdForStep}
+        />
 
       <SiteDialog
         open={dialogOpen}

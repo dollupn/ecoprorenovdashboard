@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -31,14 +31,14 @@ import { ChevronLeft, ChevronRight, Upload, X, CheckCircle2 } from "lucide-react
 import type { SiteProjectOption } from "./SiteDialog";
 
 const siteStepSchema = z.object({
-  // Step 1: Informations générales
-  project_ref: z.string().min(3, "Référence projet requise"),
-  client_name: z.string().min(2, "Client requis"),
+  // Step 1: Informations générales - All optional for navigation
+  project_ref: z.string().optional().default(""),
+  client_name: z.string().optional().default(""),
   product_name: z.string().optional().nullable(),
-  address: z.string().min(3, "Adresse requise"),
-  city: z.string().min(2, "Ville requise"),
-  postal_code: z.string().min(4, "Code postal invalide"),
-  date_debut: z.string().min(1, "Date de début requise"),
+  address: z.string().optional().default(""),
+  city: z.string().optional().default(""),
+  postal_code: z.string().optional().default(""),
+  date_debut: z.string().optional().default(""),
   
   // Step 2: Détails techniques
   surface_facturee: z.coerce.number().min(0).optional().default(0),
@@ -93,6 +93,17 @@ export const CreateSiteStepDialog = ({
     },
   });
 
+  // Handle initial project selection
+  useEffect(() => {
+    if (initialProjectId && projects.length > 0 && open) {
+      const project = projects.find(p => p.id === initialProjectId);
+      if (project) {
+        handleProjectSelect(project.project_ref);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialProjectId, projects, open]);
+
   const selectedProject = useMemo(() => {
     const projectRef = form.watch("project_ref");
     return projects.find(p => p.project_ref === projectRef);
@@ -101,24 +112,8 @@ export const CreateSiteStepDialog = ({
   const progress = (currentStep / STEPS.length) * 100;
 
   const handleNext = async () => {
-    let isValid = false;
-    
-    if (currentStep === 1) {
-      isValid = await form.trigger([
-        "project_ref",
-        "client_name",
-        "address",
-        "city",
-        "postal_code",
-        "date_debut",
-      ]);
-    } else if (currentStep === 2) {
-      isValid = true; // Optional fields
-    } else if (currentStep === 3) {
-      isValid = true; // Photos are optional
-    }
-
-    if (isValid && currentStep < STEPS.length) {
+    // All fields are optional now, so users can navigate freely
+    if (currentStep < STEPS.length) {
       setCurrentStep(currentStep + 1);
     }
   };
@@ -216,33 +211,33 @@ export const CreateSiteStepDialog = ({
                 />
 
                 <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="client_name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Client *</FormLabel>
-                        <FormControl>
-                          <Input {...field} disabled />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                <FormField
+                  control={form.control}
+                  name="client_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Client</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-                  <FormField
-                    control={form.control}
-                    name="product_name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Produit</FormLabel>
-                        <FormControl>
-                          <Input {...field} value={field.value || ""} disabled />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                <FormField
+                  control={form.control}
+                  name="product_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Produit</FormLabel>
+                      <FormControl>
+                        <Input {...field} value={field.value || ""} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 </div>
 
                 <FormField
@@ -250,9 +245,9 @@ export const CreateSiteStepDialog = ({
                   name="address"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Adresse du chantier *</FormLabel>
+                      <FormLabel>Adresse du chantier</FormLabel>
                       <FormControl>
-                        <Input {...field} disabled />
+                        <Input {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -265,9 +260,9 @@ export const CreateSiteStepDialog = ({
                     name="postal_code"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Code postal *</FormLabel>
+                        <FormLabel>Code postal</FormLabel>
                         <FormControl>
-                          <Input {...field} disabled />
+                          <Input {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -279,9 +274,9 @@ export const CreateSiteStepDialog = ({
                     name="city"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Ville *</FormLabel>
+                        <FormLabel>Ville</FormLabel>
                         <FormControl>
-                          <Input {...field} disabled />
+                          <Input {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -294,7 +289,7 @@ export const CreateSiteStepDialog = ({
                   name="date_debut"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Date de début *</FormLabel>
+                      <FormLabel>Date de début</FormLabel>
                       <FormControl>
                         <Input type="date" {...field} />
                       </FormControl>

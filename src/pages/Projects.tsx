@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,6 +13,11 @@ import {
   AddQuoteDialog,
   type QuoteFormValues,
 } from "@/components/quotes/AddQuoteDialog";
+import { 
+  CreateSiteStepDialog, 
+  type CreateSiteStepValues 
+} from "@/components/sites/CreateSiteStepDialog";
+import { toast as showToast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import {
   getProjectClientName,
@@ -34,6 +39,8 @@ import {
 } from "lucide-react";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useMembers } from "@/features/members/api";
+import { useToast } from "@/hooks/use-toast";
+import type { SiteProjectOption } from "@/components/sites/SiteDialog";
 import {
   Select,
   SelectContent,
@@ -214,9 +221,112 @@ const Projects = () => {
     setQuoteDialogOpen(true);
   };
 
+  const [siteDialogOpen, setSiteDialogOpen] = useState(false);
+  const [selectedProjectForSite, setSelectedProjectForSite] = useState<string | undefined>();
+
   const handleCreateSite = (project: Project) => {
-    navigate(`/sites`, { state: { createSite: { projectId: project.id } } });
+    setSelectedProjectForSite(project.id);
+    setSiteDialogOpen(true);
   };
+
+  const projectOptions = useMemo<SiteProjectOption[]>(() => {
+    return projects.map((project) => {
+      const clientName = getProjectClientName(project);
+      const displayedProducts = getDisplayedProducts(project.project_products);
+      const firstProduct = displayedProducts[0]?.product ?? project.project_products?.[0]?.product;
+      const productLabel = firstProduct?.code || project.product_name || "";
+      const address = (project as Project & { address?: string | null }).address ?? "";
+
+      return {
+        id: project.id,
+        project_ref: project.project_ref ?? "",
+        client_name: clientName,
+        product_name: productLabel,
+        address,
+        city: project.city ?? "",
+        postal_code: project.postal_code ?? "",
+      } satisfies SiteProjectOption;
+    });
+  }, [projects]);
+
+  const handleSubmitSite = useCallback(async (values: CreateSiteStepValues) => {
+    if (!user || !currentOrgId) return;
+
+    // Generate unique site ref
+    const today = new Date();
+    const datePrefix = `SITE-${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(today.getDate()).padStart(2, "0")}`;
+    
+    const { data: existingSites } = await supabase
+      .from("sites")
+      .select("site_ref")
+      .eq("org_id", currentOrgId)
+      .like("site_ref", `${datePrefix}-%`)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    let nextNumber = 1;
+    if (existingSites && existingSites.length > 0) {
+      const lastRef = existingSites[0].site_ref;
+      const lastNumber = parseInt(lastRef.split("-").pop() || "0");
+      nextNumber = lastNumber + 1;
+    }
+
+    const site_ref = `${datePrefix}-${String(nextNumber).padStart(3, "0")}`;
+
+    const teamMembers = values.team_members
+      ?.split("\n")
+      .map(name => name.trim())
+      .filter(Boolean) || [];
+
+    const siteData = {
+      site_ref,
+      project_ref: values.project_ref || "",
+      client_name: values.client_name || "",
+      product_name: values.product_name?.trim() || "",
+      address: values.address || "",
+      city: values.city || "",
+      postal_code: values.postal_code || "",
+      status: "PLANIFIE",
+      cofrac_status: "EN_ATTENTE",
+      date_debut: values.date_debut || new Date().toISOString().slice(0, 10),
+      date_fin_prevue: null,
+      progress_percentage: 0,
+      revenue: 0,
+      profit_margin: 0,
+      surface_facturee: values.surface_facturee || 0,
+      cout_main_oeuvre_m2_ht: 0,
+      cout_isolation_m2: 0,
+      isolation_utilisee_m2: 0,
+      montant_commission: 0,
+      valorisation_cee: 0,
+      notes: values.notes?.trim() || null,
+      team_members: teamMembers.length > 0 ? teamMembers : null,
+      additional_costs: [],
+      user_id: user.id,
+      org_id: currentOrgId,
+    };
+
+    try {
+      const { error } = await supabase.from("sites").insert([siteData]);
+
+      if (error) throw error;
+
+      showToast("Chantier créé", {
+        description: `${siteData.site_ref} a été ajouté à la liste des chantiers.`,
+      });
+
+      setSiteDialogOpen(false);
+      setSelectedProjectForSite(undefined);
+      
+      // Navigate to sites page
+      navigate("/sites");
+    } catch (error) {
+      console.error("Error saving site:", error);
+      showToast("Erreur", {
+        description: "Impossible de créer le chantier.",
+      });
+    }
+  }, [user, currentOrgId, navigate]);
 
   if (isLoading || membersLoading) {
     return (
@@ -531,6 +641,18 @@ const Projects = () => {
           }
         }}
         initialValues={quoteInitialValues}
+      />
+      <CreateSiteStepDialog
+        open={siteDialogOpen}
+        onOpenChange={(open) => {
+          setSiteDialogOpen(open);
+          if (!open) {
+            setSelectedProjectForSite(undefined);
+          }
+        }}
+        onSubmit={handleSubmitSite}
+        projects={projectOptions}
+        initialProjectId={selectedProjectForSite}
       />
     </Layout>
   );
