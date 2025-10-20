@@ -72,6 +72,7 @@ import { DynamicFields } from "@/features/leads/DynamicFields";
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 import { useProjectBuildingTypes } from "@/hooks/useProjectBuildingTypes";
 import { useProjectUsages } from "@/hooks/useProjectUsages";
+import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
 
 type ProductCatalogEntry = Pick<Tables<"product_catalog">, "id" | "name" | "code" | "category" | "is_active" | "params_schema" | "default_params">;
 type Profile = Tables<"profiles">;
@@ -320,6 +321,10 @@ const createProjectSchema = (
       .email("Email invalide")
       .optional()
       .or(z.literal("")),
+    hq_address: z.string().min(3, "L'adresse du siège est requise"),
+    hq_city: z.string().min(2, "La ville du siège est requise"),
+    hq_postal_code: z.string().min(5, "Code postal du siège invalide"),
+    same_address: z.boolean().default(false),
     address: z.string().optional().or(z.literal("")),
     siren: sirenSchema,
     external_reference: z.string().optional().or(z.literal("")),
@@ -366,6 +371,10 @@ const baseDefaultValues: Partial<ProjectFormValues> = {
   company: "",
   phone: "",
   email: "",
+  hq_address: "",
+  hq_city: "",
+  hq_postal_code: "",
+  same_address: false,
   address: "",
   siren: "",
   external_reference: "",
@@ -1095,6 +1104,7 @@ export const AddProjectDialog = ({
 
       const normalizedEmail = data.email?.trim();
       const normalizedAddress = data.address?.trim();
+      const normalizedHqAddress = data.hq_address?.trim();
       const normalizedExternalRef = data.external_reference?.trim();
       const projectCost = data.estimated_value ?? undefined;
 
@@ -1110,6 +1120,10 @@ export const AddProjectDialog = ({
             client_last_name: clientLastName,
             product_name, // Pour compatibilité
             email: normalizedEmail ? normalizedEmail : undefined,
+            hq_address: normalizedHqAddress ? normalizedHqAddress : undefined,
+            hq_city: data.hq_city || undefined,
+            hq_postal_code: data.hq_postal_code || undefined,
+            same_address: data.same_address || false,
             address: normalizedAddress ? normalizedAddress : undefined,
             external_reference: normalizedExternalRef ? normalizedExternalRef : undefined,
             city: data.city,
@@ -1324,47 +1338,155 @@ export const AddProjectDialog = ({
               />
             </div>
 
+            {/* Headquarters Address Section */}
+            <div className="space-y-4 rounded-lg border bg-muted/50 p-4">
+              <h3 className="text-sm font-semibold">Adresse du Siège Social *</h3>
+              
+              <FormField
+                control={form.control}
+                name="hq_address"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Adresse du siège *</FormLabel>
+                    <FormControl>
+                      <AddressAutocomplete
+                        value={field.value}
+                        onChange={(address, city, postalCode) => {
+                          form.setValue("hq_address", address);
+                          form.setValue("hq_city", city);
+                          form.setValue("hq_postal_code", postalCode);
+                          
+                          // If same_address is checked, also update site address
+                          if (form.watch("same_address")) {
+                            form.setValue("address", address);
+                            form.setValue("city", city);
+                            form.setValue("postal_code", postalCode);
+                          }
+                        }}
+                        disabled={loading}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="hq_city"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Ville du siège *</FormLabel>
+                      <FormControl>
+                        <Input {...field} disabled />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="hq_postal_code"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Code postal du siège *</FormLabel>
+                      <FormControl>
+                        <Input {...field} disabled />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
+            {/* Same Address Checkbox */}
             <FormField
               control={form.control}
-              name="address"
+              name="same_address"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Adresse</FormLabel>
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
                   <FormControl>
-                    <Input placeholder="Adresse complète du client" {...field} />
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={(checked) => {
+                        field.onChange(checked);
+                        if (checked) {
+                          // Copy headquarters address to site address
+                          const hqAddress = form.getValues("hq_address");
+                          const hqCity = form.getValues("hq_city");
+                          const hqPostalCode = form.getValues("hq_postal_code");
+                          form.setValue("address", hqAddress);
+                          form.setValue("city", hqCity);
+                          form.setValue("postal_code", hqPostalCode);
+                        }
+                      }}
+                    />
                   </FormControl>
-                  <FormMessage />
+                  <div className="space-y-1 leading-none">
+                    <FormLabel>
+                      L'adresse du chantier est la même que celle du siège social
+                    </FormLabel>
+                  </div>
                 </FormItem>
               )}
             />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Site Address Section */}
+            <div className="space-y-4 rounded-lg border bg-muted/50 p-4">
+              <h3 className="text-sm font-semibold">Adresse du Chantier *</h3>
+              
               <FormField
                 control={form.control}
-                name="city"
+                name="address"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Ville *</FormLabel>
+                    <FormLabel>Adresse du chantier *</FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <AddressAutocomplete
+                        value={field.value}
+                        onChange={(address, city, postalCode) => {
+                          form.setValue("address", address);
+                          form.setValue("city", city);
+                          form.setValue("postal_code", postalCode);
+                        }}
+                        disabled={loading || form.watch("same_address")}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="postal_code"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Code postal *</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="city"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Ville *</FormLabel>
+                      <FormControl>
+                        <Input {...field} disabled />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="postal_code"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Code postal *</FormLabel>
+                      <FormControl>
+                        <Input {...field} disabled />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

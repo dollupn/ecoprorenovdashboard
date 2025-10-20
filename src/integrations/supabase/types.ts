@@ -568,6 +568,9 @@ export type Database = {
           discount: number | null
           estimated_value: number | null
           external_reference: string | null
+          hq_address: string | null
+          hq_city: string | null
+          hq_postal_code: string | null
           id: string
           lead_id: string | null
           org_id: string | null
@@ -576,6 +579,7 @@ export type Database = {
           prime_cee: number | null
           product_name: string
           project_ref: string
+          same_address: boolean | null
           signatory_name: string | null
           signatory_title: string | null
           siren: string | null
@@ -602,6 +606,9 @@ export type Database = {
           discount?: number | null
           estimated_value?: number | null
           external_reference?: string | null
+          hq_address?: string | null
+          hq_city?: string | null
+          hq_postal_code?: string | null
           id?: string
           lead_id?: string | null
           org_id?: string | null
@@ -610,6 +617,7 @@ export type Database = {
           prime_cee?: number | null
           product_name: string
           project_ref: string
+          same_address?: boolean | null
           signatory_name?: string | null
           signatory_title?: string | null
           siren?: string | null
@@ -636,6 +644,9 @@ export type Database = {
           discount?: number | null
           estimated_value?: number | null
           external_reference?: string | null
+          hq_address?: string | null
+          hq_city?: string | null
+          hq_postal_code?: string | null
           id?: string
           lead_id?: string | null
           org_id?: string | null
@@ -644,6 +655,7 @@ export type Database = {
           prime_cee?: number | null
           product_name?: string
           project_ref?: string
+          same_address?: boolean | null
           signatory_name?: string | null
           signatory_title?: string | null
           siren?: string | null
