@@ -29,6 +29,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import {
   Form,
   FormControl,
   FormField,
@@ -725,403 +731,404 @@ export const SiteDialog = ({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Statut</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner un statut" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {statusOptions.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="cofrac_status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Statut COFRAC</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner un statut" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {cofracStatusOptions.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+            <Tabs defaultValue="avant-chantier" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="avant-chantier">Avant Chantier</TabsTrigger>
+                <TabsTrigger value="apres-chantier">Après Chantier</TabsTrigger>
+              </TabsList>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="site_ref"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Référence chantier</FormLabel>
-                    <FormControl>
-                      <Input placeholder="SITE-2024-0001" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="project_ref"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Projet associé</FormLabel>
-                    <Select
-                      onValueChange={(value) => {
-                        field.onChange(value);
-                        applyProjectDetails(value);
-                      }}
-                      value={field.value ?? ""}
-                    >
-                      <FormControl>
-                        <SelectTrigger disabled={availableProjects.length === 0}>
-                          <SelectValue placeholder="Sélectionner un projet" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {availableProjects.length > 0 ? (
-                          availableProjects.map((project) => (
-                            <SelectItem
-                              key={project.id ?? project.project_ref}
-                              value={project.project_ref}
-                            >
-                            {project.project_ref} • {getProjectClientName(project)}
-                            </SelectItem>
-                          ))
-                        ) : (
-                          <SelectItem value="" disabled>
-                            Aucun projet disponible
-                          </SelectItem>
-                        )}
-                      </SelectContent>
-                    </Select>
+              <TabsContent value="avant-chantier" className="space-y-6 mt-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="status"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Statut</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Sélectionner un statut" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {statusOptions.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="site_ref"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Référence chantier</FormLabel>
+                        <FormControl>
+                          <Input placeholder="SITE-2024-0001" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="project_ref"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Projet associé</FormLabel>
+                        <Select
+                          onValueChange={(value) => {
+                            field.onChange(value);
+                            applyProjectDetails(value);
+                          }}
+                          value={field.value ?? ""}
+                        >
+                          <FormControl>
+                            <SelectTrigger disabled={availableProjects.length === 0}>
+                              <SelectValue placeholder="Sélectionner un projet" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {availableProjects.length > 0 ? (
+                              availableProjects.map((project) => (
+                                <SelectItem
+                                  key={project.id ?? project.project_ref}
+                                  value={project.project_ref}
+                                >
+                                {project.project_ref} • {getProjectClientName(project)}
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="" disabled>
+                                Aucun projet disponible
+                              </SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          Le chantier reprend automatiquement les informations du projet sélectionné.
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="client_name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Client</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Nom du client"
+                            {...field}
+                            readOnly
+                            className="bg-muted"
+                          />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">
+                          Pré-rempli à partir du projet associé.
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="date_debut"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Date de début</FormLabel>
+                        <FormControl>
+                          <Input type="date" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="date_fin_prevue"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Date de fin prévue</FormLabel>
+                        <FormControl>
+                          <Input type="date" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="progress_percentage"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Avancement (%)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            step={5}
+                            {...field}
+                            readOnly
+                            className="bg-muted"
+                          />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">
+                          Calculé automatiquement à partir des dates du chantier.
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="surface_facturee"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Surface facturée (m²)</FormLabel>
+                        <FormControl>
+                          <Input type="number" min={0} step={0.1} {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <FormLabel>Équipe chantier</FormLabel>
+                  {teamMemberFields.length > 1 ? (
+                    <p className="text-xs text-muted-foreground">Faites glisser les membres pour définir l&apos;ordre de votre équipe.</p>
+                  ) : null}
+                  {subcontractors.length > 0 ? (
                     <p className="text-xs text-muted-foreground">
-                      Le chantier reprend automatiquement les informations du projet sélectionné.
+                      Sélectionnez un sous-traitant habituel dans la liste ou saisissez un nouveau nom pour l&apos;enregistrer.
                     </p>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="client_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Client</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="Nom du client"
-                        {...field}
-                        readOnly
-                        className="bg-muted"
-                      />
-                    </FormControl>
-                    <p className="text-xs text-muted-foreground">
-                      Pré-rempli à partir du projet associé.
-                    </p>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="date_debut"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Date de début</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="date_fin_prevue"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Date de fin prévue</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="progress_percentage"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Avancement (%)</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        min={0}
-                        max={100}
-                        step={5}
-                        {...field}
-                        readOnly
-                        className="bg-muted"
-                      />
-                    </FormControl>
-                    <p className="text-xs text-muted-foreground">
-                      Calculé automatiquement à partir des dates du chantier.
-                    </p>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="surface_facturee"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Surface facturée (m²)</FormLabel>
-                    <FormControl>
-                      <Input type="number" min={0} step={0.1} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="revenue"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Chiffre d'affaires (€)</FormLabel>
-                    <FormControl>
-                      <Input type="number" min={0} step={100} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="profit_margin"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Marge (%)</FormLabel>
-                    <FormControl>
-                      <Input type="number" step={0.1} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="cout_main_oeuvre_m2_ht"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Coût main d'œuvre HT (€/m²)</FormLabel>
-                    <FormControl>
-                      <Input type="number" min={0} step={0.1} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="cout_isolation_m2"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Coût isolation (€/m²)</FormLabel>
-                    <FormControl>
-                      <Input type="number" min={0} step={0.1} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="isolation_utilisee_m2"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Isolation utilisée (m²)</FormLabel>
-                    <FormControl>
-                      <Input type="number" min={0} step={0.1} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="montant_commission"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Montant de la commission (€)</FormLabel>
-                    <FormControl>
-                      <Input type="number" min={0} step={50} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="valorisation_cee"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Valorisation CEE (€)</FormLabel>
-                    <FormControl>
-                      <Input type="number" min={0} step={50} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <FormLabel>Équipe chantier</FormLabel>
-              {teamMemberFields.length > 1 ? (
-                <p className="text-xs text-muted-foreground">Faites glisser les membres pour définir l&apos;ordre de votre équipe.</p>
-              ) : null}
-              {subcontractors.length > 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  Sélectionnez un sous-traitant habituel dans la liste ou saisissez un nouveau nom pour l&apos;enregistrer.
-                </p>
-              ) : null}
-              <div className="space-y-3">
-                {teamMemberFields.length === 0 ? (
-                  <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
-                    Ajoutez les membres composant l&apos;équipe chantier.
+                  ) : null}
+                  <div className="space-y-3">
+                    {teamMemberFields.length === 0 ? (
+                      <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
+                        Ajoutez les membres composant l&apos;équipe chantier.
+                      </div>
+                    ) : (
+                      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTeamMemberDragEnd}>
+                        <SortableContext items={teamMemberIds} strategy={verticalListSortingStrategy}>
+                          {teamMemberFields.map((field, index) => (
+                            <SortableTeamMemberField
+                              key={field.id}
+                              field={field}
+                              index={index}
+                              control={form.control}
+                              remove={removeTeamMember}
+                              canRemove={teamMemberFields.length > 1}
+                              suggestions={subcontractors}
+                            />
+                          ))}
+                        </SortableContext>
+                      </DndContext>
+                    )}
                   </div>
-                ) : (
-                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTeamMemberDragEnd}>
-                    <SortableContext items={teamMemberIds} strategy={verticalListSortingStrategy}>
-                      {teamMemberFields.map((field, index) => (
-                        <SortableTeamMemberField
-                          key={field.id}
-                          field={field}
-                          index={index}
-                          control={form.control}
-                          remove={removeTeamMember}
-                          canRemove={teamMemberFields.length > 1}
-                          suggestions={subcontractors}
-                        />
-                      ))}
-                    </SortableContext>
-                  </DndContext>
-                )}
-              </div>
-              <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => appendTeamMember({ name: "" })}>
-                <Plus className="w-4 h-4 mr-1" /> Ajouter un membre
-              </Button>
-            </div>
+                  <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => appendTeamMember({ name: "" })}>
+                    <Plus className="w-4 h-4 mr-1" /> Ajouter un membre
+                  </Button>
+                </div>
 
-            <div className="space-y-2">
-              <FormLabel>Coûts supplémentaires</FormLabel>
-              {costFields.length > 1 ? (
-                <p className="text-xs text-muted-foreground">Réorganisez l&apos;affichage des coûts en les faisant glisser.</p>
-              ) : null}
-              <div className="space-y-3">
-                {costFields.length === 0 ? null : (
-                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCostDragEnd}>
-                    <SortableContext items={costIds} strategy={verticalListSortingStrategy}>
-                      {costFields.map((field, index) => (
-                        <SortableAdditionalCostRow
-                          key={field.id}
-                          field={field}
-                          index={index}
-                          control={form.control}
-                          remove={removeCost}
-                          canRemove={costFields.length > 0}
-                        />
-                      ))}
-                    </SortableContext>
-                  </DndContext>
-                )}
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="mt-2"
-                onClick={() =>
-                  appendCost({
-                    label: "",
-                    amount_ht: undefined as unknown as number,
-                    taxes: undefined as unknown as number,
-                    attachment: null,
-                  })
-                }
-              >
-                <Plus className="w-4 h-4 mr-1" /> Ajouter un coût
-              </Button>
-            </div>
+                <FormField
+                  control={form.control}
+                  name="notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Notes internes</FormLabel>
+                      <FormControl>
+                        <Textarea placeholder="Informations complémentaires" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </TabsContent>
 
-            <div className="space-y-2">
-              <FormLabel>Documents chantier</FormLabel>
-              <DriveFileUploader
-                orgId={orgId ?? initialValues?.org_id ?? null}
-                value={siteDriveFile}
-                onChange={setSiteDriveFile}
-                accept="application/pdf,image/*"
-                maxSizeMb={35}
-                entityType="site"
-                entityId={initialValues?.site_ref}
-                description="Documents liés au chantier"
-                helperText="Ajoutez des photos ou des fichiers stockés sur Google Drive."
-              />
-            </div>
+              <TabsContent value="apres-chantier" className="space-y-6 mt-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="cofrac_status"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Statut COFRAC</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Sélectionner un statut" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {cofracStatusOptions.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Notes internes</FormLabel>
-                  <FormControl>
-                    <Textarea placeholder="Informations complémentaires" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="revenue"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Chiffre d'affaires (€)</FormLabel>
+                        <FormControl>
+                          <Input type="number" min={0} step={100} {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="profit_margin"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Marge (%)</FormLabel>
+                        <FormControl>
+                          <Input type="number" step={0.1} {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="cout_main_oeuvre_m2_ht"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Coût main d'œuvre HT (€/m²)</FormLabel>
+                        <FormControl>
+                          <Input type="number" min={0} step={0.1} {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="cout_isolation_m2"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Coût isolation (€/m²)</FormLabel>
+                        <FormControl>
+                          <Input type="number" min={0} step={0.1} {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="isolation_utilisee_m2"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Isolation utilisée (m²)</FormLabel>
+                        <FormControl>
+                          <Input type="number" min={0} step={0.1} {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="valorisation_cee"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Prime CEE (€)</FormLabel>
+                        <FormControl>
+                          <Input type="number" min={0} step={50} {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <FormLabel>Coûts supplémentaires</FormLabel>
+                  {costFields.length > 1 ? (
+                    <p className="text-xs text-muted-foreground">Réorganisez l&apos;affichage des coûts en les faisant glisser.</p>
+                  ) : null}
+                  <div className="space-y-3">
+                    {costFields.length === 0 ? null : (
+                      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCostDragEnd}>
+                        <SortableContext items={costIds} strategy={verticalListSortingStrategy}>
+                          {costFields.map((field, index) => (
+                            <SortableAdditionalCostRow
+                              key={field.id}
+                              field={field}
+                              index={index}
+                              control={form.control}
+                              remove={removeCost}
+                              canRemove={costFields.length > 0}
+                            />
+                          ))}
+                        </SortableContext>
+                      </DndContext>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() =>
+                      appendCost({
+                        label: "",
+                        amount_ht: undefined as unknown as number,
+                        taxes: undefined as unknown as number,
+                        attachment: null,
+                      })
+                    }
+                  >
+                    <Plus className="w-4 h-4 mr-1" /> Ajouter un coût
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  <FormLabel>Documents chantier</FormLabel>
+                  <DriveFileUploader
+                    orgId={orgId ?? initialValues?.org_id ?? null}
+                    value={siteDriveFile}
+                    onChange={setSiteDriveFile}
+                    accept="application/pdf,image/*"
+                    maxSizeMb={35}
+                    entityType="site"
+                    entityId={initialValues?.site_ref}
+                    description="Documents liés au chantier"
+                    helperText="Ajoutez des photos ou des fichiers stockés sur Google Drive."
+                  />
+                </div>
+              </TabsContent>
+            </Tabs>
 
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
