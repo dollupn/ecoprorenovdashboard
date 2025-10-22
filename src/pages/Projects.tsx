@@ -14,9 +14,9 @@ import {
   type QuoteFormValues,
 } from "@/components/quotes/AddQuoteDialog";
 import { 
-  CreateSiteStepDialog, 
-  type CreateSiteStepValues 
-} from "@/components/sites/CreateSiteStepDialog";
+  SiteDialog, 
+  type SiteFormValues 
+} from "@/components/sites/SiteDialog";
 import { toast as showToast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import {
@@ -222,10 +222,59 @@ const Projects = () => {
   };
 
   const [siteDialogOpen, setSiteDialogOpen] = useState(false);
-  const [selectedProjectForSite, setSelectedProjectForSite] = useState<string | undefined>();
+  const [siteInitialValues, setSiteInitialValues] = useState<Partial<SiteFormValues>>();
 
-  const handleCreateSite = (project: Project) => {
-    setSelectedProjectForSite(project.id);
+  const handleCreateSite = async (project: ProjectWithRelations) => {
+    const clientName = getProjectClientName(project);
+    const displayedProducts = getDisplayedProducts(project.project_products);
+    const firstProduct = displayedProducts[0]?.product ?? project.project_products?.[0]?.product;
+    const productLabel = firstProduct?.code || project.product_name || "";
+    const address = (project as Project & { address?: string | null }).address ?? "";
+
+    // Generate unique site ref
+    const today = new Date();
+    const datePrefix = `SITE-${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(today.getDate()).padStart(2, "0")}`;
+    
+    const { data: existingSites } = await supabase
+      .from("sites")
+      .select("site_ref")
+      .eq("org_id", currentOrgId)
+      .like("site_ref", `${datePrefix}-%`)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    let nextNumber = 1;
+    if (existingSites && existingSites.length > 0) {
+      const lastRef = existingSites[0].site_ref;
+      const lastNumber = parseInt(lastRef.split("-").pop() || "0");
+      nextNumber = lastNumber + 1;
+    }
+
+    const site_ref = `${datePrefix}-${String(nextNumber).padStart(3, "0")}`;
+
+    setSiteInitialValues({
+      site_ref,
+      project_ref: project.project_ref ?? "",
+      client_name: clientName,
+      product_name: productLabel,
+      address,
+      city: project.city ?? "",
+      postal_code: project.postal_code ?? "",
+      date_debut: new Date().toISOString().slice(0, 10),
+      status: "PLANIFIE",
+      cofrac_status: "EN_ATTENTE",
+      progress_percentage: 0,
+      revenue: 0,
+      profit_margin: 0,
+      surface_facturee: 0,
+      cout_main_oeuvre_m2_ht: 0,
+      cout_isolation_m2: 0,
+      isolation_utilisee_m2: 0,
+      montant_commission: 0,
+      valorisation_cee: 0,
+      team_members: [{ name: "" }],
+      additional_costs: [],
+    });
     setSiteDialogOpen(true);
   };
 
@@ -249,59 +298,49 @@ const Projects = () => {
     });
   }, [projects]);
 
-  const handleSubmitSite = useCallback(async (values: CreateSiteStepValues) => {
+  const handleSubmitSite = useCallback(async (values: SiteFormValues) => {
     if (!user || !currentOrgId) return;
 
-    // Generate unique site ref
-    const today = new Date();
-    const datePrefix = `SITE-${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(today.getDate()).padStart(2, "0")}`;
-    
-    const { data: existingSites } = await supabase
-      .from("sites")
-      .select("site_ref")
-      .eq("org_id", currentOrgId)
-      .like("site_ref", `${datePrefix}-%`)
-      .order("created_at", { ascending: false })
-      .limit(1);
+    const sanitizedTeam = values.team_members.map((member) => member.name.trim()).filter(Boolean);
+    const sanitizedCosts = values.additional_costs
+      ? values.additional_costs
+          .filter((cost) => cost.label.trim().length > 0)
+          .map((cost) => {
+            const attachment = cost.attachment ? cost.attachment.trim() : "";
 
-    let nextNumber = 1;
-    if (existingSites && existingSites.length > 0) {
-      const lastRef = existingSites[0].site_ref;
-      const lastNumber = parseInt(lastRef.split("-").pop() || "0");
-      nextNumber = lastNumber + 1;
-    }
-
-    const site_ref = `${datePrefix}-${String(nextNumber).padStart(3, "0")}`;
-
-    const teamMembers = values.team_members
-      ?.split("\n")
-      .map(name => name.trim())
-      .filter(Boolean) || [];
+            return {
+              label: cost.label.trim(),
+              amount_ht: Number.isFinite(cost.amount_ht) ? cost.amount_ht : 0,
+              taxes: Number.isFinite(cost.taxes) ? cost.taxes : 0,
+              attachment: attachment.length > 0 ? attachment : null,
+            };
+          })
+      : [];
 
     const siteData = {
-      site_ref,
-      project_ref: values.project_ref || "",
-      client_name: values.client_name || "",
+      site_ref: values.site_ref,
+      project_ref: values.project_ref,
+      client_name: values.client_name,
       product_name: values.product_name?.trim() || "",
-      address: values.address || "",
-      city: values.city || "",
-      postal_code: values.postal_code || "",
-      status: "PLANIFIE",
-      cofrac_status: "EN_ATTENTE",
-      date_debut: values.date_debut || new Date().toISOString().slice(0, 10),
-      date_fin_prevue: null,
-      progress_percentage: 0,
-      revenue: 0,
-      profit_margin: 0,
-      surface_facturee: values.surface_facturee || 0,
-      cout_main_oeuvre_m2_ht: 0,
-      cout_isolation_m2: 0,
-      isolation_utilisee_m2: 0,
-      montant_commission: 0,
-      valorisation_cee: 0,
+      address: values.address,
+      city: values.city,
+      postal_code: values.postal_code,
+      status: values.status,
+      cofrac_status: values.cofrac_status,
+      date_debut: values.date_debut,
+      date_fin_prevue: values.date_fin_prevue || null,
+      progress_percentage: values.progress_percentage,
+      revenue: values.revenue,
+      profit_margin: values.profit_margin,
+      surface_facturee: values.surface_facturee,
+      cout_main_oeuvre_m2_ht: values.cout_main_oeuvre_m2_ht,
+      cout_isolation_m2: values.cout_isolation_m2,
+      isolation_utilisee_m2: values.isolation_utilisee_m2,
+      montant_commission: values.montant_commission,
+      valorisation_cee: values.valorisation_cee,
       notes: values.notes?.trim() || null,
-      team_members: teamMembers.length > 0 ? teamMembers : null,
-      additional_costs: [],
+      team_members: sanitizedTeam.length > 0 ? sanitizedTeam : null,
+      additional_costs: sanitizedCosts.length > 0 ? sanitizedCosts : [],
       user_id: user.id,
       org_id: currentOrgId,
     };
@@ -316,7 +355,7 @@ const Projects = () => {
       });
 
       setSiteDialogOpen(false);
-      setSelectedProjectForSite(undefined);
+      setSiteInitialValues(undefined);
       
       // Navigate to sites page
       navigate("/sites");
@@ -642,17 +681,19 @@ const Projects = () => {
         }}
         initialValues={quoteInitialValues}
       />
-      <CreateSiteStepDialog
+      <SiteDialog
         open={siteDialogOpen}
+        mode="create"
         onOpenChange={(open) => {
           setSiteDialogOpen(open);
           if (!open) {
-            setSelectedProjectForSite(undefined);
+            setSiteInitialValues(undefined);
           }
         }}
         onSubmit={handleSubmitSite}
+        initialValues={siteInitialValues}
+        orgId={currentOrgId}
         projects={projectOptions}
-        initialProjectId={selectedProjectForSite}
       />
     </Layout>
   );
