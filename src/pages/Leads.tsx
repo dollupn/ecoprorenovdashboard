@@ -1399,7 +1399,7 @@ const Leads = () => {
         <Card className="shadow-card bg-gradient-card border-0">
           <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <CardTitle>Leads Récents ({filteredLeads.length})</CardTitle>
+              <CardTitle>Liste des leads ({filteredLeads.length})</CardTitle>
               <p className="text-sm text-muted-foreground">
                 {hasActiveFilters ? `${leads.length} leads au total` : "Données à jour depuis Supabase"}
               </p>
