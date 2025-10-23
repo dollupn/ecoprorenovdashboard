@@ -1500,7 +1500,9 @@ const Leads = () => {
                           <div className="text-sm">
                             <span className="font-medium">{lead.product_name}</span>
                             {lead.surface_m2 && (
-                              <span className="text-muted-foreground"> • {lead.surface_m2} m²</span>
+                              <span className="text-muted-foreground">
+                                {" "}• Surface estimé : {lead.surface_m2} m²
+                              </span>
                             )}
                           </div>
                         )}
@@ -1640,7 +1642,9 @@ const Leads = () => {
                               <div>
                                 <span className="font-medium">{lead.product_name}</span>
                                 {lead.surface_m2 && (
-                                  <span className="text-muted-foreground"> • {lead.surface_m2} m²</span>
+                                  <span className="text-muted-foreground">
+                                    {" "}• Surface estimé : {lead.surface_m2} m²
+                                  </span>
                                 )}
                               </div>
                             ) : (
