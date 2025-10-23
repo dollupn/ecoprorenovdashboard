@@ -516,6 +516,41 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+          referencedColumns: ["id"]
+        },
+      ]
+      }
+      product_kwh_cumac: {
+        Row: {
+          building_type: string
+          created_at: string
+          id: string
+          kwh_cumac: number
+          product_id: string
+          updated_at: string
+        }
+        Insert: {
+          building_type: string
+          created_at?: string
+          id?: string
+          kwh_cumac: number
+          product_id: string
+          updated_at?: string
+        }
+        Update: {
+          building_type?: string
+          created_at?: string
+          id?: string
+          kwh_cumac?: number
+          product_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_kwh_cumac_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "product_catalog"
             referencedColumns: ["id"]
           },
         ]

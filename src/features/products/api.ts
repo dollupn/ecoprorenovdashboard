@@ -5,7 +5,16 @@ import type { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase
 
 export type CategoryRecord = Tables<"categories">;
 export type ProductRecord = Tables<"product_catalog">;
-export type ProductCatalogRecord = Tables<"product_catalog">;
+export type ProductKwhCumacRecord = Tables<"product_kwh_cumac">;
+
+export type ProductCatalogRecord = ProductRecord & {
+  kwh_cumac_values?: ProductKwhCumacRecord[];
+};
+
+export type ProductKwhCumacInput = {
+  building_type: string;
+  kwh_cumac: number | null;
+};
 
 export type ProductFilters = {
   search?: string;
@@ -87,7 +96,9 @@ export const useProductCatalog = (
 
       let query = supabase
         .from("product_catalog")
-        .select("*", { count: "exact" })
+        .select("*, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)", {
+          count: "exact",
+        })
         .eq("org_id", orgId)
         .order("created_at", { ascending: false });
 
@@ -121,41 +132,99 @@ export const useProductCatalog = (
 
       if (error) throw error;
       return {
-        data: data ?? [],
+        data: (data ?? []) as ProductCatalogRecord[],
         count: count ?? (data?.length ?? 0),
       };
     },
   });
 
+const syncProductKwhCumac = async (productId: string, entries: ProductKwhCumacInput[]) => {
+  const sanitized = entries
+    .map((entry) => ({
+      building_type: entry.building_type.trim(),
+      kwh_cumac: entry.kwh_cumac,
+    }))
+    .filter((entry) => entry.building_type.length > 0);
+
+  const { error: deleteError } = await supabase
+    .from("product_kwh_cumac")
+    .delete()
+    .eq("product_id", productId);
+
+  if (deleteError) throw deleteError;
+
+  const toInsert = sanitized.filter(
+    (entry): entry is { building_type: string; kwh_cumac: number } =>
+      entry.kwh_cumac !== null && entry.kwh_cumac !== undefined,
+  );
+
+  if (toInsert.length === 0) {
+    return;
+  }
+
+  const { error: insertError } = await supabase.from("product_kwh_cumac").insert(
+    toInsert.map((entry) => ({
+      product_id: productId,
+      building_type: entry.building_type,
+      kwh_cumac: entry.kwh_cumac,
+    })),
+  );
+
+  if (insertError) throw insertError;
+};
+
+const fetchProductWithRelations = async (id: string): Promise<ProductCatalogRecord> => {
+  const { data, error } = await supabase
+    .from("product_catalog")
+    .select("*, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)")
+    .eq("id", id)
+    .single();
+
+  if (error) throw error;
+  return data as ProductCatalogRecord;
+};
+
 export const useCreateProduct = (orgId: string | null) => {
   const queryClient = useQueryClient();
 
-  return useMutation<ProductRecord, Error, TablesInsert<"product_catalog">>({
-    mutationFn: async (payload) => {
-      if (!orgId) throw new Error("Organisation requise");
-      
-      const { data, error } = await supabase
-        .from("product_catalog")
-        .insert({ ...payload, org_id: orgId, owner_id: orgId })
-        .select()
-        .single();
+  return useMutation<ProductCatalogRecord, Error, { values: TablesInsert<"product_catalog">; kwhCumac?: ProductKwhCumacInput[] }>(
+    {
+      mutationFn: async ({ values, kwhCumac }) => {
+        if (!orgId) throw new Error("Organisation requise");
 
-      if (error) throw error;
-      return data;
+        const { data, error } = await supabase
+          .from("product_catalog")
+          .insert({ ...values, org_id: orgId, owner_id: orgId })
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        if (kwhCumac) {
+          await syncProductKwhCumac(data.id, kwhCumac);
+          return fetchProductWithRelations(data.id);
+        }
+
+        return data as ProductCatalogRecord;
+      },
+      onSuccess: () => {
+        if (orgId) {
+          queryClient.invalidateQueries({ queryKey: ["product-catalog", orgId] });
+        }
+      },
     },
-    onSuccess: () => {
-      if (orgId) {
-        queryClient.invalidateQueries({ queryKey: ["product-catalog", orgId] });
-      }
-    },
-  });
+  );
 };
 
 export const useUpdateProduct = (orgId: string | null) => {
   const queryClient = useQueryClient();
 
-  return useMutation<ProductRecord, Error, { id: string; values: TablesUpdate<"product_catalog"> }>({
-    mutationFn: async ({ id, values }) => {
+  return useMutation<
+    ProductCatalogRecord,
+    Error,
+    { id: string; values: TablesUpdate<"product_catalog">; kwhCumac?: ProductKwhCumacInput[] }
+  >({
+    mutationFn: async ({ id, values, kwhCumac }) => {
       const { data, error } = await supabase
         .from("product_catalog")
         .update(values)
@@ -164,7 +233,13 @@ export const useUpdateProduct = (orgId: string | null) => {
         .single();
 
       if (error) throw error;
-      return data;
+
+      if (kwhCumac) {
+        await syncProductKwhCumac(id, kwhCumac);
+        return fetchProductWithRelations(id);
+      }
+
+      return data as ProductCatalogRecord;
     },
     onSuccess: () => {
       if (orgId) {
