@@ -79,7 +79,7 @@ type ProductCatalogEntry = Pick<
   Tables<"product_catalog">,
   "id" | "name" | "code" | "category" | "is_active" | "params_schema" | "default_params"
   > & {
-  kwh_cumac_values?: Tables<"product_kwh_cumac">[];
+  kwh_cumac_values?: Pick<Tables<"product_kwh_cumac">, "id" | "building_type" | "kwh_cumac">[];
 };
 type Profile = Tables<"profiles">;
 type Delegate = Pick<Tables<"delegates">, "id" | "name" | "price_eur_per_mwh" | "description">;
@@ -116,7 +116,11 @@ const currencyFormatter = new Intl.NumberFormat("fr-FR", {
 
 const formatCurrency = (value: number) => currencyFormatter.format(value);
 
-type PrimeProductInput = Pick<ProjectProduct, "product_id" | "quantity">;
+type PrimeProductInput = {
+  product_id: string;
+  quantity: number;
+  dynamic_params?: Record<string, any>;
+};
 
 const calculatePrimeCee = ({
   products,
@@ -1319,8 +1323,11 @@ export const AddProjectDialog = ({
       const delegateRecord = data.delegate_id
         ? delegatesById[data.delegate_id] ?? delegatesData?.find((delegate) => delegate.id === data.delegate_id)
         : undefined;
+      const validProducts = data.products.filter(
+        (p): p is PrimeProductInput => Boolean(p.product_id) && typeof p.quantity === 'number'
+      );
       const primeCeeValue = calculatePrimeCee({
-        products: data.products,
+        products: validProducts,
         buildingType: data.building_type,
         delegate: delegateRecord,
         primeBonification,

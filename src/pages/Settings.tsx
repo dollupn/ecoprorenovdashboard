@@ -35,7 +35,7 @@ import {
   Building2,
   Bell,
   Shield,
-  Database,
+  Database as DatabaseIcon,
   Mail,
   Phone,
   Settings as SettingsIcon,
@@ -429,12 +429,14 @@ export default function Settings() {
 
     setLoadingOrganizationSettings(true);
 
-    void supabase
-      .from("organizations")
-      .select("business_location, prime_bonification")
-      .eq("id", currentOrgId)
-      .single()
-      .then(({ data, error }) => {
+    const fetchSettings = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("organizations")
+          .select("business_location, prime_bonification")
+          .eq("id", currentOrgId)
+          .single();
+
         if (isCancelled) return;
 
         if (error) {
@@ -464,12 +466,14 @@ export default function Settings() {
           businessLocation: locationValue,
           primeBonification: String(bonusValue),
         });
-      })
-      .finally(() => {
+      } finally {
         if (!isCancelled) {
           setLoadingOrganizationSettings(false);
         }
-      });
+      }
+    };
+
+    fetchSettings();
 
     return () => {
       isCancelled = true;
