@@ -48,8 +48,12 @@ import {
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 
 type Project = Tables<"projects">;
+type ProductSummary = Pick<Tables<"product_catalog">, "code" | "name" | "params_schema"> & {
+  kwh_cumac_values?: Tables<"product_kwh_cumac">[];
+};
+
 type ProjectProduct = Tables<"project_products"> & {
-  product: Pick<Tables<"product_catalog">, "code" | "name" | "params_schema"> | null;
+  product: ProductSummary | null;
 };
 
 type ProjectWithRelations = Project & {
@@ -95,7 +99,7 @@ const ProjectDetails = () => {
       let query = supabase
         .from("projects")
         .select(
-          "*, project_products(id, quantity, dynamic_params, product:product_catalog(code, name, params_schema))"
+          "*, project_products(id, quantity, dynamic_params, product:product_catalog(code, name, params_schema, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))"
         )
         .eq("id", id);
 

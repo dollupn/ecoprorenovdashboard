@@ -46,7 +46,9 @@ type SiteStatus = "PLANIFIE" | "EN_PREPARATION" | "EN_COURS" | "SUSPENDU" | "TER
 type CofracStatus = "EN_ATTENTE" | "CONFORME" | "NON_CONFORME" | "A_PLANIFIER";
 
 type ProjectProduct = Tables<"project_products"> & {
-  product: Pick<Tables<"product_catalog">, "code"> | null;
+  product: (Pick<Tables<"product_catalog">, "code"> & {
+    kwh_cumac_values?: Tables<"product_kwh_cumac">[];
+  }) | null;
 };
 type ProjectWithProducts = Tables<"projects"> & {
   project_products?: ProjectProduct[] | null;
@@ -215,7 +217,7 @@ const Sites = () => {
       const { data, error } = await supabase
         .from("projects")
         .select(
-          "*, project_products(id, product:product_catalog(code))"
+          "*, project_products(id, product:product_catalog(code, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))"
         )
         .eq("user_id", user.id);
 

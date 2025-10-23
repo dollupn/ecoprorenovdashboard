@@ -19,8 +19,9 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { getProjectBuildingTypes } from "@/lib/buildings";
 import type { TablesInsert } from "@/integrations/supabase/types";
-import type { ProductCatalogRecord, CategoryRecord } from "./api";
+import type { ProductCatalogRecord, CategoryRecord, ProductKwhCumacInput } from "./api";
 import { useCreateProduct, useUpdateProduct } from "./api";
 import { CategoryFormDialog } from "./CategoryFormDialog";
 import { RichDescription } from "./RichDescription";
@@ -28,6 +29,11 @@ import { TechnicalSheetUpload } from "./TechnicalSheetUpload";
 import { DynamicFieldsEditor } from "./DynamicFieldsEditor";
 
 const euroFormatter = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" });
+
+const kwhValueSchema = z
+  .number({ invalid_type_error: "Saisissez un nombre valide" })
+  .min(0, "La valeur doit être positive")
+  .nullable();
 
 const productSchema = z.object({
   name: z.string().min(2, "Le nom est requis").max(200),
@@ -57,6 +63,7 @@ const productSchema = z.object({
   technical_sheet_url: z.string().optional().nullable(),
   params_schema: z.any().optional().nullable(),
   default_params: z.any().optional().nullable(),
+  kwh_cumac: z.record(kwhValueSchema).default({}),
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -81,6 +88,26 @@ export const ProductFormDialog = ({
 }: ProductFormDialogProps) => {
   const [internalOpen, setInternalOpen] = useState(false);
   const { toast } = useToast();
+  const buildingTypes = useMemo(() => getProjectBuildingTypes(), []);
+  const allBuildingTypes = useMemo(() => {
+    const fromProduct = product?.kwh_cumac_values?.map((entry) => entry.building_type?.trim()).filter((value): value is string =>
+      Boolean(value),
+    ) ?? [];
+    const ordered = new Set<string>();
+    buildingTypes.forEach((type) => {
+      const trimmed = type.trim();
+      if (trimmed) {
+        ordered.add(trimmed);
+      }
+    });
+    fromProduct.forEach((type) => {
+      const trimmed = type.trim();
+      if (trimmed) {
+        ordered.add(trimmed);
+      }
+    });
+    return Array.from(ordered);
+  }, [buildingTypes, product?.kwh_cumac_values]);
   const createProduct = useCreateProduct(orgId);
   const updateProduct = useUpdateProduct(orgId);
 
@@ -105,8 +132,15 @@ export const ProductFormDialog = ({
       technical_sheet_url: product?.technical_sheet_url ?? null,
       params_schema: product?.params_schema ?? null,
       default_params: product?.default_params ?? null,
+      kwh_cumac: allBuildingTypes.reduce<Record<string, number | null>>((acc, type) => {
+        const match = product?.kwh_cumac_values?.find(
+          (entry) => entry.building_type?.trim() === type,
+        );
+        acc[type] = match?.kwh_cumac ?? null;
+        return acc;
+      }, {}),
     }),
-    [product],
+    [product, allBuildingTypes],
   );
 
   const form = useForm<ProductFormValues>({
@@ -167,12 +201,23 @@ export const ProductFormDialog = ({
       default_params: values.default_params,
     };
 
+    const kwhValues = values.kwh_cumac ?? {};
+    const kwhEntries: ProductKwhCumacInput[] = Array.from(
+      new Set([
+        ...allBuildingTypes,
+        ...Object.keys(kwhValues),
+      ].map((type) => type.trim()).filter((type) => type.length > 0)),
+    ).map((type) => ({
+      building_type: type,
+      kwh_cumac: kwhValues[type] ?? null,
+    }));
+
     try {
       if (product) {
-        await updateProduct.mutateAsync({ id: product.id, values: payload });
+        await updateProduct.mutateAsync({ id: product.id, values: payload, kwhCumac: kwhEntries });
         toast({ title: "Produit modifié", description: `${values.name} a été mis à jour` });
       } else {
-        await createProduct.mutateAsync(payload);
+        await createProduct.mutateAsync({ values: payload, kwhCumac: kwhEntries });
         toast({ title: "Produit créé", description: `${values.name} a été ajouté au catalogue` });
       }
       setOpen(false);
@@ -237,9 +282,10 @@ export const ProductFormDialog = ({
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 overflow-y-auto">
             <Tabs defaultValue="general" className="space-y-6 px-1">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="general">Général</TabsTrigger>
                 <TabsTrigger value="pricing">Tarification</TabsTrigger>
+                <TabsTrigger value="cee">CEE</TabsTrigger>
                 <TabsTrigger value="dynamic">Champs dynamiques</TabsTrigger>
               </TabsList>
 
@@ -659,6 +705,59 @@ export const ProductFormDialog = ({
                   </FormItem>
                 )}
               />
+            </TabsContent>
+
+            <TabsContent value="cee" className="space-y-6">
+              <div>
+                <h3 className="text-sm font-medium">kWh cumac</h3>
+                <p className="text-xs text-muted-foreground">
+                  Renseignez la valeur kWh cumac associée à chaque typologie de bâtiment. Laissez vide si la donnée n&apos;est pas connue.
+                </p>
+              </div>
+              {allBuildingTypes.length > 0 ? (
+                <div className="grid gap-4 md:grid-cols-2">
+                  {allBuildingTypes.map((type) => (
+                    <FormField
+                      key={type}
+                      control={form.control}
+                      name={`kwh_cumac.${type}` as const}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{type}</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min={0}
+                              step="any"
+                              value={field.value ?? ""}
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                if (value === "") {
+                                  field.onChange(null);
+                                  return;
+                                }
+                                const parsed = Number(value);
+                                if (Number.isNaN(parsed)) {
+                                  return;
+                                }
+                                field.onChange(parsed);
+                              }}
+                              onBlur={field.onBlur}
+                              disabled={isSubmitting}
+                              inputMode="decimal"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Aucun type de bâtiment n&apos;a encore été défini. Configurez-les dans les paramètres projets pour activer la saisie des kWh cumac.
+                </p>
+              )}
             </TabsContent>
 
             <TabsContent value="dynamic" className="space-y-6">

@@ -1,7 +1,9 @@
 import type { Tables } from "@/integrations/supabase/types";
 
 type QuoteProjectProduct = {
-  product: Pick<Tables<"product_catalog">, "code"> | null;
+  product: (Pick<Tables<"product_catalog">, "code"> & {
+    kwh_cumac_values?: Tables<"product_kwh_cumac">[];
+  }) | null;
 };
 
 type QuoteProject = Pick<
