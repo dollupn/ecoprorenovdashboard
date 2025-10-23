@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
 import { Label } from "@/components/ui/label";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Select,
   SelectContent,
@@ -26,7 +27,7 @@ import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 import { useProjectBuildingTypes } from "@/hooks/useProjectBuildingTypes";
 import { useProjectUsages } from "@/hooks/useProjectUsages";
 import { supabase } from "@/integrations/supabase/client";
-import type { Tables } from "@/integrations/supabase/types";
+import type { Database, Tables } from "@/integrations/supabase/types";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
 import {
@@ -85,6 +86,43 @@ import { AppointmentSettingsPanel } from "@/features/settings/AppointmentSetting
 
 const ROLE_OPTIONS = ["Administrateur", "Manager", "Commercial", "Technicien"] as const;
 type RoleOption = (typeof ROLE_OPTIONS)[number];
+type BusinessLocation = Database["public"]["Enums"]["business_location"];
+
+const BUSINESS_LOCATIONS: { value: BusinessLocation; label: string; description: string }[] = [
+  {
+    value: "metropole",
+    label: "France métropolitaine",
+    description: "Inclut la Corse et les DROM rattachés à la métropole.",
+  },
+  {
+    value: "guadeloupe",
+    label: "Guadeloupe",
+    description: "Paramètres spécifiques aux opérations réalisées en Guadeloupe.",
+  },
+  {
+    value: "martinique",
+    label: "Martinique",
+    description: "Paramètres spécifiques aux opérations réalisées en Martinique.",
+  },
+  {
+    value: "guyane",
+    label: "Guyane",
+    description: "Paramètres spécifiques aux opérations réalisées en Guyane.",
+  },
+  {
+    value: "reunion",
+    label: "La Réunion",
+    description: "Paramètres spécifiques aux opérations réalisées à La Réunion.",
+  },
+  {
+    value: "mayotte",
+    label: "Mayotte",
+    description: "Paramètres spécifiques aux opérations réalisées à Mayotte.",
+  },
+];
+
+const DEFAULT_BUSINESS_LOCATION =
+  BUSINESS_LOCATIONS[0]?.value ?? ("metropole" as BusinessLocation);
 
 type ProfileRecord = Tables<"profiles">;
 
@@ -290,6 +328,7 @@ const SETTINGS_SECTIONS: Array<{
 export default function Settings() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const location = useLocation();
   const navigate = useNavigate();
   const { currentOrgId } = useOrg();
@@ -347,6 +386,15 @@ export default function Settings() {
     description:
       "Entreprise spécialisée dans les rénovations énergétiques globales pour les particuliers et les copropriétés.",
   });
+  const [organizationPrimeSettings, setOrganizationPrimeSettings] = useState<{
+    businessLocation: BusinessLocation;
+    primeBonification: string;
+  }>({
+    businessLocation: DEFAULT_BUSINESS_LOCATION,
+    primeBonification: "0",
+  });
+  const [loadingOrganizationSettings, setLoadingOrganizationSettings] = useState(false);
+  const [savingOrganizationSettings, setSavingOrganizationSettings] = useState(false);
 
   const [notifications, setNotifications] = useState<NotificationSettings>({
     commercialEmails: true,
@@ -364,6 +412,68 @@ export default function Settings() {
   });
 
   const [integrations, setIntegrations] = useState(initialIntegrations);
+  useEffect(() => {
+    let isCancelled = false;
+
+    if (!currentOrgId) {
+      setOrganizationPrimeSettings({
+        businessLocation: DEFAULT_BUSINESS_LOCATION,
+        primeBonification: "0",
+      });
+      setLoadingOrganizationSettings(false);
+      return () => {
+        isCancelled = true;
+      };
+    }
+
+    setLoadingOrganizationSettings(true);
+
+    void supabase
+      .from("organizations")
+      .select("business_location, prime_bonification")
+      .eq("id", currentOrgId)
+      .single()
+      .then(({ data, error }) => {
+        if (isCancelled) return;
+
+        if (error) {
+          console.error("Erreur lors du chargement des paramètres organisationnels", error);
+          toast({
+            title: "Chargement impossible",
+            description:
+              "La localisation et la bonification de l'organisation n'ont pas pu être chargées.",
+            variant: "destructive",
+          });
+          setOrganizationPrimeSettings({
+            businessLocation: DEFAULT_BUSINESS_LOCATION,
+            primeBonification: "0",
+          });
+          return;
+        }
+
+        const locationValue =
+          (data?.business_location as BusinessLocation | null) ?? DEFAULT_BUSINESS_LOCATION;
+        const bonusValue =
+          typeof data?.prime_bonification === "number" &&
+          Number.isFinite(data.prime_bonification)
+            ? data.prime_bonification
+            : 0;
+
+        setOrganizationPrimeSettings({
+          businessLocation: locationValue,
+          primeBonification: String(bonusValue),
+        });
+      })
+      .finally(() => {
+        if (!isCancelled) {
+          setLoadingOrganizationSettings(false);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentOrgId, toast]);
   useEffect(() => {
     const state = location.state as SettingsLocationState | null;
     if (!state?.driveAuth) return;
@@ -899,6 +1009,63 @@ export default function Settings() {
                         />
                       </div>
                     </div>
+                    <div className="grid gap-4 md:grid-cols-2 md:col-span-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="company-business-location">Zone géographique</Label>
+                        <Select
+                          value={organizationPrimeSettings.businessLocation}
+                          onValueChange={(value) =>
+                            setOrganizationPrimeSettings((prev) => ({
+                              ...prev,
+                              businessLocation: value as BusinessLocation,
+                            }))
+                          }
+                        >
+                          <SelectTrigger
+                            id="company-business-location"
+                            disabled={loadingOrganizationSettings || savingOrganizationSettings}
+                          >
+                            <SelectValue placeholder="Sélectionnez une zone" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {BUSINESS_LOCATIONS.map((location) => (
+                              <SelectItem key={location.value} value={location.value}>
+                                {location.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          {
+                            BUSINESS_LOCATIONS.find(
+                              (location) => location.value === organizationPrimeSettings.businessLocation,
+                            )?.description ??
+                              "Choisissez la zone utilisée pour calculer les primes."
+                          }
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="prime-bonification">Bonification Prime CEE (€)</Label>
+                        <Input
+                          id="prime-bonification"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={organizationPrimeSettings.primeBonification}
+                          onChange={(event) =>
+                            setOrganizationPrimeSettings((prev) => ({
+                              ...prev,
+                              primeBonification: event.target.value,
+                            }))
+                          }
+                          disabled={loadingOrganizationSettings || savingOrganizationSettings}
+                          placeholder="0"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Montant additionnel appliqué automatiquement lors des simulations de prime CEE.
+                        </p>
+                      </div>
+                    </div>
                     <div className="md:col-span-2 space-y-2">
                       <Label htmlFor="company-description">Description publique</Label>
                       <Textarea
@@ -912,10 +1079,17 @@ export default function Settings() {
                     </div>
                   </div>
                   <div className="flex items-center justify-end gap-3">
-                    <Button type="button" variant="ghost">
+                    <Button type="button" variant="ghost" disabled={savingOrganizationSettings}>
                       Annuler
                     </Button>
-                    <Button type="submit">Enregistrer les modifications</Button>
+                    <Button
+                      type="submit"
+                      disabled={savingOrganizationSettings || loadingOrganizationSettings}
+                    >
+                      {savingOrganizationSettings
+                        ? "Enregistrement..."
+                        : "Enregistrer les modifications"}
+                    </Button>
                   </div>
                 </form>
               </TabsContent>
@@ -1536,12 +1710,61 @@ export default function Settings() {
     });
   };
 
-  const handleCompanySubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleCompanySubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    toast({
-      title: "Informations enregistrées",
-      description: "Les informations de l'entreprise ont été mises à jour.",
-    });
+
+    if (!currentOrgId) {
+      toast({
+        title: "Organisation requise",
+        description: "Sélectionnez une organisation avant de modifier ses paramètres.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSavingOrganizationSettings(true);
+
+    const normalizedValue = organizationPrimeSettings.primeBonification.replace(",", ".").trim();
+    const parsedValue = Number.parseFloat(normalizedValue);
+    const sanitizedPrimeBonification = Number.isFinite(parsedValue)
+      ? Math.max(0, parsedValue)
+      : 0;
+
+    try {
+      const { error } = await supabase
+        .from("organizations")
+        .update({
+          business_location: organizationPrimeSettings.businessLocation,
+          prime_bonification: sanitizedPrimeBonification,
+        })
+        .eq("id", currentOrgId);
+
+      if (error) {
+        throw error;
+      }
+
+      setOrganizationPrimeSettings((prev) => ({
+        ...prev,
+        primeBonification: String(sanitizedPrimeBonification),
+      }));
+
+      toast({
+        title: "Paramètres enregistrés",
+        description: "La localisation et la bonification Prime CEE ont été mises à jour.",
+      });
+
+      void queryClient.invalidateQueries({ queryKey: ["organizations", user?.id] });
+    } catch (error) {
+      console.error("Erreur lors de l'enregistrement des paramètres organisationnels", error);
+      toast({
+        title: "Enregistrement impossible",
+        description:
+          "La mise à jour des paramètres Prime CEE de l'organisation a échoué. Réessayez plus tard.",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingOrganizationSettings(false);
+    }
   };
 
   const toggleNotification = (key: keyof NotificationSettings) => {

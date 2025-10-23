@@ -2,17 +2,9 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import type { Database } from "@/integrations/supabase/types";
 
-interface Organization {
-  id: string;
-  name: string;
-  siret?: string;
-  tva?: string;
-  address?: string;
-  postal_code?: string;
-  city?: string;
-  country?: string;
-}
+type Organization = Database["public"]["Tables"]["organizations"]["Row"];
 
 interface OrgContextType {
   currentOrgId: string | null;
@@ -42,8 +34,8 @@ export const OrgProvider = ({ children }: { children: ReactNode }) => {
       if (error) throw error;
       
       return memberships
-        .map((m: any) => m.organizations)
-        .filter(Boolean);
+        .map((membership: { organizations: Organization | null }) => membership.organizations)
+        .filter((org): org is Organization => Boolean(org));
     },
     enabled: !!user,
   });
