@@ -1081,7 +1081,6 @@ export const AddProjectDialog = ({
     [watchedProducts, selectedDelegate?.price_eur_per_mwh, bonificationPercentage],
   );
 
-  // **** Merged/conflict-resolved effect: honors initialValues + defaults ****
   useEffect(() => {
     if (!open) return;
 
@@ -1158,7 +1157,6 @@ export const AddProjectDialog = ({
     statusOptions,
     defaultStartDate,
   ]);
-  // **** end merged effect ****
 
   const handleEcoToggle = useCallback(
     (productId: string, checked: boolean | "indeterminate") => {
