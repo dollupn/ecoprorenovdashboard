@@ -126,6 +126,7 @@ interface Delegataire {
   email: string;
   phone: string;
   textBlock: string;
+  pricePerMwh: string;
 }
 
 interface NotificationSettings {
@@ -973,7 +974,7 @@ export default function Settings() {
                           </Button>
                         </div>
 
-                        <div className="grid gap-4 md:grid-cols-2">
+                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                           <div className="space-y-2">
                             <Label htmlFor={`delegataire-name-${delegataire.id}`}>
                               Nom du délégataire
@@ -1043,7 +1044,24 @@ export default function Settings() {
                               placeholder="+33 6 12 34 56 78"
                             />
                           </div>
-                          <div className="md:col-span-2 space-y-2">
+                          <div className="space-y-2">
+                            <Label htmlFor={`delegataire-price-${delegataire.id}`}>
+                              Tarif (€/MWh)
+                            </Label>
+                            <Input
+                              id={`delegataire-price-${delegataire.id}`}
+                              value={delegataire.pricePerMwh}
+                              onChange={(event) =>
+                                handleDelegataireChange(
+                                  delegataire.id,
+                                  "pricePerMwh",
+                                  event.target.value,
+                                )
+                              }
+                              placeholder="0,00"
+                            />
+                          </div>
+                          <div className="md:col-span-2 lg:col-span-3 space-y-2">
                             <Label htmlFor={`delegataire-text-${delegataire.id}`}>
                               Bloc de texte pour le devis
                             </Label>
@@ -1926,6 +1944,7 @@ export default function Settings() {
         email: "",
         phone: "",
         textBlock: "",
+        pricePerMwh: "",
       },
     ]);
   }, []);
