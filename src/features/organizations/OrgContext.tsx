@@ -12,6 +12,7 @@ interface Organization {
   postal_code?: string;
   city?: string;
   country?: string;
+  prime_bonification_percentage?: number;
 }
 
 interface OrgContextType {

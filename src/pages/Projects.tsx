@@ -62,6 +62,7 @@ type ProjectProduct = Tables<"project_products"> & {
 type ProjectWithRelations = Project & {
   project_products: ProjectProduct[];
   lead?: Pick<Tables<"leads">, "email"> | null;
+  delegate?: Pick<Tables<"delegates">, "id" | "name" | "price_eur_per_mwh"> | null;
 };
 
 // Show all products except those whose code starts with "ECO"
@@ -97,7 +98,7 @@ const Projects = () => {
       let query = supabase
         .from("projects")
         .select(
-          "*, lead:leads(email), project_products(id, quantity, dynamic_params, product:product_catalog(code, name, params_schema))"
+          "*, lead:leads(email), delegate:delegates(id, name, price_eur_per_mwh), project_products(id, quantity, dynamic_params, product:product_catalog(code, name, params_schema))"
         )
         .order("created_at", { ascending: false });
 
@@ -612,6 +613,17 @@ const Projects = () => {
                         </div>
                       </div>
                     )}
+                    {project.delegate ? (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm text-muted-foreground">Délégataire:</span>
+                        <div className="flex flex-col items-end">
+                          <span className="text-sm font-medium">{project.delegate.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {formatCurrency(project.delegate.price_eur_per_mwh)} /MWh
+                          </span>
+                        </div>
+                      </div>
+                    ) : null}
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Source:</span>
                       <span className="font-medium">

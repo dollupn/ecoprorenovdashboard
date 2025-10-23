@@ -54,6 +54,7 @@ type ProjectProduct = Tables<"project_products"> & {
 
 type ProjectWithRelations = Project & {
   project_products: ProjectProduct[];
+  delegate?: Pick<Tables<"delegates">, "id" | "name" | "price_eur_per_mwh" | "description"> | null;
 };
 
 const getDisplayedProducts = (projectProducts?: ProjectProduct[]) =>
@@ -95,7 +96,7 @@ const ProjectDetails = () => {
       let query = supabase
         .from("projects")
         .select(
-          "*, project_products(id, quantity, dynamic_params, product:product_catalog(code, name, params_schema))"
+          "*, delegate:delegates(id, name, price_eur_per_mwh, description), project_products(id, quantity, dynamic_params, product:product_catalog(code, name, params_schema))"
         )
         .eq("id", id);
 
@@ -412,6 +413,20 @@ const ProjectDetails = () => {
                     ? formatCurrency(project.prime_cee)
                     : "Non définie"}
                 </span>
+              </div>
+              <div className="flex items-start gap-2">
+                <UserRound className="w-4 h-4 text-primary" />
+                <div className="flex flex-col">
+                  <span className="text-muted-foreground">Délégataire:</span>
+                  <span className="font-medium">
+                    {project.delegate ? project.delegate.name : "Non défini"}
+                  </span>
+                  {project.delegate ? (
+                    <span className="text-xs text-muted-foreground">
+                      {formatCurrency(project.delegate.price_eur_per_mwh)} /MWh
+                    </span>
+                  ) : null}
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-primary" />

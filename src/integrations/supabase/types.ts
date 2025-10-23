@@ -85,6 +85,7 @@ export type Database = {
           description: string | null
           id: string
           is_active: boolean
+          price_eur_per_mwh: number
           name: string
           org_id: string
           updated_at: string
@@ -94,6 +95,7 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean
+          price_eur_per_mwh?: number
           name: string
           org_id: string
           updated_at?: string
@@ -103,6 +105,7 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean
+          price_eur_per_mwh?: number
           name?: string
           org_id?: string
           updated_at?: string
@@ -394,6 +397,7 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          prime_bonification_percentage: number
           postal_code: string | null
           siret: string | null
           tva: string | null
@@ -406,6 +410,7 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          prime_bonification_percentage?: number
           postal_code?: string | null
           siret?: string | null
           tva?: string | null
@@ -418,6 +423,7 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          prime_bonification_percentage?: number
           postal_code?: string | null
           siret?: string | null
           tva?: string | null
@@ -617,6 +623,7 @@ export type Database = {
           phone: string | null
           postal_code: string
           prime_cee: number | null
+          delegate_id: string | null
           product_name: string
           project_ref: string
           same_address: boolean | null
@@ -656,6 +663,7 @@ export type Database = {
           phone?: string | null
           postal_code: string
           prime_cee?: number | null
+          delegate_id?: string | null
           product_name: string
           project_ref: string
           same_address?: boolean | null
@@ -695,6 +703,7 @@ export type Database = {
           phone?: string | null
           postal_code?: string
           prime_cee?: number | null
+          delegate_id?: string | null
           product_name?: string
           project_ref?: string
           same_address?: boolean | null
@@ -723,6 +732,13 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_delegate_id_fkey"
+            columns: ["delegate_id"]
+            isOneToOne: false
+            referencedRelation: "delegates"
             referencedColumns: ["id"]
           },
         ]

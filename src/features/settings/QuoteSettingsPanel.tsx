@@ -24,6 +24,7 @@ interface Delegate {
   id: string;
   name: string;
   description: string | null;
+  price_eur_per_mwh: number;
 }
 
 const RichTextEditor = ({ content, onChange }: { content: string; onChange: (html: string) => void }) => {
@@ -105,7 +106,7 @@ export function QuoteSettingsPanel() {
   const queryClient = useQueryClient();
 
   const [newSubcontractor, setNewSubcontractor] = useState({ name: "", description: "" });
-  const [newDelegate, setNewDelegate] = useState({ name: "", description: "" });
+  const [newDelegate, setNewDelegate] = useState({ name: "", description: "", price_eur_per_mwh: "" });
 
   const { data: subcontractors = [] } = useQuery({
     queryKey: ["subcontractors", currentOrgId],
@@ -170,21 +171,31 @@ export function QuoteSettingsPanel() {
   });
 
   const createDelegate = useMutation({
-    mutationFn: async (data: { name: string; description: string }) => {
+    mutationFn: async (data: { name: string; description: string; price_eur_per_mwh: number }) => {
+      if (!Number.isFinite(data.price_eur_per_mwh) || data.price_eur_per_mwh < 0) {
+        throw new Error("INVALID_PRICE");
+      }
+
       const { error } = await supabase.from("delegates").insert({
         org_id: currentOrgId!,
         name: data.name,
         description: data.description,
+        price_eur_per_mwh: data.price_eur_per_mwh,
       });
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["delegates", currentOrgId] });
-      setNewDelegate({ name: "", description: "" });
+      setNewDelegate({ name: "", description: "", price_eur_per_mwh: "" });
       toast({ title: "Délégataire créé avec succès" });
     },
-    onError: () => {
-      toast({ title: "Erreur", description: "Impossible de créer le délégataire", variant: "destructive" });
+    onError: (error) => {
+      const description =
+        error instanceof Error && error.message === "INVALID_PRICE"
+          ? "Le prix €/MWh doit être un nombre positif."
+          : "Impossible de créer le délégataire";
+
+      toast({ title: "Erreur", description, variant: "destructive" });
     },
   });
 
@@ -314,7 +325,7 @@ export function QuoteSettingsPanel() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="delegate-name">Nom du délégataire</Label>
                 <Input
@@ -324,22 +335,59 @@ export function QuoteSettingsPanel() {
                   onChange={(e) => setNewDelegate((prev) => ({ ...prev, name: e.target.value }))}
                 />
               </div>
-              <div className="space-y-2 md:col-span-2">
+              <div className="space-y-2">
+                <Label htmlFor="delegate-price">Prix (€/MWh)</Label>
+                <Input
+                  id="delegate-price"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0"
+                  value={newDelegate.price_eur_per_mwh}
+                  onChange={(e) =>
+                    setNewDelegate((prev) => ({ ...prev, price_eur_per_mwh: e.target.value }))
+                  }
+                />
+              </div>
+              <div className="space-y-2 md:col-span-3">
                 <Label htmlFor="delegate-description">Contenu par défaut</Label>
-                <RichTextEditor 
-                  content={newDelegate.description || "<p>Décrivez ici votre prestation...</p>"} 
-                  onChange={(html) => setNewDelegate((prev) => ({ ...prev, description: html }))} 
+                <RichTextEditor
+                  content={newDelegate.description || "<p>Décrivez ici votre prestation...</p>"}
+                  onChange={(html) => setNewDelegate((prev) => ({ ...prev, description: html }))}
                 />
               </div>
             </div>
             <Button
-              onClick={() =>
-                newDelegate.name.trim() &&
+              onClick={() => {
+                const name = newDelegate.name.trim();
+                if (!name) {
+                  toast({
+                    title: "Nom requis",
+                    description: "Veuillez renseigner le nom du délégataire.",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+
+                const priceValue = Number.parseFloat(
+                  newDelegate.price_eur_per_mwh.toString().replace(/,/g, "."),
+                );
+
+                if (!Number.isFinite(priceValue) || priceValue < 0) {
+                  toast({
+                    title: "Prix invalide",
+                    description: "Veuillez saisir un prix €/MWh valide.",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+
                 createDelegate.mutate({
-                  name: newDelegate.name.trim(),
+                  name,
                   description: newDelegate.description.trim(),
-                })
-              }
+                  price_eur_per_mwh: priceValue,
+                });
+              }}
               className="gap-2"
             >
               <Plus className="h-4 w-4" />
@@ -359,7 +407,14 @@ export function QuoteSettingsPanel() {
                   >
                     <div className="flex-1">
                       <p className="font-medium text-foreground">{delegate.name}</p>
-                      <div 
+                      <p className="text-sm text-muted-foreground">
+                        Prix: {new Intl.NumberFormat("fr-FR", {
+                          style: "currency",
+                          currency: "EUR",
+                        }).format(delegate.price_eur_per_mwh)}
+                        /MWh
+                      </p>
+                      <div
                         className="prose prose-sm mt-1 max-w-none text-muted-foreground"
                         dangerouslySetInnerHTML={{ __html: delegate.description ?? "<p>Aucune description</p>" }}
                       />
