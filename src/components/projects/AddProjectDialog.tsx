@@ -36,6 +36,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrg } from "@/features/organizations/OrgContext";
+import { useOrganizationPrimeSettings } from "@/features/organizations/useOrganizationPrimeSettings";
 import { useToast } from "@/hooks/use-toast";
 import * as z from "zod";
 import {
@@ -74,8 +75,14 @@ import { useProjectBuildingTypes } from "@/hooks/useProjectBuildingTypes";
 import { useProjectUsages } from "@/hooks/useProjectUsages";
 import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
 
-type ProductCatalogEntry = Pick<Tables<"product_catalog">, "id" | "name" | "code" | "category" | "is_active" | "params_schema" | "default_params">;
+type ProductCatalogEntry = Pick<
+  Tables<"product_catalog">,
+  "id" | "name" | "code" | "category" | "is_active" | "params_schema" | "default_params"
+  > & {
+  kwh_cumac_values?: Tables<"product_kwh_cumac">[];
+};
 type Profile = Tables<"profiles">;
+type Delegate = Pick<Tables<"delegates">, "id" | "name" | "price_eur_per_mwh" | "description">;
 type SelectOption = {
   value: string;
   label: string;
@@ -100,6 +107,70 @@ type ProductParamField = {
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+};
+
+const currencyFormatter = new Intl.NumberFormat("fr-FR", {
+  style: "currency",
+  currency: "EUR",
+});
+
+const formatCurrency = (value: number) => currencyFormatter.format(value);
+
+type PrimeProductInput = Pick<ProjectProduct, "product_id" | "quantity">;
+
+const calculatePrimeCee = ({
+  products,
+  buildingType,
+  delegate,
+  primeBonification,
+  productMap,
+}: {
+  products: PrimeProductInput[];
+  buildingType?: string | null;
+  delegate?: Delegate;
+  primeBonification: number;
+  productMap: Record<string, ProductCatalogEntry>;
+}) => {
+  if (!delegate || !buildingType) {
+    return null;
+  }
+
+  const pricePerMwh =
+    typeof delegate.price_eur_per_mwh === "number" ? delegate.price_eur_per_mwh : 0;
+
+  const totalKwh = products.reduce((sum, item) => {
+    if (!item?.product_id) {
+      return sum;
+    }
+
+    const product = productMap[item.product_id];
+    if (!product) {
+      return sum;
+    }
+
+    const kwhEntry = product.kwh_cumac_values?.find(
+      (value) => value.building_type === buildingType
+    );
+
+    if (!kwhEntry || typeof kwhEntry.kwh_cumac !== "number") {
+      return sum;
+    }
+
+    const quantity = typeof item.quantity === "number" ? item.quantity : Number(item.quantity ?? 0);
+
+    if (!Number.isFinite(quantity)) {
+      return sum;
+    }
+
+    return sum + kwhEntry.kwh_cumac * quantity;
+  }, 0);
+
+  const bonification = Number.isFinite(primeBonification) ? primeBonification : 0;
+  const basePrime = (totalKwh / 1000) * pricePerMwh;
+  const computed = basePrime + bonification;
+  const rounded = Math.round(computed * 100) / 100;
+
+  return Number.isFinite(rounded) ? rounded : bonification;
 };
 
 const extractProductParamFields = (
@@ -336,7 +407,9 @@ const createProjectSchema = (
     postal_code: z.string().min(5, "Code postal du chantier invalide"),
     building_type: buildingTypeSchema,
     usage: usageSchema,
-    prime_cee: z.coerce.number().optional(),
+    delegate_id: z
+      .string({ required_error: "Sélectionnez un délégataire" })
+      .uuid("Délégataire invalide"),
     signatory_name: z.string().optional(),
     signatory_title: z.string().optional(),
     surface_batiment_m2: z.coerce.number().optional(),
@@ -377,7 +450,7 @@ const baseDefaultValues: Partial<ProjectFormValues> = {
   products: [{ product_id: "", quantity: 1, dynamic_params: {} }],
   building_type: "",
   usage: "",
-  prime_cee: undefined,
+  delegate_id: "",
   signatory_name: "",
   signatory_title: "",
   surface_batiment_m2: undefined,
@@ -433,6 +506,7 @@ export const AddProjectDialog = ({
   const projectStatuses = useProjectStatuses();
   const buildingTypes = useProjectBuildingTypes();
   const usages = useProjectUsages();
+  const { primeBonification } = useOrganizationPrimeSettings();
 
   const statusOptions = useMemo(
     () => projectStatuses.map((status) => status.value),
@@ -531,13 +605,37 @@ export const AddProjectDialog = ({
 
       const { data, error } = await supabase
         .from("product_catalog")
-        .select("id, name, code, category, is_active, params_schema, default_params")
+        .select(
+          "id, name, code, category, is_active, params_schema, default_params, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)"
+        )
         .eq("org_id", currentOrgId)
         .eq("is_active", true)
         .order("name", { ascending: true });
 
       if (error) throw error;
       return data ?? [];
+    },
+    enabled: Boolean(currentOrgId),
+  });
+
+  const {
+    data: delegatesData,
+    isLoading: delegatesLoading,
+    error: delegatesError,
+  } = useQuery({
+    queryKey: ["delegates", currentOrgId],
+    queryFn: async () => {
+      if (!currentOrgId) return [] as Delegate[];
+
+      const { data, error } = await supabase
+        .from("delegates")
+        .select("id, name, price_eur_per_mwh, description")
+        .eq("org_id", currentOrgId)
+        .eq("is_active", true)
+        .order("name", { ascending: true });
+
+      if (error) throw error;
+      return (data ?? []) as Delegate[];
     },
     enabled: Boolean(currentOrgId),
   });
@@ -570,6 +668,20 @@ export const AddProjectDialog = ({
     }
   }, [productsError, toast]);
 
+  useEffect(() => {
+    if (delegatesError) {
+      const message =
+        delegatesError instanceof Error
+          ? delegatesError.message
+          : "Impossible de charger les délégataires";
+      toast({
+        title: "Erreur",
+        description: message,
+        variant: "destructive",
+      });
+    }
+  }, [delegatesError, toast]);
+
   const rawCommercialOptions = useMemo(() => {
     if (!salesRepsData) return [] as SelectOption[];
 
@@ -592,6 +704,40 @@ export const AddProjectDialog = ({
         label: product.code ?? product.name ?? "Produit",
       })) as SelectOption[];
   }, [productsData]);
+
+  const delegateOptions = useMemo(() => {
+    if (!delegatesData) return [] as SelectOption[];
+
+    return delegatesData.map((delegate) => {
+      const description =
+        typeof delegate.price_eur_per_mwh === "number"
+          ? `${formatCurrency(delegate.price_eur_per_mwh)} / MWh`
+          : undefined;
+
+      return {
+        value: delegate.id,
+        label: delegate.name,
+        description,
+      } satisfies SelectOption;
+    });
+  }, [delegatesData]);
+
+  const delegatesById = useMemo(() => {
+    if (!delegatesData) return {} as Record<string, Delegate>;
+
+    return delegatesData.reduce<Record<string, Delegate>>((acc, delegate) => {
+      acc[delegate.id] = delegate;
+      return acc;
+    }, {});
+  }, [delegatesData]);
+
+  const defaultDelegateId = useMemo(() => {
+    if (initialValues?.delegate_id) {
+      return initialValues.delegate_id;
+    }
+
+    return delegatesData?.[0]?.id ?? "";
+  }, [delegatesData, initialValues?.delegate_id]);
 
   const ecoProducts = useMemo(() => {
     if (!productsData) return [] as ProductCatalogEntry[];
@@ -687,6 +833,7 @@ export const AddProjectDialog = ({
       usage: defaultUsage,
       assigned_to: initialValues?.assigned_to ?? defaultAssignee ?? "",
       source: initialValues?.source ?? defaultSource ?? "",
+      delegate_id: initialValues?.delegate_id ?? defaultDelegateId ?? "",
       products: initialValues?.products ?? [createProductEntry()],
     } as ProjectFormValues,
   });
@@ -702,7 +849,75 @@ export const AddProjectDialog = ({
     name: "products",
   });
 
+  const watchedProducts = form.watch("products");
+  const watchedBuildingType = form.watch("building_type");
+  const watchedDelegateId = form.watch("delegate_id");
+
+  const productMap = useMemo(() => {
+    if (!productsData) return {} as Record<string, ProductCatalogEntry>;
+
+    return productsData.reduce<Record<string, ProductCatalogEntry>>((acc, product) => {
+      if (product.id) {
+        acc[product.id] = product;
+      }
+      return acc;
+    }, {});
+  }, [productsData]);
+
+  const selectedDelegate = useMemo(() => {
+    if (!watchedDelegateId) return undefined;
+    return delegatesById[watchedDelegateId];
+  }, [delegatesById, watchedDelegateId]);
+
+  const missingKwhProductCodes = useMemo(() => {
+    if (!watchedBuildingType) {
+      return [] as string[];
+    }
+
+    return (watchedProducts ?? []).reduce<string[]>((acc, item) => {
+      if (!item?.product_id) {
+        return acc;
+      }
+
+      const product = productMap[item.product_id];
+      if (!product) {
+        return acc;
+      }
+
+      const hasKwhForBuilding = product.kwh_cumac_values?.some((value) => {
+        return value.building_type === watchedBuildingType && typeof value.kwh_cumac === "number";
+      });
+
+      if (!hasKwhForBuilding) {
+        const label = product.code ?? product.name ?? product.id ?? "Produit";
+        if (!acc.includes(label)) {
+          acc.push(label);
+        }
+      }
+
+      return acc;
+    }, []);
+  }, [productMap, watchedBuildingType, watchedProducts]);
+
+  const computedPrimeCee = useMemo(() => {
+    return calculatePrimeCee({
+      products: (watchedProducts ?? []) as PrimeProductInput[],
+      buildingType: watchedBuildingType,
+      delegate: selectedDelegate,
+      primeBonification,
+      productMap,
+    });
+  }, [watchedProducts, watchedBuildingType, selectedDelegate, primeBonification, productMap]);
+
   // preserve status auto-correction effect
+  useEffect(() => {
+    const currentDelegateId = form.getValues("delegate_id");
+
+    if (!currentDelegateId && defaultDelegateId) {
+      form.setValue("delegate_id", defaultDelegateId);
+    }
+  }, [defaultDelegateId, form]);
+
   useEffect(() => {
     const currentStatus = form.getValues("status");
 
@@ -976,6 +1191,7 @@ export const AddProjectDialog = ({
       status: nextStatus,
       assigned_to: initialValues?.assigned_to ?? defaultAssignee ?? "",
       source: initialValues?.source ?? defaultSource ?? "",
+      delegate_id: initialValues?.delegate_id ?? defaultDelegateId ?? "",
       siren: initialValues?.siren ?? "",
       address: initialValues?.address ?? "",
       date_debut_prevue: initialValues?.date_debut_prevue ?? defaultStartDate ?? "",
@@ -992,6 +1208,7 @@ export const AddProjectDialog = ({
     defaultStatus,
     statusOptions,
     defaultStartDate,
+    defaultDelegateId,
   ]);
   // **** end merged effect ****
 
@@ -1099,6 +1316,20 @@ export const AddProjectDialog = ({
       const normalizedHqAddress = data.hq_address?.trim();
       const normalizedExternalRef = data.external_reference?.trim();
       const projectCost = data.estimated_value ?? undefined;
+      const delegateRecord = data.delegate_id
+        ? delegatesById[data.delegate_id] ?? delegatesData?.find((delegate) => delegate.id === data.delegate_id)
+        : undefined;
+      const primeCeeValue = calculatePrimeCee({
+        products: data.products,
+        buildingType: data.building_type,
+        delegate: delegateRecord,
+        primeBonification,
+        productMap,
+      });
+      const sanitizedPrimeCee =
+        typeof primeCeeValue === "number" && Number.isFinite(primeCeeValue)
+          ? Math.round(primeCeeValue * 100) / 100
+          : undefined;
 
       const { data: createdProject, error: projectError } = await supabase
         .from("projects")
@@ -1127,7 +1358,8 @@ export const AddProjectDialog = ({
             siren: normalizedSiren ? normalizedSiren : undefined,
             building_type: data.building_type || undefined,
             usage: data.usage || undefined,
-            prime_cee: data.prime_cee || undefined,
+            prime_cee: sanitizedPrimeCee,
+            delegate_id: data.delegate_id,
             signatory_name: data.signatory_name || undefined,
             signatory_title: data.signatory_title || undefined,
             surface_batiment_m2: data.surface_batiment_m2 || undefined,
@@ -1175,6 +1407,7 @@ export const AddProjectDialog = ({
         ...baseDefaultValues,
         assigned_to: defaultAssignee ?? "",
         source: defaultSource ?? "",
+        delegate_id: defaultDelegateId ?? "",
         products: ecoEntries.length ? ecoEntries : [createProductEntry()],
       } as ProjectFormValues);
       setOpen(false);
@@ -1674,13 +1907,53 @@ export const AddProjectDialog = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="prime_cee"
+                name="delegate_id"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Prime CEE (€)</FormLabel>
-                    <FormControl>
-                      <Input type="number" step="0.01" {...field} />
-                    </FormControl>
+                    <FormLabel>Délégataire *</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value}
+                      disabled={delegatesLoading || delegateOptions.length === 0 || loading}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue
+                            placeholder={
+                              delegatesLoading
+                                ? "Chargement..."
+                                : delegateOptions.length > 0
+                                ? "Sélectionnez un délégataire"
+                                : "Aucun délégataire disponible"
+                            }
+                          />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {delegatesLoading ? (
+                          <SelectItem value="__loading" disabled>
+                            Chargement...
+                          </SelectItem>
+                        ) : delegateOptions.length > 0 ? (
+                          delegateOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              <div className="flex flex-col">
+                                <span>{option.label}</span>
+                                {option.description ? (
+                                  <span className="text-xs text-muted-foreground">
+                                    {option.description}
+                                  </span>
+                                ) : null}
+                              </div>
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="__empty" disabled>
+                            Aucun délégataire disponible
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -1698,6 +1971,33 @@ export const AddProjectDialog = ({
                   </FormItem>
                 )}
               />
+            </div>
+
+            <div className="space-y-1">
+              <FormLabel>Prime CEE estimée</FormLabel>
+              <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-sm font-medium">
+                {delegatesLoading ? (
+                  "Calcul en attente du chargement des délégataires..."
+                ) : !selectedDelegate ? (
+                  "Sélectionnez un délégataire pour estimer la prime."
+                ) : !watchedBuildingType ? (
+                  "Sélectionnez un type de bâtiment pour estimer la prime."
+                ) : typeof computedPrimeCee === "number" ? (
+                  formatCurrency(computedPrimeCee)
+                ) : (
+                  "Impossible de calculer la prime : vérifiez les kWh cumac du produit choisi."
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Formule : Σ(kWh cumac × quantité) / 1000 × tarif délégataire + bonification (
+                {formatCurrency(primeBonification)}).
+              </p>
+              {missingKwhProductCodes.length > 0 ? (
+                <p className="text-xs text-amber-600">
+                  Valeurs kWh cumac manquantes pour : {missingKwhProductCodes.join(", ")}. Ces produits sont ignorés
+                  dans le calcul.
+                </p>
+              ) : null}
             </div>
 
             <FormField

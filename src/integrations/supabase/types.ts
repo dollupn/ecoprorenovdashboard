@@ -649,6 +649,7 @@ export type Database = {
           created_at: string
           date_debut_prevue: string | null
           date_fin_prevue: string | null
+          delegate_id: string | null
           discount: number | null
           estimated_value: number | null
           external_reference: string | null
@@ -688,6 +689,7 @@ export type Database = {
           created_at?: string
           date_debut_prevue?: string | null
           date_fin_prevue?: string | null
+          delegate_id?: string | null
           discount?: number | null
           estimated_value?: number | null
           external_reference?: string | null
@@ -727,6 +729,7 @@ export type Database = {
           created_at?: string
           date_debut_prevue?: string | null
           date_fin_prevue?: string | null
+          delegate_id?: string | null
           discount?: number | null
           estimated_value?: number | null
           external_reference?: string | null
@@ -760,6 +763,13 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_delegate_id_fkey"
+            columns: ["delegate_id"]
+            isOneToOne: false
+            referencedRelation: "delegates"
             referencedColumns: ["id"]
           },
           {
