@@ -36,6 +36,7 @@ import {
   Hammer,
   HandCoins,
   Mail,
+  UserRound,
 } from "lucide-react";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useMembers } from "@/features/members/api";
@@ -65,6 +66,7 @@ type ProjectProduct = Tables<"project_products"> & {
 type ProjectWithRelations = Project & {
   project_products: ProjectProduct[];
   lead?: Pick<Tables<"leads">, "email"> | null;
+  delegate?: Pick<Tables<"delegates">, "id" | "name" | "price_eur_per_mwh"> | null;
 };
 
 // Show all products except those whose code starts with "ECO"
@@ -100,7 +102,7 @@ const Projects = () => {
       let query = supabase
         .from("projects")
         .select(
-          "*, lead:leads(email), project_products(id, quantity, dynamic_params, product:product_catalog(code, name, params_schema, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))"
+          "*, delegate:delegates(id, name, price_eur_per_mwh), lead:leads(email), project_products(id, quantity, dynamic_params, product:product_catalog(code, name, params_schema, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))"
         )
         .order("created_at", { ascending: false });
 
@@ -186,6 +188,7 @@ const Projects = () => {
         project.assigned_to,
         project.source ?? "",
         project.lead?.email ?? "",
+        project.delegate?.name ?? "",
         dynamicValues,
       ]
         .join(" ")
@@ -615,6 +618,26 @@ const Projects = () => {
                         </div>
                       </div>
                     )}
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground flex items-center gap-1">
+                        <UserRound className="w-4 h-4" />
+                        Délégataire:
+                      </span>
+                      <span className="font-medium flex items-center gap-1 text-right">
+                        {project.delegate ? (
+                          <>
+                            {project.delegate.name}
+                            {typeof project.delegate.price_eur_per_mwh === "number" ? (
+                              <span className="text-xs text-muted-foreground">
+                                ({formatCurrency(project.delegate.price_eur_per_mwh)} / MWh)
+                              </span>
+                            ) : null}
+                          </>
+                        ) : (
+                          "Non défini"
+                        )}
+                      </span>
+                    </div>
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Source:</span>
                       <span className="font-medium">

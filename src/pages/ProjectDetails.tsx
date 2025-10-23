@@ -56,8 +56,11 @@ type ProjectProduct = Tables<"project_products"> & {
   product: ProductSummary | null;
 };
 
+type DelegateSummary = Pick<Tables<"delegates">, "id" | "name" | "price_eur_per_mwh">;
+
 type ProjectWithRelations = Project & {
   project_products: ProjectProduct[];
+  delegate?: DelegateSummary | null;
 };
 
 const getDisplayedProducts = (projectProducts?: ProjectProduct[]) =>
@@ -99,7 +102,7 @@ const ProjectDetails = () => {
       let query = supabase
         .from("projects")
         .select(
-          "*, project_products(id, quantity, dynamic_params, product:product_catalog(code, name, params_schema, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))"
+          "*, delegate:delegates(id, name, price_eur_per_mwh), project_products(id, quantity, dynamic_params, product:product_catalog(code, name, params_schema, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))"
         )
         .eq("id", id);
 
@@ -415,6 +418,24 @@ const ProjectDetails = () => {
                   {typeof project.prime_cee === "number"
                     ? formatCurrency(project.prime_cee)
                     : "Non définie"}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <UserRound className="w-4 h-4 text-primary" />
+                <span className="text-muted-foreground">Délégataire:</span>
+                <span className="font-medium flex items-center gap-2">
+                  {project.delegate ? (
+                    <>
+                      {project.delegate.name}
+                      {typeof project.delegate.price_eur_per_mwh === "number" ? (
+                        <span className="text-xs text-muted-foreground">
+                          ({formatCurrency(project.delegate.price_eur_per_mwh)} / MWh)
+                        </span>
+                      ) : null}
+                    </>
+                  ) : (
+                    "Non défini"
+                  )}
                 </span>
               </div>
               <div className="flex items-center gap-2">
