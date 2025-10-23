@@ -391,43 +391,49 @@ export type Database = {
       }
       organizations: {
         Row: {
-          business_location: Database["public"]["Enums"]["business_location"]
           address: string | null
+          business_location:
+            | Database["public"]["Enums"]["business_location"]
+            | null
           city: string | null
           country: string | null
           created_at: string
           id: string
           name: string
-          prime_bonification: number
           postal_code: string | null
+          prime_bonification: number | null
           siret: string | null
           tva: string | null
           updated_at: string
         }
         Insert: {
-          business_location?: Database["public"]["Enums"]["business_location"]
           address?: string | null
+          business_location?:
+            | Database["public"]["Enums"]["business_location"]
+            | null
           city?: string | null
           country?: string | null
           created_at?: string
           id?: string
           name: string
-          prime_bonification?: number
           postal_code?: string | null
+          prime_bonification?: number | null
           siret?: string | null
           tva?: string | null
           updated_at?: string
         }
         Update: {
-          business_location?: Database["public"]["Enums"]["business_location"]
           address?: string | null
+          business_location?:
+            | Database["public"]["Enums"]["business_location"]
+            | null
           city?: string | null
           country?: string | null
           created_at?: string
           id?: string
           name?: string
-          prime_bonification?: number
           postal_code?: string | null
+          prime_bonification?: number | null
           siret?: string | null
           tva?: string | null
           updated_at?: string
@@ -525,9 +531,9 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
-          referencedColumns: ["id"]
-        },
-      ]
+            referencedColumns: ["id"]
+          },
+        ]
       }
       product_kwh_cumac: {
         Row: {
@@ -759,17 +765,17 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "projects_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "leads"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "projects_delegate_id_fkey"
             columns: ["delegate_id"]
             isOneToOne: false
             referencedRelation: "delegates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
             referencedColumns: ["id"]
           },
           {
@@ -1056,6 +1062,7 @@ export type Database = {
       }
     }
     Enums: {
+      app_role: "admin" | "commercial" | "user"
       business_location:
         | "metropole"
         | "guadeloupe"
@@ -1063,7 +1070,6 @@ export type Database = {
         | "guyane"
         | "reunion"
         | "mayotte"
-      app_role: "admin" | "commercial" | "user"
       org_role: "owner" | "admin" | "member" | "commercial"
     }
     CompositeTypes: {
@@ -1193,6 +1199,14 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "commercial", "user"],
+      business_location: [
+        "metropole",
+        "guadeloupe",
+        "martinique",
+        "guyane",
+        "reunion",
+        "mayotte",
+      ],
       org_role: ["owner", "admin", "member", "commercial"],
     },
   },

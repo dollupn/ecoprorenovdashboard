@@ -49,10 +49,10 @@ import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 
 type Project = Tables<"projects">;
 type ProductSummary = Pick<Tables<"product_catalog">, "code" | "name" | "params_schema"> & {
-  kwh_cumac_values?: Tables<"product_kwh_cumac">[];
+  kwh_cumac_values?: Pick<Tables<"product_kwh_cumac">, "id" | "building_type" | "kwh_cumac">[];
 };
 
-type ProjectProduct = Tables<"project_products"> & {
+type ProjectProduct = Pick<Tables<"project_products">, "id" | "quantity" | "dynamic_params"> & {
   product: ProductSummary | null;
 };
 
