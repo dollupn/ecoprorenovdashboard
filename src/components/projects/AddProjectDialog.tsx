@@ -142,6 +142,9 @@ const calculatePrimeCee = ({
   const pricePerMwh =
     typeof delegate.price_eur_per_mwh === "number" ? delegate.price_eur_per_mwh : 0;
 
+  // Filter out products with ECO-FURN, ECO-LOG, ECO-ADMN categories
+  const excludedCategories = ["ECO-FURN", "ECO-LOG", "ECO-ADMN"];
+
   const totalKwh = products.reduce((sum, item) => {
     if (!item?.product_id) {
       return sum;
@@ -149,6 +152,11 @@ const calculatePrimeCee = ({
 
     const product = productMap[item.product_id];
     if (!product) {
+      return sum;
+    }
+
+    // Skip products in excluded categories
+    if (product.category && excludedCategories.includes(product.category)) {
       return sum;
     }
 
@@ -169,12 +177,12 @@ const calculatePrimeCee = ({
     return sum + kwhEntry.kwh_cumac * quantity;
   }, 0);
 
-  const bonification = Number.isFinite(primeBonification) ? primeBonification : 0;
+  const bonification = Number.isFinite(primeBonification) ? primeBonification : 1;
   const basePrime = (totalKwh / 1000) * pricePerMwh;
-  const computed = basePrime + bonification;
+  const computed = basePrime * bonification;
   const rounded = Math.round(computed * 100) / 100;
 
-  return Number.isFinite(rounded) ? rounded : bonification;
+  return Number.isFinite(rounded) ? rounded : 0;
 };
 
 const extractProductParamFields = (
@@ -1918,13 +1926,13 @@ export const AddProjectDialog = ({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Délégataire *</FormLabel>
-                    <Select
+                     <Select
                       onValueChange={field.onChange}
                       value={field.value}
                       disabled={delegatesLoading || delegateOptions.length === 0 || loading}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="h-auto">
                           <SelectValue
                             placeholder={
                               delegatesLoading
@@ -1943,11 +1951,11 @@ export const AddProjectDialog = ({
                           </SelectItem>
                         ) : delegateOptions.length > 0 ? (
                           delegateOptions.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              <div className="flex flex-col">
-                                <span>{option.label}</span>
+                            <SelectItem key={option.value} value={option.value} className="h-auto py-3">
+                              <div className="flex flex-col gap-1">
+                                <span className="font-medium">{option.label}</span>
                                 {option.description ? (
-                                  <span className="text-xs text-muted-foreground">
+                                  <span className="text-sm font-semibold text-emerald-600">
                                     {option.description}
                                   </span>
                                 ) : null}
@@ -1961,6 +1969,11 @@ export const AddProjectDialog = ({
                         )}
                       </SelectContent>
                     </Select>
+                    {selectedDelegate && typeof selectedDelegate.price_eur_per_mwh === "number" && (
+                      <p className="text-sm font-semibold text-emerald-600">
+                        {formatCurrency(selectedDelegate.price_eur_per_mwh)} / MWh
+                      </p>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -1996,8 +2009,10 @@ export const AddProjectDialog = ({
                 )}
               </div>
               <p className="text-xs text-muted-foreground">
-                Formule : Σ(kWh cumac × quantité) / 1000 × tarif délégataire + bonification (
-                {formatCurrency(primeBonification)}).
+                Formule : Σ(kWh cumac × quantité) / 1000 × tarif délégataire × bonification ({primeBonification}).
+              </p>
+              <p className="text-xs text-orange-600 font-medium">
+                Valeurs kWh cumac manquantes pour : ECO-FURN, ECO-LOG, ECO-ADMN. Ces produits sont ignorés dans le calcul.
               </p>
               {missingKwhProductCodes.length > 0 ? (
                 <p className="text-xs text-amber-600">
