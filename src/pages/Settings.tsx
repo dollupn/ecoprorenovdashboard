@@ -767,7 +767,7 @@ export default function Settings() {
                         <Input
                           value={status.value}
                           onChange={(event) => handleStatusValueChange(status.id, event.target.value)}
-                          placeholder="PROSPECTION"
+                          placeholder="NOUVEAU"
                         />
                         <p className="text-xs text-muted-foreground">
                           Identifiant synchronisé avec vos exports et intégrations.
