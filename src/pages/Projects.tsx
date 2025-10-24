@@ -54,12 +54,24 @@ import {
   formatDynamicFieldValue,
 } from "@/lib/product-params";
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
+import { useOrganizationPrimeSettings } from "@/features/organizations/useOrganizationPrimeSettings";
+import {
+  computeProjectPrimeAndValorisation,
+  type ProjectPrimeValorisationResult,
+  type ProjectProductValorisation,
+} from "@/lib/prime-valorisation";
 
 type Project = Tables<"projects">;
-type ProductSummary = Pick<Tables<"product_catalog">, "code" | "name" | "params_schema"> & {
+type ProductSummary = Pick<
+  Tables<"product_catalog">,
+  "id" | "code" | "name" | "category" | "params_schema"
+> & {
   kwh_cumac_values?: Pick<Tables<"product_kwh_cumac">, "id" | "building_type" | "kwh_cumac">[];
 };
-type ProjectProduct = Pick<Tables<"project_products">, "id" | "quantity" | "dynamic_params"> & {
+type ProjectProduct = Pick<
+  Tables<"project_products">,
+  "id" | "product_id" | "quantity" | "dynamic_params"
+> & {
   product: ProductSummary | null;
 };
 
@@ -85,6 +97,7 @@ const Projects = () => {
   const { currentOrgId } = useOrg();
   const { data: members = [], isLoading: membersLoading } = useMembers(currentOrgId);
   const projectStatuses = useProjectStatuses();
+  const { primeBonification } = useOrganizationPrimeSettings();
   const [searchTerm, setSearchTerm] = useState("");
   const [assignedFilter, setAssignedFilter] = useState<string>("all");
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
@@ -102,7 +115,7 @@ const Projects = () => {
       let query = supabase
         .from("projects")
         .select(
-          "*, delegate:delegates(id, name, price_eur_per_mwh), lead:leads(email), project_products(id, quantity, dynamic_params, product:product_catalog(code, name, params_schema, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))"
+          "*, delegate:delegates(id, name, price_eur_per_mwh), lead:leads(email), project_products(id, product_id, quantity, dynamic_params, product:product_catalog(id, code, name, category, params_schema, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))"
         )
         .order("created_at", { ascending: false });
 
@@ -144,6 +157,36 @@ const Projects = () => {
       return acc;
     }, {});
   }, [projectStatuses]);
+
+  type ProjectValorisationSummary = ProjectPrimeValorisationResult & {
+    productMap: Record<string, ProjectProductValorisation>;
+  };
+
+  const projectValorisationSummaries = useMemo(() => {
+    return projects.reduce<Record<string, ProjectValorisationSummary>>((acc, project) => {
+      const result = computeProjectPrimeAndValorisation({
+        products: project.project_products,
+        buildingType: project.building_type,
+        delegate: project.delegate,
+        primeBonification,
+      });
+
+      const productMap = result.products.reduce<Record<string, ProjectProductValorisation>>(
+        (map, product) => {
+          map[product.projectProductId] = product;
+          return map;
+        },
+        {}
+      );
+
+      acc[project.id] = {
+        ...result,
+        productMap,
+      };
+
+      return acc;
+    }, {});
+  }, [projects, primeBonification]);
 
   const filteredProjects = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -237,6 +280,16 @@ const Projects = () => {
     const productLabel = firstProduct?.code || project.product_name || "";
     const address = (project as Project & { address?: string | null }).address ?? "";
 
+    const valorisationSummary = projectValorisationSummaries[project.id];
+    const valorisationEntries = displayedProducts
+      .map((item) => (item.id ? valorisationSummary?.productMap[item.id] : undefined))
+      .filter((entry): entry is ProjectProductValorisation => Boolean(entry && entry.valorisationPerUnit));
+    const fallbackValorisation = valorisationSummary?.products.find(
+      (entry) => typeof entry.valorisationPerUnit === "number" && entry.valorisationPerUnit > 0
+    );
+    const selectedValorisation = valorisationEntries[0] ?? fallbackValorisation;
+    const valorisationBase = selectedValorisation?.valorisationPerUnit ?? 0;
+
     // Generate unique site ref
     const today = new Date();
     const datePrefix = `SITE-${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(today.getDate()).padStart(2, "0")}`;
@@ -277,7 +330,7 @@ const Projects = () => {
       cout_isolation_m2: 0,
       isolation_utilisee_m2: 0,
       montant_commission: 0,
-      valorisation_cee: 0,
+      valorisation_cee: valorisationBase,
       team_members: [{ name: "" }],
       additional_costs: [],
     });
@@ -452,6 +505,12 @@ const Projects = () => {
               project.lead?.email ??
               null;
             const projectCostValue = project.estimated_value ?? null;
+            const valorisationSummary = projectValorisationSummaries[project.id];
+            const valorisationEntries = displayedProducts
+              .map((item) => (item.id ? valorisationSummary?.productMap[item.id] : undefined))
+              .filter((entry): entry is ProjectProductValorisation =>
+                Boolean(entry && entry.valorisationPerUnit && entry.valorisationPerUnit > 0)
+              );
 
             return (
               <Card
@@ -618,6 +677,20 @@ const Projects = () => {
                         </div>
                       </div>
                     )}
+                    {valorisationEntries.map((entry) => (
+                      <div
+                        key={`${project.id}-valorisation-${entry.projectProductId}`}
+                        className="flex items-center justify-between"
+                      >
+                        <span className="text-sm text-muted-foreground">
+                          Valorisation CEE
+                          {entry.productCode ? ` (${entry.productCode})` : ""}:
+                        </span>
+                        <span className="text-sm font-semibold text-amber-600 text-right">
+                          {formatCurrency(entry.valorisationPerUnit ?? 0)} / {entry.multiplierLabel}
+                        </span>
+                      </div>
+                    ))}
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground flex items-center gap-1">
                         <UserRound className="w-4 h-4" />

@@ -46,13 +46,25 @@ import {
   formatDynamicFieldValue,
 } from "@/lib/product-params";
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
+import { useOrganizationPrimeSettings } from "@/features/organizations/useOrganizationPrimeSettings";
+import {
+  computeProjectPrimeAndValorisation,
+  type ProjectPrimeValorisationResult,
+  type ProjectProductValorisation,
+} from "@/lib/prime-valorisation";
 
 type Project = Tables<"projects">;
-type ProductSummary = Pick<Tables<"product_catalog">, "code" | "name" | "params_schema"> & {
+type ProductSummary = Pick<
+  Tables<"product_catalog">,
+  "id" | "code" | "name" | "category" | "params_schema"
+> & {
   kwh_cumac_values?: Pick<Tables<"product_kwh_cumac">, "id" | "building_type" | "kwh_cumac">[];
 };
 
-type ProjectProduct = Pick<Tables<"project_products">, "id" | "quantity" | "dynamic_params"> & {
+type ProjectProduct = Pick<
+  Tables<"project_products">,
+  "id" | "product_id" | "quantity" | "dynamic_params"
+> & {
   product: ProductSummary | null;
 };
 
@@ -81,6 +93,7 @@ const ProjectDetails = () => {
   const { currentOrgId } = useOrg();
   const { data: members = [], isLoading: membersLoading } = useMembers(currentOrgId);
   const projectStatuses = useProjectStatuses();
+  const { primeBonification } = useOrganizationPrimeSettings();
 
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
   const [quoteInitialValues, setQuoteInitialValues] = useState<Partial<QuoteFormValues>>({});
@@ -102,7 +115,7 @@ const ProjectDetails = () => {
       let query = supabase
         .from("projects")
         .select(
-          "*, delegate:delegates(id, name, price_eur_per_mwh), project_products(id, quantity, dynamic_params, product:product_catalog(code, name, params_schema, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))"
+          "*, delegate:delegates(id, name, price_eur_per_mwh), project_products(id, product_id, quantity, dynamic_params, product:product_catalog(id, code, name, category, params_schema, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))"
         )
         .eq("id", id);
 
@@ -133,6 +146,14 @@ const ProjectDetails = () => {
     () => getDisplayedProducts(project?.project_products),
     [project?.project_products]
   );
+
+  const valorisationEntries = useMemo(() => {
+    return projectProducts
+      .map((item) => (item.id ? valorisationProductMap[item.id] : undefined))
+      .filter((entry): entry is ProjectProductValorisation =>
+        Boolean(entry && entry.valorisationPerUnit && entry.valorisationPerUnit > 0)
+      );
+  }, [projectProducts, valorisationProductMap]);
 
   if (isLoading || membersLoading) {
     return (
@@ -239,6 +260,30 @@ const ProjectDetails = () => {
 
   const projectCostValue = project?.estimated_value ?? null;
   const projectEmail = (project as Project & { email?: string })?.email ?? null;
+  const valorisationResult = useMemo<ProjectPrimeValorisationResult | null>(() => {
+    if (!project) return null;
+
+    return computeProjectPrimeAndValorisation({
+      products: project.project_products,
+      buildingType: project.building_type,
+      delegate: project.delegate,
+      primeBonification,
+    });
+  }, [project, primeBonification]);
+
+  const valorisationProductMap = useMemo(() => {
+    if (!valorisationResult) return {} as Record<string, ProjectProductValorisation>;
+
+    return valorisationResult.products.reduce<Record<string, ProjectProductValorisation>>((acc, item) => {
+      acc[item.projectProductId] = item;
+      return acc;
+    }, {});
+  }, [valorisationResult]);
+
+  const displayedPrimeValue =
+    typeof project?.prime_cee === "number"
+      ? project.prime_cee
+      : valorisationResult?.totalPrime ?? null;
 
   return (
     <Layout>
@@ -415,11 +460,26 @@ const ProjectDetails = () => {
                 <HandCoins className="w-4 h-4 text-emerald-600" />
                 <span className="text-muted-foreground">Prime CEE:</span>
                 <span className="font-medium">
-                  {typeof project.prime_cee === "number"
-                    ? formatCurrency(project.prime_cee)
+                  {typeof displayedPrimeValue === "number"
+                    ? formatCurrency(displayedPrimeValue)
                     : "Non définie"}
                 </span>
               </div>
+              {valorisationEntries.map((entry) => (
+                <div
+                  key={`valorisation-summary-${entry.projectProductId}`}
+                  className="flex items-center gap-2"
+                >
+                  <HandCoins className="w-4 h-4 text-amber-600" />
+                  <span className="text-muted-foreground">
+                    Valorisation CEE
+                    {entry.productCode ? ` (${entry.productCode})` : ""}:
+                  </span>
+                  <span className="font-medium text-amber-600">
+                    {formatCurrency(entry.valorisationPerUnit ?? 0)} / {entry.multiplierLabel}
+                  </span>
+                </div>
+              ))}
               <div className="flex items-center gap-2">
                 <UserRound className="w-4 h-4 text-primary" />
                 <span className="text-muted-foreground">Délégataire:</span>
@@ -481,6 +541,7 @@ const ProjectDetails = () => {
                   item.product?.params_schema ?? null,
                   item.dynamic_params
                 );
+                const valorisationEntry = item.id ? valorisationProductMap[item.id] : undefined;
 
                 return (
                   <div
@@ -515,6 +576,14 @@ const ProjectDetails = () => {
                         ))}
                       </div>
                     )}
+                    {valorisationEntry?.valorisationPerUnit ? (
+                      <div className="flex items-center justify-between text-sm pt-2 border-t border-border/40">
+                        <span className="text-muted-foreground">Valorisation CEE</span>
+                        <span className="font-medium text-amber-600 text-right">
+                          {formatCurrency(valorisationEntry.valorisationPerUnit ?? 0)} / {valorisationEntry.multiplierLabel}
+                        </span>
+                      </div>
+                    ) : null}
                   </div>
                 );
               })
