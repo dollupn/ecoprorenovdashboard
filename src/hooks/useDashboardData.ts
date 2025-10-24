@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getProjectClientName } from "@/lib/projects";
+import type { Tables } from "@/integrations/supabase/types";
 import {
   addDays,
   addMonths,
@@ -76,6 +77,111 @@ const SITE_ACTIVITY_TITLES: Partial<Record<SiteStatus, string>> = {
   LIVRE: "Chantier livré",
 };
 
+const PRODUCT_ENERGY_EXCLUDED_CATEGORIES = ["ECO-FURN", "ECO-LOG", "ECO-ADMN"] as const;
+const QUANTITY_PARAM_KEYS = ["quantity", "surface_isolee", "nombre_led", "surface"] as const;
+
+type ProjectWithProducts = Pick<
+  Tables<"projects">,
+  "id" | "status" | "updated_at" | "surface_isolee_m2" | "city" | "client_name" | "building_type"
+> & {
+  project_products?: (
+    Pick<Tables<"project_products">, "quantity" | "dynamic_params"> & {
+      product?:
+        | (Pick<Tables<"product_catalog">, "category"> & {
+            kwh_cumac_values?: Pick<Tables<"product_kwh_cumac">, "building_type" | "kwh_cumac">[] | null;
+          })
+        | null;
+    }
+  )[] | null;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+};
+
+const parseNumericValue = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.replace(",", ".").trim();
+    if (!normalized) {
+      return null;
+    }
+
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+};
+
+const getProductMultiplier = (
+  projectProduct: Pick<Tables<"project_products">, "quantity" | "dynamic_params">
+) => {
+  if (projectProduct.dynamic_params && isRecord(projectProduct.dynamic_params)) {
+    const params = projectProduct.dynamic_params as Record<string, unknown>;
+    for (const key of QUANTITY_PARAM_KEYS) {
+      const rawValue = params[key];
+      const parsed = parseNumericValue(rawValue);
+      if (parsed && parsed > 0) {
+        return parsed;
+      }
+    }
+  }
+
+  const fallback = parseNumericValue(projectProduct.quantity);
+  return fallback && fallback > 0 ? fallback : 0;
+};
+
+const calculateProjectMwh = (project: ProjectWithProducts) => {
+  if (!isStatusValue(PROJECT_SURFACE_STATUSES, project.status)) {
+    return 0;
+  }
+
+  if (!project.building_type) {
+    return 0;
+  }
+
+  const products = project.project_products ?? [];
+
+  return products.reduce((sum, projectProduct) => {
+    if (!projectProduct?.product) {
+      return sum;
+    }
+
+    const { product } = projectProduct;
+
+    if (
+      typeof product.category === "string" &&
+      PRODUCT_ENERGY_EXCLUDED_CATEGORIES.includes(product.category)
+    ) {
+      return sum;
+    }
+
+    const kwhEntry = product.kwh_cumac_values?.find(
+      (entry) => entry && entry.building_type === project.building_type
+    );
+
+    if (!kwhEntry || typeof kwhEntry.kwh_cumac !== "number") {
+      return sum;
+    }
+
+    const multiplier = getProductMultiplier(projectProduct);
+    if (multiplier <= 0) {
+      return sum;
+    }
+
+    const productMwh = (kwhEntry.kwh_cumac / 1000) * multiplier;
+    return sum + productMwh;
+  }, 0);
+};
+
+const calculateTotalMwh = (projects: ProjectWithProducts[]) => {
+  return projects.reduce((acc, project) => acc + calculateProjectMwh(project), 0);
+};
+
 const INVOICE_ACTIVITY_STATUS_LABELS = {
   SENT: "Envoyée",
   PAID: "Payée",
@@ -104,6 +210,7 @@ export interface DashboardMetrics {
   chantiersFinSemaine: number;
   rdvProgrammesSemaine: number;
   surfaceIsoleeMois: number;
+  totalMwh: number;
   tauxConversion: {
     rate: number;
     delta: number | null;
@@ -190,7 +297,10 @@ export const useDashboardMetrics = (
           .in("status", ACTIVE_LEAD_STATUSES),
         supabase
           .from("projects")
-          .select("id, status, updated_at, surface_isolee_m2, city, client_name")
+          .select(
+            `id, status, updated_at, surface_isolee_m2, city, client_name, building_type,
+            project_products(id, quantity, dynamic_params, product:product_catalog(category, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))`
+          )
           .eq("org_id", orgId)
           .in("status", [...ACTIVE_PROJECT_STATUSES, ...PROJECT_SURFACE_STATUSES]),
         supabase
@@ -231,7 +341,7 @@ export const useDashboardMetrics = (
       if (qualifiedLeads.error) throw qualifiedLeads.error;
       if (acceptedProjects.error) throw acceptedProjects.error;
 
-      const projets = projectsData.data ?? [];
+      const projets = (projectsData.data ?? []) as ProjectWithProducts[];
       const sites = sitesData.data ?? [];
       const rdv = leadsRdv.data ?? [];
       const quotes = pendingQuotes.data ?? [];
@@ -254,6 +364,8 @@ export const useDashboardMetrics = (
           return updated >= startMonth && updated < nextMonthStart;
         })
         .reduce((acc, project) => acc + (project.surface_isolee_m2 ?? 0), 0);
+
+      const totalMwh = calculateTotalMwh(projets);
 
       const qualified = qualifiedLeads.data ?? [];
       const accepted = acceptedProjects.data ?? [];
@@ -297,6 +409,7 @@ export const useDashboardMetrics = (
         chantiersFinSemaine,
         rdvProgrammesSemaine: rdv.length,
         surfaceIsoleeMois: surfaceIsolee,
+        totalMwh: Number.isFinite(totalMwh) ? Number(totalMwh.toFixed(2)) : 0,
         tauxConversion: {
           rate: Number(currentRate.toFixed(1)),
           delta: delta === null ? null : Number(delta.toFixed(1)),
