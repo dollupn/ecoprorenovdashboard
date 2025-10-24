@@ -1951,7 +1951,7 @@ export const AddProjectDialog = ({
                 name="estimated_value"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Valeur estimée (€)</FormLabel>
+                    <FormLabel>Valorisation CEE</FormLabel>
                     <FormControl>
                       <Input type="number" step="0.01" {...field} />
                     </FormControl>
