@@ -33,6 +33,7 @@ const normalizeSchemaFields = (
 };
 
 export type DynamicFieldEntry = {
+  name: string;
   label: string;
   value: string | number;
   unit?: string;
@@ -63,6 +64,7 @@ export const getDynamicFieldEntries = (
             : JSON.stringify(rawValue);
 
       return {
+        name: field.name,
         label: field.label ?? field.name,
         value,
         unit: field.unit,
