@@ -388,36 +388,42 @@ export type Database = {
       }
       organizations: {
         Row: {
+          business_location: Database["public"]["Enums"]["business_location"]
           address: string | null
           city: string | null
           country: string | null
           created_at: string
           id: string
           name: string
+          prime_bonification: number
           postal_code: string | null
           siret: string | null
           tva: string | null
           updated_at: string
         }
         Insert: {
+          business_location?: Database["public"]["Enums"]["business_location"]
           address?: string | null
           city?: string | null
           country?: string | null
           created_at?: string
           id?: string
           name: string
+          prime_bonification?: number
           postal_code?: string | null
           siret?: string | null
           tva?: string | null
           updated_at?: string
         }
         Update: {
+          business_location?: Database["public"]["Enums"]["business_location"]
           address?: string | null
           city?: string | null
           country?: string | null
           created_at?: string
           id?: string
           name?: string
+          prime_bonification?: number
           postal_code?: string | null
           siret?: string | null
           tva?: string | null
@@ -1002,6 +1008,13 @@ export type Database = {
       }
     }
     Enums: {
+      business_location:
+        | "metropole"
+        | "guadeloupe"
+        | "martinique"
+        | "guyane"
+        | "reunion"
+        | "mayotte"
       app_role: "admin" | "commercial" | "user"
       org_role: "owner" | "admin" | "member" | "commercial"
     }
