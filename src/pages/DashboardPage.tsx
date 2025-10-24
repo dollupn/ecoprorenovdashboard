@@ -14,6 +14,7 @@ import {
   Calendar,
   Target,
   Ruler,
+  Zap,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -33,6 +34,10 @@ const numberFormatter = new Intl.NumberFormat("fr-FR", {
 
 const surfaceFormatter = new Intl.NumberFormat("fr-FR", {
   maximumFractionDigits: 0,
+});
+
+const energyFormatter = new Intl.NumberFormat("fr-FR", {
+  maximumFractionDigits: 1,
 });
 
 const formatPercentage = (value: number) => `${value.toFixed(1)}%`;
@@ -230,6 +235,17 @@ const DashboardPage = () => {
             changeType="neutral"
             icon={Ruler}
             gradient="from-teal-500 to-teal-600"
+            isLoading={metricsQuery.isLoading || !queriesEnabled}
+            error={metricsQuery.error ? "Erreur" : undefined}
+          />
+
+          <KPICard
+            title="Énergie Cumulée"
+            value={`${energyFormatter.format(metricsQuery.data?.totalMwh ?? 0)} MWh`}
+            change="Tous projets actifs"
+            changeType="neutral"
+            icon={Zap}
+            gradient="from-yellow-500 to-orange-500"
             isLoading={metricsQuery.isLoading || !queriesEnabled}
             error={metricsQuery.error ? "Erreur" : undefined}
           />
