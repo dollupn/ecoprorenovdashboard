@@ -74,13 +74,15 @@ import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 import { useProjectBuildingTypes } from "@/hooks/useProjectBuildingTypes";
 import { useProjectUsages } from "@/hooks/useProjectUsages";
 import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
+import {
+  computePrimeCee,
+  resolveBonificationFactor,
+  type PrimeCeeComputation,
+  type PrimeCeeProductCatalogEntry,
+  type PrimeProductInput,
+} from "@/lib/prime-cee";
 
-type ProductCatalogEntry = Pick<
-  Tables<"product_catalog">,
-  "id" | "name" | "code" | "category" | "is_active" | "params_schema" | "default_params"
-  > & {
-  kwh_cumac_values?: Pick<Tables<"product_kwh_cumac">, "id" | "building_type" | "kwh_cumac">[];
-};
+type ProductCatalogEntry = PrimeCeeProductCatalogEntry;
 type Profile = Tables<"profiles">;
 type Delegate = Pick<Tables<"delegates">, "id" | "name" | "price_eur_per_mwh" | "description">;
 type SelectOption = {
@@ -115,89 +117,11 @@ const currencyFormatter = new Intl.NumberFormat("fr-FR", {
 });
 
 const formatCurrency = (value: number) => currencyFormatter.format(value);
-
-type PrimeProductInput = {
-  product_id: string;
-  quantity: number;
-  dynamic_params?: Record<string, any>;
-};
-
-const calculatePrimeCee = ({
-  products,
-  buildingType,
-  delegate,
-  primeBonification,
-  productMap,
-}: {
-  products: PrimeProductInput[];
-  buildingType?: string | null;
-  delegate?: Delegate;
-  primeBonification: number;
-  productMap: Record<string, ProductCatalogEntry>;
-}) => {
-  if (!delegate || !buildingType) {
-    return null;
-  }
-
-  const pricePerMwh =
-    typeof delegate.price_eur_per_mwh === "number" ? delegate.price_eur_per_mwh : 0;
-
-  // Filter out products with ECO-FURN, ECO-LOG, ECO-ADMN categories
-  const excludedCategories = ["ECO-FURN", "ECO-LOG", "ECO-ADMN"];
-  const bonification = Number.isFinite(primeBonification) ? primeBonification : 1;
-
-  const totalPrime = products.reduce((sum, item) => {
-    if (!item?.product_id) {
-      return sum;
-    }
-
-    const product = productMap[item.product_id];
-    if (!product) {
-      return sum;
-    }
-
-    // Skip products in excluded categories
-    if (product.category && excludedCategories.includes(product.category)) {
-      return sum;
-    }
-
-    const kwhEntry = product.kwh_cumac_values?.find(
-      (value) => value.building_type === buildingType
-    );
-
-    if (!kwhEntry || typeof kwhEntry.kwh_cumac !== "number") {
-      return sum;
-    }
-
-    // Get the multiplier from dynamic_params or fall back to quantity field
-    let multiplier = 0;
-    if (item.dynamic_params && typeof item.dynamic_params === "object") {
-      const params = item.dynamic_params as Record<string, unknown>;
-      // Look for common quantity fields in dynamic params (surface_isolee, nombre_led, etc.)
-      const quantityValue = params.quantity || params.surface_isolee || params.nombre_led || params.surface;
-      if (typeof quantityValue === "number" && Number.isFinite(quantityValue)) {
-        multiplier = quantityValue;
-      }
-    }
-    
-    // Fall back to the quantity field if no dynamic param found
-    if (multiplier <= 0) {
-      multiplier = typeof item.quantity === "number" ? item.quantity : Number(item.quantity ?? 0);
-    }
-
-    if (!Number.isFinite(multiplier) || multiplier <= 0) {
-      return sum;
-    }
-
-    // Formula: (kWh cumac × bonification / 1000 × tarif) × multiplier
-    const productPrime = (kwhEntry.kwh_cumac * bonification / 1000 * pricePerMwh) * multiplier;
-    return sum + productPrime;
-  }, 0);
-
-  const rounded = Math.round(totalPrime * 100) / 100;
-
-  return Number.isFinite(rounded) ? rounded : 0;
-};
+const decimalFormatter = new Intl.NumberFormat("fr-FR", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+const formatDecimal = (value: number) => decimalFormatter.format(value);
 
 const extractProductParamFields = (
   schema: ProductCatalogEntry["params_schema"]
@@ -925,15 +849,38 @@ export const AddProjectDialog = ({
     }, []);
   }, [productMap, watchedBuildingType, watchedProducts]);
 
-  const computedPrimeCee = useMemo(() => {
-    return calculatePrimeCee({
-      products: (watchedProducts ?? []) as PrimeProductInput[],
+  const effectivePrimeBonification = useMemo(
+    () => resolveBonificationFactor(primeBonification),
+    [primeBonification]
+  );
+
+  const primeCeeComputation = useMemo<PrimeCeeComputation | null>(() => {
+    const normalizedProducts: PrimeProductInput[] = (watchedProducts ?? [])
+      .filter((item) => Boolean(item?.product_id))
+      .map((item) => ({
+        product_id: item.product_id as string,
+        quantity:
+          typeof item.quantity === "number"
+            ? item.quantity
+            : Number.isFinite(Number(item.quantity))
+              ? Number(item.quantity)
+              : undefined,
+        dynamic_params: item.dynamic_params ?? {},
+      }));
+
+    return computePrimeCee({
+      products: normalizedProducts,
       buildingType: watchedBuildingType,
       delegate: selectedDelegate,
       primeBonification,
       productMap,
     });
   }, [watchedProducts, watchedBuildingType, selectedDelegate, primeBonification, productMap]);
+
+  const primeCeeProducts = primeCeeComputation?.products ?? [];
+  const hasPrimeCeeValue =
+    typeof primeCeeComputation?.total === "number" && Number.isFinite(primeCeeComputation.total);
+  const primeCeeTotal = hasPrimeCeeValue && primeCeeComputation ? primeCeeComputation.total : null;
 
   // preserve status auto-correction effect
   useEffect(() => {
@@ -1345,20 +1292,27 @@ export const AddProjectDialog = ({
       const delegateRecord = data.delegate_id
         ? delegatesById[data.delegate_id] ?? delegatesData?.find((delegate) => delegate.id === data.delegate_id)
         : undefined;
-      const validProducts = data.products.filter(
-        (p): p is PrimeProductInput => Boolean(p.product_id) && typeof p.quantity === 'number'
-      );
-      const primeCeeValue = calculatePrimeCee({
+      const validProducts: PrimeProductInput[] = data.products
+        .filter((p) => Boolean(p.product_id))
+        .map((p) => ({
+          product_id: p.product_id as string,
+          quantity:
+            typeof p.quantity === "number"
+              ? p.quantity
+              : Number.isFinite(Number(p.quantity))
+                ? Number(p.quantity)
+                : undefined,
+          dynamic_params: p.dynamic_params ?? {},
+        }));
+
+      const primeCeeValue = computePrimeCee({
         products: validProducts,
         buildingType: data.building_type,
         delegate: delegateRecord,
         primeBonification,
         productMap,
       });
-      const sanitizedPrimeCee =
-        typeof primeCeeValue === "number" && Number.isFinite(primeCeeValue)
-          ? Math.round(primeCeeValue * 100) / 100
-          : undefined;
+      const sanitizedPrimeCee = primeCeeValue ? primeCeeValue.total : undefined;
 
       const { data: createdProject, error: projectError } = await supabase
         .from("projects")
@@ -2009,21 +1963,42 @@ export const AddProjectDialog = ({
 
             <div className="space-y-1">
               <FormLabel>Prime CEE estimée</FormLabel>
-              <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-sm font-medium">
-                {delegatesLoading ? (
-                  "Calcul en attente du chargement des délégataires..."
-                ) : !selectedDelegate ? (
-                  "Sélectionnez un délégataire pour estimer la prime."
-                ) : !watchedBuildingType ? (
-                  "Sélectionnez un type de bâtiment pour estimer la prime."
-                ) : typeof computedPrimeCee === "number" ? (
-                  formatCurrency(computedPrimeCee)
-                ) : (
-                  "Impossible de calculer la prime : vérifiez les kWh cumac du produit choisi."
-                )}
+              <div className="space-y-2">
+                <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-sm font-medium">
+                  {delegatesLoading ? (
+                    "Calcul en attente du chargement des délégataires..."
+                  ) : !selectedDelegate ? (
+                    "Sélectionnez un délégataire pour estimer la prime."
+                  ) : !watchedBuildingType ? (
+                    "Sélectionnez un type de bâtiment pour estimer la prime."
+                  ) : hasPrimeCeeValue ? (
+                    primeCeeTotal !== null ? formatCurrency(primeCeeTotal) : "0 €"
+                  ) : (
+                    "Impossible de calculer la prime : vérifiez les kWh cumac du produit choisi."
+                  )}
+                </div>
+
+                {hasPrimeCeeValue && primeCeeProducts.length > 0 ? (
+                  <div className="rounded-md border border-dashed border-border/60 bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
+                    <div className="font-semibold text-foreground">Détail par produit</div>
+                    <ul className="mt-1 space-y-1">
+                      {primeCeeProducts.map((product) => {
+                        const label = product.productCode || product.productName || product.productId;
+                        return (
+                          <li key={product.productId} className="flex flex-col gap-0.5">
+                            <span className="font-medium text-foreground">{label}</span>
+                            <span>
+                              Valorisation : {formatCurrency(product.valorisationBase)} × {product.multiplierLabel} : {formatDecimal(product.multiplier)} = {formatCurrency(product.total)}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ) : null}
               </div>
               <p className="text-xs text-muted-foreground">
-                Formule : Σ((kWh cumac × bonification ({primeBonification}) / 1000) × tarif délégataire × quantité).
+                Valorisation CEE = (kWh cumac × bonification ({formatDecimal(effectivePrimeBonification)}) / 1000) × tarif délégataire. Prime estimée = Σ(Valorisation CEE × champ dynamique).
               </p>
               <p className="text-xs text-orange-600 font-medium">
                 Valeurs kWh cumac manquantes pour : ECO-FURN, ECO-LOG, ECO-ADMN. Ces produits sont ignorés dans le calcul.
