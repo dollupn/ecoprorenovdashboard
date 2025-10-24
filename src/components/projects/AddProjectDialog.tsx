@@ -144,8 +144,9 @@ const calculatePrimeCee = ({
 
   // Filter out products with ECO-FURN, ECO-LOG, ECO-ADMN categories
   const excludedCategories = ["ECO-FURN", "ECO-LOG", "ECO-ADMN"];
+  const bonification = Number.isFinite(primeBonification) ? primeBonification : 1;
 
-  const totalKwh = products.reduce((sum, item) => {
+  const totalPrime = products.reduce((sum, item) => {
     if (!item?.product_id) {
       return sum;
     }
@@ -168,19 +169,32 @@ const calculatePrimeCee = ({
       return sum;
     }
 
-    const quantity = typeof item.quantity === "number" ? item.quantity : Number(item.quantity ?? 0);
+    // Get the multiplier from dynamic_params or fall back to quantity field
+    let multiplier = 0;
+    if (item.dynamic_params && typeof item.dynamic_params === "object") {
+      const params = item.dynamic_params as Record<string, unknown>;
+      // Look for common quantity fields in dynamic params (surface_isolee, nombre_led, etc.)
+      const quantityValue = params.quantity || params.surface_isolee || params.nombre_led || params.surface;
+      if (typeof quantityValue === "number" && Number.isFinite(quantityValue)) {
+        multiplier = quantityValue;
+      }
+    }
+    
+    // Fall back to the quantity field if no dynamic param found
+    if (multiplier <= 0) {
+      multiplier = typeof item.quantity === "number" ? item.quantity : Number(item.quantity ?? 0);
+    }
 
-    if (!Number.isFinite(quantity)) {
+    if (!Number.isFinite(multiplier) || multiplier <= 0) {
       return sum;
     }
 
-    return sum + kwhEntry.kwh_cumac * quantity;
+    // Formula: (kWh cumac × bonification / 1000 × tarif) × multiplier
+    const productPrime = (kwhEntry.kwh_cumac * bonification / 1000 * pricePerMwh) * multiplier;
+    return sum + productPrime;
   }, 0);
 
-  const bonification = Number.isFinite(primeBonification) ? primeBonification : 1;
-  const basePrime = (totalKwh / 1000) * pricePerMwh;
-  const computed = basePrime * bonification;
-  const rounded = Math.round(computed * 100) / 100;
+  const rounded = Math.round(totalPrime * 100) / 100;
 
   return Number.isFinite(rounded) ? rounded : 0;
 };
@@ -2009,7 +2023,7 @@ export const AddProjectDialog = ({
                 )}
               </div>
               <p className="text-xs text-muted-foreground">
-                Formule : Σ(kWh cumac × quantité) / 1000 × tarif délégataire × bonification ({primeBonification}).
+                Formule : Σ((kWh cumac × bonification ({primeBonification}) / 1000) × tarif délégataire × quantité).
               </p>
               <p className="text-xs text-orange-600 font-medium">
                 Valeurs kWh cumac manquantes pour : ECO-FURN, ECO-LOG, ECO-ADMN. Ces produits sont ignorés dans le calcul.
