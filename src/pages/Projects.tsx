@@ -56,15 +56,17 @@ import {
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 import { useOrganizationPrimeSettings } from "@/features/organizations/useOrganizationPrimeSettings";
 import {
-  computeProjectPrimeAndValorisation,
-  type ProjectPrimeValorisationResult,
-  type ProjectProductValorisation,
-} from "@/lib/prime-valorisation";
+  computePrimeCee,
+  type PrimeCeeComputation,
+  type PrimeCeeProductResult,
+  type PrimeCeeProductCatalogEntry,
+  type PrimeProductInput,
+} from "@/lib/prime-cee-unified";
 
 type Project = Tables<"projects">;
 type ProductSummary = Pick<
   Tables<"product_catalog">,
-  "id" | "code" | "name" | "category" | "params_schema"
+  "id" | "code" | "name" | "category" | "params_schema" | "is_active" | "default_params"
 > & {
   kwh_cumac_values?: Pick<Tables<"product_kwh_cumac">, "id" | "building_type" | "kwh_cumac">[];
 };
@@ -158,20 +160,38 @@ const Projects = () => {
     }, {});
   }, [projectStatuses]);
 
-  type ProjectValorisationSummary = ProjectPrimeValorisationResult & {
-    productMap: Record<string, ProjectProductValorisation>;
+  type ProjectValorisationSummary = PrimeCeeComputation & {
+    productMap: Record<string, PrimeCeeProductResult>;
   };
 
   const projectValorisationSummaries = useMemo(() => {
     return projects.reduce<Record<string, ProjectValorisationSummary>>((acc, project) => {
-      const result = computeProjectPrimeAndValorisation({
-        products: project.project_products,
+      const projectProducts = project.project_products.reduce<PrimeProductInput[]>((pAcc, pp) => {
+        pAcc.push({
+          id: pp.id,
+          product_id: pp.product_id,
+          quantity: pp.quantity,
+          dynamic_params: (pp.dynamic_params as Record<string, unknown>) ?? {},
+        });
+        return pAcc;
+      }, []);
+
+      const productMap = project.project_products.reduce<Record<string, PrimeCeeProductCatalogEntry>>((pMap, pp) => {
+        if (pp.product) {
+          pMap[pp.product_id] = pp.product;
+        }
+        return pMap;
+      }, {});
+
+      const result = computePrimeCee({
+        products: projectProducts,
+        productMap,
         buildingType: project.building_type,
         delegate: project.delegate,
         primeBonification,
       });
 
-      const productMap = result.products.reduce<Record<string, ProjectProductValorisation>>(
+      const resultProductMap = (result?.products ?? []).reduce<Record<string, PrimeCeeProductResult>>(
         (map, product) => {
           map[product.projectProductId] = product;
           return map;
@@ -180,8 +200,9 @@ const Projects = () => {
       );
 
       acc[project.id] = {
-        ...result,
-        productMap,
+        totalPrime: result?.totalPrime ?? 0,
+        products: result?.products ?? [],
+        productMap: resultProductMap,
       };
 
       return acc;
@@ -283,7 +304,7 @@ const Projects = () => {
     const valorisationSummary = projectValorisationSummaries[project.id];
     const valorisationEntries = displayedProducts
       .map((item) => (item.id ? valorisationSummary?.productMap[item.id] : undefined))
-      .filter((entry): entry is ProjectProductValorisation => Boolean(entry && entry.valorisationPerUnit));
+      .filter((entry): entry is PrimeCeeProductResult => Boolean(entry && entry.valorisationPerUnit));
     const fallbackValorisation = valorisationSummary?.products.find(
       (entry) => typeof entry.valorisationPerUnit === "number" && entry.valorisationPerUnit > 0
     );
@@ -508,7 +529,7 @@ const Projects = () => {
             const valorisationSummary = projectValorisationSummaries[project.id];
             const valorisationEntries = displayedProducts
               .map((item) => (item.id ? valorisationSummary?.productMap[item.id] : undefined))
-              .filter((entry): entry is ProjectProductValorisation =>
+              .filter((entry): entry is PrimeCeeProductResult =>
                 Boolean(entry && entry.valorisationPerUnit && entry.valorisationPerUnit > 0)
               );
 

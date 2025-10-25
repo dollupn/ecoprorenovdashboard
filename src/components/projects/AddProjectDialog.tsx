@@ -80,7 +80,7 @@ import {
   type PrimeCeeComputation,
   type PrimeCeeProductCatalogEntry,
   type PrimeProductInput,
-} from "@/lib/prime-cee";
+} from "@/lib/prime-cee-unified";
 
 type ProductCatalogEntry = PrimeCeeProductCatalogEntry;
 type Profile = Tables<"profiles">;
@@ -879,8 +879,8 @@ export const AddProjectDialog = ({
 
   const primeCeeProducts = primeCeeComputation?.products ?? [];
   const hasPrimeCeeValue =
-    typeof primeCeeComputation?.total === "number" && Number.isFinite(primeCeeComputation.total);
-  const primeCeeTotal = hasPrimeCeeValue && primeCeeComputation ? primeCeeComputation.total : null;
+    typeof primeCeeComputation?.totalPrime === "number" && Number.isFinite(primeCeeComputation.totalPrime);
+  const primeCeeTotal = hasPrimeCeeValue && primeCeeComputation ? primeCeeComputation.totalPrime : null;
 
   // preserve status auto-correction effect
   useEffect(() => {
@@ -1312,7 +1312,7 @@ export const AddProjectDialog = ({
         primeBonification,
         productMap,
       });
-      const sanitizedPrimeCee = primeCeeValue ? primeCeeValue.total : undefined;
+      const sanitizedPrimeCee = primeCeeValue ? primeCeeValue.totalPrime : undefined;
 
       const { data: createdProject, error: projectError } = await supabase
         .from("projects")
@@ -1988,7 +1988,7 @@ export const AddProjectDialog = ({
                           <li key={product.productId} className="flex flex-col gap-0.5">
                             <span className="font-medium text-foreground">{label}</span>
                             <span>
-                              Valorisation : {formatCurrency(product.valorisationBase)} × {product.multiplierLabel} : {formatDecimal(product.multiplier)} = {formatCurrency(product.total)}
+                              Valorisation : {formatCurrency(product.valorisationPerUnit)} × {product.multiplierLabel} : {formatDecimal(product.multiplier)} = {formatCurrency(product.totalPrime)}
                             </span>
                           </li>
                         );

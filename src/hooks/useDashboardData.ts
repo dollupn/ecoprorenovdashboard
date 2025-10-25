@@ -77,8 +77,7 @@ const SITE_ACTIVITY_TITLES: Partial<Record<SiteStatus, string>> = {
   LIVRE: "Chantier livré",
 };
 
-const PRODUCT_ENERGY_EXCLUDED_CATEGORIES = ["ECO-FURN", "ECO-LOG", "ECO-ADMN"] as const;
-const QUANTITY_PARAM_KEYS = ["quantity", "surface_isolee", "nombre_led", "surface"] as const;
+import { isProductExcluded, getMultiplierValue, type PrimeCeeProductCatalogEntry } from "@/lib/prime-cee-unified";
 
 type ProjectWithProducts = Pick<
   Tables<"projects">,
@@ -86,53 +85,14 @@ type ProjectWithProducts = Pick<
 > & {
   project_products?: (
     Pick<Tables<"project_products">, "quantity" | "dynamic_params"> & {
-      product?:
-        | (Pick<Tables<"product_catalog">, "category"> & {
-            kwh_cumac_values?: Pick<Tables<"product_kwh_cumac">, "building_type" | "kwh_cumac">[] | null;
-          })
-        | null;
+      product?: Pick<
+        Tables<"product_catalog">,
+        "id" | "code" | "category" | "params_schema" | "is_active" | "default_params"
+      > & {
+        kwh_cumac_values?: Pick<Tables<"product_kwh_cumac">, "building_type" | "kwh_cumac">[] | null;
+      } | null;
     }
   )[] | null;
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-};
-
-const parseNumericValue = (value: unknown): number | null => {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (typeof value === "string") {
-    const normalized = value.replace(",", ".").trim();
-    if (!normalized) {
-      return null;
-    }
-
-    const parsed = Number(normalized);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  return null;
-};
-
-const getProductMultiplier = (
-  projectProduct: Pick<Tables<"project_products">, "quantity" | "dynamic_params">
-) => {
-  if (projectProduct.dynamic_params && isRecord(projectProduct.dynamic_params)) {
-    const params = projectProduct.dynamic_params as Record<string, unknown>;
-    for (const key of QUANTITY_PARAM_KEYS) {
-      const rawValue = params[key];
-      const parsed = parseNumericValue(rawValue);
-      if (parsed && parsed > 0) {
-        return parsed;
-      }
-    }
-  }
-
-  const fallback = parseNumericValue(projectProduct.quantity);
-  return fallback && fallback > 0 ? fallback : 0;
 };
 
 const calculateProjectMwh = (project: ProjectWithProducts) => {
@@ -153,10 +113,8 @@ const calculateProjectMwh = (project: ProjectWithProducts) => {
 
     const { product } = projectProduct;
 
-    if (
-      typeof product.category === "string" &&
-      PRODUCT_ENERGY_EXCLUDED_CATEGORIES.includes(product.category)
-    ) {
+    // Exclude ECO-* products
+    if (isProductExcluded(product)) {
       return sum;
     }
 
@@ -168,12 +126,16 @@ const calculateProjectMwh = (project: ProjectWithProducts) => {
       return sum;
     }
 
-    const multiplier = getProductMultiplier(projectProduct);
-    if (multiplier <= 0) {
+    const multiplier = getMultiplierValue({ 
+      product: product as PrimeCeeProductCatalogEntry, 
+      projectProduct 
+    });
+    
+    if (!multiplier || multiplier.value <= 0) {
       return sum;
     }
 
-    const productMwh = (kwhEntry.kwh_cumac / 1000) * multiplier;
+    const productMwh = (kwhEntry.kwh_cumac / 1000) * multiplier.value;
     return sum + productMwh;
   }, 0);
 };
@@ -341,7 +303,7 @@ export const useDashboardMetrics = (
       if (qualifiedLeads.error) throw qualifiedLeads.error;
       if (acceptedProjects.error) throw acceptedProjects.error;
 
-      const projets = (projectsData.data ?? []) as ProjectWithProducts[];
+      const projets = projectsData.data ?? [];
       const sites = sitesData.data ?? [];
       const rdv = leadsRdv.data ?? [];
       const quotes = pendingQuotes.data ?? [];
@@ -365,7 +327,7 @@ export const useDashboardMetrics = (
         })
         .reduce((acc, project) => acc + (project.surface_isolee_m2 ?? 0), 0);
 
-      const totalMwh = calculateTotalMwh(projets);
+      const totalMwh = calculateTotalMwh(projets as any);
 
       const qualified = qualifiedLeads.data ?? [];
       const accepted = acceptedProjects.data ?? [];
