@@ -84,8 +84,14 @@ const getDisplayedProducts = (projectProducts?: ProjectProduct[]) =>
     return !code.startsWith("ECO");
   });
 
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value);
+const currencyFormatter = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" });
+const decimalFormatter = new Intl.NumberFormat("fr-FR", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
+const formatCurrency = (value: number) => currencyFormatter.format(value);
+const formatDecimal = (value: number) => decimalFormatter.format(value);
 
 const ProjectDetails = () => {
   const { id } = useParams<{ id: string }>();
@@ -190,8 +196,9 @@ const ProjectDetails = () => {
   const valorisationEntries = useMemo(() => {
     return projectProducts
       .map((item) => (item.id ? valorisationProductMap[item.id] : undefined))
-      .filter((entry): entry is PrimeCeeProductResult =>
-        Boolean(entry && entry.valorisationPerUnit && entry.valorisationPerUnit > 0)
+      .filter(
+        (entry): entry is PrimeCeeProductResult =>
+          Boolean(entry && entry.valorisationPerUnitEur && entry.valorisationPerUnitEur > 0),
       );
   }, [projectProducts, valorisationProductMap]);
 
@@ -486,21 +493,34 @@ const ProjectDetails = () => {
                     : "Non définie"}
                 </span>
               </div>
-              {valorisationEntries.map((entry) => (
-                <div
-                  key={`valorisation-summary-${entry.projectProductId}`}
-                  className="flex items-center gap-2"
-                >
-                  <HandCoins className="w-4 h-4 text-amber-600" />
-                  <span className="text-muted-foreground">
-                    Valorisation CEE
-                    {entry.productCode ? ` (${entry.productCode})` : ""}:
-                  </span>
-                  <span className="font-medium text-amber-600">
-                    {formatCurrency(entry.valorisationPerUnit ?? 0)} / {entry.multiplierLabel}
-                  </span>
-                </div>
-              ))}
+              {valorisationEntries.map((entry) => {
+                const valorisationLabel = (entry.valorisationLabel || "Valorisation m²/LED").trim();
+                return (
+                  <div
+                    key={`valorisation-summary-${entry.projectProductId}`}
+                    className="flex items-start gap-2"
+                  >
+                    <HandCoins className="w-4 h-4 text-amber-600 mt-0.5" />
+                    <div className="flex flex-col gap-1 text-xs sm:text-sm">
+                      <span className="text-muted-foreground">
+                        {valorisationLabel}
+                        {entry.productCode ? ` (${entry.productCode})` : ""}
+                      </span>
+                      <span className="font-medium text-emerald-600 text-sm">
+                        {formatCurrency(entry.valorisationPerUnitEur ?? 0)} / {entry.multiplierLabel}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {`${formatDecimal(entry.valorisationPerUnitMwh)} MWh × ${entry.multiplierLabel} = ${formatDecimal(
+                          entry.valorisationTotalMwh,
+                        )} MWh`}
+                      </span>
+                      <span className="text-xs font-semibold text-amber-600">
+                        Prime calculée : {formatCurrency(entry.valorisationTotalEur ?? entry.totalPrime ?? 0)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
               <div className="flex items-center gap-2">
                 <UserRound className="w-4 h-4 text-primary" />
                 <span className="text-muted-foreground">Délégataire:</span>
@@ -597,11 +617,21 @@ const ProjectDetails = () => {
                         ))}
                       </div>
                     )}
-                    {valorisationEntry?.valorisationPerUnit ? (
-                      <div className="flex items-center justify-between text-sm pt-2 border-t border-border/40">
-                        <span className="text-muted-foreground">Valorisation CEE</span>
-                        <span className="font-medium text-amber-600 text-right">
-                          {formatCurrency(valorisationEntry.valorisationPerUnit ?? 0)} / {valorisationEntry.multiplierLabel}
+                    {valorisationEntry?.valorisationPerUnitEur ? (
+                      <div className="flex flex-col gap-1 text-sm pt-2 border-t border-border/40">
+                        <span className="text-muted-foreground">
+                          {(valorisationEntry.valorisationLabel || "Valorisation m²/LED").trim()}
+                        </span>
+                        <span className="font-medium text-emerald-600 text-right">
+                          {formatCurrency(valorisationEntry.valorisationPerUnitEur ?? 0)} / {valorisationEntry.multiplierLabel}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {`${formatDecimal(valorisationEntry.valorisationPerUnitMwh)} MWh × ${valorisationEntry.multiplierLabel} = ${formatDecimal(
+                            valorisationEntry.valorisationTotalMwh,
+                          )} MWh`}
+                        </span>
+                        <span className="text-xs font-semibold text-amber-600 text-right">
+                          Prime calculée : {formatCurrency(valorisationEntry.valorisationTotalEur ?? valorisationEntry.totalPrime ?? 0)}
                         </span>
                       </div>
                     ) : null}

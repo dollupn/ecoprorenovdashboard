@@ -91,8 +91,14 @@ const getDisplayedProducts = (projectProducts?: ProjectProduct[]) =>
     return !code.startsWith("ECO");
   });
 
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value);
+const currencyFormatter = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" });
+const decimalFormatter = new Intl.NumberFormat("fr-FR", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
+const formatCurrency = (value: number) => currencyFormatter.format(value);
+const formatDecimal = (value: number) => decimalFormatter.format(value);
 
 const SURFACE_FACTUREE_TARGETS = ["surface_facturee", "surface facturée"] as const;
 
@@ -205,6 +211,7 @@ const Projects = () => {
       acc[project.id] = {
         totalPrime: result?.totalPrime ?? 0,
         totalValorisationMwh: result?.totalValorisationMwh ?? 0,
+        totalValorisationEur: result?.totalValorisationEur ?? 0,
         delegatePrice: result?.delegatePrice ?? 0,
         products: result?.products ?? [],
         productMap: resultProductMap,
@@ -338,13 +345,19 @@ const Projects = () => {
     const valorisationSummary = projectValorisationSummaries[project.id];
     const valorisationEntries = displayedProducts
       .map((item) => (item.id ? valorisationSummary?.productMap[item.id] : undefined))
-      .filter((entry): entry is PrimeCeeProductResult => Boolean(entry && entry.valorisationTotalMwh));
-    const fallbackValorisation = valorisationSummary?.products.find(
-      (entry) => typeof entry.valorisationTotalMwh === "number" && entry.valorisationTotalMwh > 0
-    );
+      .filter(
+        (entry): entry is PrimeCeeProductResult =>
+          Boolean(entry && entry.valorisationTotalEur && entry.valorisationTotalEur > 0),
+      );
+    const fallbackValorisation =
+      valorisationSummary?.products.find(
+        (entry) => typeof entry.valorisationTotalEur === "number" && entry.valorisationTotalEur > 0,
+      ) ??
+      valorisationSummary?.products.find(
+        (entry) => typeof entry.valorisationTotalMwh === "number" && entry.valorisationTotalMwh > 0,
+      );
     const selectedValorisation = valorisationEntries[0] ?? fallbackValorisation;
-    const valorisationMwh = selectedValorisation?.valorisationTotalMwh ?? 0;
-    const valorisationBase = selectedValorisation?.valorisationPerUnit ?? 0;
+    const valorisationTotalEur = selectedValorisation?.valorisationTotalEur ?? selectedValorisation?.totalPrime ?? 0;
     const surfaceFacturee = surfaceFactureeByProject[project.id] ?? 0;
 
     // Generate unique site ref
@@ -387,7 +400,7 @@ const Projects = () => {
       cout_isolation_m2: 0,
       isolation_utilisee_m2: 0,
       montant_commission: 0,
-      valorisation_cee: valorisationMwh,
+      valorisation_cee: valorisationTotalEur,
       team_members: [{ name: "" }],
       additional_costs: [],
     });
@@ -568,7 +581,7 @@ const Projects = () => {
             const valorisationEntries = displayedProducts
               .map((item) => (item.id ? valorisationSummary?.productMap[item.id] : undefined))
               .filter((entry): entry is PrimeCeeProductResult =>
-                Boolean(entry && entry.valorisationPerUnit && entry.valorisationPerUnit > 0)
+                Boolean(entry && entry.valorisationPerUnitEur && entry.valorisationPerUnitEur > 0)
               );
 
             return (
@@ -736,20 +749,35 @@ const Projects = () => {
                         </div>
                       </div>
                     )}
-                    {valorisationEntries.map((entry) => (
-                      <div
-                        key={`${project.id}-valorisation-${entry.projectProductId}`}
-                        className="flex items-center justify-between"
-                      >
-                        <span className="text-sm text-muted-foreground">
-                          Valorisation CEE
-                          {entry.productCode ? ` (${entry.productCode})` : ""}:
-                        </span>
-                        <span className="text-sm font-semibold text-amber-600 text-right">
-                          {formatCurrency(entry.valorisationPerUnit ?? 0)} / {entry.multiplierLabel}
-                        </span>
-                      </div>
-                    ))}
+                    {valorisationEntries.map((entry) => {
+                      const valorisationLabel = (entry.valorisationLabel || "Valorisation m²/LED").trim();
+                      return (
+                        <div
+                          key={`${project.id}-valorisation-${entry.projectProductId}`}
+                          className="space-y-1"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                              {valorisationLabel}
+                              {entry.productCode ? ` (${entry.productCode})` : ""}
+                            </span>
+                            <span className="text-sm font-semibold text-emerald-600 text-right">
+                              {formatCurrency(entry.valorisationPerUnitEur ?? 0)} / {entry.multiplierLabel}
+                            </span>
+                          </div>
+                          <div className="flex items-start justify-between gap-3 text-xs text-muted-foreground">
+                            <span>
+                              {`${formatDecimal(entry.valorisationPerUnitMwh)} MWh × ${entry.multiplierLabel} = ${formatDecimal(
+                                entry.valorisationTotalMwh,
+                              )} MWh`}
+                            </span>
+                            <span className="font-semibold text-amber-600 text-right">
+                              Prime calculée : {formatCurrency(entry.valorisationTotalEur ?? entry.totalPrime ?? 0)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground flex items-center gap-1">
                         <UserRound className="w-4 h-4" />

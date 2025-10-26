@@ -1988,14 +1988,23 @@ export const AddProjectDialog = ({
                 {selectedDelegate && hasPrimeCeeValue && primeCeeProducts.length > 0 ? (
                   <div className="rounded-md border border-dashed border-border/60 bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
                     <div className="font-semibold text-foreground">Détail par produit</div>
-                    <ul className="mt-1 space-y-1">
+                    <ul className="mt-1 space-y-2">
                       {primeCeeProducts.map((product) => {
                         const label = product.productCode || product.productName || product.productId;
+                        const valorisationLabel = (product.valorisationLabel || "Valorisation m²/LED").trim();
                         return (
-                          <li key={product.productId} className="flex flex-col gap-0.5">
+                          <li key={product.productId} className="flex flex-col gap-1">
                             <span className="font-medium text-foreground">{label}</span>
-                            <span>
-                              Valorisation : {formatDecimal(product.valorisationPerUnitMwh)} MWh × {product.multiplierLabel} = {formatDecimal(product.valorisationTotalMwh)} MWh • Prime : {formatCurrency(product.totalPrime)}
+                            <span className="text-sm font-semibold text-emerald-600">
+                              {valorisationLabel}: {formatCurrency(product.valorisationPerUnitEur)} / {product.multiplierLabel}
+                            </span>
+                            <span className="text-sm font-semibold text-emerald-600">
+                              Prime calculée : {formatCurrency(product.valorisationTotalEur)}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              Soit {formatDecimal(product.valorisationPerUnitMwh)} MWh × {product.multiplierLabel} = {formatDecimal(
+                                product.valorisationTotalMwh,
+                              )} MWh
                             </span>
                           </li>
                         );
