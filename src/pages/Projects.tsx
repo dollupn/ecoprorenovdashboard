@@ -201,6 +201,7 @@ const Projects = () => {
 
       acc[project.id] = {
         totalPrime: result?.totalPrime ?? 0,
+        valorisationBase: result?.valorisationBase ?? 0,
         products: result?.products ?? [],
         productMap: resultProductMap,
       };

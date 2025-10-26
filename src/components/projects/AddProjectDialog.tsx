@@ -881,6 +881,7 @@ export const AddProjectDialog = ({
   const hasPrimeCeeValue =
     typeof primeCeeComputation?.totalPrime === "number" && Number.isFinite(primeCeeComputation.totalPrime);
   const primeCeeTotal = hasPrimeCeeValue && primeCeeComputation ? primeCeeComputation.totalPrime : null;
+  const valorisationBase = primeCeeComputation?.valorisationBase ?? null;
 
   // preserve status auto-correction effect
   useEffect(() => {
@@ -1955,8 +1956,8 @@ export const AddProjectDialog = ({
                     "Sélectionnez un délégataire"
                   ) : !watchedBuildingType ? (
                     "Sélectionnez un type de bâtiment"
-                  ) : hasPrimeCeeValue && primeCeeTotal !== null ? (
-                    formatCurrency(primeCeeTotal)
+                  ) : valorisationBase !== null && valorisationBase > 0 ? (
+                    formatCurrency(valorisationBase)
                   ) : (
                     "0 €"
                   )}
@@ -2002,9 +2003,6 @@ export const AddProjectDialog = ({
               </div>
               <p className="text-xs text-muted-foreground">
                 Valorisation CEE = (kWh cumac × bonification ({formatDecimal(effectivePrimeBonification)}) / 1000) × tarif délégataire. Prime estimée = Σ(Valorisation CEE × champ dynamique).
-              </p>
-              <p className="text-xs text-orange-600 font-medium">
-                Valeurs kWh cumac manquantes pour : ECO-FURN, ECO-LOG, ECO-ADMN. Ces produits sont ignorés dans le calcul.
               </p>
               {missingKwhProductCodes.length > 0 ? (
                 <p className="text-xs text-amber-600">

@@ -47,6 +47,7 @@ export type PrimeCeeProductResult = {
 
 export type PrimeCeeComputation = {
   totalPrime: number;
+  valorisationBase: number; // Σ((kWh cumac × bonification / 1000) × tarif) - base valorisation without multiplier
   products: PrimeCeeProductResult[];
 };
 
@@ -252,6 +253,7 @@ export const computePrimeCee = ({
   if (pricePerMwh <= 0) {
     return {
       totalPrime: 0,
+      valorisationBase: 0,
       products: [],
     };
   }
@@ -259,6 +261,7 @@ export const computePrimeCee = ({
   const bonification = resolveBonificationFactor(primeBonification);
 
   const productResults: PrimeCeeProductResult[] = [];
+  let valorisationBaseSum = 0;
 
   for (const projectProduct of products) {
     if (!projectProduct?.product_id) {
@@ -294,6 +297,9 @@ export const computePrimeCee = ({
       continue;
     }
 
+    // Add to valorisation base (without multiplier)
+    valorisationBaseSum += valorisationPerUnit;
+
     // Prime CEE = Valorisation CEE × champ dynamique
     const totalPrime = valorisationPerUnit * multiplier.value;
     if (!Number.isFinite(totalPrime) || totalPrime <= 0) {
@@ -313,9 +319,11 @@ export const computePrimeCee = ({
   }
 
   const total = roundToTwo(productResults.reduce((sum, result) => sum + result.totalPrime, 0));
+  const valorisationBase = roundToTwo(valorisationBaseSum);
 
   return {
     totalPrime: total,
+    valorisationBase,
     products: productResults.map((result) => ({
       ...result,
       valorisationPerUnit: roundToTwo(result.valorisationPerUnit),
