@@ -28,7 +28,8 @@ export const normalizeValorisationFormula = (
       ? raw.variableLabel
       : null;
 
-  const coefficient = isFiniteNumber(raw.coefficient) ? raw.coefficient : null;
+  const coefficient =
+    isFiniteNumber(raw.coefficient) && raw.coefficient > 0 ? raw.coefficient : null;
 
   return {
     variableKey: key,

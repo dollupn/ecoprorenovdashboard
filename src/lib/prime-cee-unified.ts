@@ -1,5 +1,9 @@
 import type { Tables } from "@/integrations/supabase/types";
-import { FORMULA_QUANTITY_KEY, normalizeValorisationFormula } from "./valorisation-formula";
+import {
+  FORMULA_QUANTITY_KEY,
+  formatFormulaCoefficient,
+  normalizeValorisationFormula,
+} from "./valorisation-formula";
 
 // ============================================================================
 // TYPES
@@ -176,10 +180,15 @@ const resolveFormulaMultiplier = ({
     return null;
   }
 
+  const coefficient = toPositiveNumber(normalized.coefficient) ?? 1;
+  const withCoefficientLabel = (label: string) =>
+    coefficient !== 1 ? `${label} × ${formatFormulaCoefficient(coefficient)}` : label;
+
   if (normalized.variableKey === FORMULA_QUANTITY_KEY) {
-    if (typeof quantity === "number" && Number.isFinite(quantity) && quantity > 0) {
+    const quantityValue = toPositiveNumber(quantity);
+    if (quantityValue) {
       const label = normalized.variableLabel ?? "Quantité";
-      return { value: quantity, label };
+      return { value: quantityValue * coefficient, label: withCoefficientLabel(label) };
     }
     return null;
   }
@@ -201,7 +210,98 @@ const resolveFormulaMultiplier = ({
     (typeof match?.name === "string" && match.name.length > 0 ? match.name : undefined) ||
     normalized.variableKey;
 
-  return { value: numericValue, label };
+  return { value: numericValue * coefficient, label: withCoefficientLabel(label) };
+};
+
+// ============================================================================
+// MULTIPLIER RESOLUTION (PUBLIC API)
+// ============================================================================
+
+export const getMultiplierValue = ({
+  product,
+  projectProduct,
+}: {
+  product: PrimeCeeProductCatalogEntry;
+  projectProduct: ProjectProduct;
+}): MultiplierDetection | null => {
+  const schemaFields = getSchemaFields(product.params_schema);
+  const dynamicParams = isRecord(projectProduct.dynamic_params)
+    ? (projectProduct.dynamic_params as Record<string, unknown>)
+    : undefined;
+  const quantityValue = toPositiveNumber(projectProduct.quantity);
+
+  const formulaMultiplier = resolveFormulaMultiplier({
+    formula: product.valorisation_formula,
+    schemaFields,
+    dynamicParams,
+    quantity: quantityValue,
+  });
+
+  if (formulaMultiplier) {
+    return formulaMultiplier;
+  }
+
+  if (dynamicParams) {
+    for (const { targets, fallbackLabel } of DYNAMIC_FIELD_PRIORITIES) {
+      const matchingField = schemaFields.find((field) => matchesField(field, targets));
+
+      if (!matchingField) {
+        continue;
+      }
+
+      const key = typeof matchingField.name === "string" ? matchingField.name : undefined;
+      if (!key) {
+        continue;
+      }
+
+      const value = toNumber(dynamicParams[key]);
+      if (!value || value <= 0) {
+        continue;
+      }
+
+      const label =
+        (typeof matchingField.label === "string" && matchingField.label.length > 0
+          ? matchingField.label
+          : undefined) ?? fallbackLabel;
+
+      return { value, label };
+    }
+  }
+
+  if (quantityValue && quantityValue > 0) {
+    return { value: quantityValue, label: "Quantité" };
+  }
+
+  return null;
+};
+
+// ============================================================================
+// BONIFICATION & COEFFICIENT HELPERS
+// ============================================================================
+
+export const resolveBonificationFactor = (value: number | null | undefined) => {
+  const numeric = toPositiveNumber(value);
+  return numeric ?? 2;
+};
+
+export const resolveProductCoefficient = (
+  product: Pick<ProductCatalog, "valorisation_coefficient">,
+) => {
+  const numeric = toPositiveNumber(product.valorisation_coefficient);
+  return numeric ?? 1;
+};
+
+// ============================================================================
+// CATEGORY EXCLUSION
+// ============================================================================
+
+export const isProductExcluded = (product: { category?: string | null; code?: string | null }) => {
+  const category = (product.category ?? "").toUpperCase();
+  const code = (product.code ?? "").toUpperCase();
+
+  return EXCLUDED_CATEGORY_PREFIXES.some((prefix) =>
+    category.startsWith(prefix) || code.startsWith(prefix),
+  );
 };
 
 /**

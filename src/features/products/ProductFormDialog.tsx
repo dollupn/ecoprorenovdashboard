@@ -87,7 +87,7 @@ const valorisationFormulaSchema = z
     variableLabel: z.string().optional().nullable(),
     coefficient: z
       .number({ invalid_type_error: "Saisissez un coefficient valide" })
-      .min(0, "Le coefficient doit être positif")
+      .gt(0, "Le coefficient doit être positif")
       .optional()
       .nullable(),
   })
@@ -348,6 +348,11 @@ export const ProductFormDialog = ({
   const watchedCoefficient = form.watch("valorisation_coefficient");
   const watchedFormulaValue = form.watch("valorisation_formula");
 
+  const normalizedFormulaValue = useMemo(
+    () => normalizeValorisationFormula(watchedFormulaValue),
+    [watchedFormulaValue],
+  );
+
   const priceTTC = useMemo(() => {
     if (watchedBasePrice && watchedTva !== null && watchedTva !== undefined) {
       return watchedBasePrice * (1 + watchedTva / 100);
@@ -379,16 +384,15 @@ export const ProductFormDialog = ({
   const bonificationDisplay = useMemo(() => formatDecimalValue(watchedBonification, 2), [watchedBonification]);
   const coefficientDisplay = useMemo(() => formatDecimalValue(watchedCoefficient, 1), [watchedCoefficient]);
   const formulaPreviewLabel = useMemo(() => {
-    const normalized = normalizeValorisationFormula(watchedFormulaValue);
-    if (!normalized || !normalized.variableKey) {
+    if (!normalizedFormulaValue || !normalizedFormulaValue.variableKey) {
       return "multiplicateur détecté automatiquement";
     }
 
-    if (normalized.variableKey === FORMULA_QUANTITY_KEY) {
-      return normalized.variableLabel ?? "Quantité";
+    if (normalizedFormulaValue.variableKey === FORMULA_QUANTITY_KEY) {
+      return normalizedFormulaValue.variableLabel ?? "Quantité";
     }
 
-    const matchField = dynamicSchemaFields.find((field) => field.name === normalized.variableKey);
+    const matchField = dynamicSchemaFields.find((field) => field.name === normalizedFormulaValue.variableKey);
     if (matchField?.label && matchField.label.trim().length > 0) {
       return matchField.label;
     }
@@ -396,12 +400,28 @@ export const ProductFormDialog = ({
       return matchField.name;
     }
 
-    if (normalized.variableLabel && normalized.variableLabel.trim().length > 0) {
-      return normalized.variableLabel;
+    if (
+      normalizedFormulaValue.variableLabel &&
+      normalizedFormulaValue.variableLabel.trim().length > 0
+    ) {
+      return normalizedFormulaValue.variableLabel;
     }
 
-    return normalized.variableKey;
-  }, [dynamicSchemaFields, watchedFormulaValue]);
+    return normalizedFormulaValue.variableKey;
+  }, [dynamicSchemaFields, normalizedFormulaValue]);
+
+  const formulaCoefficientDisplay = useMemo(
+    () => formatDecimalValue(normalizedFormulaValue?.coefficient, 1),
+    [normalizedFormulaValue],
+  );
+
+  const formulaMultiplierDescription = useMemo(() => {
+    if (!normalizedFormulaValue || !normalizedFormulaValue.coefficient) {
+      return formulaPreviewLabel;
+    }
+
+    return `${formulaPreviewLabel} × coefficient (${formulaCoefficientDisplay})`;
+  }, [formulaCoefficientDisplay, formulaPreviewLabel, normalizedFormulaValue]);
 
   useEffect(() => {
     const current = form.getValues("valorisation_formula");
@@ -1028,10 +1048,19 @@ export const ProductFormDialog = ({
                     const current = field.value as ValorisationFormulaConfig | null;
                     const selectedKey = current?.variableKey ?? "auto";
                     const selectedOption = formulaOptions.find((option) => option.value === selectedKey);
+                    const normalized = normalizeValorisationFormula(current);
                     const multiplierLabel =
                       selectedKey === "auto"
                         ? "multiplicateur détecté automatiquement"
-                        : selectedOption?.label ?? current?.variableLabel ?? selectedKey;
+                        : selectedOption?.label ?? normalized?.variableLabel ?? selectedKey;
+                    const rawCoefficient =
+                      typeof current?.coefficient === "number" && Number.isFinite(current.coefficient)
+                        ? current.coefficient
+                        : normalized?.coefficient ?? null;
+                    const formulaErrors = form.formState.errors.valorisation_formula as
+                      | { coefficient?: { message?: string } }
+                      | undefined;
+                    const coefficientError = formulaErrors?.coefficient?.message;
 
                     return (
                       <FormItem>
@@ -1045,10 +1074,16 @@ export const ProductFormDialog = ({
                                 return;
                               }
 
+                              const preservedCoefficient =
+                                typeof current?.coefficient === "number" && Number.isFinite(current.coefficient)
+                                  ? current.coefficient
+                                  : normalized?.coefficient ?? null;
+
                               if (value === FORMULA_QUANTITY_KEY) {
                                 field.onChange({
                                   variableKey: FORMULA_QUANTITY_KEY,
                                   variableLabel: "Quantité",
+                                  coefficient: preservedCoefficient,
                                 });
                                 return;
                               }
@@ -1057,6 +1092,7 @@ export const ProductFormDialog = ({
                               field.onChange({
                                 variableKey: value,
                                 variableLabel: option?.label ?? value,
+                                coefficient: preservedCoefficient,
                               });
                             }}
                             disabled={isSubmitting}
@@ -1076,6 +1112,49 @@ export const ProductFormDialog = ({
                         <p className="text-xs text-muted-foreground">
                           Sélectionnez le champ dynamique qui multipliera la valorisation pour obtenir la prime.
                         </p>
+                        {selectedKey !== "auto" ? (
+                          <div className="mt-3 space-y-3 rounded-md border border-dashed border-border/60 bg-muted/20 p-3">
+                            <p className="text-xs font-medium text-foreground">
+                              Champ sélectionné : {multiplierLabel}
+                            </p>
+                            <div className="space-y-1">
+                              <label className="text-xs font-medium text-foreground">
+                                Coefficient du champ (optionnel)
+                              </label>
+                              <Input
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                value={rawCoefficient ?? ""}
+                                onChange={(event) => {
+                                  if (!current) {
+                                    return;
+                                  }
+
+                                  const value = event.target.value;
+                                  if (value === "") {
+                                    field.onChange({ ...current, coefficient: null });
+                                    return;
+                                  }
+
+                                  const parsed = Number(value);
+                                  if (Number.isNaN(parsed)) {
+                                    return;
+                                  }
+
+                                  field.onChange({ ...current, coefficient: parsed });
+                                }}
+                                disabled={isSubmitting}
+                              />
+                              <p className="text-xs text-muted-foreground">
+                                Multiplicateur appliqué au champ sélectionné (ex. puissance d&apos;un luminaire en watts).
+                              </p>
+                              {coefficientError ? (
+                                <p className="text-xs text-destructive">{coefficientError}</p>
+                              ) : null}
+                            </div>
+                          </div>
+                        ) : null}
                         <FormMessage />
                       </FormItem>
                     );
@@ -1083,8 +1162,8 @@ export const ProductFormDialog = ({
                 />
 
                 <div className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                  Formule : ((kWh cumac × bonification ({bonificationDisplay}) × coefficient ({coefficientDisplay})) / 1000)
-                  × {formulaPreviewLabel}.
+                  Formule : ((kWh cumac × bonification ({bonificationDisplay}) × coefficient fixe ({coefficientDisplay})) /
+                  1000) × {formulaMultiplierDescription}.
                 </div>
               </div>
             </TabsContent>
