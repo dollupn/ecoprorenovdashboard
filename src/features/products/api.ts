@@ -192,9 +192,18 @@ export const useCreateProduct = (orgId: string | null) => {
       mutationFn: async ({ values, kwhCumac }) => {
         if (!orgId) throw new Error("Organisation requise");
 
+        const insertValues: TablesInsert<"product_catalog"> = {
+          ...values,
+          org_id: values.org_id ?? orgId,
+        };
+
+        if (!insertValues.owner_id) {
+          throw new Error("Utilisateur requis pour créer un produit");
+        }
+
         const { data, error } = await supabase
           .from("product_catalog")
-          .insert({ ...values, org_id: orgId, owner_id: orgId })
+          .insert(insertValues)
           .select()
           .single();
 
