@@ -77,6 +77,7 @@ import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
 import {
   computePrimeCee,
   resolveBonificationFactor,
+  isProductExcluded,
   type PrimeCeeComputation,
   type PrimeCeeProductCatalogEntry,
   type PrimeProductInput,
@@ -831,6 +832,11 @@ export const AddProjectDialog = ({
 
       const product = productMap[item.product_id];
       if (!product) {
+        return acc;
+      }
+
+      // Skip ECO products as they are excluded from Prime CEE calculation
+      if (isProductExcluded(product)) {
         return acc;
       }
 
