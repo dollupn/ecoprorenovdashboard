@@ -41,6 +41,7 @@ import {
   LEAD_STATUSES,
   type LeadStatus,
 } from "@/components/leads/status";
+import { getLeadStatusSettings, LEAD_STATUS_SETTINGS_UPDATED_EVENT } from "@/lib/leads";
 import type { Tables } from "@/integrations/supabase/types";
 
 const CONTACT_RESULT_OPTIONS = [
@@ -128,21 +129,6 @@ const extractPhoningSnapshot = (lead: LeadWithExtras): PhoningSnapshot => {
   };
 };
 
-const resolveInitialNextStatus = (lead: LeadWithExtras, snapshot: PhoningSnapshot): LeadStatus => {
-  if (snapshot.next_status && isLeadStatus(snapshot.next_status)) {
-    return snapshot.next_status;
-  }
-
-  if (isLeadStatus(lead.status)) {
-    if (lead.status === "À rappeler") {
-      return "Phoning";
-    }
-    return lead.status as LeadStatus;
-  }
-
-  return "Phoning";
-};
-
 export const LeadPhoningDialog = ({ lead, onCompleted }: LeadPhoningDialogProps) => {
   const [open, setOpen] = useState(false);
   const [recontactDate, setRecontactDate] = useState<Date | undefined>();
@@ -150,7 +136,58 @@ export const LeadPhoningDialog = ({ lead, onCompleted }: LeadPhoningDialogProps)
   const { toast } = useToast();
   const updateLead = useUpdateLead(null);
 
+  const [statusSettings, setStatusSettings] = useState(() =>
+    getLeadStatusSettings({ includeInactive: false })
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleUpdate = () => {
+      setStatusSettings(getLeadStatusSettings({ includeInactive: false, skipCache: true }));
+    };
+
+    window.addEventListener(LEAD_STATUS_SETTINGS_UPDATED_EVENT, handleUpdate);
+
+    return () => {
+      window.removeEventListener(LEAD_STATUS_SETTINGS_UPDATED_EVENT, handleUpdate);
+    };
+  }, []);
+
+  const statusOptions = useMemo(
+    () => statusSettings.filter((status) => status.isActive).sort((a, b) => a.order - b.order),
+    [statusSettings]
+  );
+
   const snapshot = useMemo(() => extractPhoningSnapshot(lead), [lead]);
+
+  const defaultStatus = useMemo(
+    () => (statusOptions[0]?.value ?? LEAD_STATUSES[0]) as LeadStatus,
+    [statusOptions]
+  );
+
+  const initialNextStatus = useMemo(() => {
+    if (snapshot.next_status && isLeadStatus(snapshot.next_status)) {
+      if (statusOptions.some((status) => status.value === snapshot.next_status)) {
+        return snapshot.next_status;
+      }
+    }
+
+    if (isLeadStatus(lead.status)) {
+      const transitions: Partial<Record<LeadStatus, LeadStatus>> = {
+        "À rappeler": "Phoning",
+      };
+      const preferred = transitions[lead.status] ?? lead.status;
+      if (statusOptions.some((status) => status.value === preferred)) {
+        return preferred;
+      }
+      if (statusOptions.some((status) => status.value === lead.status)) {
+        return lead.status as LeadStatus;
+      }
+    }
+
+    return defaultStatus;
+  }, [snapshot.next_status, lead.status, statusOptions, defaultStatus]);
 
   const form = useForm<PhoningFormValues>({
     resolver: zodResolver(phoningSchema),
@@ -164,12 +201,18 @@ export const LeadPhoningDialog = ({ lead, onCompleted }: LeadPhoningDialogProps)
       previsit_date: snapshot.previsit_date ?? "",
       previsit_time: snapshot.previsit_time ?? "",
       notes: snapshot.notes ?? "",
-      next_status: resolveInitialNextStatus(lead, snapshot),
+      next_status: initialNextStatus,
     },
   });
 
   const watchContactResult = form.watch("contact_result");
   const watchPrevisitDate = form.watch("previsit_date");
+
+  useEffect(() => {
+    if (!open) {
+      form.setValue("next_status", initialNextStatus);
+    }
+  }, [initialNextStatus, form, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -190,16 +233,21 @@ export const LeadPhoningDialog = ({ lead, onCompleted }: LeadPhoningDialogProps)
       previsit_date: snapshot.previsit_date ?? "",
       previsit_time: snapshot.previsit_time ?? "",
       notes: snapshot.notes ?? "",
-      next_status: resolveInitialNextStatus(lead, snapshot),
+      next_status: initialNextStatus,
     });
-  }, [open, form, snapshot, lead]);
+  }, [open, form, snapshot, initialNextStatus]);
 
   // Auto-update status when pre-visit is scheduled
   useEffect(() => {
     if (watchPrevisitDate && watchPrevisitDate.length > 0) {
-      form.setValue("next_status", "Programmer pré-visite");
+      const previsitStatus = statusOptions.find(
+        (status) => status.value === "Programmer pré-visite"
+      );
+      if (previsitStatus) {
+        form.setValue("next_status", previsitStatus.value);
+      }
     }
-  }, [watchPrevisitDate, form]);
+  }, [watchPrevisitDate, form, statusOptions]);
 
   const onSubmit = async (values: PhoningFormValues) => {
     const phoningPayload: PhoningSnapshot = {
@@ -520,9 +568,9 @@ export const LeadPhoningDialog = ({ lead, onCompleted }: LeadPhoningDialogProps)
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {LEAD_STATUSES.map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {getLeadStatusLabel(status)}
+                      {statusOptions.map((status) => (
+                        <SelectItem key={status.value} value={status.value}>
+                          {getLeadStatusLabel(status.value)}
                         </SelectItem>
                       ))}
                     </SelectContent>
