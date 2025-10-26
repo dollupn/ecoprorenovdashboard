@@ -20,6 +20,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { getProjectBuildingTypes } from "@/lib/buildings";
+import {
+  FORMULA_QUANTITY_KEY,
+  normalizeValorisationFormula,
+  type ValorisationFormulaConfig,
+} from "@/lib/valorisation-formula";
 import type { TablesInsert } from "@/integrations/supabase/types";
 import type { ProductCatalogRecord, CategoryRecord, ProductKwhCumacInput } from "./api";
 import { useCreateProduct, useUpdateProduct } from "./api";
@@ -29,11 +34,64 @@ import { TechnicalSheetUpload } from "./TechnicalSheetUpload";
 import { DynamicFieldsEditor } from "./DynamicFieldsEditor";
 
 const euroFormatter = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" });
+const decimalFormatter = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
+const formatDecimalValue = (value: number | null | undefined, fallback: number) => {
+  const numeric = typeof value === "number" && Number.isFinite(value) ? value : fallback;
+  return decimalFormatter.format(numeric);
+};
+
+type DynamicSchemaField = { name: string; label?: string | null };
+
+const extractSchemaFields = (schema: unknown): DynamicSchemaField[] => {
+  if (!schema) {
+    return [];
+  }
+
+  if (Array.isArray(schema)) {
+    return schema.filter((field): field is DynamicSchemaField => {
+      return (
+        typeof field === "object" &&
+        field !== null &&
+        !Array.isArray(field) &&
+        typeof (field as Record<string, unknown>).name === "string"
+      );
+    }) as DynamicSchemaField[];
+  }
+
+  if (typeof schema === "object" && schema !== null) {
+    const fields = (schema as Record<string, unknown>).fields;
+    if (Array.isArray(fields)) {
+      return fields.filter((field): field is DynamicSchemaField => {
+        return (
+          typeof field === "object" &&
+          field !== null &&
+          !Array.isArray(field) &&
+          typeof (field as Record<string, unknown>).name === "string"
+        );
+      }) as DynamicSchemaField[];
+    }
+  }
+
+  return [];
+};
 
 const kwhValueSchema = z
   .number({ invalid_type_error: "Saisissez un nombre valide" })
   .min(0, "La valeur doit être positive")
   .nullable();
+
+const valorisationFormulaSchema = z
+  .object({
+    variableKey: z.string().min(1, "Sélectionnez une variable"),
+    variableLabel: z.string().optional().nullable(),
+    coefficient: z
+      .number({ invalid_type_error: "Saisissez un coefficient valide" })
+      .min(0, "Le coefficient doit être positif")
+      .optional()
+      .nullable(),
+  })
+  .strict();
 
 const productSchema = z.object({
   name: z.string().min(2, "Le nom est requis").max(200),
@@ -64,6 +122,17 @@ const productSchema = z.object({
   params_schema: z.any().optional().nullable(),
   default_params: z.any().optional().nullable(),
   kwh_cumac: z.record(kwhValueSchema).default({}),
+  valorisation_bonification: z
+    .number({ invalid_type_error: "Saisissez une bonification valide" })
+    .min(0, "La bonification doit être positive")
+    .optional()
+    .nullable(),
+  valorisation_coefficient: z
+    .number({ invalid_type_error: "Saisissez un coefficient valide" })
+    .min(0, "Le coefficient doit être positif")
+    .optional()
+    .nullable(),
+  valorisation_formula: valorisationFormulaSchema.optional().nullable(),
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -139,6 +208,15 @@ export const ProductFormDialog = ({
         acc[type] = match?.kwh_cumac ?? null;
         return acc;
       }, {}),
+      valorisation_bonification:
+        typeof product?.valorisation_bonification === "number"
+          ? product.valorisation_bonification
+          : 2,
+      valorisation_coefficient:
+        typeof product?.valorisation_coefficient === "number"
+          ? product.valorisation_coefficient
+          : 1,
+      valorisation_formula: normalizeValorisationFormula(product?.valorisation_formula) ?? null,
     }),
     [product, allBuildingTypes],
   );
@@ -169,12 +247,32 @@ export const ProductFormDialog = ({
 
   const onSubmit = async (values: ProductFormValues) => {
     if (!orgId) {
-      toast({ 
-        title: "Organisation manquante", 
-        description: "Vous devez être membre d'une organisation pour créer des produits", 
-        variant: "destructive" 
+      toast({
+        title: "Organisation manquante",
+        description: "Vous devez être membre d'une organisation pour créer des produits",
+        variant: "destructive"
       });
       return;
+    }
+
+    const schemaFields = extractSchemaFields(values.params_schema);
+    const normalizedFormula = normalizeValorisationFormula(values.valorisation_formula);
+
+    let payloadFormula: ValorisationFormulaConfig | null = null;
+
+    if (normalizedFormula) {
+      if (normalizedFormula.variableKey === FORMULA_QUANTITY_KEY) {
+        payloadFormula = {
+          ...normalizedFormula,
+          variableLabel: normalizedFormula.variableLabel ?? "Quantité",
+        };
+      } else {
+        const match = schemaFields.find((field) => field.name === normalizedFormula.variableKey);
+        payloadFormula = {
+          ...normalizedFormula,
+          variableLabel: match?.label ?? normalizedFormula.variableLabel ?? normalizedFormula.variableKey,
+        };
+      }
     }
 
     const payload: TablesInsert<"product_catalog"> = {
@@ -199,6 +297,15 @@ export const ProductFormDialog = ({
       technical_sheet_url: values.technical_sheet_url,
       params_schema: values.params_schema,
       default_params: values.default_params,
+      valorisation_bonification:
+        typeof values.valorisation_bonification === "number"
+          ? values.valorisation_bonification
+          : null,
+      valorisation_coefficient:
+        typeof values.valorisation_coefficient === "number"
+          ? values.valorisation_coefficient
+          : null,
+      valorisation_formula: payloadFormula,
     };
 
     const kwhValues = values.kwh_cumac ?? {};
@@ -230,27 +337,104 @@ export const ProductFormDialog = ({
 
   const isSubmitting = form.formState.isSubmitting;
 
+  const watchedBasePrice = form.watch("base_price_ht");
+  const watchedTva = form.watch("tva_percentage");
+  const watchedPrime = form.watch("prime_percentage");
+  const watchedEcoAdmin = form.watch("eco_admin_percentage");
+  const watchedEcoFurn = form.watch("eco_furn_percentage");
+  const watchedEcoLog = form.watch("eco_log_percentage");
+  const paramsSchema = form.watch("params_schema");
+  const watchedBonification = form.watch("valorisation_bonification");
+  const watchedCoefficient = form.watch("valorisation_coefficient");
+  const watchedFormulaValue = form.watch("valorisation_formula");
+
   const priceTTC = useMemo(() => {
-    const basePrice = form.watch("base_price_ht");
-    const tva = form.watch("tva_percentage");
-    if (basePrice && tva !== null && tva !== undefined) {
-      return basePrice * (1 + tva / 100);
+    if (watchedBasePrice && watchedTva !== null && watchedTva !== undefined) {
+      return watchedBasePrice * (1 + watchedTva / 100);
     }
     return null;
-  }, [form.watch("base_price_ht"), form.watch("tva_percentage")]);
+  }, [watchedBasePrice, watchedTva]);
+
+  const dynamicSchemaFields = useMemo(
+    () =>
+      extractSchemaFields(paramsSchema).map((field) => ({
+        name: field.name,
+        label: field.label && field.label.trim().length > 0 ? field.label : field.name,
+      })),
+    [paramsSchema],
+  );
+
+  const formulaOptions = useMemo(() => {
+    const baseOptions = dynamicSchemaFields.map((field) => ({
+      value: field.name,
+      label: field.label,
+    }));
+    return [
+      { value: "auto", label: "Détection automatique" },
+      ...baseOptions,
+      { value: FORMULA_QUANTITY_KEY, label: "Quantité" },
+    ];
+  }, [dynamicSchemaFields]);
+
+  const bonificationDisplay = useMemo(() => formatDecimalValue(watchedBonification, 2), [watchedBonification]);
+  const coefficientDisplay = useMemo(() => formatDecimalValue(watchedCoefficient, 1), [watchedCoefficient]);
+  const formulaPreviewLabel = useMemo(() => {
+    const normalized = normalizeValorisationFormula(watchedFormulaValue);
+    if (!normalized || !normalized.variableKey) {
+      return "multiplicateur détecté automatiquement";
+    }
+
+    if (normalized.variableKey === FORMULA_QUANTITY_KEY) {
+      return normalized.variableLabel ?? "Quantité";
+    }
+
+    const matchField = dynamicSchemaFields.find((field) => field.name === normalized.variableKey);
+    if (matchField?.label && matchField.label.trim().length > 0) {
+      return matchField.label;
+    }
+    if (matchField?.name && matchField.name.trim().length > 0) {
+      return matchField.name;
+    }
+
+    if (normalized.variableLabel && normalized.variableLabel.trim().length > 0) {
+      return normalized.variableLabel;
+    }
+
+    return normalized.variableKey;
+  }, [dynamicSchemaFields, watchedFormulaValue]);
+
+  useEffect(() => {
+    const current = form.getValues("valorisation_formula");
+    if (!current || !current.variableKey || current.variableKey === FORMULA_QUANTITY_KEY) {
+      if (current?.variableKey === FORMULA_QUANTITY_KEY && !current.variableLabel) {
+        form.setValue("valorisation_formula", { ...current, variableLabel: "Quantité" });
+      }
+      return;
+    }
+
+    const match = dynamicSchemaFields.find((field) => field.name === current.variableKey);
+    if (!match) {
+      form.setValue("valorisation_formula", null);
+      return;
+    }
+
+    const nextLabel = match.label ?? match.name;
+    if (nextLabel && current.variableLabel !== nextLabel) {
+      form.setValue("valorisation_formula", { ...current, variableLabel: nextLabel });
+    }
+  }, [dynamicSchemaFields, form]);
 
   const ecoEstimation = useMemo(() => {
-    const basePrice = form.watch("base_price_ht");
-    if (basePrice === null || basePrice === undefined) {
+    if (watchedBasePrice === null || watchedBasePrice === undefined) {
       return null;
     }
 
-    const prime = form.watch("prime_percentage") ?? 0;
-    const admin = form.watch("eco_admin_percentage") ?? 0;
-    const furn = form.watch("eco_furn_percentage") ?? 0;
-    const log = form.watch("eco_log_percentage") ?? 0;
+    const prime = watchedPrime ?? 0;
+    const admin = watchedEcoAdmin ?? 0;
+    const furn = watchedEcoFurn ?? 0;
+    const log = watchedEcoLog ?? 0;
 
-    const safeBase = Number(basePrice);
+    const safeBase = Number(watchedBasePrice);
     if (Number.isNaN(safeBase)) {
       return null;
     }
@@ -264,13 +448,7 @@ export const ProductFormDialog = ({
       ecoCharges,
       totalWithEco,
     };
-  }, [
-    form.watch("base_price_ht"),
-    form.watch("prime_percentage"),
-    form.watch("eco_admin_percentage"),
-    form.watch("eco_furn_percentage"),
-    form.watch("eco_log_percentage"),
-  ]);
+  }, [watchedBasePrice, watchedPrime, watchedEcoAdmin, watchedEcoFurn, watchedEcoLog]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -758,6 +936,157 @@ export const ProductFormDialog = ({
                   Aucun type de bâtiment n&apos;a encore été défini. Configurez-les dans les paramètres projets pour activer la saisie des kWh cumac.
                 </p>
               )}
+
+              <div className="space-y-4 rounded-lg border p-4">
+                <div>
+                  <h3 className="text-sm font-medium">Valorisation CEE</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Configurez la bonification, le coefficient fixe et le champ utilisé comme multiplicateur dans la prime.
+                  </p>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="valorisation_bonification"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Bonification</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            step="0.1"
+                            min={0}
+                            value={field.value ?? ""}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              if (value === "") {
+                                field.onChange(null);
+                                return;
+                              }
+                              const parsed = Number(value);
+                              if (Number.isNaN(parsed)) {
+                                return;
+                              }
+                              field.onChange(parsed);
+                            }}
+                            onBlur={field.onBlur}
+                            placeholder="2"
+                            disabled={isSubmitting}
+                          />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground px-1">
+                          Valeur par défaut : 2.
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="valorisation_coefficient"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Coefficient fixe</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min={0}
+                            value={field.value ?? ""}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              if (value === "") {
+                                field.onChange(null);
+                                return;
+                              }
+                              const parsed = Number(value);
+                              if (Number.isNaN(parsed)) {
+                                return;
+                              }
+                              field.onChange(parsed);
+                            }}
+                            onBlur={field.onBlur}
+                            placeholder="1"
+                            disabled={isSubmitting}
+                          />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground px-1">
+                          Exemple : puissance électrique (250 W).
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="valorisation_formula"
+                  render={({ field }) => {
+                    const current = field.value as ValorisationFormulaConfig | null;
+                    const selectedKey = current?.variableKey ?? "auto";
+                    const selectedOption = formulaOptions.find((option) => option.value === selectedKey);
+                    const multiplierLabel =
+                      selectedKey === "auto"
+                        ? "multiplicateur détecté automatiquement"
+                        : selectedOption?.label ?? current?.variableLabel ?? selectedKey;
+
+                    return (
+                      <FormItem>
+                        <FormLabel>Champ multiplicateur (Prime CEE)</FormLabel>
+                        <FormControl>
+                          <Select
+                            value={selectedKey}
+                            onValueChange={(value) => {
+                              if (value === "auto") {
+                                field.onChange(null);
+                                return;
+                              }
+
+                              if (value === FORMULA_QUANTITY_KEY) {
+                                field.onChange({
+                                  variableKey: FORMULA_QUANTITY_KEY,
+                                  variableLabel: "Quantité",
+                                });
+                                return;
+                              }
+
+                              const option = formulaOptions.find((item) => item.value === value);
+                              field.onChange({
+                                variableKey: value,
+                                variableLabel: option?.label ?? value,
+                              });
+                            }}
+                            disabled={isSubmitting}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Choisir un champ" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {formulaOptions.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">
+                          Sélectionnez le champ dynamique qui multipliera la valorisation pour obtenir la prime.
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    );
+                  }}
+                />
+
+                <div className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                  Formule : ((kWh cumac × bonification ({bonificationDisplay}) × coefficient ({coefficientDisplay})) / 1000)
+                  × {formulaPreviewLabel}.
+                </div>
+              </div>
             </TabsContent>
 
             <TabsContent value="dynamic" className="space-y-6">

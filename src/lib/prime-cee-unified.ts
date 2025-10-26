@@ -1,4 +1,5 @@
 import type { Tables } from "@/integrations/supabase/types";
+import { FORMULA_QUANTITY_KEY, normalizeValorisationFormula } from "./valorisation-formula";
 
 // ============================================================================
 // TYPES
@@ -29,7 +30,16 @@ type SchemaField = {
 
 export type PrimeCeeProductCatalogEntry = Pick<
   ProductCatalog,
-  "id" | "name" | "code" | "category" | "is_active" | "params_schema" | "default_params"
+  | "id"
+  | "name"
+  | "code"
+  | "category"
+  | "is_active"
+  | "params_schema"
+  | "default_params"
+  | "valorisation_bonification"
+  | "valorisation_coefficient"
+  | "valorisation_formula"
 > & {
   kwh_cumac_values?: ProductKwhValue[];
 };
@@ -39,15 +49,21 @@ export type PrimeCeeProductResult = {
   productId: string;
   productCode?: string | null;
   productName?: string | null;
-  valorisationPerUnit: number; // Valorisation CEE = (kWh cumac × bonification / 1000) × tarif délégataire
-  multiplier: number; // champ dynamique (surface_isolee, nombre_led, quantity, etc.)
+  baseKwh: number;
+  bonification: number;
+  coefficient: number;
+  valorisationPerUnitMwh: number;
+  multiplier: number;
   multiplierLabel: string;
-  totalPrime: number; // valorisationPerUnit × multiplier
+  valorisationTotalMwh: number;
+  delegatePrice: number;
+  totalPrime: number;
 };
 
 export type PrimeCeeComputation = {
   totalPrime: number;
-  valorisationBase: number; // Σ((kWh cumac × bonification / 1000) × tarif) - base valorisation without multiplier
+  totalValorisationMwh: number;
+  delegatePrice: number;
   products: PrimeCeeProductResult[];
 };
 
@@ -90,6 +106,13 @@ const toNumber = (value: unknown): number | null => {
     if (Number.isFinite(parsed)) {
       return parsed;
     }
+  }
+  return null;
+};
+
+const toPositiveNumber = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return value;
   }
   return null;
 };
@@ -137,96 +160,57 @@ type MultiplierDetection = {
   label: string;
 };
 
-/**
- * Detects the multiplier (champ dynamique) from product parameters
- * Priority: surface_isolee > nombre_led > quantity > other dynamic fields
- */
-export const getMultiplierValue = ({
-  product,
-  projectProduct,
+const resolveFormulaMultiplier = ({
+  formula,
+  schemaFields,
+  dynamicParams,
+  quantity,
 }: {
-  product: PrimeCeeProductCatalogEntry;
-  projectProduct: { quantity?: number | null; dynamic_params?: unknown };
+  formula: ProductCatalog["valorisation_formula"];
+  schemaFields: SchemaField[];
+  dynamicParams?: Record<string, unknown>;
+  quantity?: number | null;
 }): MultiplierDetection | null => {
-  const schemaFields = getSchemaFields(product.params_schema);
-  const dynamicParams = isRecord(projectProduct.dynamic_params)
-    ? projectProduct.dynamic_params
-    : undefined;
+  const normalized = normalizeValorisationFormula(formula);
+  if (!normalized) {
+    return null;
+  }
 
-  // Try to find matching fields in priority order
-  if (dynamicParams) {
-    for (const { targets, fallbackLabel } of DYNAMIC_FIELD_PRIORITIES) {
-      const matchingField = schemaFields.find((field) => matchesField(field, targets));
-      
-      if (matchingField) {
-        const key = typeof matchingField.name === "string" ? matchingField.name : undefined;
-        if (key) {
-          const value = toNumber(dynamicParams[key]);
-          if (value && value > 0) {
-            return {
-              value,
-              label:
-                typeof matchingField.label === "string" && matchingField.label.length > 0
-                  ? matchingField.label
-                  : fallbackLabel,
-            };
-          }
-        }
-      }
+  if (normalized.variableKey === FORMULA_QUANTITY_KEY) {
+    if (typeof quantity === "number" && Number.isFinite(quantity) && quantity > 0) {
+      const label = normalized.variableLabel ?? "Quantité";
+      return { value: quantity, label };
     }
+    return null;
   }
 
-  // Fallback to quantity field
-  if (typeof projectProduct.quantity === "number" && Number.isFinite(projectProduct.quantity)) {
-    return {
-      value: projectProduct.quantity,
-      label: "Quantité",
-    };
+  if (!dynamicParams) {
+    return null;
   }
 
-  return null;
+  const rawValue = dynamicParams[normalized.variableKey];
+  const numericValue = toNumber(rawValue);
+  if (!numericValue || numericValue <= 0) {
+    return null;
+  }
+
+  const match = schemaFields.find((field) => field.name === normalized.variableKey);
+  const label =
+    (normalized.variableLabel && normalized.variableLabel.length > 0 && normalized.variableLabel) ||
+    (typeof match?.label === "string" && match.label.length > 0 ? match.label : undefined) ||
+    (typeof match?.name === "string" && match.name.length > 0 ? match.name : undefined) ||
+    normalized.variableKey;
+
+  return { value: numericValue, label };
 };
-
-// ============================================================================
-// BONIFICATION FACTOR
-// ============================================================================
-
-export const resolveBonificationFactor = (value: number | null | undefined) => {
-  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
-    return value;
-  }
-  return 2;
-};
-
-// ============================================================================
-// CATEGORY EXCLUSION
-// ============================================================================
 
 /**
- * Checks if a product should be excluded from Prime CEE calculation
- * Excludes products whose category or code starts with "ECO"
- */
-export const isProductExcluded = (product: { category?: string | null; code?: string | null }): boolean => {
-  const category = (product.category ?? "").toUpperCase();
-  const code = (product.code ?? "").toUpperCase();
-  
-  return EXCLUDED_CATEGORY_PREFIXES.some(
-    (prefix) => category.startsWith(prefix) || code.startsWith(prefix)
-  );
-};
-
-// ============================================================================
-// PRIME CEE COMPUTATION
-// ============================================================================
-
-/**
- * Computes Prime CEE for a list of products
- * 
- * Formula:
- * - Valorisation CEE = (kWh cumac × bonification / 1000) × tarif délégataire
- * - Prime CEE = Σ(Valorisation CEE × champ dynamique)
- * 
- * Products starting with "ECO" are excluded from calculation
+ * Computes Valorisation and Prime CEE for a list of products.
+ *
+ * Valorisation CEE (MWh) = (kWh cumac × bonification × coefficient) / 1000
+ * Prime CEE (€) = Valorisation CEE (MWh) × champ dynamique × tarif délégataire
+ *
+ * Products starting with "ECO" are excluded from calculation.
  */
 export const computePrimeCee = ({
   products,
@@ -241,27 +225,18 @@ export const computePrimeCee = ({
   delegate?: Delegate | null;
   primeBonification?: number | null;
 }): PrimeCeeComputation | null => {
-  if (!delegate || !buildingType) {
+  if (!buildingType) {
     return null;
   }
 
-  const pricePerMwh =
-    typeof delegate.price_eur_per_mwh === "number" && Number.isFinite(delegate.price_eur_per_mwh)
+  const delegatePrice =
+    typeof delegate?.price_eur_per_mwh === "number" && Number.isFinite(delegate.price_eur_per_mwh)
       ? delegate.price_eur_per_mwh
       : 0;
 
-  if (pricePerMwh <= 0) {
-    return {
-      totalPrime: 0,
-      valorisationBase: 0,
-      products: [],
-    };
-  }
-
-  const bonification = resolveBonificationFactor(primeBonification);
-
   const productResults: PrimeCeeProductResult[] = [];
-  let valorisationBaseSum = 0;
+  let totalPrime = 0;
+  let totalValorisationMwh = 0;
 
   for (const projectProduct of products) {
     if (!projectProduct?.product_id) {
@@ -273,7 +248,6 @@ export const computePrimeCee = ({
       continue;
     }
 
-    // Exclude ECO-* products
     if (isProductExcluded(product)) {
       continue;
     }
@@ -286,48 +260,63 @@ export const computePrimeCee = ({
       continue;
     }
 
-    const multiplier = getMultiplierValue({ product, projectProduct });
-    if (!multiplier || multiplier.value <= 0) {
+    const baseKwh = kwhEntry.kwh_cumac;
+    if (baseKwh <= 0) {
       continue;
     }
 
-    // Valorisation CEE = (kWh cumac × bonification / 1000) × tarif délégataire
-    const valorisationPerUnit = (kwhEntry.kwh_cumac * bonification * pricePerMwh) / 1000;
-    if (!Number.isFinite(valorisationPerUnit) || valorisationPerUnit <= 0) {
+    const productBonification = toPositiveNumber(product.valorisation_bonification);
+    const bonification = resolveBonificationFactor(productBonification ?? primeBonification);
+    const coefficient = resolveProductCoefficient(product);
+
+    const valorisationPerUnitMwh = (baseKwh * bonification * coefficient) / 1000;
+    if (!Number.isFinite(valorisationPerUnitMwh) || valorisationPerUnitMwh <= 0) {
       continue;
     }
 
-    // Add to valorisation base (without multiplier)
-    valorisationBaseSum += valorisationPerUnit;
+    const multiplierDetection = getMultiplierValue({ product, projectProduct });
+    const multiplierValue =
+      multiplierDetection && Number.isFinite(multiplierDetection.value) && multiplierDetection.value > 0
+        ? multiplierDetection.value
+        : 0;
+    const multiplierLabel = multiplierDetection?.label ?? "Multiplicateur non renseigné";
 
-    // Prime CEE = Valorisation CEE × champ dynamique
-    const totalPrime = valorisationPerUnit * multiplier.value;
-    if (!Number.isFinite(totalPrime) || totalPrime <= 0) {
-      continue;
-    }
+    const valorisationTotalMwh = valorisationPerUnitMwh * multiplierValue;
+    const productPrime = valorisationTotalMwh * delegatePrice;
+
+    totalValorisationMwh += valorisationTotalMwh;
+    totalPrime += productPrime;
 
     productResults.push({
       projectProductId: projectProduct.id ?? projectProduct.product_id,
       productId: product.id ?? projectProduct.product_id,
       productCode: product.code,
       productName: product.name,
-      valorisationPerUnit,
-      multiplier: multiplier.value,
-      multiplierLabel: multiplier.label,
-      totalPrime,
+      baseKwh,
+      bonification,
+      coefficient,
+      valorisationPerUnitMwh,
+      multiplier: multiplierValue,
+      multiplierLabel,
+      valorisationTotalMwh,
+      delegatePrice,
+      totalPrime: productPrime,
     });
   }
 
-  const total = roundToTwo(productResults.reduce((sum, result) => sum + result.totalPrime, 0));
-  const valorisationBase = roundToTwo(valorisationBaseSum);
-
   return {
-    totalPrime: total,
-    valorisationBase,
+    totalPrime: roundToTwo(totalPrime),
+    totalValorisationMwh: roundToTwo(totalValorisationMwh),
+    delegatePrice: roundToTwo(delegatePrice),
     products: productResults.map((result) => ({
       ...result,
-      valorisationPerUnit: roundToTwo(result.valorisationPerUnit),
+      baseKwh: roundToTwo(result.baseKwh),
+      bonification: roundToTwo(result.bonification),
+      coefficient: roundToTwo(result.coefficient),
+      valorisationPerUnitMwh: roundToTwo(result.valorisationPerUnitMwh),
       multiplier: roundToTwo(result.multiplier),
+      valorisationTotalMwh: roundToTwo(result.valorisationTotalMwh),
+      delegatePrice: roundToTwo(result.delegatePrice),
       totalPrime: roundToTwo(result.totalPrime),
     })),
   };
