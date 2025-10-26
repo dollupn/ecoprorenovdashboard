@@ -19,13 +19,14 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { getProjectBuildingTypes } from "@/lib/buildings";
 import {
   FORMULA_QUANTITY_KEY,
   normalizeValorisationFormula,
   type ValorisationFormulaConfig,
 } from "@/lib/valorisation-formula";
-import type { TablesInsert } from "@/integrations/supabase/types";
+import type { TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 import type { ProductCatalogRecord, CategoryRecord, ProductKwhCumacInput } from "./api";
 import { useCreateProduct, useUpdateProduct } from "./api";
 import { CategoryFormDialog } from "./CategoryFormDialog";
@@ -155,6 +156,7 @@ export const ProductFormDialog = ({
 }: ProductFormDialogProps) => {
   const [internalOpen, setInternalOpen] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
   const buildingTypes = useMemo(() => getProjectBuildingTypes(), []);
   const allBuildingTypes = useMemo(() => {
     const fromProduct =
@@ -260,9 +262,7 @@ export const ProductFormDialog = ({
       }
     }
 
-    const payload: TablesInsert<"product_catalog"> = {
-      org_id: orgId,
-      owner_id: orgId,
+    const basePayload: Omit<TablesInsert<"product_catalog">, "org_id" | "owner_id"> = {
       name: values.name.trim(),
       code: values.code?.trim() || "",
       category: values.category,
@@ -299,10 +299,25 @@ export const ProductFormDialog = ({
 
     try {
       if (product) {
-        await updateProduct.mutateAsync({ id: product.id, values: payload, kwhCumac: kwhEntries });
+        const updatePayload: TablesUpdate<"product_catalog"> = { ...basePayload };
+        await updateProduct.mutateAsync({ id: product.id, values: updatePayload, kwhCumac: kwhEntries });
         toast({ title: "Produit modifié", description: `${values.name} a été mis à jour` });
       } else {
-        await createProduct.mutateAsync({ values: payload, kwhCumac: kwhEntries });
+        if (!orgId) {
+          throw new Error("Organisation requise pour créer un produit");
+        }
+
+        if (!user?.id) {
+          throw new Error("Utilisateur requis pour créer un produit");
+        }
+
+        const insertPayload: TablesInsert<"product_catalog"> = {
+          ...basePayload,
+          org_id: orgId,
+          owner_id: user.id,
+        };
+
+        await createProduct.mutateAsync({ values: insertPayload, kwhCumac: kwhEntries });
         toast({ title: "Produit créé", description: `${values.name} a été ajouté au catalogue` });
       }
       setOpen(false);
