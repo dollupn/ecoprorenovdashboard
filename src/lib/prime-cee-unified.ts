@@ -75,12 +75,25 @@ export type PrimeCeeComputation = {
   products: PrimeCeeProductResult[];
 };
 
+export type PrimeCeeValorisationEntry = PrimeCeeProductResult & {
+  valorisationPerUnit: number;
+};
+
+export type PrimeCeeProductDisplayMapEntry = {
+  productCode?: string | null;
+  productName?: string | null;
+};
+
+export type PrimeCeeProductDisplayMap = Record<string, PrimeCeeProductDisplayMapEntry>;
+
 // ============================================================================
 // CONSTANTS
 // ============================================================================
 
 // Products starting with "ECO" are excluded from Prime CEE calculation
 const EXCLUDED_CATEGORY_PREFIXES = ["ECO"] as const;
+
+const DEFAULT_MULTIPLIER_LABEL = "Multiplicateur non renseigné";
 
 // Priority order for dynamic field detection
 const DYNAMIC_FIELD_PRIORITIES = [
@@ -126,6 +139,45 @@ const toPositiveNumber = (value: unknown): number | null => {
 };
 
 const roundToTwo = (value: number) => Math.round(value * 100) / 100;
+
+// ============================================================================
+// VALORISATION ENTRY BUILDER
+// ============================================================================
+
+export const buildPrimeCeeEntries = ({
+  computation,
+  productMap,
+}: {
+  computation: PrimeCeeComputation | null | undefined;
+  productMap: PrimeCeeProductDisplayMap;
+}): PrimeCeeValorisationEntry[] => {
+  if (!computation) return [];
+
+  return computation.products
+    .map((product) => {
+      const mapEntry = productMap[product.projectProductId];
+      if (!mapEntry) {
+        return null;
+      }
+
+      if (!product.multiplier || product.multiplier <= 0) {
+        return null;
+      }
+
+      const valorisationPerUnitRaw = product.valorisationPerUnitMwh * product.delegatePrice;
+      if (!Number.isFinite(valorisationPerUnitRaw) || valorisationPerUnitRaw <= 0) {
+        return null;
+      }
+
+      return {
+        ...product,
+        productCode: mapEntry.productCode ?? product.productCode,
+        productName: mapEntry.productName ?? product.productName,
+        valorisationPerUnit: roundToTwo(valorisationPerUnitRaw),
+      } satisfies PrimeCeeValorisationEntry;
+    })
+    .filter((entry): entry is PrimeCeeValorisationEntry => Boolean(entry));
+};
 
 // ============================================================================
 // SCHEMA PARSING
@@ -299,6 +351,17 @@ export const isProductExcluded = (product: { category?: string | null; code?: st
   );
 };
 
+export const getValorisationLabel = (
+  entry?: Pick<PrimeCeeProductResult, "multiplierLabel"> | null,
+) => {
+  if (!entry?.multiplierLabel) {
+    return DEFAULT_MULTIPLIER_LABEL;
+  }
+
+  const trimmed = entry.multiplierLabel.trim();
+  return trimmed.length > 0 ? trimmed : DEFAULT_MULTIPLIER_LABEL;
+};
+
 /**
  * Computes Valorisation and Prime CEE for a list of products.
  *
@@ -367,7 +430,9 @@ export const computePrimeCee = ({
       multiplierDetection && Number.isFinite(multiplierDetection.value) && multiplierDetection.value > 0
         ? multiplierDetection.value
         : 0;
-    const multiplierLabel = multiplierDetection?.label ?? "Multiplicateur non renseigné";
+    const multiplierLabel = getValorisationLabel(
+      multiplierDetection?.label ? { multiplierLabel: multiplierDetection.label } : null,
+    );
 
     const valorisationTotalMwh = valorisationPerUnitMwh * multiplierValue;
     const valorisationPerUnitEur = valorisationPerUnitMwh * delegatePrice;
@@ -380,6 +445,10 @@ export const computePrimeCee = ({
     totalValorisationMwh += valorisationTotalMwh;
     totalPrime += productPrime;
     totalValorisationEur += valorisationTotalEur;
+
+    totalValorisationMwh += valorisationTotalMwh;
+    totalValorisationEur += valorisationTotalEur;
+    totalPrime += valorisationTotalEur;
 
     productResults.push({
       projectProductId: projectProduct.id ?? projectProduct.product_id,
@@ -397,7 +466,7 @@ export const computePrimeCee = ({
       valorisationTotalMwh,
       valorisationTotalEur,
       delegatePrice,
-      totalPrime: productPrime,
+      totalPrime: valorisationTotalEur,
     });
   }
 

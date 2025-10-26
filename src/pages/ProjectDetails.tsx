@@ -48,10 +48,13 @@ import {
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 import { useOrganizationPrimeSettings } from "@/features/organizations/useOrganizationPrimeSettings";
 import {
+  buildPrimeCeeEntries,
   computePrimeCee,
+  getValorisationLabel,
   type PrimeCeeComputation,
-  type PrimeCeeProductResult,
   type PrimeCeeProductCatalogEntry,
+  type PrimeCeeProductDisplayMap,
+  type PrimeCeeValorisationEntry,
   type PrimeProductInput,
 } from "@/lib/prime-cee-unified";
 
@@ -92,6 +95,24 @@ const decimalFormatter = new Intl.NumberFormat("fr-FR", {
 
 const formatCurrency = (value: number) => currencyFormatter.format(value);
 const formatDecimal = (value: number) => decimalFormatter.format(value);
+
+const buildProjectProductDisplayMap = (
+  projectProducts?: ProjectProduct[],
+): PrimeCeeProductDisplayMap => {
+  return (projectProducts ?? []).reduce<PrimeCeeProductDisplayMap>((acc, item) => {
+    const key = item.id ?? item.product_id;
+    if (!key) {
+      return acc;
+    }
+
+    acc[key] = {
+      productCode: item.product?.code ?? null,
+      productName: item.product?.name ?? null,
+    };
+
+    return acc;
+  }, {});
+};
 
 const ProjectDetails = () => {
   const { id } = useParams<{ id: string }>();
@@ -184,13 +205,26 @@ const ProjectDetails = () => {
     });
   }, [project, primeBonification]);
 
-  const valorisationProductMap = useMemo(() => {
-    if (!valorisationResult) return {} as Record<string, PrimeCeeProductResult>;
+  const projectProductDisplayMap = useMemo(
+    () => buildProjectProductDisplayMap(projectProducts),
+    [projectProducts]
+  );
 
-    return valorisationResult.products.reduce<Record<string, PrimeCeeProductResult>>((acc, item) => {
-      acc[item.projectProductId] = item;
+  const valorisationEntries = useMemo(
+    () =>
+      buildPrimeCeeEntries({
+        computation: valorisationResult,
+        productMap: projectProductDisplayMap,
+      }),
+    [valorisationResult, projectProductDisplayMap]
+  );
+
+  const valorisationEntryMap = useMemo(() => {
+    return valorisationEntries.reduce<Record<string, PrimeCeeValorisationEntry>>((acc, entry) => {
+      acc[entry.projectProductId] = entry;
       return acc;
     }, {});
+  }, [valorisationEntries]);
   }, [valorisationResult]);
 
   const valorisationEntries = useMemo(() => {
@@ -199,6 +233,8 @@ const ProjectDetails = () => {
       .filter(
         (entry): entry is PrimeCeeProductResult =>
           Boolean(entry && entry.valorisationPerUnitEur && entry.valorisationPerUnitEur > 0),
+      .filter((entry): entry is PrimeCeeProductResult =>
+        Boolean(entry && entry.valorisationPerUnitEur && entry.valorisationPerUnitEur > 0)
       );
   }, [projectProducts, valorisationProductMap]);
 
@@ -521,6 +557,21 @@ const ProjectDetails = () => {
                   </div>
                 );
               })}
+              {valorisationEntries.map((entry) => (
+                <div
+                  key={`valorisation-summary-${entry.projectProductId}`}
+                  className="flex items-center gap-2"
+                >
+                  <HandCoins className="w-4 h-4 text-amber-600" />
+                  <span className="text-muted-foreground">
+                    Valorisation CEE
+                    {entry.productCode ? ` (${entry.productCode})` : ""}:
+                  </span>
+                  <span className="font-medium text-amber-600">
+                    {formatCurrency(entry.valorisationPerUnitEur ?? 0)} / {getValorisationLabel(entry)}
+                  </span>
+                </div>
+              ))}
               <div className="flex items-center gap-2">
                 <UserRound className="w-4 h-4 text-primary" />
                 <span className="text-muted-foreground">Délégataire:</span>
@@ -582,7 +633,7 @@ const ProjectDetails = () => {
                   item.product?.params_schema ?? null,
                   item.dynamic_params
                 );
-                const valorisationEntry = item.id ? valorisationProductMap[item.id] : undefined;
+                const valorisationEntry = valorisationEntryMap[item.id ?? item.product_id];
 
                 return (
                   <div
@@ -632,6 +683,10 @@ const ProjectDetails = () => {
                         </span>
                         <span className="text-xs font-semibold text-amber-600 text-right">
                           Prime calculée : {formatCurrency(valorisationEntry.valorisationTotalEur ?? valorisationEntry.totalPrime ?? 0)}
+                      <div className="flex items-center justify-between text-sm pt-2 border-t border-border/40">
+                        <span className="text-muted-foreground">Valorisation CEE</span>
+                        <span className="font-medium text-amber-600 text-right">
+                          {formatCurrency(valorisationEntry.valorisationPerUnitEur ?? 0)} / {getValorisationLabel(valorisationEntry)}
                         </span>
                       </div>
                     ) : null}

@@ -57,10 +57,14 @@ import {
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 import { useOrganizationPrimeSettings } from "@/features/organizations/useOrganizationPrimeSettings";
 import {
+  buildPrimeCeeEntries,
   computePrimeCee,
+  getValorisationLabel,
   type PrimeCeeComputation,
-  type PrimeCeeProductResult,
   type PrimeCeeProductCatalogEntry,
+  type PrimeCeeProductDisplayMap,
+  type PrimeCeeProductResult,
+  type PrimeCeeValorisationEntry,
   type PrimeProductInput,
 } from "@/lib/prime-cee-unified";
 
@@ -101,6 +105,24 @@ const formatCurrency = (value: number) => currencyFormatter.format(value);
 const formatDecimal = (value: number) => decimalFormatter.format(value);
 
 const SURFACE_FACTUREE_TARGETS = ["surface_facturee", "surface facturée"] as const;
+
+const buildProjectProductDisplayMap = (
+  projectProducts?: ProjectProduct[],
+): PrimeCeeProductDisplayMap => {
+  return (projectProducts ?? []).reduce<PrimeCeeProductDisplayMap>((acc, item) => {
+    const key = item.id ?? item.product_id;
+    if (!key) {
+      return acc;
+    }
+
+    acc[key] = {
+      productCode: item.product?.code ?? null,
+      productName: item.product?.name ?? null,
+    };
+
+    return acc;
+  }, {});
+};
 
 const Projects = () => {
   const navigate = useNavigate();
@@ -169,8 +191,12 @@ const Projects = () => {
     }, {});
   }, [projectStatuses]);
 
-  type ProjectValorisationSummary = PrimeCeeComputation & {
-    productMap: Record<string, PrimeCeeProductResult>;
+  type ProjectValorisationSummary = {
+    computation: PrimeCeeComputation | null;
+    totalPrime: number;
+    totalValorisationMwh: number;
+    delegatePrice: number;
+    products: PrimeCeeProductResult[];
   };
 
   const projectValorisationSummaries = useMemo(() => {
@@ -200,21 +226,13 @@ const Projects = () => {
         primeBonification,
       });
 
-      const resultProductMap = (result?.products ?? []).reduce<Record<string, PrimeCeeProductResult>>(
-        (map, product) => {
-          map[product.projectProductId] = product;
-          return map;
-        },
-        {}
-      );
-
       acc[project.id] = {
+        computation: result ?? null,
         totalPrime: result?.totalPrime ?? 0,
         totalValorisationMwh: result?.totalValorisationMwh ?? 0,
         totalValorisationEur: result?.totalValorisationEur ?? 0,
         delegatePrice: result?.delegatePrice ?? 0,
         products: result?.products ?? [],
-        productMap: resultProductMap,
       };
 
       return acc;
@@ -358,6 +376,20 @@ const Projects = () => {
       );
     const selectedValorisation = valorisationEntries[0] ?? fallbackValorisation;
     const valorisationTotalEur = selectedValorisation?.valorisationTotalEur ?? selectedValorisation?.totalPrime ?? 0;
+    const valorisationEntries = buildPrimeCeeEntries({
+      computation: valorisationSummary?.computation ?? null,
+      productMap: buildProjectProductDisplayMap(displayedProducts),
+    });
+    let fallbackValorisation: PrimeCeeValorisationEntry | undefined;
+    if (!valorisationEntries.length) {
+      fallbackValorisation = buildPrimeCeeEntries({
+        computation: valorisationSummary?.computation ?? null,
+        productMap: buildProjectProductDisplayMap(project.project_products),
+      }).find((entry) => entry.valorisationTotalMwh > 0);
+    }
+    const selectedValorisation = valorisationEntries[0] ?? fallbackValorisation;
+    const valorisationMwh = selectedValorisation?.valorisationTotalMwh ?? 0;
+    const valorisationBase = selectedValorisation?.valorisationPerUnitEur ?? 0;
     const surfaceFacturee = surfaceFactureeByProject[project.id] ?? 0;
 
     // Generate unique site ref
@@ -578,6 +610,10 @@ const Projects = () => {
               null;
             const projectCostValue = project.estimated_value ?? null;
             const valorisationSummary = projectValorisationSummaries[project.id];
+            const valorisationEntries = buildPrimeCeeEntries({
+              computation: valorisationSummary?.computation ?? null,
+              productMap: buildProjectProductDisplayMap(displayedProducts),
+            });
             const valorisationEntries = displayedProducts
               .map((item) => (item.id ? valorisationSummary?.productMap[item.id] : undefined))
               .filter((entry): entry is PrimeCeeProductResult =>
@@ -778,6 +814,20 @@ const Projects = () => {
                         </div>
                       );
                     })}
+                    {valorisationEntries.map((entry) => (
+                      <div
+                        key={`${project.id}-valorisation-${entry.projectProductId}`}
+                        className="flex items-center justify-between"
+                      >
+                        <span className="text-sm text-muted-foreground">
+                          Valorisation CEE
+                          {entry.productCode ? ` (${entry.productCode})` : ""}:
+                        </span>
+                        <span className="text-sm font-semibold text-amber-600 text-right">
+                          {formatCurrency(entry.valorisationPerUnitEur ?? 0)} / {getValorisationLabel(entry)}
+                        </span>
+                      </div>
+                    ))}
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground flex items-center gap-1">
                         <UserRound className="w-4 h-4" />
