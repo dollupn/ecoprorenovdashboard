@@ -48,10 +48,12 @@ import {
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 import { useOrganizationPrimeSettings } from "@/features/organizations/useOrganizationPrimeSettings";
 import {
+  buildPrimeCeeEntries,
   computePrimeCee,
   type PrimeCeeComputation,
-  type PrimeCeeProductResult,
   type PrimeCeeProductCatalogEntry,
+  type PrimeCeeProductDisplayMap,
+  type PrimeCeeValorisationEntry,
   type PrimeProductInput,
 } from "@/lib/prime-cee-unified";
 
@@ -86,6 +88,24 @@ const getDisplayedProducts = (projectProducts?: ProjectProduct[]) =>
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value);
+
+const buildProjectProductDisplayMap = (
+  projectProducts?: ProjectProduct[],
+): PrimeCeeProductDisplayMap => {
+  return (projectProducts ?? []).reduce<PrimeCeeProductDisplayMap>((acc, item) => {
+    const key = item.id ?? item.product_id;
+    if (!key) {
+      return acc;
+    }
+
+    acc[key] = {
+      productCode: item.product?.code ?? null,
+      productName: item.product?.name ?? null,
+    };
+
+    return acc;
+  }, {});
+};
 
 const ProjectDetails = () => {
   const { id } = useParams<{ id: string }>();
@@ -178,22 +198,26 @@ const ProjectDetails = () => {
     });
   }, [project, primeBonification]);
 
-  const valorisationProductMap = useMemo(() => {
-    if (!valorisationResult) return {} as Record<string, PrimeCeeProductResult>;
+  const projectProductDisplayMap = useMemo(
+    () => buildProjectProductDisplayMap(projectProducts),
+    [projectProducts]
+  );
 
-    return valorisationResult.products.reduce<Record<string, PrimeCeeProductResult>>((acc, item) => {
-      acc[item.projectProductId] = item;
+  const valorisationEntries = useMemo(
+    () =>
+      buildPrimeCeeEntries({
+        computation: valorisationResult,
+        productMap: projectProductDisplayMap,
+      }),
+    [valorisationResult, projectProductDisplayMap]
+  );
+
+  const valorisationEntryMap = useMemo(() => {
+    return valorisationEntries.reduce<Record<string, PrimeCeeValorisationEntry>>((acc, entry) => {
+      acc[entry.projectProductId] = entry;
       return acc;
     }, {});
-  }, [valorisationResult]);
-
-  const valorisationEntries = useMemo(() => {
-    return projectProducts
-      .map((item) => (item.id ? valorisationProductMap[item.id] : undefined))
-      .filter((entry): entry is PrimeCeeProductResult =>
-        Boolean(entry && entry.valorisationPerUnit && entry.valorisationPerUnit > 0)
-      );
-  }, [projectProducts, valorisationProductMap]);
+  }, [valorisationEntries]);
 
   if (isLoading || membersLoading) {
     return (
@@ -562,7 +586,7 @@ const ProjectDetails = () => {
                   item.product?.params_schema ?? null,
                   item.dynamic_params
                 );
-                const valorisationEntry = item.id ? valorisationProductMap[item.id] : undefined;
+                const valorisationEntry = valorisationEntryMap[item.id ?? item.product_id];
 
                 return (
                   <div

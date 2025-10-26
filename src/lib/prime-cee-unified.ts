@@ -71,6 +71,17 @@ export type PrimeCeeComputation = {
   products: PrimeCeeProductResult[];
 };
 
+export type PrimeCeeValorisationEntry = PrimeCeeProductResult & {
+  valorisationPerUnit: number;
+};
+
+export type PrimeCeeProductDisplayMapEntry = {
+  productCode?: string | null;
+  productName?: string | null;
+};
+
+export type PrimeCeeProductDisplayMap = Record<string, PrimeCeeProductDisplayMapEntry>;
+
 // ============================================================================
 // CONSTANTS
 // ============================================================================
@@ -122,6 +133,45 @@ const toPositiveNumber = (value: unknown): number | null => {
 };
 
 const roundToTwo = (value: number) => Math.round(value * 100) / 100;
+
+// ============================================================================
+// VALORISATION ENTRY BUILDER
+// ============================================================================
+
+export const buildPrimeCeeEntries = ({
+  computation,
+  productMap,
+}: {
+  computation: PrimeCeeComputation | null | undefined;
+  productMap: PrimeCeeProductDisplayMap;
+}): PrimeCeeValorisationEntry[] => {
+  if (!computation) return [];
+
+  return computation.products
+    .map((product) => {
+      const mapEntry = productMap[product.projectProductId];
+      if (!mapEntry) {
+        return null;
+      }
+
+      if (!product.multiplier || product.multiplier <= 0) {
+        return null;
+      }
+
+      const valorisationPerUnitRaw = product.valorisationPerUnitMwh * product.delegatePrice;
+      if (!Number.isFinite(valorisationPerUnitRaw) || valorisationPerUnitRaw <= 0) {
+        return null;
+      }
+
+      return {
+        ...product,
+        productCode: mapEntry.productCode ?? product.productCode,
+        productName: mapEntry.productName ?? product.productName,
+        valorisationPerUnit: roundToTwo(valorisationPerUnitRaw),
+      } satisfies PrimeCeeValorisationEntry;
+    })
+    .filter((entry): entry is PrimeCeeValorisationEntry => Boolean(entry));
+};
 
 // ============================================================================
 // SCHEMA PARSING
