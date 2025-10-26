@@ -133,6 +133,9 @@ export const CreateSiteStepDialog = ({
       form.setValue("address", project.address || "");
       form.setValue("city", project.city);
       form.setValue("postal_code", project.postal_code);
+      if (typeof project.surface_facturee === "number") {
+        form.setValue("surface_facturee", project.surface_facturee);
+      }
     }
   };
 

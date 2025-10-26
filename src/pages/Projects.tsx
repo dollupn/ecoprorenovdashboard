@@ -52,6 +52,7 @@ import {
 import {
   getDynamicFieldEntries,
   formatDynamicFieldValue,
+  getDynamicFieldNumericValue,
 } from "@/lib/product-params";
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 import { useOrganizationPrimeSettings } from "@/features/organizations/useOrganizationPrimeSettings";
@@ -92,6 +93,8 @@ const getDisplayedProducts = (projectProducts?: ProjectProduct[]) =>
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value);
+
+const SURFACE_FACTUREE_TARGETS = ["surface_facturee", "surface facturée"] as const;
 
 const Projects = () => {
   const navigate = useNavigate();
@@ -210,6 +213,35 @@ const Projects = () => {
     }, {});
   }, [projects, primeBonification]);
 
+  const surfaceFactureeByProject = useMemo(() => {
+    return projects.reduce<Record<string, number>>((acc, project) => {
+      const total = (project.project_products ?? []).reduce((sum, projectProduct) => {
+        const product = projectProduct.product;
+        if (!product) {
+          return sum;
+        }
+
+        const surfaceValue = getDynamicFieldNumericValue(
+          product.params_schema,
+          projectProduct.dynamic_params,
+          [...SURFACE_FACTUREE_TARGETS],
+        );
+
+        if (typeof surfaceValue === "number" && surfaceValue > 0) {
+          return sum + surfaceValue;
+        }
+
+        return sum;
+      }, 0);
+
+      if (total > 0 && project.id) {
+        acc[project.id] = total;
+      }
+
+      return acc;
+    }, {});
+  }, [projects]);
+
   const filteredProjects = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
@@ -311,6 +343,7 @@ const Projects = () => {
     );
     const selectedValorisation = valorisationEntries[0] ?? fallbackValorisation;
     const valorisationBase = selectedValorisation?.valorisationPerUnit ?? 0;
+    const surfaceFacturee = surfaceFactureeByProject[project.id] ?? 0;
 
     // Generate unique site ref
     const today = new Date();
@@ -347,7 +380,7 @@ const Projects = () => {
       progress_percentage: 0,
       revenue: 0,
       profit_margin: 0,
-      surface_facturee: 0,
+      surface_facturee: surfaceFacturee,
       cout_main_oeuvre_m2_ht: 0,
       cout_isolation_m2: 0,
       isolation_utilisee_m2: 0,
@@ -366,6 +399,7 @@ const Projects = () => {
       const firstProduct = displayedProducts[0]?.product ?? project.project_products?.[0]?.product;
       const productLabel = firstProduct?.code || project.product_name || "";
       const address = (project as Project & { address?: string | null }).address ?? "";
+      const surfaceFacturee = surfaceFactureeByProject[project.id] ?? undefined;
 
       return {
         id: project.id,
@@ -375,9 +409,10 @@ const Projects = () => {
         address,
         city: project.city ?? "",
         postal_code: project.postal_code ?? "",
+        surface_facturee: surfaceFacturee && surfaceFacturee > 0 ? surfaceFacturee : undefined,
       } satisfies SiteProjectOption;
     });
-  }, [projects]);
+  }, [projects, surfaceFactureeByProject]);
 
   const handleSubmitSite = useCallback(async (values: SiteFormValues) => {
     if (!user || !currentOrgId) return;

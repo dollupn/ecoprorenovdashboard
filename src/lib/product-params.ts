@@ -9,6 +9,35 @@ type SchemaField = {
   unit?: string;
 };
 
+const normalizeForComparison = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+const buildNormalizedTargets = (targets: string[]) =>
+  targets
+    .map((target) => normalizeForComparison(target))
+    .filter((target) => target.length > 0);
+
+const parseNumericValue = (value: string | number): number | null => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === "string") {
+    const sanitized = value.replace(/\s+/g, "").replace(",", ".");
+    const parsed = Number(sanitized);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return null;
+};
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
@@ -78,4 +107,47 @@ export const formatDynamicFieldValue = ({ value, unit }: DynamicFieldEntry) => {
     return unit ? `${value} ${unit}` : value;
   }
   return unit ? `${value} ${unit}` : value;
+};
+
+const matchesTarget = (value: string | undefined, normalizedTargets: string[]) => {
+  if (!value) {
+    return false;
+  }
+
+  const normalizedValue = normalizeForComparison(value);
+  return normalizedTargets.some(
+    (target) =>
+      normalizedValue === target || normalizedValue.startsWith(`${target} `),
+  );
+};
+
+export const getDynamicFieldNumericValue = (
+  paramsSchema: ProductCatalog["params_schema"],
+  dynamicParams: ProjectProduct["dynamic_params"],
+  targets: string[],
+): number | null => {
+  if (!Array.isArray(targets) || targets.length === 0) {
+    return null;
+  }
+
+  const normalizedTargets = buildNormalizedTargets(targets);
+  if (normalizedTargets.length === 0) {
+    return null;
+  }
+
+  const entries = getDynamicFieldEntries(paramsSchema, dynamicParams);
+
+  for (const entry of entries) {
+    if (
+      matchesTarget(entry.name, normalizedTargets) ||
+      matchesTarget(entry.label, normalizedTargets)
+    ) {
+      const numeric = parseNumericValue(entry.value);
+      if (numeric !== null) {
+        return numeric;
+      }
+    }
+  }
+
+  return null;
 };
