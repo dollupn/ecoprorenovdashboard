@@ -58,6 +58,7 @@ export type PrimeCeeProductResult = {
   coefficient: number;
   valorisationPerUnitMwh: number;
   valorisationPerUnitEur: number;
+  valorisationLabel: string;
   multiplier: number;
   multiplierLabel: string;
   valorisationTotalMwh: number;
@@ -436,6 +437,14 @@ export const computePrimeCee = ({
     const valorisationTotalMwh = valorisationPerUnitMwh * multiplierValue;
     const valorisationPerUnitEur = valorisationPerUnitMwh * delegatePrice;
     const valorisationTotalEur = valorisationTotalMwh * delegatePrice;
+    const valorisationLabel = multiplierDetection?.label
+      ? `Valorisation ${multiplierDetection.label}`
+      : "Valorisation m²/LED";
+    const productPrime = valorisationTotalEur;
+
+    totalValorisationMwh += valorisationTotalMwh;
+    totalPrime += productPrime;
+    totalValorisationEur += valorisationTotalEur;
 
     totalValorisationMwh += valorisationTotalMwh;
     totalValorisationEur += valorisationTotalEur;
@@ -451,6 +460,7 @@ export const computePrimeCee = ({
       coefficient,
       valorisationPerUnitMwh,
       valorisationPerUnitEur,
+      valorisationLabel,
       multiplier: multiplierValue,
       multiplierLabel,
       valorisationTotalMwh,
