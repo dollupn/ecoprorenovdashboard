@@ -163,7 +163,11 @@ export const useReportsData = (orgId: string | null, options: QueryOptions = {})
         .sort((a, b) => b.leads - a.leads);
 
       const marginValues = sites
-        .map((site) => (typeof site.profit_margin === "number" ? site.profit_margin : null))
+        .map((site) =>
+          typeof site.profit_margin === "number"
+            ? site.profit_margin / 100
+            : null,
+        )
         .filter((value): value is number => value !== null);
 
       const averageMargin =
@@ -220,7 +224,10 @@ export const useReportsData = (orgId: string | null, options: QueryOptions = {})
           siteRef: site.site_ref,
           clientName: site.client_name,
           revenue: site.revenue ?? 0,
-          profitMargin: typeof site.profit_margin === "number" ? site.profit_margin : null,
+          profitMargin:
+            typeof site.profit_margin === "number"
+              ? site.profit_margin / 100
+              : null,
           status: site.status,
           statusLabel: (() => {
             const status = toSiteStatus(site.status);
