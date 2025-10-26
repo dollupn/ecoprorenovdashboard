@@ -468,6 +468,8 @@ export type Database = {
           tva_percentage: number | null
           unit_type: string | null
           updated_at: string
+          valorisation_formula: Json | null
+          valorisation_tarif_override: number | null
         }
         Insert: {
           base_price_ht?: number | null
@@ -496,6 +498,8 @@ export type Database = {
           tva_percentage?: number | null
           unit_type?: string | null
           updated_at?: string
+          valorisation_formula?: Json | null
+          valorisation_tarif_override?: number | null
         }
         Update: {
           base_price_ht?: number | null
@@ -524,6 +528,8 @@ export type Database = {
           tva_percentage?: number | null
           unit_type?: string | null
           updated_at?: string
+          valorisation_formula?: Json | null
+          valorisation_tarif_override?: number | null
         }
         Relationships: [
           {
