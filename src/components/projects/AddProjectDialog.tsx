@@ -1946,19 +1946,22 @@ export const AddProjectDialog = ({
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="estimated_value"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Valorisation CEE</FormLabel>
-                    <FormControl>
-                      <Input type="number" step="0.01" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div className="space-y-2">
+                <FormLabel>Valorisation CEE</FormLabel>
+                <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2.5 text-sm font-medium">
+                  {delegatesLoading ? (
+                    "Calcul en cours..."
+                  ) : !selectedDelegate ? (
+                    "Sélectionnez un délégataire"
+                  ) : !watchedBuildingType ? (
+                    "Sélectionnez un type de bâtiment"
+                  ) : hasPrimeCeeValue && primeCeeTotal !== null ? (
+                    formatCurrency(primeCeeTotal)
+                  ) : (
+                    "0 €"
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="space-y-1">
