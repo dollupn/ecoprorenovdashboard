@@ -9,7 +9,7 @@ import FontFamily from "@tiptap/extension-font-family";
 import TextAlign from "@tiptap/extension-text-align";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Extension } from "@tiptap/core";
-import sanitizeHtml from "sanitize-html";
+import DOMPurify from "dompurify";
 import {
   AlignCenter,
   AlignLeft,
@@ -54,46 +54,112 @@ const allowedTags = [
   "a",
   "br",
   "span",
-  "div",
 ];
 
-const sanitize = (html: string) =>
-  sanitizeHtml(html, {
-    allowedTags,
-    allowedAttributes: {
-      a: ["href", "target", "rel"],
-      span: ["style"],
-      p: ["style"],
-      div: ["style"],
-      h1: ["style"],
-      h2: ["style"],
-      h3: ["style"],
-    },
-    allowedStyles: {
-      "*": {
-        "font-family": [/^['"a-zA-Z0-9 ,\-]+$/],
-        "font-size": [/^\d+(\.\d+)?px$/],
-        "font-weight": [/^(normal|bold|[1-9]00)$/],
-        "text-decoration": [/^(none|underline|line-through|underline line-through)$/],
-        "text-align": [/^(left|center|right|justify)$/],
-      },
-    },
-    allowedSchemes: ["http", "https", "mailto", "tel"],
-    transformTags: {
-      a: (tagName, attribs) => ({
-        tagName,
-        attribs: {
-          ...attribs,
-          rel: attribs.rel ?? "noopener noreferrer",
-          target: attribs.target ?? "_blank",
-        },
-      }),
-      div: (tagName, attribs) => ({
-        tagName: "p",
-        attribs,
-      }),
-    },
+const styleAllowedTags = new Set(["span", "p", "h1", "h2", "h3"]);
+
+const styleValidators: Record<string, RegExp> = {
+  "font-family": /^['"a-zA-Z0-9 ,\-]+$/,
+  "font-size": /^\d+(\.\d+)?px$/,
+  "font-weight": /^(normal|bold|[1-9]00)$/,
+  "text-decoration": /^(none|underline|line-through|underline line-through)$/,
+  "text-align": /^(left|center|right|justify)$/,
+};
+
+const sanitize = (html: string) => {
+  if (!html || typeof window === "undefined") {
+    return html;
+  }
+
+  const lowerAllowedAttrsByTag: Record<string, Set<string>> = {
+    a: new Set(["href", "target", "rel"]),
+    span: new Set(["style"]),
+    p: new Set(["style"]),
+    h1: new Set(["style"]),
+    h2: new Set(["style"]),
+    h3: new Set(["style"]),
+  };
+
+  DOMPurify.addHook("uponSanitizeElement", (_node, data) => {
+    if (data.tagName === "div") {
+      data.tagName = "p";
+    }
   });
+
+  DOMPurify.addHook("uponSanitizeAttribute", (_node, data) => {
+    const tag = data.tagName?.toLowerCase();
+    const attr = data.attrName?.toLowerCase();
+
+    if (!tag || !attr) {
+      return;
+    }
+
+    if (attr === "style") {
+      if (!styleAllowedTags.has(tag)) {
+        data.keepAttr = false;
+        return;
+      }
+
+      const sanitizedStyle = data.attrValue
+        .split(";")
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .map((part) => {
+          const [property, value] = part.split(":").map((item) => item.trim());
+          if (!property || !value) {
+            return null;
+          }
+          const validator = styleValidators[property as keyof typeof styleValidators];
+          return validator && validator.test(value) ? `${property}: ${value}` : null;
+        })
+        .filter((value): value is string => Boolean(value))
+        .join("; ");
+
+      if (sanitizedStyle) {
+        data.attrValue = sanitizedStyle;
+      } else {
+        data.keepAttr = false;
+      }
+      return;
+    }
+
+    const allowedAttrs = lowerAllowedAttrsByTag[tag];
+    if (!allowedAttrs) {
+      if (["href", "target", "rel"].includes(attr)) {
+        data.keepAttr = false;
+      }
+      return;
+    }
+
+    if (!allowedAttrs.has(attr)) {
+      data.keepAttr = false;
+    }
+  });
+
+  DOMPurify.addHook("afterSanitizeAttributes", (node) => {
+    if (node.nodeName.toLowerCase() === "a") {
+      if (!node.getAttribute("rel")) {
+        node.setAttribute("rel", "noopener noreferrer");
+      }
+      if (!node.getAttribute("target")) {
+        node.setAttribute("target", "_blank");
+      }
+    }
+  });
+
+  const sanitized = DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: allowedTags,
+    ALLOWED_ATTR: ["href", "target", "rel", "style"],
+    ALLOW_DATA_ATTR: false,
+    KEEP_CONTENT: true,
+  });
+
+  DOMPurify.removeHook("uponSanitizeElement");
+  DOMPurify.removeHook("uponSanitizeAttribute");
+  DOMPurify.removeHook("afterSanitizeAttributes");
+
+  return sanitized;
+};
 
 const FontSize = Extension.create({
   name: "fontSize",
