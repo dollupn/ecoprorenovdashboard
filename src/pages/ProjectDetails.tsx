@@ -54,7 +54,7 @@ import {
   type PrimeCeeComputation,
   type PrimeCeeProductCatalogEntry,
   type PrimeCeeProductDisplayMap,
-  type PrimeCeeValorisationEntry,
+  type PrimeCeeProductResult,
   type PrimeProductInput,
 } from "@/lib/prime-cee-unified";
 
@@ -210,7 +210,7 @@ const ProjectDetails = () => {
     [projectProducts]
   );
 
-  const valorisationEntries = useMemo(
+  const valorisationPrimeEntries = useMemo(
     () =>
       buildPrimeCeeEntries({
         computation: valorisationResult,
@@ -219,24 +219,26 @@ const ProjectDetails = () => {
     [valorisationResult, projectProductDisplayMap]
   );
 
-  const valorisationEntryMap = useMemo(() => {
-    return valorisationEntries.reduce<Record<string, PrimeCeeValorisationEntry>>((acc, entry) => {
-      acc[entry.projectProductId] = entry;
-      return acc;
-    }, {});
-  }, [valorisationEntries]);
-  }, [valorisationResult]);
-
-  const valorisationEntries = useMemo(() => {
+  const valorisationProductEntries = useMemo(() => {
     return projectProducts
       .map((item) => (item.id ? valorisationProductMap[item.id] : undefined))
       .filter(
         (entry): entry is PrimeCeeProductResult =>
-          Boolean(entry && entry.valorisationPerUnitEur && entry.valorisationPerUnitEur > 0),
-      .filter((entry): entry is PrimeCeeProductResult =>
-        Boolean(entry && entry.valorisationPerUnitEur && entry.valorisationPerUnitEur > 0)
+          Boolean(entry && entry.valorisationPerUnitEur && entry.valorisationPerUnitEur > 0)
       );
   }, [projectProducts, valorisationProductMap]);
+
+  const displayedValorisationEntries = useMemo<PrimeCeeProductResult[]>(
+    () => (valorisationPrimeEntries.length ? valorisationPrimeEntries : valorisationProductEntries),
+    [valorisationPrimeEntries, valorisationProductEntries]
+  );
+
+  const valorisationEntryMap = useMemo(() => {
+    return displayedValorisationEntries.reduce<Record<string, PrimeCeeProductResult>>((acc, entry) => {
+      acc[entry.projectProductId] = entry;
+      return acc;
+    }, {});
+  }, [displayedValorisationEntries]);
 
   if (isLoading || membersLoading) {
     return (
@@ -529,7 +531,7 @@ const ProjectDetails = () => {
                     : "Non définie"}
                 </span>
               </div>
-              {valorisationEntries.map((entry) => {
+              {displayedValorisationEntries.map((entry) => {
                 const valorisationLabel = (entry.valorisationLabel || "Valorisation m²/LED").trim();
                 return (
                   <div
@@ -557,7 +559,7 @@ const ProjectDetails = () => {
                   </div>
                 );
               })}
-              {valorisationEntries.map((entry) => (
+              {displayedValorisationEntries.map((entry) => (
                 <div
                   key={`valorisation-summary-${entry.projectProductId}`}
                   className="flex items-center gap-2"
@@ -669,26 +671,30 @@ const ProjectDetails = () => {
                       </div>
                     )}
                     {valorisationEntry?.valorisationPerUnitEur ? (
-                      <div className="flex flex-col gap-1 text-sm pt-2 border-t border-border/40">
-                        <span className="text-muted-foreground">
-                          {(valorisationEntry.valorisationLabel || "Valorisation m²/LED").trim()}
-                        </span>
-                        <span className="font-medium text-emerald-600 text-right">
-                          {formatCurrency(valorisationEntry.valorisationPerUnitEur ?? 0)} / {valorisationEntry.multiplierLabel}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {`${formatDecimal(valorisationEntry.valorisationPerUnitMwh)} MWh × ${valorisationEntry.multiplierLabel} = ${formatDecimal(
-                            valorisationEntry.valorisationTotalMwh,
-                          )} MWh`}
-                        </span>
-                        <span className="text-xs font-semibold text-amber-600 text-right">
-                          Prime calculée : {formatCurrency(valorisationEntry.valorisationTotalEur ?? valorisationEntry.totalPrime ?? 0)}
-                      <div className="flex items-center justify-between text-sm pt-2 border-t border-border/40">
-                        <span className="text-muted-foreground">Valorisation CEE</span>
-                        <span className="font-medium text-amber-600 text-right">
-                          {formatCurrency(valorisationEntry.valorisationPerUnitEur ?? 0)} / {getValorisationLabel(valorisationEntry)}
-                        </span>
-                      </div>
+                      <>
+                        <div className="flex flex-col gap-1 text-sm pt-2 border-t border-border/40">
+                          <span className="text-muted-foreground">
+                            {(valorisationEntry.valorisationLabel || "Valorisation m²/LED").trim()}
+                          </span>
+                          <span className="font-medium text-emerald-600 text-right">
+                            {formatCurrency(valorisationEntry.valorisationPerUnitEur ?? 0)} / {valorisationEntry.multiplierLabel}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {`${formatDecimal(valorisationEntry.valorisationPerUnitMwh)} MWh × ${valorisationEntry.multiplierLabel} = ${formatDecimal(
+                              valorisationEntry.valorisationTotalMwh,
+                            )} MWh`}
+                          </span>
+                          <span className="text-xs font-semibold text-amber-600 text-right">
+                            Prime calculée : {formatCurrency(valorisationEntry.valorisationTotalEur ?? valorisationEntry.totalPrime ?? 0)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm pt-2 border-t border-border/40">
+                          <span className="text-muted-foreground">Valorisation CEE</span>
+                          <span className="font-medium text-amber-600 text-right">
+                            {formatCurrency(valorisationEntry.valorisationPerUnitEur ?? 0)} / {getValorisationLabel(valorisationEntry)}
+                          </span>
+                        </div>
+                      </>
                     ) : null}
                   </div>
                 );
