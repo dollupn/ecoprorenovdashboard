@@ -1,4 +1,9 @@
 import type { Tables } from "@/integrations/supabase/types";
+import {
+  FORMULA_QUANTITY_KEY,
+  formatFormulaCoefficient,
+  normalizeValorisationFormula,
+} from "./valorisation-formula";
 
 // ============================================================================
 // TYPES
@@ -29,7 +34,15 @@ type SchemaField = {
 
 export type PrimeCeeProductCatalogEntry = Pick<
   ProductCatalog,
-  "id" | "name" | "code" | "category" | "is_active" | "params_schema" | "default_params"
+  | "id"
+  | "name"
+  | "code"
+  | "category"
+  | "is_active"
+  | "params_schema"
+  | "default_params"
+  | "valorisation_tarif_override"
+  | "valorisation_formula"
 > & {
   kwh_cumac_values?: ProductKwhValue[];
 };
@@ -137,6 +150,77 @@ type MultiplierDetection = {
   label: string;
 };
 
+const resolveFormulaMultiplier = ({
+  formula,
+  schemaFields,
+  dynamicParams,
+  quantity,
+}: {
+  formula: ProductCatalog["valorisation_formula"];
+  schemaFields: SchemaField[];
+  dynamicParams?: Record<string, unknown>;
+  quantity?: number | null;
+}): MultiplierDetection | null => {
+  const normalized = normalizeValorisationFormula(formula);
+  if (!normalized) {
+    return null;
+  }
+
+  const coefficient =
+    typeof normalized.coefficient === "number" &&
+    Number.isFinite(normalized.coefficient) &&
+    normalized.coefficient > 0
+      ? normalized.coefficient
+      : 1;
+
+  if (normalized.variableKey === FORMULA_QUANTITY_KEY) {
+    if (typeof quantity === "number" && Number.isFinite(quantity) && quantity > 0) {
+      const value = quantity * coefficient;
+      if (value > 0) {
+        const baseLabel = normalized.variableLabel ?? "Quantité";
+        const label =
+          coefficient !== 1
+            ? `${baseLabel} × ${formatFormulaCoefficient(coefficient)}`
+            : baseLabel;
+        return { value, label };
+      }
+    }
+    return null;
+  }
+
+  if (!dynamicParams) {
+    return null;
+  }
+
+  const rawValue = dynamicParams[normalized.variableKey];
+  const numericValue = toNumber(rawValue);
+  if (!numericValue || numericValue <= 0) {
+    return null;
+  }
+
+  const match = schemaFields.find((field) => field.name === normalized.variableKey);
+  const baseLabel =
+    normalized.variableLabel && normalized.variableLabel.length > 0
+      ? normalized.variableLabel
+      : typeof match?.label === "string" && match.label.length > 0
+        ? match.label
+        : typeof match?.name === "string" && match.name.length > 0
+          ? match.name
+          : normalized.variableKey;
+
+  const value = numericValue * coefficient;
+  if (!Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+
+  const label =
+    coefficient !== 1
+      ? `${baseLabel} × ${formatFormulaCoefficient(coefficient)}`
+      : baseLabel;
+
+  return { value, label };
+};
+
 /**
  * Detects the multiplier (champ dynamique) from product parameters
  * Priority: surface_isolee > nombre_led > quantity > other dynamic fields
@@ -152,6 +236,17 @@ export const getMultiplierValue = ({
   const dynamicParams = isRecord(projectProduct.dynamic_params)
     ? projectProduct.dynamic_params
     : undefined;
+
+  const formulaMultiplier = resolveFormulaMultiplier({
+    formula: product.valorisation_formula,
+    schemaFields,
+    dynamicParams,
+    quantity: projectProduct.quantity,
+  });
+
+  if (formulaMultiplier) {
+    return formulaMultiplier;
+  }
 
   // Try to find matching fields in priority order
   if (dynamicParams) {
@@ -245,18 +340,10 @@ export const computePrimeCee = ({
     return null;
   }
 
-  const pricePerMwh =
+  const delegatePrice =
     typeof delegate.price_eur_per_mwh === "number" && Number.isFinite(delegate.price_eur_per_mwh)
       ? delegate.price_eur_per_mwh
       : 0;
-
-  if (pricePerMwh <= 0) {
-    return {
-      totalPrime: 0,
-      valorisationBase: 0,
-      products: [],
-    };
-  }
 
   const bonification = resolveBonificationFactor(primeBonification);
 
@@ -292,6 +379,17 @@ export const computePrimeCee = ({
     }
 
     // Valorisation CEE = (kWh cumac × bonification / 1000) × tarif délégataire
+    const pricePerMwh =
+      typeof product.valorisation_tarif_override === "number" &&
+      Number.isFinite(product.valorisation_tarif_override) &&
+      product.valorisation_tarif_override > 0
+        ? product.valorisation_tarif_override
+        : delegatePrice;
+
+    if (pricePerMwh <= 0) {
+      continue;
+    }
+
     const valorisationPerUnit = (kwhEntry.kwh_cumac * bonification * pricePerMwh) / 1000;
     if (!Number.isFinite(valorisationPerUnit) || valorisationPerUnit <= 0) {
       continue;
