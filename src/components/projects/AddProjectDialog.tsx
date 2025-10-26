@@ -9,6 +9,7 @@ import {
 import {
   useForm,
   useFieldArray,
+  useWatch,
   type Control,
   type FieldArrayWithId,
   type UseFormReturn,
@@ -800,9 +801,9 @@ export const AddProjectDialog = ({
     name: "products",
   });
 
-  const watchedProducts = form.watch("products");
-  const watchedBuildingType = form.watch("building_type");
-  const watchedDelegateId = form.watch("delegate_id");
+  const watchedProducts = useWatch({ control: form.control, name: "products" });
+  const watchedBuildingType = useWatch({ control: form.control, name: "building_type" });
+  const watchedDelegateId = useWatch({ control: form.control, name: "delegate_id" });
 
   const productMap = useMemo(() => {
     if (!productsData) return {} as Record<string, ProductCatalogEntry>;
