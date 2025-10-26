@@ -54,7 +54,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  getLeadStatusColor,
+  getLeadStatusBadgeStyles,
   getLeadStatusLabel,
   isLeadStatus,
   LEAD_STATUSES,
@@ -78,6 +78,7 @@ import {
 } from "lucide-react";
 import { getOrganizationProducts } from "@/features/leads/api";
 import { cn } from "@/lib/utils";
+import { getLeadStatusSettings, LEAD_STATUS_SETTINGS_UPDATED_EVENT } from "@/lib/leads";
 
 const CARD_SKELETON_COUNT = 4;
 
@@ -775,11 +776,39 @@ const Leads = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState<LeadStatus[]>([]);
+  const [statusSettings, setStatusSettings] = useState(() =>
+    getLeadStatusSettings({ includeInactive: false })
+  );
   const [importing, setImporting] = useState(false);
   const [isCsvDragActive, setIsCsvDragActive] = useState(false);
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [assigningLeadId, setAssigningLeadId] = useState<string | null>(null);
   const orgId = currentOrgId;
+
+  const statusOptions = useMemo(
+    () => statusSettings.filter((status) => status.isActive).sort((a, b) => a.order - b.order),
+    [statusSettings]
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleUpdate = () => {
+      setStatusSettings(getLeadStatusSettings({ includeInactive: false, skipCache: true }));
+    };
+
+    window.addEventListener(LEAD_STATUS_SETTINGS_UPDATED_EVENT, handleUpdate);
+
+    return () => {
+      window.removeEventListener(LEAD_STATUS_SETTINGS_UPDATED_EVENT, handleUpdate);
+    };
+  }, []);
+
+  useEffect(() => {
+    setSelectedStatuses((current) =>
+      current.filter((status) => statusOptions.some((option) => option.value === status))
+    );
+  }, [statusOptions]);
 
   const {
     data: leads = [],
@@ -1361,13 +1390,15 @@ const Leads = () => {
                 <DropdownMenuContent align="end" className="w-60">
                   <DropdownMenuLabel>Filtrer par statut</DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  {LEAD_STATUSES.map((status) => (
+                  {statusOptions.map((status) => (
                     <DropdownMenuCheckboxItem
-                      key={status}
-                      checked={selectedStatuses.includes(status)}
-                      onCheckedChange={(checked) => handleStatusFilterChange(status, checked)}
+                      key={status.value}
+                      checked={selectedStatuses.includes(status.value as LeadStatus)}
+                      onCheckedChange={(checked) =>
+                        handleStatusFilterChange(status.value as LeadStatus, checked)
+                      }
                     >
-                      {getLeadStatusLabel(status)}
+                      {getLeadStatusLabel(status.value)}
                     </DropdownMenuCheckboxItem>
                   ))}
                   <DropdownMenuSeparator />
@@ -1474,7 +1505,10 @@ const Leads = () => {
                           )}
                         </div>
                       </div>
-                      <Badge className={getLeadStatusColor(lead.status)}>
+                      <Badge
+                        className="border px-2 py-1 font-medium"
+                        style={getLeadStatusBadgeStyles(lead.status)}
+                      >
                         {getLeadStatusLabel(lead.status)}
                       </Badge>
                     </div>
@@ -1652,7 +1686,10 @@ const Leads = () => {
                             )}
                           </TableCell>
                           <TableCell>
-                            <Badge className={getLeadStatusColor(lead.status)}>
+                            <Badge
+                              className="border px-2 py-1 font-medium"
+                              style={getLeadStatusBadgeStyles(lead.status)}
+                            >
                               {getLeadStatusLabel(lead.status)}
                             </Badge>
                           </TableCell>
