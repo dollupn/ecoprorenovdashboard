@@ -888,7 +888,7 @@ export const AddProjectDialog = ({
   const hasPrimeCeeValue =
     typeof primeCeeComputation?.totalPrime === "number" && Number.isFinite(primeCeeComputation.totalPrime);
   const primeCeeTotal = hasPrimeCeeValue && primeCeeComputation ? primeCeeComputation.totalPrime : null;
-  const valorisationBase = primeCeeComputation?.valorisationBase ?? null;
+  const totalValorisationMwh = primeCeeComputation?.totalValorisationMwh ?? null;
 
   // preserve status auto-correction effect
   useEffect(() => {
@@ -1957,16 +1957,12 @@ export const AddProjectDialog = ({
               <div className="space-y-2">
                 <FormLabel>Valorisation CEE</FormLabel>
                 <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2.5 text-sm font-medium">
-                  {delegatesLoading ? (
-                    "Calcul en cours..."
-                  ) : !selectedDelegate ? (
-                    "Sélectionnez un délégataire"
-                  ) : !watchedBuildingType ? (
+                  {!watchedBuildingType ? (
                     "Sélectionnez un type de bâtiment"
-                  ) : valorisationBase !== null && valorisationBase > 0 ? (
-                    formatCurrency(valorisationBase)
+                  ) : totalValorisationMwh !== null && totalValorisationMwh > 0 ? (
+                    `${formatDecimal(totalValorisationMwh)} MWh`
                   ) : (
-                    "0 €"
+                    "0 MWh"
                   )}
                 </div>
               </div>
@@ -1989,7 +1985,7 @@ export const AddProjectDialog = ({
                   )}
                 </div>
 
-                {hasPrimeCeeValue && primeCeeProducts.length > 0 ? (
+                {selectedDelegate && hasPrimeCeeValue && primeCeeProducts.length > 0 ? (
                   <div className="rounded-md border border-dashed border-border/60 bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
                     <div className="font-semibold text-foreground">Détail par produit</div>
                     <ul className="mt-1 space-y-1">
@@ -1999,7 +1995,7 @@ export const AddProjectDialog = ({
                           <li key={product.productId} className="flex flex-col gap-0.5">
                             <span className="font-medium text-foreground">{label}</span>
                             <span>
-                              Valorisation : {formatCurrency(product.valorisationPerUnit)} × {product.multiplierLabel} : {formatDecimal(product.multiplier)} = {formatCurrency(product.totalPrime)}
+                              Valorisation : {formatDecimal(product.valorisationPerUnitMwh)} MWh × {product.multiplierLabel} = {formatDecimal(product.valorisationTotalMwh)} MWh • Prime : {formatCurrency(product.totalPrime)}
                             </span>
                           </li>
                         );
@@ -2009,7 +2005,7 @@ export const AddProjectDialog = ({
                 ) : null}
               </div>
               <p className="text-xs text-muted-foreground">
-                Valorisation CEE = (kWh cumac × bonification ({formatDecimal(effectivePrimeBonification)}) / 1000) × tarif délégataire. Prime estimée = Σ(Valorisation CEE × champ dynamique).
+                Valorisation CEE (MWh) = (kWh cumac × bonification × coefficient) / 1000. Prime estimée = Σ(Valorisation CEE × champ dynamique × tarif délégataire). Bonification projet par défaut : {formatDecimal(effectivePrimeBonification)}.
               </p>
               {missingKwhProductCodes.length > 0 ? (
                 <p className="text-xs text-amber-600">

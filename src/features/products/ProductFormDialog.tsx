@@ -22,7 +22,6 @@ import { useToast } from "@/hooks/use-toast";
 import { getProjectBuildingTypes } from "@/lib/buildings";
 import {
   FORMULA_QUANTITY_KEY,
-  formatFormulaCoefficient,
   normalizeValorisationFormula,
   type ValorisationFormulaConfig,
 } from "@/lib/valorisation-formula";
@@ -35,13 +34,17 @@ import { TechnicalSheetUpload } from "./TechnicalSheetUpload";
 import { DynamicFieldsEditor } from "./DynamicFieldsEditor";
 
 const euroFormatter = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" });
+const decimalFormatter = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
+const formatDecimalValue = (value: number | null | undefined, fallback: number) => {
+  const numeric = typeof value === "number" && Number.isFinite(value) ? value : fallback;
+  return decimalFormatter.format(numeric);
+};
 
 type DynamicSchemaField = { name: string; label?: string | null };
 
 const extractSchemaFields = (schema: unknown): DynamicSchemaField[] => {
-  if (!schema) {
-    return [];
-  }
+  if (!schema) return [];
 
   if (Array.isArray(schema)) {
     return schema.filter((field): field is DynamicSchemaField => {
@@ -82,7 +85,7 @@ const valorisationFormulaSchema = z
     variableLabel: z.string().optional().nullable(),
     coefficient: z
       .number({ invalid_type_error: "Saisissez un coefficient valide" })
-      .min(0, "Le coefficient doit être positif")
+      .gt(0, "Le coefficient doit être positif")
       .optional()
       .nullable(),
   })
@@ -117,9 +120,14 @@ const productSchema = z.object({
   params_schema: z.any().optional().nullable(),
   default_params: z.any().optional().nullable(),
   kwh_cumac: z.record(kwhValueSchema).default({}),
-  valorisation_tarif_override: z
-    .number({ invalid_type_error: "Saisissez un tarif valide" })
-    .min(0, "Le tarif doit être positif")
+  valorisation_bonification: z
+    .number({ invalid_type_error: "Saisissez une bonification valide" })
+    .min(0, "La bonification doit être positive")
+    .optional()
+    .nullable(),
+  valorisation_coefficient: z
+    .number({ invalid_type_error: "Saisissez un coefficient valide" })
+    .min(0, "Le coefficient doit être positif")
     .optional()
     .nullable(),
   valorisation_formula: valorisationFormulaSchema.optional().nullable(),
@@ -149,24 +157,21 @@ export const ProductFormDialog = ({
   const { toast } = useToast();
   const buildingTypes = useMemo(() => getProjectBuildingTypes(), []);
   const allBuildingTypes = useMemo(() => {
-    const fromProduct = product?.kwh_cumac_values?.map((entry) => entry.building_type?.trim()).filter((value): value is string =>
-      Boolean(value),
-    ) ?? [];
+    const fromProduct =
+      product?.kwh_cumac_values?.map((entry) => entry.building_type?.trim()).filter((value): value is string => Boolean(value)) ??
+      [];
     const ordered = new Set<string>();
     buildingTypes.forEach((type) => {
       const trimmed = type.trim();
-      if (trimmed) {
-        ordered.add(trimmed);
-      }
+      if (trimmed) ordered.add(trimmed);
     });
     fromProduct.forEach((type) => {
       const trimmed = type.trim();
-      if (trimmed) {
-        ordered.add(trimmed);
-      }
+      if (trimmed) ordered.add(trimmed);
     });
     return Array.from(ordered);
   }, [buildingTypes, product?.kwh_cumac_values]);
+
   const createProduct = useCreateProduct(orgId);
   const updateProduct = useUpdateProduct(orgId);
 
@@ -192,16 +197,14 @@ export const ProductFormDialog = ({
       params_schema: product?.params_schema ?? null,
       default_params: product?.default_params ?? null,
       kwh_cumac: allBuildingTypes.reduce<Record<string, number | null>>((acc, type) => {
-        const match = product?.kwh_cumac_values?.find(
-          (entry) => entry.building_type?.trim() === type,
-        );
+        const match = product?.kwh_cumac_values?.find((entry) => entry.building_type?.trim() === type);
         acc[type] = match?.kwh_cumac ?? null;
         return acc;
       }, {}),
-      valorisation_tarif_override:
-        typeof product?.valorisation_tarif_override === "number"
-          ? product.valorisation_tarif_override
-          : null,
+      valorisation_bonification:
+        typeof product?.valorisation_bonification === "number" ? product.valorisation_bonification : 2,
+      valorisation_coefficient:
+        typeof product?.valorisation_coefficient === "number" ? product.valorisation_coefficient : 1,
       valorisation_formula: normalizeValorisationFormula(product?.valorisation_formula) ?? null,
     }),
     [product, allBuildingTypes],
@@ -222,13 +225,9 @@ export const ProductFormDialog = ({
   }, [open, defaultValues, form]);
 
   const setOpen = (next: boolean) => {
-    if (!isControlled) {
-      setInternalOpen(next);
-    }
+    if (!isControlled) setInternalOpen(next);
     onOpenChange?.(next);
-    if (!next) {
-      form.reset(defaultValues);
-    }
+    if (!next) form.reset(defaultValues);
   };
 
   const onSubmit = async (values: ProductFormValues) => {
@@ -236,7 +235,7 @@ export const ProductFormDialog = ({
       toast({
         title: "Organisation manquante",
         description: "Vous devez être membre d'une organisation pour créer des produits",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
@@ -283,19 +282,16 @@ export const ProductFormDialog = ({
       technical_sheet_url: values.technical_sheet_url,
       params_schema: values.params_schema,
       default_params: values.default_params,
-      valorisation_tarif_override:
-        typeof values.valorisation_tarif_override === "number"
-          ? values.valorisation_tarif_override
-          : null,
+      valorisation_bonification:
+        typeof values.valorisation_bonification === "number" ? values.valorisation_bonification : null,
+      valorisation_coefficient:
+        typeof values.valorisation_coefficient === "number" ? values.valorisation_coefficient : null,
       valorisation_formula: payloadFormula,
     };
 
     const kwhValues = values.kwh_cumac ?? {};
     const kwhEntries: ProductKwhCumacInput[] = Array.from(
-      new Set([
-        ...allBuildingTypes,
-        ...Object.keys(kwhValues),
-      ].map((type) => type.trim()).filter((type) => type.length > 0)),
+      new Set([...allBuildingTypes, ...Object.keys(kwhValues)].map((type) => type.trim()).filter((type) => type.length > 0)),
     ).map((type) => ({
       building_type: type,
       kwh_cumac: kwhValues[type] ?? null,
@@ -327,6 +323,15 @@ export const ProductFormDialog = ({
   const watchedEcoLog = form.watch("eco_log_percentage");
   const paramsSchema = form.watch("params_schema");
 
+  const watchedBonification = form.watch("valorisation_bonification");
+  const watchedCoefficient = form.watch("valorisation_coefficient");
+  const watchedFormulaValue = form.watch("valorisation_formula");
+
+  const normalizedFormulaValue = useMemo(
+    () => normalizeValorisationFormula(watchedFormulaValue),
+    [watchedFormulaValue],
+  );
+
   const priceTTC = useMemo(() => {
     if (watchedBasePrice && watchedTva !== null && watchedTva !== undefined) {
       return watchedBasePrice * (1 + watchedTva / 100);
@@ -355,6 +360,41 @@ export const ProductFormDialog = ({
     ];
   }, [dynamicSchemaFields]);
 
+  const bonificationDisplay = useMemo(() => formatDecimalValue(watchedBonification, 2), [watchedBonification]);
+  const coefficientDisplay = useMemo(() => formatDecimalValue(watchedCoefficient, 1), [watchedCoefficient]);
+
+  const formulaPreviewLabel = useMemo(() => {
+    if (!normalizedFormulaValue || !normalizedFormulaValue.variableKey) {
+      return "multiplicateur détecté automatiquement";
+    }
+
+    if (normalizedFormulaValue.variableKey === FORMULA_QUANTITY_KEY) {
+      return normalizedFormulaValue.variableLabel ?? "Quantité";
+    }
+
+    const matchField = dynamicSchemaFields.find((field) => field.name === normalizedFormulaValue.variableKey);
+    if (matchField?.label && matchField.label.trim().length > 0) return matchField.label;
+    if (matchField?.name && matchField.name.trim().length > 0) return matchField.name;
+
+    if (normalizedFormulaValue.variableLabel && normalizedFormulaValue.variableLabel.trim().length > 0) {
+      return normalizedFormulaValue.variableLabel;
+    }
+
+    return normalizedFormulaValue.variableKey;
+  }, [dynamicSchemaFields, normalizedFormulaValue]);
+
+  const formulaCoefficientDisplay = useMemo(
+    () => formatDecimalValue(normalizedFormulaValue?.coefficient, 1),
+    [normalizedFormulaValue],
+  );
+
+  const formulaMultiplierDescription = useMemo(() => {
+    if (!normalizedFormulaValue || !normalizedFormulaValue.coefficient) {
+      return formulaPreviewLabel;
+    }
+    return `${formulaPreviewLabel} × coefficient (${formulaCoefficientDisplay})`;
+  }, [formulaCoefficientDisplay, formulaPreviewLabel, normalizedFormulaValue]);
+
   useEffect(() => {
     const current = form.getValues("valorisation_formula");
     if (!current || !current.variableKey || current.variableKey === FORMULA_QUANTITY_KEY) {
@@ -377,9 +417,7 @@ export const ProductFormDialog = ({
   }, [dynamicSchemaFields, form]);
 
   const ecoEstimation = useMemo(() => {
-    if (watchedBasePrice === null || watchedBasePrice === undefined) {
-      return null;
-    }
+    if (watchedBasePrice === null || watchedBasePrice === undefined) return null;
 
     const prime = watchedPrime ?? 0;
     const admin = watchedEcoAdmin ?? 0;
@@ -387,19 +425,13 @@ export const ProductFormDialog = ({
     const log = watchedEcoLog ?? 0;
 
     const safeBase = Number(watchedBasePrice);
-    if (Number.isNaN(safeBase)) {
-      return null;
-    }
+    if (Number.isNaN(safeBase)) return null;
 
     const totalPercent = Number(prime || 0) + Number(admin || 0) + Number(furn || 0) + Number(log || 0);
     const ecoCharges = safeBase * (totalPercent / 100);
     const totalWithEco = safeBase + ecoCharges;
 
-    return {
-      totalPercent,
-      ecoCharges,
-      totalWithEco,
-    };
+    return { totalPercent, ecoCharges, totalWithEco };
   }, [watchedBasePrice, watchedPrime, watchedEcoAdmin, watchedEcoFurn, watchedEcoLog]);
 
   return (
@@ -420,376 +452,83 @@ export const ProductFormDialog = ({
               </TabsList>
 
               <TabsContent value="general" className="space-y-6">
-              <div className="grid gap-4 md:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nom *</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="Nom du produit" disabled={isSubmitting} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="code"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Code</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="Code produit" disabled={isSubmitting} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <FormField
-                  control={form.control}
-                  name="category"
-                  render={({ field }) => (
-                    <FormItem className="flex-1">
-                      <FormLabel>Catégorie</FormLabel>
-                      <FormControl>
-                        <Select
-                          value={field.value ?? "null"}
-                          onValueChange={(value) => field.onChange(value === "null" ? null : value)}
-                          disabled={isSubmitting}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Choisir une catégorie" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="null">Aucune</SelectItem>
-                            {categories.map((category) => (
-                              <SelectItem key={category.id} value={category.name}>
-                                {category.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <CategoryFormDialog
-                  orgId={orgId}
-                  trigger={
-                    <Button type="button" variant="outline" size="sm" className="gap-2 whitespace-nowrap mt-8">
-                      <Plus className="h-4 w-4" /> Catégorie
-                    </Button>
-                  }
-                />
-              </div>
-
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description</FormLabel>
-                    <FormControl>
-                      <RichDescription
-                        value={field.value ?? ""}
-                        onChange={(value) => field.onChange(value)}
-                        disabled={isSubmitting}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="custom_description_primary"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description personnalisée — bloc 1</FormLabel>
-                    <FormControl>
-                      <RichDescription
-                        value={field.value ?? ""}
-                        onChange={(value) => field.onChange(value)}
-                        disabled={isSubmitting}
-                      />
-                    </FormControl>
-                    <p className="text-xs text-muted-foreground px-1">
-                      Contenu additionnel utilisé pour enrichir les devis (section principale).
-                    </p>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="custom_description_secondary"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description personnalisée — bloc 2</FormLabel>
-                    <FormControl>
-                      <RichDescription
-                        value={field.value ?? ""}
-                        onChange={(value) => field.onChange(value)}
-                        disabled={isSubmitting}
-                      />
-                    </FormControl>
-                    <p className="text-xs text-muted-foreground px-1">
-                      Deuxième bloc de description pour les annexes ou précisions techniques.
-                    </p>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="is_active"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                    <div className="space-y-0.5">
-                      <FormLabel className="text-base">Produit actif</FormLabel>
-                      <div className="text-sm text-muted-foreground">
-                        Ce produit sera visible dans les formulaires
-                      </div>
-                    </div>
-                    <FormControl>
-                      <Switch checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-            </TabsContent>
-
-            <TabsContent value="pricing" className="space-y-6">
-              <div className="grid gap-4 md:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="unit_type"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Type d'unité</FormLabel>
-                      <FormControl>
-                        <Select
-                          value={field.value ?? "null"}
-                          onValueChange={(value) => field.onChange(value === "null" ? null : value)}
-                          disabled={isSubmitting}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Choisir une unité" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="null">Aucune</SelectItem>
-                            <SelectItem value="m²">m²</SelectItem>
-                            <SelectItem value="unité">Unité</SelectItem>
-                            <SelectItem value="kit">Kit</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="base_price_ht"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Prix de base HT</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          {...field}
-                          value={field.value ?? ""}
-                          onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
-                          placeholder="0.00"
-                          disabled={isSubmitting}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="tva_percentage"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>TVA (%)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="0.1"
-                          {...field}
-                          value={field.value ?? ""}
-                          onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
-                          placeholder="8.5"
-                          disabled={isSubmitting}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div>
-                  <FormLabel>Prix TTC (calculé)</FormLabel>
-                  <Input
-                    value={priceTTC ? priceTTC.toFixed(2) + " €" : "—"}
-                    disabled
-                    className="bg-muted mt-2"
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nom *</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Nom du produit" disabled={isSubmitting} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="code"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Code</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Code produit" disabled={isSubmitting} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
                 </div>
-              </div>
 
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <FormField
-                  control={form.control}
-                  name="prime_percentage"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Part prime (%)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="0.1"
-                          {...field}
-                          value={field.value ?? ""}
-                          onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
-                          placeholder="0"
-                          disabled={isSubmitting}
-                        />
-                      </FormControl>
-                      <p className="text-xs text-muted-foreground px-1">Pourcentage appliqué pour caler le prix prime.</p>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="eco_admin_percentage"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>ECO-ADMN (%)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="0.1"
-                          {...field}
-                          value={field.value ?? ""}
-                          onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
-                          placeholder="15"
-                          disabled={isSubmitting}
-                        />
-                      </FormControl>
-                      <p className="text-xs text-muted-foreground px-1">Frais administratifs (par défaut 15%).</p>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="eco_furn_percentage"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>ECO-FURN (%)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="0.1"
-                          {...field}
-                          value={field.value ?? ""}
-                          onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
-                          placeholder="5"
-                          disabled={isSubmitting}
-                        />
-                      </FormControl>
-                      <p className="text-xs text-muted-foreground px-1">Frais de fourniture (par défaut 5%).</p>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="eco_log_percentage"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>ECO-LOG (%)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="0.1"
-                          {...field}
-                          value={field.value ?? ""}
-                          onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
-                          placeholder="0"
-                          disabled={isSubmitting}
-                        />
-                      </FormControl>
-                      <p className="text-xs text-muted-foreground px-1">Logistique (défaut 0% - gratuit).</p>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="rounded-lg border p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <FormLabel className="text-sm font-medium">Estimation charges ECO</FormLabel>
-                  {ecoEstimation ? (
-                    <span className="text-xs text-muted-foreground">
-                      {ecoEstimation.totalPercent.toFixed(2)}%
-                    </span>
-                  ) : null}
+                <div className="flex items-center gap-2">
+                  <FormField
+                    control={form.control}
+                    name="category"
+                    render={({ field }) => (
+                      <FormItem className="flex-1">
+                        <FormLabel>Catégorie</FormLabel>
+                        <FormControl>
+                          <Select
+                            value={field.value ?? "null"}
+                            onValueChange={(value) => field.onChange(value === "null" ? null : value)}
+                            disabled={isSubmitting}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Choisir une catégorie" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="null">Aucune</SelectItem>
+                              {categories.map((category) => (
+                                <SelectItem key={category.id} value={category.name}>
+                                  {category.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <CategoryFormDialog
+                    orgId={orgId}
+                    trigger={
+                      <Button type="button" variant="outline" size="sm" className="gap-2 whitespace-nowrap mt-8">
+                        <Plus className="h-4 w-4" /> Catégorie
+                      </Button>
+                    }
+                  />
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Calcul basé sur le prix HT et les pourcentages configurés ci-dessus.
-                </p>
-                {ecoEstimation ? (
-                  <div className="space-y-1 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span>Montant charges</span>
-                      <span>{euroFormatter.format(ecoEstimation.ecoCharges)}</span>
-                    </div>
-                    <div className="flex items-center justify-between font-medium">
-                      <span>Total HT (produit + charges)</span>
-                      <span>{euroFormatter.format(ecoEstimation.totalWithEco)}</span>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Saisissez un prix de base pour obtenir une estimation.
-                  </p>
-                )}
-              </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
                 <FormField
                   control={form.control}
-                  name="supplier_name"
+                  name="description"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Fournisseur</FormLabel>
+                      <FormLabel>Description</FormLabel>
                       <FormControl>
-                        <Input
-                          {...field}
-                          value={field.value ?? ""}
-                          placeholder="Nom du fournisseur"
-                          disabled={isSubmitting}
-                        />
+                        <RichDescription value={field.value ?? ""} onChange={(value) => field.onChange(value)} disabled={isSubmitting} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -798,138 +537,271 @@ export const ProductFormDialog = ({
 
                 <FormField
                   control={form.control}
-                  name="supplier_reference"
+                  name="custom_description_primary"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Référence fournisseur</FormLabel>
+                      <FormLabel>Description personnalisée — bloc 1</FormLabel>
                       <FormControl>
-                        <Input
-                          {...field}
-                          value={field.value ?? ""}
-                          placeholder="Référence"
-                          disabled={isSubmitting}
-                        />
+                        <RichDescription value={field.value ?? ""} onChange={(value) => field.onChange(value)} disabled={isSubmitting} />
                       </FormControl>
+                      <p className="text-xs text-muted-foreground px-1">Contenu additionnel utilisé pour enrichir les devis (section principale).</p>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-              </div>
 
-              <FormField
-                control={form.control}
-                name="technical_sheet_url"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Fiche technique (PDF)</FormLabel>
-                    <FormControl>
-                      <TechnicalSheetUpload
-                        orgId={orgId}
-                        productId={product?.id}
-                        currentUrl={field.value}
-                        onUrlChange={field.onChange}
-                        disabled={isSubmitting}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </TabsContent>
+                <FormField
+                  control={form.control}
+                  name="custom_description_secondary"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description personnalisée — bloc 2</FormLabel>
+                      <FormControl>
+                        <RichDescription value={field.value ?? ""} onChange={(value) => field.onChange(value)} disabled={isSubmitting} />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground px-1">Deuxième bloc de description pour les annexes ou précisions techniques.</p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <TabsContent value="cee" className="space-y-6">
-              <div>
-                <h3 className="text-sm font-medium">kWh cumac</h3>
-                <p className="text-xs text-muted-foreground">
-                  Renseignez la valeur kWh cumac associée à chaque typologie de bâtiment. Laissez vide si la donnée n&apos;est pas connue.
-                </p>
-              </div>
-              {allBuildingTypes.length > 0 ? (
+                <FormField
+                  control={form.control}
+                  name="is_active"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-base">Produit actif</FormLabel>
+                        <div className="text-sm text-muted-foreground">Ce produit sera visible dans les formulaires</div>
+                      </div>
+                      <FormControl>
+                        <Switch checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </TabsContent>
+
+              <TabsContent value="pricing" className="space-y-6">
                 <div className="grid gap-4 md:grid-cols-2">
-                  {allBuildingTypes.map((type) => (
-                    <FormField
-                      key={type}
-                      control={form.control}
-                      name={`kwh_cumac.${type}` as const}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{type}</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              min={0}
-                              step="any"
-                              value={field.value ?? ""}
-                              onChange={(event) => {
-                                const value = event.target.value;
-                                if (value === "") {
-                                  field.onChange(null);
-                                  return;
-                                }
-                                const parsed = Number(value);
-                                if (Number.isNaN(parsed)) {
-                                  return;
-                                }
-                                field.onChange(parsed);
-                              }}
-                              onBlur={field.onBlur}
-                              disabled={isSubmitting}
-                              inputMode="decimal"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Aucun type de bâtiment n&apos;a encore été défini. Configurez-les dans les paramètres projets pour activer la saisie des kWh cumac.
-                </p>
-              )}
+                  <FormField
+                    control={form.control}
+                    name="unit_type"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Type d'unité</FormLabel>
+                        <FormControl>
+                          <Select
+                            value={field.value ?? "null"}
+                            onValueChange={(value) => field.onChange(value === "null" ? null : value)}
+                            disabled={isSubmitting}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Choisir une unité" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="null">Aucune</SelectItem>
+                              <SelectItem value="m²">m²</SelectItem>
+                              <SelectItem value="unité">Unité</SelectItem>
+                              <SelectItem value="kit">Kit</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-              <div className="space-y-4 rounded-lg border p-4">
-                <div>
-                  <h3 className="text-sm font-medium">Valorisation CEE</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Configurez le tarif délégataire spécifique au produit et le champ utilisé comme multiplicateur dans la formule.
-                  </p>
+                  <FormField
+                    control={form.control}
+                    name="base_price_ht"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Prix de base HT</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            {...field}
+                            value={field.value ?? ""}
+                            onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                            placeholder="0.00"
+                            disabled={isSubmitting}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="tva_percentage"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>TVA (%)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            step="0.1"
+                            {...field}
+                            value={field.value ?? ""}
+                            onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                            placeholder="8.5"
+                            disabled={isSubmitting}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div>
+                    <FormLabel>Prix TTC (calculé)</FormLabel>
+                    <Input value={priceTTC ? priceTTC.toFixed(2) + " €" : "—"} disabled className="bg-muted mt-2" />
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  <FormField
+                    control={form.control}
+                    name="prime_percentage"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Part prime (%)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            step="0.1"
+                            {...field}
+                            value={field.value ?? ""}
+                            onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                            placeholder="0"
+                            disabled={isSubmitting}
+                          />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground px-1">Pourcentage appliqué pour caler le prix prime.</p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="eco_admin_percentage"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>ECO-ADMN (%)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            step="0.1"
+                            {...field}
+                            value={field.value ?? ""}
+                            onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                            placeholder="15"
+                            disabled={isSubmitting}
+                          />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground px-1">Frais administratifs (par défaut 15%).</p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="eco_furn_percentage"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>ECO-FURN (%)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            step="0.1"
+                            {...field}
+                            value={field.value ?? ""}
+                            onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                            placeholder="5"
+                            disabled={isSubmitting}
+                          />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground px-1">Frais de fourniture (par défaut 5%).</p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="eco_log_percentage"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>ECO-LOG (%)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            step="0.1"
+                            {...field}
+                            value={field.value ?? ""}
+                            onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                            placeholder="0"
+                            disabled={isSubmitting}
+                          />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground px-1">Logistique (défaut 0% - gratuit).</p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="rounded-lg border p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <FormLabel className="text-sm font-medium">Estimation charges ECO</FormLabel>
+                    {ecoEstimation ? <span className="text-xs text-muted-foreground">{ecoEstimation.totalPercent.toFixed(2)}%</span> : null}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Calcul basé sur le prix HT et les pourcentages configurés ci-dessus.</p>
+                  {ecoEstimation ? (
+                    <div className="space-y-1 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span>Montant charges</span>
+                        <span>{euroFormatter.format(ecoEstimation.ecoCharges)}</span>
+                      </div>
+                      <div className="flex items-center justify-between font-medium">
+                        <span>Total HT (produit + charges)</span>
+                        <span>{euroFormatter.format(ecoEstimation.totalWithEco)}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Saisissez un prix de base pour obtenir une estimation.</p>
+                  )}
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <FormField
                     control={form.control}
-                    name="valorisation_tarif_override"
+                    name="supplier_name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Tarif délégataire / MWh</FormLabel>
+                        <FormLabel>Fournisseur</FormLabel>
                         <FormControl>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min={0}
-                            value={field.value ?? ""}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              if (value === "") {
-                                field.onChange(null);
-                                return;
-                              }
-                              const parsed = Number(value);
-                              if (Number.isNaN(parsed)) {
-                                return;
-                              }
-                              field.onChange(parsed);
-                            }}
-                            onBlur={field.onBlur}
-                            placeholder="Tarif spécifique (facultatif)"
-                            disabled={isSubmitting}
-                          />
+                          <Input {...field} value={field.value ?? ""} placeholder="Nom du fournisseur" disabled={isSubmitting} />
                         </FormControl>
-                        <p className="text-xs text-muted-foreground px-1">
-                          Laissez vide pour utiliser le tarif du délégataire sélectionné sur le projet.
-                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="supplier_reference"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Référence fournisseur</FormLabel>
+                        <FormControl>
+                          <Input {...field} value={field.value ?? ""} placeholder="Référence" disabled={isSubmitting} />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -938,23 +810,179 @@ export const ProductFormDialog = ({
 
                 <FormField
                   control={form.control}
-                  name="valorisation_formula"
-                  render={({ field }) => {
-                    const current = field.value as ValorisationFormulaConfig | null;
-                    const selectedKey = current?.variableKey ?? "auto";
-                    const selectedOption = formulaOptions.find((option) => option.value === selectedKey);
-                    const multiplierLabel =
-                      selectedKey === "auto"
-                        ? "champ dynamique détecté automatiquement"
-                        : selectedOption?.label ?? current?.variableLabel ?? selectedKey;
-                    const coefficientValue = current?.coefficient ?? 1;
-                    const formattedCoefficient = formatFormulaCoefficient(coefficientValue);
+                  name="technical_sheet_url"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Fiche technique (PDF)</FormLabel>
+                      <FormControl>
+                        <TechnicalSheetUpload
+                          orgId={orgId}
+                          productId={product?.id}
+                          currentUrl={field.value}
+                          onUrlChange={field.onChange}
+                          disabled={isSubmitting}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </TabsContent>
 
-                    return (
-                      <FormItem>
-                        <FormLabel>Formule de valorisation</FormLabel>
-                        <FormControl>
-                          <div className="space-y-3">
+              <TabsContent value="cee" className="space-y-6">
+                <div>
+                  <h3 className="text-sm font-medium">kWh cumac</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Renseignez la valeur kWh cumac associée à chaque typologie de bâtiment. Laissez vide si la donnée n&apos;est pas connue.
+                  </p>
+                </div>
+                {allBuildingTypes.length > 0 ? (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {allBuildingTypes.map((type) => (
+                      <FormField
+                        key={type}
+                        control={form.control}
+                        name={`kwh_cumac.${type}` as const}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{type}</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min={0}
+                                step="any"
+                                value={field.value ?? ""}
+                                onChange={(event) => {
+                                  const value = event.target.value;
+                                  if (value === "") {
+                                    field.onChange(null);
+                                    return;
+                                  }
+                                  const parsed = Number(value);
+                                  if (Number.isNaN(parsed)) return;
+                                  field.onChange(parsed);
+                                }}
+                                onBlur={field.onBlur}
+                                disabled={isSubmitting}
+                                inputMode="decimal"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Aucun type de bâtiment n&apos;a encore été défini. Configurez-les dans les paramètres projets pour activer la saisie des kWh cumac.
+                  </p>
+                )}
+
+                <div className="space-y-4 rounded-lg border p-4">
+                  <div>
+                    <h3 className="text-sm font-medium">Valorisation CEE</h3>
+                    <p className="text-xs text-muted-foreground">
+                      Configurez la bonification, le coefficient fixe et le champ utilisé comme multiplicateur dans la prime.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <FormField
+                      control={form.control}
+                      name="valorisation_bonification"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Bonification</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              step="0.1"
+                              min={0}
+                              value={field.value ?? ""}
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                if (value === "") {
+                                  field.onChange(null);
+                                  return;
+                                }
+                                const parsed = Number(value);
+                                if (Number.isNaN(parsed)) return;
+                                field.onChange(parsed);
+                              }}
+                              onBlur={field.onBlur}
+                              placeholder="2"
+                              disabled={isSubmitting}
+                            />
+                          </FormControl>
+                          <p className="text-xs text-muted-foreground px-1">Valeur par défaut : 2.</p>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="valorisation_coefficient"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Coefficient fixe</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min={0}
+                              value={field.value ?? ""}
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                if (value === "") {
+                                  field.onChange(null);
+                                  return;
+                                }
+                                const parsed = Number(value);
+                                if (Number.isNaN(parsed)) return;
+                                field.onChange(parsed);
+                              }}
+                              onBlur={field.onBlur}
+                              placeholder="1"
+                              disabled={isSubmitting}
+                            />
+                          </FormControl>
+                          <p className="text-xs text-muted-foreground px-1">Exemple : puissance électrique (250 W).</p>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <FormField
+                    control={form.control}
+                    name="valorisation_formula"
+                    render={({ field }) => {
+                      const current = field.value as ValorisationFormulaConfig | null;
+                      const selectedKey = current?.variableKey ?? "auto";
+                      const selectedOption = formulaOptions.find((option) => option.value === selectedKey);
+                      const normalized = normalizeValorisationFormula(current);
+
+                      const multiplierLabel =
+                        selectedKey === "auto"
+                          ? "multiplicateur détecté automatiquement"
+                          : selectedOption?.label ?? normalized?.variableLabel ?? selectedKey;
+
+                      const rawCoefficient =
+                        typeof current?.coefficient === "number" && Number.isFinite(current.coefficient)
+                          ? current.coefficient
+                          : normalized?.coefficient ?? null;
+
+                      const formulaErrors = form.formState.errors.valorisation_formula as
+                        | { coefficient?: { message?: string } }
+                        | undefined;
+                      const coefficientError = formulaErrors?.coefficient?.message;
+
+                      return (
+                        <FormItem>
+                          <FormLabel>Champ multiplicateur (Prime CEE)</FormLabel>
+                          <FormControl>
                             <Select
                               value={selectedKey}
                               onValueChange={(value) => {
@@ -963,11 +991,16 @@ export const ProductFormDialog = ({
                                   return;
                                 }
 
+                                const preservedCoefficient =
+                                  typeof current?.coefficient === "number" && Number.isFinite(current.coefficient)
+                                    ? current.coefficient
+                                    : normalized?.coefficient ?? null;
+
                                 if (value === FORMULA_QUANTITY_KEY) {
                                   field.onChange({
                                     variableKey: FORMULA_QUANTITY_KEY,
                                     variableLabel: "Quantité",
-                                    coefficient: current?.coefficient ?? 1,
+                                    coefficient: preservedCoefficient,
                                   });
                                   return;
                                 }
@@ -976,7 +1009,7 @@ export const ProductFormDialog = ({
                                 field.onChange({
                                   variableKey: value,
                                   variableLabel: option?.label ?? value,
-                                  coefficient: current?.coefficient ?? 1,
+                                  coefficient: preservedCoefficient,
                                 });
                               }}
                               disabled={isSubmitting}
@@ -992,83 +1025,80 @@ export const ProductFormDialog = ({
                                 ))}
                               </SelectContent>
                             </Select>
+                          </FormControl>
+                          <p className="text-xs text-muted-foreground">
+                            Sélectionnez le champ dynamique qui multipliera la valorisation pour obtenir la prime.
+                          </p>
+                          {selectedKey !== "auto" ? (
+                            <div className="mt-3 space-y-3 rounded-md border border-dashed border-border/60 bg-muted/20 p-3">
+                              <p className="text-xs font-medium text-foreground">Champ sélectionné : {multiplierLabel}</p>
+                              <div className="space-y-1">
+                                <label className="text-xs font-medium text-foreground">Coefficient du champ (optionnel)</label>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  step="0.01"
+                                  value={rawCoefficient ?? ""}
+                                  onChange={(event) => {
+                                    if (!current) return;
 
-                            {selectedKey !== "auto" ? (
-                              <div className="grid gap-3 md:grid-cols-2">
-                                <div className="space-y-1">
-                                  <FormLabel className="text-xs">Coefficient multiplicateur</FormLabel>
-                                  <Input
-                                    type="number"
-                                    step="0.01"
-                                    min={0}
-                                    value={current?.coefficient ?? 1}
-                                    onChange={(event) => {
-                                      if (!current) {
-                                        return;
-                                      }
-                                      const value = event.target.value;
-                                      if (value === "") {
-                                        field.onChange({ ...current, coefficient: null });
-                                        return;
-                                      }
-                                      const parsed = Number(value);
-                                      if (Number.isNaN(parsed)) {
-                                        return;
-                                      }
-                                      field.onChange({ ...current, coefficient: parsed });
-                                    }}
-                                    onBlur={field.onBlur}
-                                    disabled={isSubmitting}
-                                  />
-                                </div>
-                                <div className="text-xs text-muted-foreground md:pt-6">
-                                  Le champ sélectionné sera multiplié par ce coefficient dans le calcul.
-                                </div>
+                                    const value = event.target.value;
+                                    if (value === "") {
+                                      field.onChange({ ...current, coefficient: null });
+                                      return;
+                                    }
+
+                                    const parsed = Number(value);
+                                    if (Number.isNaN(parsed)) return;
+
+                                    field.onChange({ ...current, coefficient: parsed });
+                                  }}
+                                  disabled={isSubmitting}
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                  Multiplicateur appliqué au champ sélectionné (ex. puissance d&apos;un luminaire en watts).
+                                </p>
+                                {coefficientError ? <p className="text-xs text-destructive">{coefficientError}</p> : null}
                               </div>
-                            ) : (
-                              <p className="text-xs text-muted-foreground">
-                                La plateforme détectera automatiquement le champ dynamique le plus pertinent (surface, quantité, etc.).
-                              </p>
-                            )}
+                            </div>
+                          ) : null}
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
+                  />
 
-                            <p className="text-xs text-muted-foreground">
-                              Formule : (kWh cumac × bonification / 1000) × {multiplierLabel}
-                              {selectedKey !== "auto" ? ` × ${formattedCoefficient}` : ""}
-                            </p>
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    );
-                  }}
+                  <div className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                    Formule : ((kWh cumac × bonification ({bonificationDisplay}) × coefficient fixe ({coefficientDisplay})) / 1000) ×{" "}
+                    {formulaMultiplierDescription}.
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="dynamic" className="space-y-6">
+                <FormField
+                  control={form.control}
+                  name="params_schema"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <DynamicFieldsEditor
+                          value={{
+                            schema: (form.watch("params_schema") as any) || [],
+                            defaults: (form.watch("default_params") as any) || {},
+                          }}
+                          onChange={(value) => {
+                            form.setValue("params_schema", value.schema);
+                            form.setValue("default_params", value.defaults);
+                          }}
+                          disabled={isSubmitting}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              </div>
-            </TabsContent>
-
-            <TabsContent value="dynamic" className="space-y-6">
-              <FormField
-                control={form.control}
-                name="params_schema"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <DynamicFieldsEditor
-                        value={{
-                          schema: (form.watch("params_schema") as any) || [],
-                          defaults: (form.watch("default_params") as any) || {},
-                        }}
-                        onChange={(value) => {
-                          form.setValue("params_schema", value.schema);
-                          form.setValue("default_params", value.defaults);
-                        }}
-                        disabled={isSubmitting}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </TabsContent>
+              </TabsContent>
             </Tabs>
 
             <DialogFooter className="mt-6">

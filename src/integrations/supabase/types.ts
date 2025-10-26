@@ -469,6 +469,8 @@ export type Database = {
           unit_type: string | null
           updated_at: string
           valorisation_formula: Json | null
+          valorisation_bonification: number | null
+          valorisation_coefficient: number | null
           valorisation_tarif_override: number | null
         }
         Insert: {
@@ -499,6 +501,8 @@ export type Database = {
           unit_type?: string | null
           updated_at?: string
           valorisation_formula?: Json | null
+          valorisation_bonification?: number | null
+          valorisation_coefficient?: number | null
           valorisation_tarif_override?: number | null
         }
         Update: {
@@ -529,6 +533,8 @@ export type Database = {
           unit_type?: string | null
           updated_at?: string
           valorisation_formula?: Json | null
+          valorisation_bonification?: number | null
+          valorisation_coefficient?: number | null
           valorisation_tarif_override?: number | null
         }
         Relationships: [
@@ -1028,7 +1034,7 @@ export type Database = {
           created_at?: string
           id?: string
           org_id?: string
-          role?: Database["public"]["Enums"]["app_role"]
+          role: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
         Relationships: [

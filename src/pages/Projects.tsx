@@ -204,7 +204,8 @@ const Projects = () => {
 
       acc[project.id] = {
         totalPrime: result?.totalPrime ?? 0,
-        valorisationBase: result?.valorisationBase ?? 0,
+        totalValorisationMwh: result?.totalValorisationMwh ?? 0,
+        delegatePrice: result?.delegatePrice ?? 0,
         products: result?.products ?? [],
         productMap: resultProductMap,
       };
@@ -337,11 +338,12 @@ const Projects = () => {
     const valorisationSummary = projectValorisationSummaries[project.id];
     const valorisationEntries = displayedProducts
       .map((item) => (item.id ? valorisationSummary?.productMap[item.id] : undefined))
-      .filter((entry): entry is PrimeCeeProductResult => Boolean(entry && entry.valorisationPerUnit));
+      .filter((entry): entry is PrimeCeeProductResult => Boolean(entry && entry.valorisationTotalMwh));
     const fallbackValorisation = valorisationSummary?.products.find(
-      (entry) => typeof entry.valorisationPerUnit === "number" && entry.valorisationPerUnit > 0
+      (entry) => typeof entry.valorisationTotalMwh === "number" && entry.valorisationTotalMwh > 0
     );
     const selectedValorisation = valorisationEntries[0] ?? fallbackValorisation;
+    const valorisationMwh = selectedValorisation?.valorisationTotalMwh ?? 0;
     const valorisationBase = selectedValorisation?.valorisationPerUnit ?? 0;
     const surfaceFacturee = surfaceFactureeByProject[project.id] ?? 0;
 
@@ -385,7 +387,7 @@ const Projects = () => {
       cout_isolation_m2: 0,
       isolation_utilisee_m2: 0,
       montant_commission: 0,
-      valorisation_cee: valorisationBase,
+      valorisation_cee: valorisationMwh,
       team_members: [{ name: "" }],
       additional_costs: [],
     });
