@@ -46,13 +46,22 @@ import {
   getOrganizationMembers,
   useCreateLead,
   useLeadProductTypes,
+  type ProductFormSchema,
 } from "./api";
 import type { TablesInsert } from "@/integrations/supabase/types";
 import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
 import { DriveFileUploader } from "@/components/integrations/DriveFileUploader";
 import type { DriveFileMetadata } from "@/integrations/googleDrive";
-
-const LEAD_SOURCES = ["Commercial", "Campagne FB", "Régie Commercial"] as const;
+import {
+  getLeadDynamicFieldSchema,
+  getLeadSources,
+  getLeadStatusSettings,
+  LEAD_DYNAMIC_FIELDS_UPDATED_EVENT,
+  LEAD_SOURCES_UPDATED_EVENT,
+  LEAD_STATUS_SETTINGS_UPDATED_EVENT,
+  type LeadSourceSetting,
+  type LeadStatusSetting,
+} from "@/lib/leads";
 
 const sirenSchema = z
   .string()
@@ -109,6 +118,18 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
 
   const orgId = currentOrgId;
 
+  const initialStatusSettings = useMemo(
+    () => getLeadStatusSettings({ includeInactive: false }),
+    []
+  );
+  const initialLeadSources = useMemo(
+    () => getLeadSources({ includeInactive: false }),
+    []
+  );
+  const initialDynamicSchema = useMemo(() => getLeadDynamicFieldSchema(), []);
+
+  const defaultStatusValue = initialStatusSettings[0]?.value ?? LEAD_STATUSES[0];
+
   const form = useForm<LeadFormValues>({
     resolver: zodResolver(leadSchema),
     defaultValues: {
@@ -123,7 +144,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
       postal_code: "",
       product_type: "",
       utm_source: "",
-      status: "À rappeler",
+      status: defaultStatusValue,
       commentaire: "",
       remarks: "",
       building_length: "",
@@ -140,6 +161,12 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
     }
   }, [user?.id, form]);
 
+  const [statusSettings, setStatusSettings] = useState<LeadStatusSetting[]>(initialStatusSettings);
+  const [availableSources, setAvailableSources] = useState<LeadSourceSetting[]>(initialLeadSources);
+  const [dynamicSchema, setDynamicSchema] = useState<ProductFormSchema | null>(
+    initialDynamicSchema
+  );
+
   const { data: productTypes } = useLeadProductTypes(orgId);
   const { data: members } = useQueryOrganizationMembers(orgId);
 
@@ -149,6 +176,68 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
   }, [members, user?.id]);
 
   const canAssignOthers = currentMemberRole === "owner" || currentMemberRole === "admin";
+
+  const statusOptions = useMemo(
+    () => statusSettings.filter((status) => status.isActive).sort((a, b) => a.order - b.order),
+    [statusSettings]
+  );
+
+  const leadSourceOptions = useMemo(
+    () =>
+      availableSources
+        .filter((source) => source.isActive)
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [availableSources]
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleStatusesUpdate = () => {
+      setStatusSettings(getLeadStatusSettings({ includeInactive: false, skipCache: true }));
+    };
+    const handleSourcesUpdate = () => {
+      setAvailableSources(getLeadSources({ includeInactive: false, skipCache: true }));
+    };
+    const handleDynamicFieldsUpdate = () => {
+      setDynamicSchema(getLeadDynamicFieldSchema());
+    };
+
+    window.addEventListener(LEAD_STATUS_SETTINGS_UPDATED_EVENT, handleStatusesUpdate);
+    window.addEventListener(LEAD_SOURCES_UPDATED_EVENT, handleSourcesUpdate);
+    window.addEventListener(LEAD_DYNAMIC_FIELDS_UPDATED_EVENT, handleDynamicFieldsUpdate);
+
+    return () => {
+      window.removeEventListener(LEAD_STATUS_SETTINGS_UPDATED_EVENT, handleStatusesUpdate);
+      window.removeEventListener(LEAD_SOURCES_UPDATED_EVENT, handleSourcesUpdate);
+      window.removeEventListener(LEAD_DYNAMIC_FIELDS_UPDATED_EVENT, handleDynamicFieldsUpdate);
+    };
+  }, []);
+
+  useEffect(() => {
+    const allowedValues = statusOptions.map((status) => status.value);
+    const currentValue = form.getValues("status");
+
+    if (!allowedValues.includes(currentValue as LeadStatus)) {
+      const fallback = allowedValues[0] ?? LEAD_STATUSES[0];
+      form.setValue("status", fallback, { shouldDirty: true });
+    }
+  }, [statusOptions, form]);
+
+  useEffect(() => {
+    if (!dynamicSchema) {
+      form.setValue("extra_fields", {});
+      return;
+    }
+
+    const allowedNames = new Set(dynamicSchema.fields.map((field) => field.name));
+    const currentExtraFields = form.getValues("extra_fields") ?? {};
+    const sanitizedEntries = Object.entries(currentExtraFields).filter(([key]) =>
+      allowedNames.has(key)
+    );
+
+    form.setValue("extra_fields", Object.fromEntries(sanitizedEntries));
+  }, [dynamicSchema, form]);
 
   const productType = form.watch("product_type");
 
@@ -248,6 +337,8 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         description: "Le lead a été ajouté avec succès",
       });
 
+      const resetStatus = statusOptions[0]?.value ?? LEAD_STATUSES[0];
+
       form.reset({
         first_name: "",
         last_name: "",
@@ -260,7 +351,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         postal_code: "",
         product_type: productTypes?.length === 1 ? productTypes[0].name : "",
         utm_source: "",
-        status: "À rappeler",
+        status: resetStatus,
         commentaire: "",
         remarks: "",
         building_length: "",
@@ -308,6 +399,8 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
   const handleOpenChange = (value: boolean) => {
     setOpen(value);
     if (!value) {
+      const resetStatus = statusOptions[0]?.value ?? LEAD_STATUSES[0];
+
       form.reset({
         first_name: "",
         last_name: "",
@@ -320,7 +413,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         postal_code: "",
         product_type: productTypes?.length === 1 ? productTypes[0].name : "",
         utm_source: "",
-        status: "À rappeler",
+        status: resetStatus,
         commentaire: "",
         remarks: "",
         building_length: "",
@@ -647,11 +740,17 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {LEAD_SOURCES.map((source) => (
-                          <SelectItem key={source} value={source}>
-                            {source}
+                        {leadSourceOptions.length > 0 ? (
+                          leadSourceOptions.map((source) => (
+                            <SelectItem key={source.id} value={source.name}>
+                              {source.name}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="__empty" disabled>
+                            Aucune source configurée
                           </SelectItem>
-                        ))}
+                        )}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -675,9 +774,9 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {LEAD_STATUSES.map((status) => (
-                          <SelectItem key={status} value={status}>
-                            {getLeadStatusLabel(status)}
+                        {statusOptions.map((status) => (
+                          <SelectItem key={status.value} value={status.value}>
+                            {getLeadStatusLabel(status.value)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -687,6 +786,8 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
                 )}
               />
             </div>
+
+            <DynamicFields form={form} schema={dynamicSchema} disabled={isSubmitting} />
 
             <div className="space-y-2">
               <FormLabel>Photo pré-visite</FormLabel>

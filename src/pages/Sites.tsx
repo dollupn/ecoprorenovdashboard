@@ -18,6 +18,7 @@ import { useToast } from "@/components/ui/use-toast";
 import type { Tables } from "@/integrations/supabase/types";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { getProjectClientName } from "@/lib/projects";
+import { getDynamicFieldNumericValue } from "@/lib/product-params";
 import {
   Plus,
   Search,
@@ -46,7 +47,7 @@ type SiteStatus = "PLANIFIE" | "EN_PREPARATION" | "EN_COURS" | "SUSPENDU" | "TER
 type CofracStatus = "EN_ATTENTE" | "CONFORME" | "NON_CONFORME" | "A_PLANIFIER";
 
 type ProjectProduct = Tables<"project_products"> & {
-  product: (Pick<Tables<"product_catalog">, "code"> & {
+  product: (Pick<Tables<"product_catalog">, "code" | "params_schema"> & {
     kwh_cumac_values?: Tables<"product_kwh_cumac">[];
   }) | null;
 };
@@ -122,6 +123,8 @@ type Site = Tables<"sites"> & {
   cofrac_status?: string | null;
   notes?: string | null;
 };
+
+const SURFACE_FACTUREE_TARGETS = ["surface_facturee", "surface facturée"] as const;
 
 const getStatusLabel = (status: SiteStatus) => {
   const labels: Record<SiteStatus, string> = {
@@ -217,7 +220,7 @@ const Sites = () => {
       const { data, error } = await supabase
         .from("projects")
         .select(
-          "*, project_products(id, product:product_catalog(code, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))"
+          "*, project_products(id, dynamic_params, product:product_catalog(code, params_schema, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))"
         )
         .eq("user_id", user.id);
 
@@ -226,6 +229,35 @@ const Sites = () => {
     },
     enabled: !!user,
   });
+
+  const surfaceFactureeByProject = useMemo(() => {
+    return projects.reduce<Record<string, number>>((acc, project) => {
+      const total = (project.project_products ?? []).reduce((sum, projectProduct) => {
+        const product = projectProduct.product;
+        if (!product) {
+          return sum;
+        }
+
+        const surfaceValue = getDynamicFieldNumericValue(
+          product?.params_schema,
+          projectProduct.dynamic_params,
+          [...SURFACE_FACTUREE_TARGETS],
+        );
+
+        if (typeof surfaceValue === "number" && surfaceValue > 0) {
+          return sum + surfaceValue;
+        }
+
+        return sum;
+      }, 0);
+
+      if (total > 0 && project.id) {
+        acc[project.id] = total;
+      }
+
+      return acc;
+    }, {});
+  }, [projects]);
 
   const projectOptions = useMemo<SiteProjectOption[]>(() => {
     return projects.map((project) => {
@@ -241,6 +273,7 @@ const Sites = () => {
           : project.product_name ?? "";
 
       const address = (project as { address?: string | null }).address ?? "";
+      const surfaceFacturee = surfaceFactureeByProject[project.id] ?? undefined;
 
       return {
         id: project.id,
@@ -250,9 +283,10 @@ const Sites = () => {
         address,
         city: project.city ?? "",
         postal_code: project.postal_code ?? "",
+        surface_facturee: surfaceFacturee && surfaceFacturee > 0 ? surfaceFacturee : undefined,
       } satisfies SiteProjectOption;
     });
-  }, [projects]);
+  }, [projects, surfaceFactureeByProject]);
 
   const handleDialogOpenChange = (open: boolean) => {
     setDialogOpen(open);

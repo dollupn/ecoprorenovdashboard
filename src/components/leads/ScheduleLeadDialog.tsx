@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -39,6 +39,7 @@ import {
   type LeadStatus,
   LEAD_STATUSES,
 } from "./status";
+import { getLeadStatusSettings, LEAD_STATUS_SETTINGS_UPDATED_EVENT } from "@/lib/leads";
 import { useUpdateLead } from "@/features/leads/api";
 
 const scheduleSchema = z.object({
@@ -57,26 +58,55 @@ interface ScheduleLeadDialogProps {
   onScheduled?: () => void | Promise<void>;
 }
 
-const resolveInitialStatus = (status: string): LeadStatus => {
-  if (isLeadStatus(status)) {
-    if (status === "À rappeler") {
-      return "Phoning";
-    }
-    if (status === "Phoning") {
-      return "À recontacter";
-    }
-    if (status === "À recontacter") {
-      return "Programmer pré-visite";
-    }
-    return status;
-  }
-  return "Phoning";
-};
-
 export const ScheduleLeadDialog = ({ lead, onScheduled }: ScheduleLeadDialogProps) => {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
   const updateLead = useUpdateLead(null);
+
+  const [statusSettings, setStatusSettings] = useState(() =>
+    getLeadStatusSettings({ includeInactive: false })
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleUpdate = () => {
+      setStatusSettings(getLeadStatusSettings({ includeInactive: false, skipCache: true }));
+    };
+
+    window.addEventListener(LEAD_STATUS_SETTINGS_UPDATED_EVENT, handleUpdate);
+
+    return () => {
+      window.removeEventListener(LEAD_STATUS_SETTINGS_UPDATED_EVENT, handleUpdate);
+    };
+  }, []);
+
+  const statusOptions = statusSettings
+    .filter((status) => status.isActive)
+    .sort((a, b) => a.order - b.order);
+
+  const resolveInitialStatus = useCallback(
+    (status: string): LeadStatus => {
+      const defaultStatus = (statusOptions[0]?.value ?? LEAD_STATUSES[0]) as LeadStatus;
+      if (!isLeadStatus(status) || !statusOptions.some((option) => option.value === status)) {
+        return defaultStatus;
+      }
+
+      const transitions: Partial<Record<LeadStatus, LeadStatus>> = {
+        "À rappeler": "Phoning",
+        Phoning: "À recontacter",
+        "À recontacter": "Programmer pré-visite",
+      };
+
+      const next = transitions[status] ?? status;
+      if (next && statusOptions.some((option) => option.value === next)) {
+        return next;
+      }
+
+      return defaultStatus;
+    },
+    [statusOptions]
+  );
 
   const form = useForm<ScheduleLeadForm>({
     resolver: zodResolver(scheduleSchema),
@@ -97,7 +127,7 @@ export const ScheduleLeadDialog = ({ lead, onScheduled }: ScheduleLeadDialogProp
         status: resolveInitialStatus(lead.status),
       });
     }
-  }, [open, lead, form]);
+  }, [open, lead, form, resolveInitialStatus]);
 
   const onSubmit = async (values: ScheduleLeadForm) => {
     try {
@@ -192,9 +222,9 @@ export const ScheduleLeadDialog = ({ lead, onScheduled }: ScheduleLeadDialogProp
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {LEAD_STATUSES.map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {getLeadStatusLabel(status)}
+                      {statusOptions.map((status) => (
+                        <SelectItem key={status.value} value={status.value}>
+                          {getLeadStatusLabel(status.value)}
                         </SelectItem>
                       ))}
                     </SelectContent>

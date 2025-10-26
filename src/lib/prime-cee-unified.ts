@@ -128,9 +128,7 @@ const roundToTwo = (value: number) => Math.round(value * 100) / 100;
 // ============================================================================
 
 const getSchemaFields = (paramsSchema: unknown): SchemaField[] => {
-  if (!paramsSchema) {
-    return [];
-  }
+  if (!paramsSchema) return [];
 
   // Handle array of fields directly
   if (Array.isArray(paramsSchema)) {
@@ -139,7 +137,9 @@ const getSchemaFields = (paramsSchema: unknown): SchemaField[] => {
 
   // Handle object with fields property
   if (isRecord(paramsSchema) && Array.isArray(paramsSchema.fields)) {
-    return (paramsSchema.fields as unknown[]).filter((field): field is SchemaField => isRecord(field));
+    return (paramsSchema.fields as unknown[]).filter((field): field is SchemaField =>
+      isRecord(field),
+    );
   }
 
   return [];
@@ -176,9 +176,7 @@ const resolveFormulaMultiplier = ({
   quantity?: number | null;
 }): MultiplierDetection | null => {
   const normalized = normalizeValorisationFormula(formula);
-  if (!normalized) {
-    return null;
-  }
+  if (!normalized) return null;
 
   const coefficient = toPositiveNumber(normalized.coefficient) ?? 1;
   const withCoefficientLabel = (label: string) =>
@@ -193,15 +191,11 @@ const resolveFormulaMultiplier = ({
     return null;
   }
 
-  if (!dynamicParams) {
-    return null;
-  }
+  if (!dynamicParams) return null;
 
   const rawValue = dynamicParams[normalized.variableKey];
   const numericValue = toNumber(rawValue);
-  if (!numericValue || numericValue <= 0) {
-    return null;
-  }
+  if (!numericValue || numericValue <= 0) return null;
 
   const match = schemaFields.find((field) => field.name === normalized.variableKey);
   const label =
@@ -217,6 +211,10 @@ const resolveFormulaMultiplier = ({
 // MULTIPLIER RESOLUTION (PUBLIC API)
 // ============================================================================
 
+/**
+ * Detects the multiplier (champ dynamique) from product parameters
+ * Priority: surface_isolee > nombre_led > quantity > other dynamic fields
+ */
 export const getMultiplierValue = ({
   product,
   projectProduct,
@@ -244,20 +242,13 @@ export const getMultiplierValue = ({
   if (dynamicParams) {
     for (const { targets, fallbackLabel } of DYNAMIC_FIELD_PRIORITIES) {
       const matchingField = schemaFields.find((field) => matchesField(field, targets));
-
-      if (!matchingField) {
-        continue;
-      }
+      if (!matchingField) continue;
 
       const key = typeof matchingField.name === "string" ? matchingField.name : undefined;
-      if (!key) {
-        continue;
-      }
+      if (!key) continue;
 
       const value = toNumber(dynamicParams[key]);
-      if (!value || value <= 0) {
-        continue;
-      }
+      if (!value || value <= 0) continue;
 
       const label =
         (typeof matchingField.label === "string" && matchingField.label.length > 0
@@ -339,31 +330,23 @@ export const computePrimeCee = ({
   let totalValorisationMwh = 0;
 
   for (const projectProduct of products) {
-    if (!projectProduct?.product_id) {
-      continue;
-    }
+    if (!projectProduct?.product_id) continue;
 
     const product = productMap[projectProduct.product_id];
-    if (!product) {
-      continue;
-    }
+    if (!product) continue;
 
-    if (isProductExcluded(product)) {
-      continue;
-    }
+    if (isProductExcluded(product)) continue;
 
-    const kwhEntry = product.kwh_cumac_values?.find((value) => {
-      return value.building_type === buildingType && typeof value.kwh_cumac === "number";
-    });
+    const kwhEntry = product.kwh_cumac_values?.find(
+      (value) => value.building_type === buildingType && typeof value.kwh_cumac === "number",
+    );
 
     if (!kwhEntry || typeof kwhEntry.kwh_cumac !== "number" || !Number.isFinite(kwhEntry.kwh_cumac)) {
       continue;
     }
 
     const baseKwh = kwhEntry.kwh_cumac;
-    if (baseKwh <= 0) {
-      continue;
-    }
+    if (baseKwh <= 0) continue;
 
     const productBonification = toPositiveNumber(product.valorisation_bonification);
     const bonification = resolveBonificationFactor(productBonification ?? primeBonification);

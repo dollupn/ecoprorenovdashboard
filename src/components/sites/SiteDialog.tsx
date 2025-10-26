@@ -114,6 +114,7 @@ export type SiteProjectOption = {
   address?: string | null;
   city: string;
   postal_code: string;
+  surface_facturee?: number | null;
 };
 
 interface SiteDialogProps {
@@ -521,6 +522,7 @@ export const SiteDialog = ({
         address: mergedDefaults.address,
         city: mergedDefaults.city,
         postal_code: mergedDefaults.postal_code,
+        surface_facturee: mergedDefaults.surface_facturee,
       });
     }
 
@@ -556,6 +558,12 @@ export const SiteDialog = ({
         shouldDirty: true,
         shouldValidate: true,
       });
+      if (typeof selectedProject.surface_facturee === "number") {
+        form.setValue("surface_facturee", selectedProject.surface_facturee, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      }
     },
     [availableProjects, form],
   );
