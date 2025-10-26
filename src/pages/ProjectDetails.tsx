@@ -50,6 +50,7 @@ import { useOrganizationPrimeSettings } from "@/features/organizations/useOrgani
 import {
   buildPrimeCeeEntries,
   computePrimeCee,
+  getValorisationLabel,
   type PrimeCeeComputation,
   type PrimeCeeProductCatalogEntry,
   type PrimeCeeProductDisplayMap,
@@ -218,6 +219,15 @@ const ProjectDetails = () => {
       return acc;
     }, {});
   }, [valorisationEntries]);
+  }, [valorisationResult]);
+
+  const valorisationEntries = useMemo(() => {
+    return projectProducts
+      .map((item) => (item.id ? valorisationProductMap[item.id] : undefined))
+      .filter((entry): entry is PrimeCeeProductResult =>
+        Boolean(entry && entry.valorisationPerUnitEur && entry.valorisationPerUnitEur > 0)
+      );
+  }, [projectProducts, valorisationProductMap]);
 
   if (isLoading || membersLoading) {
     return (
@@ -521,7 +531,7 @@ const ProjectDetails = () => {
                     {entry.productCode ? ` (${entry.productCode})` : ""}:
                   </span>
                   <span className="font-medium text-amber-600">
-                    {formatCurrency(entry.valorisationPerUnit ?? 0)} / {entry.multiplierLabel}
+                    {formatCurrency(entry.valorisationPerUnitEur ?? 0)} / {getValorisationLabel(entry)}
                   </span>
                 </div>
               ))}
@@ -621,11 +631,11 @@ const ProjectDetails = () => {
                         ))}
                       </div>
                     )}
-                    {valorisationEntry?.valorisationPerUnit ? (
+                    {valorisationEntry?.valorisationPerUnitEur ? (
                       <div className="flex items-center justify-between text-sm pt-2 border-t border-border/40">
                         <span className="text-muted-foreground">Valorisation CEE</span>
                         <span className="font-medium text-amber-600 text-right">
-                          {formatCurrency(valorisationEntry.valorisationPerUnit ?? 0)} / {valorisationEntry.multiplierLabel}
+                          {formatCurrency(valorisationEntry.valorisationPerUnitEur ?? 0)} / {getValorisationLabel(valorisationEntry)}
                         </span>
                       </div>
                     ) : null}

@@ -57,9 +57,11 @@ export type PrimeCeeProductResult = {
   bonification: number;
   coefficient: number;
   valorisationPerUnitMwh: number;
+  valorisationPerUnitEur: number;
   multiplier: number;
   multiplierLabel: string;
   valorisationTotalMwh: number;
+  valorisationTotalEur: number;
   delegatePrice: number;
   totalPrime: number;
 };
@@ -67,6 +69,7 @@ export type PrimeCeeProductResult = {
 export type PrimeCeeComputation = {
   totalPrime: number;
   totalValorisationMwh: number;
+  totalValorisationEur: number;
   delegatePrice: number;
   products: PrimeCeeProductResult[];
 };
@@ -88,6 +91,8 @@ export type PrimeCeeProductDisplayMap = Record<string, PrimeCeeProductDisplayMap
 
 // Products starting with "ECO" are excluded from Prime CEE calculation
 const EXCLUDED_CATEGORY_PREFIXES = ["ECO"] as const;
+
+const DEFAULT_MULTIPLIER_LABEL = "Multiplicateur non renseigné";
 
 // Priority order for dynamic field detection
 const DYNAMIC_FIELD_PRIORITIES = [
@@ -345,6 +350,17 @@ export const isProductExcluded = (product: { category?: string | null; code?: st
   );
 };
 
+export const getValorisationLabel = (
+  entry?: Pick<PrimeCeeProductResult, "multiplierLabel"> | null,
+) => {
+  if (!entry?.multiplierLabel) {
+    return DEFAULT_MULTIPLIER_LABEL;
+  }
+
+  const trimmed = entry.multiplierLabel.trim();
+  return trimmed.length > 0 ? trimmed : DEFAULT_MULTIPLIER_LABEL;
+};
+
 /**
  * Computes Valorisation and Prime CEE for a list of products.
  *
@@ -378,6 +394,7 @@ export const computePrimeCee = ({
   const productResults: PrimeCeeProductResult[] = [];
   let totalPrime = 0;
   let totalValorisationMwh = 0;
+  let totalValorisationEur = 0;
 
   for (const projectProduct of products) {
     if (!projectProduct?.product_id) continue;
@@ -412,13 +429,17 @@ export const computePrimeCee = ({
       multiplierDetection && Number.isFinite(multiplierDetection.value) && multiplierDetection.value > 0
         ? multiplierDetection.value
         : 0;
-    const multiplierLabel = multiplierDetection?.label ?? "Multiplicateur non renseigné";
+    const multiplierLabel = getValorisationLabel(
+      multiplierDetection?.label ? { multiplierLabel: multiplierDetection.label } : null,
+    );
 
     const valorisationTotalMwh = valorisationPerUnitMwh * multiplierValue;
-    const productPrime = valorisationTotalMwh * delegatePrice;
+    const valorisationPerUnitEur = valorisationPerUnitMwh * delegatePrice;
+    const valorisationTotalEur = valorisationTotalMwh * delegatePrice;
 
     totalValorisationMwh += valorisationTotalMwh;
-    totalPrime += productPrime;
+    totalValorisationEur += valorisationTotalEur;
+    totalPrime += valorisationTotalEur;
 
     productResults.push({
       projectProductId: projectProduct.id ?? projectProduct.product_id,
@@ -429,17 +450,20 @@ export const computePrimeCee = ({
       bonification,
       coefficient,
       valorisationPerUnitMwh,
+      valorisationPerUnitEur,
       multiplier: multiplierValue,
       multiplierLabel,
       valorisationTotalMwh,
+      valorisationTotalEur,
       delegatePrice,
-      totalPrime: productPrime,
+      totalPrime: valorisationTotalEur,
     });
   }
 
   return {
     totalPrime: roundToTwo(totalPrime),
     totalValorisationMwh: roundToTwo(totalValorisationMwh),
+    totalValorisationEur: roundToTwo(totalValorisationEur),
     delegatePrice: roundToTwo(delegatePrice),
     products: productResults.map((result) => ({
       ...result,
@@ -447,8 +471,10 @@ export const computePrimeCee = ({
       bonification: roundToTwo(result.bonification),
       coefficient: roundToTwo(result.coefficient),
       valorisationPerUnitMwh: roundToTwo(result.valorisationPerUnitMwh),
+      valorisationPerUnitEur: roundToTwo(result.valorisationPerUnitEur),
       multiplier: roundToTwo(result.multiplier),
       valorisationTotalMwh: roundToTwo(result.valorisationTotalMwh),
+      valorisationTotalEur: roundToTwo(result.valorisationTotalEur),
       delegatePrice: roundToTwo(result.delegatePrice),
       totalPrime: roundToTwo(result.totalPrime),
     })),

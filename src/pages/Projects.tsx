@@ -59,6 +59,7 @@ import { useOrganizationPrimeSettings } from "@/features/organizations/useOrgani
 import {
   buildPrimeCeeEntries,
   computePrimeCee,
+  getValorisationLabel,
   type PrimeCeeComputation,
   type PrimeCeeProductCatalogEntry,
   type PrimeCeeProductDisplayMap,
@@ -223,6 +224,7 @@ const Projects = () => {
         computation: result ?? null,
         totalPrime: result?.totalPrime ?? 0,
         totalValorisationMwh: result?.totalValorisationMwh ?? 0,
+        totalValorisationEur: result?.totalValorisationEur ?? 0,
         delegatePrice: result?.delegatePrice ?? 0,
         products: result?.products ?? [],
       };
@@ -366,7 +368,7 @@ const Projects = () => {
     }
     const selectedValorisation = valorisationEntries[0] ?? fallbackValorisation;
     const valorisationMwh = selectedValorisation?.valorisationTotalMwh ?? 0;
-    const valorisationBase = selectedValorisation?.valorisationPerUnit ?? 0;
+    const valorisationBase = selectedValorisation?.valorisationPerUnitEur ?? 0;
     const surfaceFacturee = surfaceFactureeByProject[project.id] ?? 0;
 
     // Generate unique site ref
@@ -591,6 +593,11 @@ const Projects = () => {
               computation: valorisationSummary?.computation ?? null,
               productMap: buildProjectProductDisplayMap(displayedProducts),
             });
+            const valorisationEntries = displayedProducts
+              .map((item) => (item.id ? valorisationSummary?.productMap[item.id] : undefined))
+              .filter((entry): entry is PrimeCeeProductResult =>
+                Boolean(entry && entry.valorisationPerUnitEur && entry.valorisationPerUnitEur > 0)
+              );
 
             return (
               <Card
@@ -767,7 +774,7 @@ const Projects = () => {
                           {entry.productCode ? ` (${entry.productCode})` : ""}:
                         </span>
                         <span className="text-sm font-semibold text-amber-600 text-right">
-                          {formatCurrency(entry.valorisationPerUnit ?? 0)} / {entry.multiplierLabel}
+                          {formatCurrency(entry.valorisationPerUnitEur ?? 0)} / {getValorisationLabel(entry)}
                         </span>
                       </div>
                     ))}
