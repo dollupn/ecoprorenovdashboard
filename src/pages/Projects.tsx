@@ -58,6 +58,7 @@ import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 import { useOrganizationPrimeSettings } from "@/features/organizations/useOrganizationPrimeSettings";
 import {
   computePrimeCee,
+  getValorisationLabel,
   type PrimeCeeComputation,
   type PrimeCeeProductResult,
   type PrimeCeeProductCatalogEntry,
@@ -205,6 +206,7 @@ const Projects = () => {
       acc[project.id] = {
         totalPrime: result?.totalPrime ?? 0,
         totalValorisationMwh: result?.totalValorisationMwh ?? 0,
+        totalValorisationEur: result?.totalValorisationEur ?? 0,
         delegatePrice: result?.delegatePrice ?? 0,
         products: result?.products ?? [],
         productMap: resultProductMap,
@@ -344,7 +346,7 @@ const Projects = () => {
     );
     const selectedValorisation = valorisationEntries[0] ?? fallbackValorisation;
     const valorisationMwh = selectedValorisation?.valorisationTotalMwh ?? 0;
-    const valorisationBase = selectedValorisation?.valorisationPerUnit ?? 0;
+    const valorisationBase = selectedValorisation?.valorisationPerUnitEur ?? 0;
     const surfaceFacturee = surfaceFactureeByProject[project.id] ?? 0;
 
     // Generate unique site ref
@@ -568,7 +570,7 @@ const Projects = () => {
             const valorisationEntries = displayedProducts
               .map((item) => (item.id ? valorisationSummary?.productMap[item.id] : undefined))
               .filter((entry): entry is PrimeCeeProductResult =>
-                Boolean(entry && entry.valorisationPerUnit && entry.valorisationPerUnit > 0)
+                Boolean(entry && entry.valorisationPerUnitEur && entry.valorisationPerUnitEur > 0)
               );
 
             return (
@@ -746,7 +748,7 @@ const Projects = () => {
                           {entry.productCode ? ` (${entry.productCode})` : ""}:
                         </span>
                         <span className="text-sm font-semibold text-amber-600 text-right">
-                          {formatCurrency(entry.valorisationPerUnit ?? 0)} / {entry.multiplierLabel}
+                          {formatCurrency(entry.valorisationPerUnitEur ?? 0)} / {getValorisationLabel(entry)}
                         </span>
                       </div>
                     ))}
