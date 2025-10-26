@@ -61,7 +61,16 @@ import {
 type Project = Tables<"projects">;
 type ProductSummary = Pick<
   Tables<"product_catalog">,
-  "id" | "code" | "name" | "category" | "params_schema" | "is_active" | "default_params"
+  | "id"
+  | "code"
+  | "name"
+  | "category"
+  | "params_schema"
+  | "is_active"
+  | "default_params"
+  | "valorisation_bonification"
+  | "valorisation_coefficient"
+  | "valorisation_formula"
 > & {
   kwh_cumac_values?: Pick<Tables<"product_kwh_cumac">, "id" | "building_type" | "kwh_cumac">[];
 };
@@ -144,7 +153,7 @@ const ProjectDetails = () => {
       let query = supabase
         .from("projects")
         .select(
-          "*, delegate:delegates(id, name, price_eur_per_mwh), project_products(id, product_id, quantity, dynamic_params, product:product_catalog(id, code, name, category, params_schema, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))"
+          "*, delegate:delegates(id, name, price_eur_per_mwh), project_products(id, product_id, quantity, dynamic_params, product:product_catalog(id, code, name, category, params_schema, valorisation_bonification, valorisation_coefficient, valorisation_formula, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))"
         )
         .eq("id", id);
 
@@ -220,13 +229,13 @@ const ProjectDetails = () => {
   );
 
   const valorisationProductEntries = useMemo(() => {
-    return projectProducts
-      .map((item) => (item.id ? valorisationProductMap[item.id] : undefined))
-      .filter(
-        (entry): entry is PrimeCeeProductResult =>
-          Boolean(entry && entry.valorisationPerUnitEur && entry.valorisationPerUnitEur > 0)
-      );
-  }, [projectProducts, valorisationProductMap]);
+    if (!valorisationResult?.products) return [];
+    
+    return valorisationResult.products.filter(
+      (entry): entry is PrimeCeeProductResult =>
+        Boolean(entry && entry.valorisationPerUnitEur && entry.valorisationPerUnitEur > 0)
+    );
+  }, [valorisationResult]);
 
   const displayedValorisationEntries = useMemo<PrimeCeeProductResult[]>(
     () => (valorisationPrimeEntries.length ? valorisationPrimeEntries : valorisationProductEntries),

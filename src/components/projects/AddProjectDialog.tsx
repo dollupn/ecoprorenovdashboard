@@ -558,7 +558,7 @@ export const AddProjectDialog = ({
       const { data, error } = await supabase
         .from("product_catalog")
         .select(
-          "id, name, code, category, is_active, params_schema, default_params, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)"
+          "id, name, code, category, is_active, params_schema, default_params, valorisation_bonification, valorisation_coefficient, valorisation_formula, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)"
         )
         .eq("org_id", currentOrgId)
         .eq("is_active", true)
@@ -806,11 +806,11 @@ export const AddProjectDialog = ({
   const watchedDelegateId = useWatch({ control: form.control, name: "delegate_id" });
 
   const productMap = useMemo(() => {
-    if (!productsData) return {} as Record<string, ProductCatalogEntry>;
+    if (!productsData) return {};
 
-    return productsData.reduce<Record<string, ProductCatalogEntry>>((acc, product) => {
+    return productsData.reduce<Record<string, PrimeCeeProductCatalogEntry>>((acc, product) => {
       if (product.id) {
-        acc[product.id] = product;
+        acc[product.id] = product as PrimeCeeProductCatalogEntry;
       }
       return acc;
     }, {});

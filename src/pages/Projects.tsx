@@ -71,7 +71,16 @@ import {
 type Project = Tables<"projects">;
 type ProductSummary = Pick<
   Tables<"product_catalog">,
-  "id" | "code" | "name" | "category" | "params_schema" | "is_active" | "default_params"
+  | "id"
+  | "code"
+  | "name"
+  | "category"
+  | "params_schema"
+  | "is_active"
+  | "default_params"
+  | "valorisation_bonification"
+  | "valorisation_coefficient"
+  | "valorisation_formula"
 > & {
   kwh_cumac_values?: Pick<Tables<"product_kwh_cumac">, "id" | "building_type" | "kwh_cumac">[];
 };
@@ -148,7 +157,7 @@ const Projects = () => {
       let query = supabase
         .from("projects")
         .select(
-          "*, delegate:delegates(id, name, price_eur_per_mwh), lead:leads(email), project_products(id, product_id, quantity, dynamic_params, product:product_catalog(id, code, name, category, params_schema, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))"
+          "*, delegate:delegates(id, name, price_eur_per_mwh), lead:leads(email), project_products(id, product_id, quantity, dynamic_params, product:product_catalog(id, code, name, category, params_schema, valorisation_bonification, valorisation_coefficient, valorisation_formula, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))"
         )
         .order("created_at", { ascending: false });
 
@@ -195,6 +204,7 @@ const Projects = () => {
     computation: PrimeCeeComputation | null;
     totalPrime: number;
     totalValorisationMwh: number;
+    totalValorisationEur: number;
     delegatePrice: number;
     products: PrimeCeeProductResult[];
   };
@@ -361,8 +371,7 @@ const Projects = () => {
     const address = (project as Project & { address?: string | null }).address ?? "";
 
     const valorisationSummary = projectValorisationSummaries[project.id];
-    const valorisationProductEntries = displayedProducts
-      .map((item) => (item.id ? valorisationSummary?.productMap[item.id] : undefined))
+    const valorisationProductEntries = (valorisationSummary?.products ?? [])
       .filter(
         (entry): entry is PrimeCeeProductResult =>
           Boolean(entry && entry.valorisationTotalEur && entry.valorisationTotalEur > 0),
@@ -615,8 +624,7 @@ const Projects = () => {
               computation: valorisationSummary?.computation ?? null,
               productMap: buildProjectProductDisplayMap(displayedProducts),
             });
-            const valorisationProductEntries = displayedProducts
-              .map((item) => (item.id ? valorisationSummary?.productMap[item.id] : undefined))
+            const valorisationProductEntries = (valorisationSummary?.products ?? [])
               .filter((entry): entry is PrimeCeeProductResult =>
                 Boolean(entry && entry.valorisationPerUnitEur && entry.valorisationPerUnitEur > 0)
               );
