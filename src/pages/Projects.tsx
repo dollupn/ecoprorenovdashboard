@@ -361,7 +361,7 @@ const Projects = () => {
     const address = (project as Project & { address?: string | null }).address ?? "";
 
     const valorisationSummary = projectValorisationSummaries[project.id];
-    const valorisationEntries = displayedProducts
+    const valorisationProductEntries = displayedProducts
       .map((item) => (item.id ? valorisationSummary?.productMap[item.id] : undefined))
       .filter(
         (entry): entry is PrimeCeeProductResult =>
@@ -374,22 +374,23 @@ const Projects = () => {
       valorisationSummary?.products.find(
         (entry) => typeof entry.valorisationTotalMwh === "number" && entry.valorisationTotalMwh > 0,
       );
-    const selectedValorisation = valorisationEntries[0] ?? fallbackValorisation;
-    const valorisationTotalEur = selectedValorisation?.valorisationTotalEur ?? selectedValorisation?.totalPrime ?? 0;
-    const valorisationEntries = buildPrimeCeeEntries({
+    const selectedValorisation = valorisationProductEntries[0] ?? fallbackValorisation;
+    const valorisationTotalEur =
+      selectedValorisation?.valorisationTotalEur ?? selectedValorisation?.totalPrime ?? 0;
+    const valorisationPrimeEntries = buildPrimeCeeEntries({
       computation: valorisationSummary?.computation ?? null,
       productMap: buildProjectProductDisplayMap(displayedProducts),
     });
-    let fallbackValorisation: PrimeCeeValorisationEntry | undefined;
-    if (!valorisationEntries.length) {
-      fallbackValorisation = buildPrimeCeeEntries({
+    let fallbackPrimeValorisation: PrimeCeeValorisationEntry | undefined;
+    if (!valorisationPrimeEntries.length) {
+      fallbackPrimeValorisation = buildPrimeCeeEntries({
         computation: valorisationSummary?.computation ?? null,
         productMap: buildProjectProductDisplayMap(project.project_products),
       }).find((entry) => entry.valorisationTotalMwh > 0);
     }
-    const selectedValorisation = valorisationEntries[0] ?? fallbackValorisation;
-    const valorisationMwh = selectedValorisation?.valorisationTotalMwh ?? 0;
-    const valorisationBase = selectedValorisation?.valorisationPerUnitEur ?? 0;
+    const selectedPrimeValorisation = valorisationPrimeEntries[0] ?? fallbackPrimeValorisation;
+    const valorisationMwh = selectedPrimeValorisation?.valorisationTotalMwh ?? 0;
+    const valorisationBase = selectedPrimeValorisation?.valorisationPerUnitEur ?? 0;
     const surfaceFacturee = surfaceFactureeByProject[project.id] ?? 0;
 
     // Generate unique site ref
@@ -610,15 +611,17 @@ const Projects = () => {
               null;
             const projectCostValue = project.estimated_value ?? null;
             const valorisationSummary = projectValorisationSummaries[project.id];
-            const valorisationEntries = buildPrimeCeeEntries({
+            const valorisationPrimeEntries = buildPrimeCeeEntries({
               computation: valorisationSummary?.computation ?? null,
               productMap: buildProjectProductDisplayMap(displayedProducts),
             });
-            const valorisationEntries = displayedProducts
+            const valorisationProductEntries = displayedProducts
               .map((item) => (item.id ? valorisationSummary?.productMap[item.id] : undefined))
               .filter((entry): entry is PrimeCeeProductResult =>
                 Boolean(entry && entry.valorisationPerUnitEur && entry.valorisationPerUnitEur > 0)
               );
+            const displayedValorisationEntries: PrimeCeeProductResult[] =
+              valorisationPrimeEntries.length ? valorisationPrimeEntries : valorisationProductEntries;
 
             return (
               <Card
@@ -785,7 +788,7 @@ const Projects = () => {
                         </div>
                       </div>
                     )}
-                    {valorisationEntries.map((entry) => {
+                    {displayedValorisationEntries.map((entry) => {
                       const valorisationLabel = (entry.valorisationLabel || "Valorisation m²/LED").trim();
                       return (
                         <div
@@ -814,7 +817,7 @@ const Projects = () => {
                         </div>
                       );
                     })}
-                    {valorisationEntries.map((entry) => (
+                    {displayedValorisationEntries.map((entry) => (
                       <div
                         key={`${project.id}-valorisation-${entry.projectProductId}`}
                         className="flex items-center justify-between"
