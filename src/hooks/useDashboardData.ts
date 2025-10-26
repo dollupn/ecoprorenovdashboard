@@ -9,8 +9,10 @@ import {
   format,
   startOfMonth,
   startOfWeek,
+  startOfYear,
   subDays,
   subMonths,
+  subYears,
 } from "date-fns";
 import { fr } from "date-fns/locale";
 
@@ -184,6 +186,7 @@ export interface RevenuePoint {
   month: string;
   isoMonth: string;
   total: number;
+  invoicedTotal: number;
 }
 
 export interface RevenueData {
@@ -194,6 +197,10 @@ export interface RevenueData {
   previousWeekTotal: number;
   hasData: boolean;
   generatedAt: string;
+  yearToDatePaid: number;
+  yearToDateInvoiced: number;
+  previousYearToDatePaid: number;
+  previousYearToDateInvoiced: number;
 }
 
 export type ActivityType = "lead" | "quote" | "project" | "site" | "invoice";
@@ -390,6 +397,7 @@ export const useRevenueData = (
 ) => {
   const { enabled = true } = options;
 
+
   return useQuery<RevenueData, Error>({
     queryKey: ["dashboard", "revenue", orgId],
     enabled: Boolean(orgId) && enabled,
@@ -399,52 +407,70 @@ export const useRevenueData = (
       }
 
       const now = new Date();
-      const startPeriod = startOfMonth(subMonths(now, 11));
+      const trendStart = startOfMonth(subMonths(now, 11));
       const startWeek = startOfWeek(now, { weekStartsOn: 1 });
       const endWeek = endOfWeek(now, { weekStartsOn: 1 });
       const previousWeekStart = subDays(startWeek, 7);
       const previousWeekEnd = subDays(startWeek, 1);
+      const currentYearStart = startOfYear(now);
+      const previousYearCutoff = subYears(now, 1);
+      const previousYearStart = startOfYear(previousYearCutoff);
 
       const { data, error } = await supabase
         .from("invoices")
         .select("id, amount, status, created_at, updated_at")
         .eq("org_id", orgId)
-        .eq("status", "PAID")
-        .gte("created_at", startPeriod.toISOString())
+        .gte("created_at", previousYearStart.toISOString())
         .order("created_at", { ascending: true });
 
       if (error) throw error;
 
-      const invoices = data ?? [];
-      const buckets: RevenuePoint[] = [];
+      const invoices = (data ?? []).map((invoice) => ({
+        ...invoice,
+        status: invoice.status ? invoice.status.toUpperCase() : null,
+      }));
+      const paidInvoices = invoices.filter((invoice) => invoice.status === "PAID");
 
+      const buckets: RevenuePoint[] = [];
       for (let i = 0; i < 12; i += 1) {
-        const monthDate = addMonths(startPeriod, i);
+        const monthDate = addMonths(trendStart, i);
         const isoMonth = format(monthDate, "yyyy-MM");
-        const total = invoices
+        const invoicedTotal = invoices
+          .filter((invoice) => format(new Date(invoice.created_at), "yyyy-MM") === isoMonth)
+          .reduce((acc, invoice) => acc + (invoice.amount ?? 0), 0);
+        const paidTotal = paidInvoices
           .filter((invoice) => format(new Date(invoice.created_at), "yyyy-MM") === isoMonth)
           .reduce((acc, invoice) => acc + (invoice.amount ?? 0), 0);
 
         buckets.push({
           isoMonth,
           month: formatMonthLabel(monthDate),
-          total,
+          total: paidTotal,
+          invoicedTotal,
         });
       }
 
       const currentMonthTotal = buckets.at(-1)?.total ?? 0;
       const previousMonthTotal = buckets.at(-2)?.total ?? 0;
 
-      const sumInInterval = (start: Date, end: Date) =>
-        invoices
+      const sumInInterval = (records: typeof invoices, start: Date, end: Date) =>
+        records
           .filter((invoice) => {
             const date = new Date(invoice.created_at);
             return date >= start && date <= end;
           })
           .reduce((acc, invoice) => acc + (invoice.amount ?? 0), 0);
 
-      const currentWeekTotal = sumInInterval(startWeek, endWeek);
-      const previousWeekTotal = sumInInterval(previousWeekStart, previousWeekEnd);
+      const currentWeekTotal = sumInInterval(paidInvoices, startWeek, endWeek);
+      const previousWeekTotal = sumInInterval(paidInvoices, previousWeekStart, previousWeekEnd);
+      const yearToDatePaid = sumInInterval(paidInvoices, currentYearStart, now);
+      const yearToDateInvoiced = sumInInterval(invoices, currentYearStart, now);
+      const previousYearToDatePaid = sumInInterval(paidInvoices, previousYearStart, previousYearCutoff);
+      const previousYearToDateInvoiced = sumInInterval(
+        invoices,
+        previousYearStart,
+        previousYearCutoff,
+      );
 
       return {
         points: buckets,
@@ -452,12 +478,17 @@ export const useRevenueData = (
         previousMonthTotal,
         currentWeekTotal,
         previousWeekTotal,
-        hasData: invoices.length > 0,
+        hasData: paidInvoices.length > 0,
         generatedAt: now.toISOString(),
+        yearToDatePaid,
+        yearToDateInvoiced,
+        previousYearToDatePaid,
+        previousYearToDateInvoiced,
       } satisfies RevenueData;
     },
   });
 };
+
 
 export const useActivityFeed = (
   orgId: string | null,
