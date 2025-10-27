@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type FieldType = "text" | "number" | "select" | "textarea" | "checkbox";
 
@@ -20,13 +20,67 @@ type DynamicField = {
 };
 
 type DynamicFieldsEditorProps = {
-  value: { schema: DynamicField[]; defaults: Record<string, any> };
+  value: {
+    schema: DynamicField[] | Record<string, DynamicField> | null | undefined;
+    defaults: Record<string, any>;
+  };
   onChange: (value: { schema: DynamicField[]; defaults: Record<string, any> }) => void;
   disabled?: boolean;
 };
 
+const normalizeSchema = (
+  schema: DynamicFieldsEditorProps["value"]["schema"],
+): DynamicField[] => {
+  if (!schema) {
+    return [];
+  }
+
+  if (Array.isArray(schema)) {
+    return schema;
+  }
+
+  return Object.values(schema);
+};
+
 export const DynamicFieldsEditor = ({ value, onChange, disabled }: DynamicFieldsEditorProps) => {
-  const [fields, setFields] = useState<DynamicField[]>(value.schema || []);
+  const [fields, setFields] = useState<DynamicField[]>(() => normalizeSchema(value.schema));
+
+  const updateParent = useCallback(
+    (updatedFields: DynamicField[]) => {
+      const defaults: Record<string, any> = {};
+      updatedFields.forEach((field) => {
+        if (field.defaultValue !== undefined) {
+          defaults[field.name] = field.defaultValue;
+        }
+      });
+      onChange({ schema: updatedFields, defaults });
+    },
+    [onChange],
+  );
+
+  useEffect(() => {
+    const normalizedSchema = normalizeSchema(value.schema);
+    const fieldsWithDefaults = normalizedSchema.map((field) => {
+      const defaultValue = value.defaults?.[field.name];
+      if (defaultValue === undefined) {
+        return { ...field };
+      }
+      return { ...field, defaultValue };
+    });
+    const shouldForceUpdate = !Array.isArray(value.schema);
+
+    setFields((previousFields) => {
+      const hasSchemaChanged =
+        JSON.stringify(previousFields) !== JSON.stringify(fieldsWithDefaults);
+
+      if (hasSchemaChanged || shouldForceUpdate) {
+        updateParent(fieldsWithDefaults);
+        return fieldsWithDefaults;
+      }
+
+      return previousFields;
+    });
+  }, [updateParent, value.defaults, value.schema]);
 
   const addField = () => {
     const newField: DynamicField = {
@@ -51,16 +105,6 @@ export const DynamicFieldsEditor = ({ value, onChange, disabled }: DynamicFields
     const updatedFields = fields.map((f) => (f.id === id ? { ...f, ...updates } : f));
     setFields(updatedFields);
     updateParent(updatedFields);
-  };
-
-  const updateParent = (updatedFields: DynamicField[]) => {
-    const defaults: Record<string, any> = {};
-    updatedFields.forEach((field) => {
-      if (field.defaultValue !== undefined) {
-        defaults[field.name] = field.defaultValue;
-      }
-    });
-    onChange({ schema: updatedFields, defaults });
   };
 
   return (
