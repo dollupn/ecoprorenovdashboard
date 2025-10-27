@@ -43,22 +43,23 @@ import {
 } from "@/components/quotes/AddQuoteDialog";
 import {
   getDynamicFieldEntries,
+  getDynamicFieldNumericValue,
   formatDynamicFieldValue,
 } from "@/lib/product-params";
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 import { useOrganizationPrimeSettings } from "@/features/organizations/useOrganizationPrimeSettings";
 import {
-  buildPrimeCeeEntries,
-  computePrimeCee,
-  getValorisationLabel,
+  computePrimeCeeEur,
+  computeProjectCeeTotals,
+  type CeeConfig,
+  type DynamicParams,
+  type PrimeCeeResult,
+} from "@/lib/cee";
+import {
   withDefaultProductCeeConfig,
-  type PrimeCeeComputation,
-  type PrimeCeeProductCatalogEntry,
-  type PrimeCeeProductDisplayMap,
-  type PrimeCeeProductResult,
-  type PrimeProductInput,
   type ProductCeeConfig,
 } from "@/lib/prime-cee-unified";
+import { formatFormulaCoefficient } from "@/lib/valorisation-formula";
 
 type Project = Tables<"projects">;
 type ProductSummary = Pick<
@@ -109,23 +110,187 @@ const decimalFormatter = new Intl.NumberFormat("fr-FR", {
 const formatCurrency = (value: number) => currencyFormatter.format(value);
 const formatDecimal = (value: number) => decimalFormatter.format(value);
 
-const buildProjectProductDisplayMap = (
-  projectProducts?: ProjectProduct[],
-): PrimeCeeProductDisplayMap => {
-  return (projectProducts ?? []).reduce<PrimeCeeProductDisplayMap>((acc, item) => {
-    const key = item.id ?? item.product_id;
-    if (!key) {
-      return acc;
+type ProjectProductCeeEntry = {
+  projectProductId: string;
+  productCode: string | null;
+  productName: string | null;
+  multiplierLabel: string | null;
+  multiplierValue: number | null;
+  result: PrimeCeeResult | null;
+  warnings: {
+    missingDynamicParams: boolean;
+    missingKwh: boolean;
+  };
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const toNumber = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value.replace(/\s+/g, "").replace(",", "."));
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return null;
+};
+
+const toPositiveNumber = (value: unknown): number | null => {
+  const numeric = toNumber(value);
+  return numeric !== null && numeric > 0 ? numeric : null;
+};
+
+const normalizeKey = (value: string | null | undefined) =>
+  typeof value === "string" ? value.trim().toLowerCase() : "";
+
+const getSchemaFieldLabel = (
+  paramsSchema: ProductSummary["params_schema"],
+  key: string,
+) => {
+  if (!paramsSchema || !key) return null;
+
+  const normalizedKey = normalizeKey(key);
+  if (!normalizedKey) return null;
+
+  const fields = Array.isArray(paramsSchema)
+    ? paramsSchema
+    : isRecord(paramsSchema) && Array.isArray(paramsSchema.fields)
+      ? paramsSchema.fields
+      : [];
+
+  for (const field of fields as Array<Record<string, unknown>>) {
+    if (!isRecord(field)) continue;
+    const fieldName = normalizeKey(typeof field.name === "string" ? field.name : null);
+    if (!fieldName) continue;
+
+    if (fieldName === normalizedKey) {
+      if (typeof field.label === "string" && field.label.trim().length > 0) {
+        return field.label;
+      }
+
+      if (typeof field.name === "string" && field.name.trim().length > 0) {
+        return field.name;
+      }
+    }
+  }
+
+  return null;
+};
+
+const findOverrideForBuilding = (
+  config: ProductCeeConfig | undefined,
+  buildingType: string | null | undefined,
+) => {
+  if (!config || !buildingType) return null;
+
+  const normalized = normalizeKey(buildingType);
+  if (!normalized) return null;
+
+  for (const [key, value] of Object.entries(config.overrides ?? {})) {
+    if (normalizeKey(key) === normalized) {
+      return value ?? null;
+    }
+  }
+
+  return null;
+};
+
+const findKwhEntry = (
+  product: ProductSummary | null | undefined,
+  buildingType: string | null | undefined,
+) => {
+  if (!product || !Array.isArray(product.kwh_cumac_values)) return null;
+
+  const normalized = normalizeKey(buildingType);
+  if (!normalized) return null;
+
+  return (
+    product.kwh_cumac_values.find((entry) => normalizeKey(entry.building_type) === normalized) ??
+    null
+  );
+};
+
+const resolveBonificationValue = (
+  product: ProductSummary,
+  override: ReturnType<typeof findOverrideForBuilding>,
+  primeBonification: number | null | undefined,
+) =>
+  toPositiveNumber(override?.bonification) ??
+  toPositiveNumber(product.cee_config.defaults?.bonification) ??
+  toPositiveNumber(product.valorisation_bonification) ??
+  toPositiveNumber(primeBonification);
+
+const resolveCoefficientValue = (
+  product: ProductSummary,
+  override: ReturnType<typeof findOverrideForBuilding>,
+) =>
+  toPositiveNumber(override?.coefficient) ??
+  toPositiveNumber(product.cee_config.defaults?.coefficient) ??
+  toPositiveNumber(product.valorisation_coefficient);
+
+const resolveMultiplierDetails = (
+  product: ProductSummary,
+  projectProduct: ProjectProduct,
+  override: ReturnType<typeof findOverrideForBuilding>,
+): { value: number | null; label: string | null; missingDynamicParams: boolean } => {
+  const overrideConfig = override?.multiplier;
+  const defaultConfig = product.cee_config.defaults?.multiplier;
+  const multiplierConfig =
+    overrideConfig && overrideConfig.key
+      ? overrideConfig
+      : defaultConfig && defaultConfig.key
+        ? defaultConfig
+        : null;
+
+  if (multiplierConfig?.key) {
+    const schemaLabel = getSchemaFieldLabel(product.params_schema, multiplierConfig.key);
+    const coefficient = toPositiveNumber(multiplierConfig.coefficient) ?? 1;
+    const targets = schemaLabel
+      ? [multiplierConfig.key, schemaLabel]
+      : [multiplierConfig.key];
+    const dynamicValue = getDynamicFieldNumericValue(
+      product.params_schema,
+      projectProduct.dynamic_params,
+      targets,
+    );
+
+    if (dynamicValue !== null && dynamicValue > 0) {
+      const labelBase = schemaLabel ?? multiplierConfig.key;
+      const label =
+        coefficient !== 1
+          ? `${labelBase} × ${formatFormulaCoefficient(coefficient)}`
+          : labelBase;
+
+      return {
+        value: dynamicValue * coefficient,
+        label,
+        missingDynamicParams: false,
+      };
     }
 
-    acc[key] = {
-      productCode: item.product?.code ?? null,
-      productName: item.product?.name ?? null,
+    return {
+      value: null,
+      label: schemaLabel ?? multiplierConfig.key,
+      missingDynamicParams: true,
     };
+  }
 
-    return acc;
-  }, {});
+  const quantityValue = toPositiveNumber(projectProduct.quantity);
+  if (quantityValue !== null) {
+    return { value: quantityValue, label: "Quantité", missingDynamicParams: false };
+  }
+
+  return { value: null, label: null, missingDynamicParams: false };
 };
+
+const resolveDelegatePrice = (delegate?: DelegateSummary | null) =>
+  toNumber(delegate?.price_eur_per_mwh);
 
 const ProjectDetails = () => {
   const { id } = useParams<{ id: string }>();
@@ -200,69 +365,101 @@ const ProjectDetails = () => {
     [project?.project_products]
   );
 
-  const valorisationResult = useMemo<PrimeCeeComputation | null>(() => {
-    if (!project) return null;
+  const { entries: ceeEntries, totals: ceeTotals } = useMemo(() => {
+    if (!project) {
+      return {
+        entries: [] as ProjectProductCeeEntry[],
+        totals: computeProjectCeeTotals([]),
+      };
+    }
 
-    const projectProductsInput = project.project_products.reduce<PrimeProductInput[]>((acc, pp) => {
-      acc.push({
-        id: pp.id,
-        product_id: pp.product_id,
-        quantity: pp.quantity,
-        dynamic_params: (pp.dynamic_params as Record<string, unknown>) ?? {},
-      });
-      return acc;
-    }, []);
+    const buildingType =
+      typeof project.building_type === "string" ? project.building_type.trim() : "";
+    const delegatePrice = resolveDelegatePrice(project.delegate);
 
-    const productMap = project.project_products.reduce<Record<string, PrimeCeeProductCatalogEntry>>((acc, pp) => {
-      if (pp.product) {
-        acc[pp.product_id] = pp.product;
+    const entries = projectProducts.map((item, index) => {
+      const product = item.product;
+      const entryId = item.id ?? item.product_id ?? `product-${index}`;
+
+      let multiplierLabel: string | null = null;
+      let multiplierValue: number | null = null;
+      let missingDynamicParams = false;
+      let missingKwh = !buildingType;
+      let result: PrimeCeeResult | null = null;
+
+      if (!product) {
+        return {
+          projectProductId: entryId,
+          productCode: null,
+          productName: null,
+          multiplierLabel,
+          multiplierValue,
+          result,
+          warnings: { missingDynamicParams, missingKwh },
+        } satisfies ProjectProductCeeEntry;
+      }
+
+      const override = findOverrideForBuilding(product.cee_config, buildingType);
+      const multiplierDetails = resolveMultiplierDetails(product, item, override);
+      multiplierLabel = multiplierDetails.label;
+      multiplierValue = multiplierDetails.value;
+      missingDynamicParams = multiplierDetails.missingDynamicParams;
+
+      const kwhEntry = findKwhEntry(product, buildingType);
+      const kwhValue = toPositiveNumber(kwhEntry?.kwh_cumac);
+      missingKwh = !buildingType || !kwhValue;
+
+      if (!missingKwh && multiplierValue && multiplierValue > 0 && kwhValue) {
+        const bonification = resolveBonificationValue(product, override, primeBonification);
+        const coefficient = resolveCoefficientValue(product, override);
+        const quantityValue = toNumber(item.quantity);
+        const dynamicParams = isRecord(item.dynamic_params)
+          ? (item.dynamic_params as DynamicParams)
+          : null;
+
+        const config: CeeConfig = {
+          kwhCumac: kwhValue,
+          bonification: bonification ?? undefined,
+          coefficient: coefficient ?? undefined,
+          multiplier: multiplierValue,
+          quantity: quantityValue ?? null,
+          delegatePriceEurPerMwh: delegatePrice ?? null,
+          dynamicParams,
+          valorisationFormula: product.valorisation_formula,
+        };
+
+        result = computePrimeCeeEur(config);
+      }
+
+      return {
+        projectProductId: entryId,
+        productCode: product.code ?? null,
+        productName: product.name ?? null,
+        multiplierLabel,
+        multiplierValue,
+        result,
+        warnings: { missingDynamicParams, missingKwh },
+      } satisfies ProjectProductCeeEntry;
+    });
+
+    const totals = computeProjectCeeTotals(entries.map((entry) => entry.result));
+
+    return { entries, totals };
+  }, [project, projectProducts, primeBonification]);
+
+  const ceeEntryMap = useMemo(() => {
+    return ceeEntries.reduce<Record<string, ProjectProductCeeEntry>>((acc, entry) => {
+      if (entry.projectProductId) {
+        acc[entry.projectProductId] = entry;
       }
       return acc;
     }, {});
+  }, [ceeEntries]);
 
-    return computePrimeCee({
-      products: projectProductsInput,
-      productMap,
-      buildingType: project.building_type,
-      delegate: project.delegate,
-      primeBonification,
-    });
-  }, [project, primeBonification]);
-
-  const projectProductDisplayMap = useMemo(
-    () => buildProjectProductDisplayMap(projectProducts),
-    [projectProducts]
+  const hasComputedCeeTotals = useMemo(
+    () => ceeEntries.some((entry) => entry.result !== null),
+    [ceeEntries],
   );
-
-  const valorisationPrimeEntries = useMemo(
-    () =>
-      buildPrimeCeeEntries({
-        computation: valorisationResult,
-        productMap: projectProductDisplayMap,
-      }),
-    [valorisationResult, projectProductDisplayMap]
-  );
-
-  const valorisationProductEntries = useMemo(() => {
-    if (!valorisationResult?.products) return [];
-    
-    return valorisationResult.products.filter(
-      (entry): entry is PrimeCeeProductResult =>
-        Boolean(entry && entry.valorisationPerUnitEur && entry.valorisationPerUnitEur > 0)
-    );
-  }, [valorisationResult]);
-
-  const displayedValorisationEntries = useMemo<PrimeCeeProductResult[]>(
-    () => (valorisationPrimeEntries.length ? valorisationPrimeEntries : valorisationProductEntries),
-    [valorisationPrimeEntries, valorisationProductEntries]
-  );
-
-  const valorisationEntryMap = useMemo(() => {
-    return displayedValorisationEntries.reduce<Record<string, PrimeCeeProductResult>>((acc, entry) => {
-      acc[entry.projectProductId] = entry;
-      return acc;
-    }, {});
-  }, [displayedValorisationEntries]);
 
   if (isLoading || membersLoading) {
     return (
@@ -373,7 +570,9 @@ const ProjectDetails = () => {
   const displayedPrimeValue =
     typeof project?.prime_cee === "number"
       ? project.prime_cee
-      : valorisationResult?.totalPrime ?? null;
+      : hasComputedCeeTotals
+        ? ceeTotals.totalPrime
+        : null;
 
   return (
     <Layout>
@@ -555,49 +754,74 @@ const ProjectDetails = () => {
                     : "Non définie"}
                 </span>
               </div>
-              {displayedValorisationEntries.map((entry) => {
-                const valorisationLabel = (entry.valorisationLabel || "Valorisation m²/LED").trim();
+              <div className="flex items-center gap-2">
+                <HandCoins className="w-4 h-4 text-amber-600" />
+                <span className="text-muted-foreground">Valorisation totale:</span>
+                <span className="font-medium text-amber-600">
+                  {hasComputedCeeTotals
+                    ? `${formatCurrency(ceeTotals.totalValorisationEur)} (${formatDecimal(
+                        ceeTotals.totalValorisationMwh,
+                      )} MWh)`
+                    : "Non calculée"}
+                </span>
+              </div>
+              {projectProducts.map((item, index) => {
+                const entryId = item.id ?? item.product_id ?? `product-${index}`;
+                const ceeEntry = ceeEntryMap[entryId];
+                if (!ceeEntry) {
+                  return null;
+                }
+
+                const labelBase =
+                  ceeEntry.multiplierLabel && ceeEntry.multiplierLabel.trim().length > 0
+                    ? ceeEntry.multiplierLabel
+                    : "Valorisation CEE";
+                const summaryLabel = item.product?.code
+                  ? `${labelBase} (${item.product.code})`
+                  : labelBase;
+
+                let summaryDetails: string;
+                if (
+                  ceeEntry.result &&
+                  typeof ceeEntry.multiplierValue === "number" &&
+                  ceeEntry.multiplierValue > 0
+                ) {
+                  summaryDetails = `${formatDecimal(ceeEntry.result.valorisationPerUnitMwh)} MWh × ${formatDecimal(
+                    ceeEntry.multiplierValue,
+                  )} = ${formatDecimal(ceeEntry.result.valorisationTotalMwh)} MWh`;
+                } else if (ceeEntry.warnings.missingDynamicParams) {
+                  summaryDetails = "Paramètres dynamiques manquants";
+                } else if (ceeEntry.warnings.missingKwh) {
+                  summaryDetails = "Aucune valeur kWh pour ce bâtiment";
+                } else {
+                  summaryDetails = "Prime non calculée";
+                }
+
                 return (
                   <div
-                    key={`valorisation-summary-${entry.projectProductId}`}
+                    key={`valorisation-summary-${entryId}`}
                     className="flex items-start gap-2"
                   >
                     <HandCoins className="w-4 h-4 text-amber-600 mt-0.5" />
                     <div className="flex flex-col gap-1 text-xs sm:text-sm">
-                      <span className="text-muted-foreground">
-                        {valorisationLabel}
-                        {entry.productCode ? ` (${entry.productCode})` : ""}
-                      </span>
+                      <span className="text-muted-foreground">{summaryLabel}</span>
                       <span className="font-medium text-emerald-600 text-sm">
-                        {formatCurrency(entry.valorisationPerUnitEur ?? 0)} / {entry.multiplierLabel}
+                        {ceeEntry.result
+                          ? `${formatCurrency(ceeEntry.result.valorisationPerUnitEur)} / ${
+                              ceeEntry.multiplierLabel ?? "unité"
+                            }`
+                          : "Non calculée"}
                       </span>
-                      <span className="text-xs text-muted-foreground">
-                        {`${formatDecimal(entry.valorisationPerUnitMwh)} MWh × ${entry.multiplierLabel} = ${formatDecimal(
-                          entry.valorisationTotalMwh,
-                        )} MWh`}
-                      </span>
+                      <span className="text-xs text-muted-foreground">{summaryDetails}</span>
                       <span className="text-xs font-semibold text-amber-600">
-                        Prime calculée : {formatCurrency(entry.valorisationTotalEur ?? entry.totalPrime ?? 0)}
+                        {ceeEntry.result
+                          ? `Prime calculée : ${formatCurrency(ceeEntry.result.totalPrime)}`
+                          : "Prime non calculée"}
                       </span>
                     </div>
                   </div>
                 );
               })}
-              {displayedValorisationEntries.map((entry) => (
-                <div
-                  key={`valorisation-summary-${entry.projectProductId}`}
-                  className="flex items-center gap-2"
-                >
-                  <HandCoins className="w-4 h-4 text-amber-600" />
-                  <span className="text-muted-foreground">
-                    Valorisation CEE
-                    {entry.productCode ? ` (${entry.productCode})` : ""}:
-                  </span>
-                  <span className="font-medium text-amber-600">
-                    {formatCurrency(entry.valorisationPerUnitEur ?? 0)} / {getValorisationLabel(entry)}
-                  </span>
-                </div>
-              ))}
               <div className="flex items-center gap-2">
                 <UserRound className="w-4 h-4 text-primary" />
                 <span className="text-muted-foreground">Délégataire:</span>
@@ -654,16 +878,50 @@ const ProjectDetails = () => {
                 Aucun produit (hors ECO) n'est associé à ce projet.
               </p>
             ) : (
-              projectProducts.map((item) => {
+              projectProducts.map((item, index) => {
                 const dynamicFields = getDynamicFieldEntries(
                   item.product?.params_schema ?? null,
                   item.dynamic_params
                 );
-                const valorisationEntry = valorisationEntryMap[item.id ?? item.product_id];
+                const entryId = item.id ?? item.product_id ?? `product-${index}`;
+                const ceeEntry = ceeEntryMap[entryId];
+                const hasWarnings =
+                  Boolean(ceeEntry?.warnings.missingDynamicParams) ||
+                  Boolean(ceeEntry?.warnings.missingKwh);
+
+                const multiplierDisplay = (() => {
+                  if (!ceeEntry) return "Non renseigné";
+                  if (typeof ceeEntry.multiplierValue === "number" && ceeEntry.multiplierValue > 0) {
+                    const value = formatDecimal(ceeEntry.multiplierValue);
+                    return ceeEntry.multiplierLabel
+                      ? `${value} (${ceeEntry.multiplierLabel})`
+                      : value;
+                  }
+                  if (ceeEntry.warnings.missingDynamicParams) {
+                    return "Paramètres dynamiques manquants";
+                  }
+                  return "Non renseigné";
+                })();
+
+                const valorisationTotalDisplay = (() => {
+                  if (!ceeEntry) return "Non calculée";
+                  if (ceeEntry.result) {
+                    return `${formatCurrency(ceeEntry.result.valorisationTotalEur)} · ${formatDecimal(
+                      ceeEntry.result.valorisationTotalMwh,
+                    )} MWh`;
+                  }
+                  if (ceeEntry.warnings.missingDynamicParams) {
+                    return "Paramètres dynamiques manquants";
+                  }
+                  if (ceeEntry.warnings.missingKwh) {
+                    return "Aucune valeur kWh";
+                  }
+                  return "Non calculée";
+                })();
 
                 return (
                   <div
-                    key={item.id}
+                    key={item.id ?? entryId}
                     className="border border-border/60 rounded-lg p-4 space-y-3"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -679,6 +937,20 @@ const ProjectDetails = () => {
                         <span className="text-sm font-medium">Quantité : {item.quantity}</span>
                       )}
                     </div>
+                    {hasWarnings ? (
+                      <div className="flex flex-wrap gap-2">
+                        {ceeEntry?.warnings.missingKwh ? (
+                          <Badge className="bg-amber-100 text-amber-700 border-amber-200" variant="outline">
+                            kWh manquant pour ce bâtiment
+                          </Badge>
+                        ) : null}
+                        {ceeEntry?.warnings.missingDynamicParams ? (
+                          <Badge className="bg-amber-100 text-amber-700 border-amber-200" variant="outline">
+                            Paramètres dynamiques manquants
+                          </Badge>
+                        ) : null}
+                      </div>
+                    ) : null}
                     {dynamicFields.length > 0 && (
                       <div className="grid gap-2 md:grid-cols-2 text-sm">
                         {dynamicFields.map((field) => (
@@ -694,31 +966,35 @@ const ProjectDetails = () => {
                         ))}
                       </div>
                     )}
-                    {valorisationEntry?.valorisationPerUnitEur ? (
-                      <>
-                        <div className="flex flex-col gap-1 text-sm pt-2 border-t border-border/40">
-                          <span className="text-muted-foreground">
-                            {(valorisationEntry.valorisationLabel || "Valorisation m²/LED").trim()}
-                          </span>
+                    {ceeEntry ? (
+                      <div className="space-y-2 text-sm pt-2 border-t border-border/40">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Multiplicateur</span>
+                          <span className="font-medium text-right">{multiplierDisplay}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Valorisation / unité</span>
                           <span className="font-medium text-emerald-600 text-right">
-                            {formatCurrency(valorisationEntry.valorisationPerUnitEur ?? 0)} / {valorisationEntry.multiplierLabel}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {`${formatDecimal(valorisationEntry.valorisationPerUnitMwh)} MWh × ${valorisationEntry.multiplierLabel} = ${formatDecimal(
-                              valorisationEntry.valorisationTotalMwh,
-                            )} MWh`}
-                          </span>
-                          <span className="text-xs font-semibold text-amber-600 text-right">
-                            Prime calculée : {formatCurrency(valorisationEntry.valorisationTotalEur ?? valorisationEntry.totalPrime ?? 0)}
+                            {ceeEntry.result
+                              ? `${formatCurrency(ceeEntry.result.valorisationPerUnitEur)}${
+                                  ceeEntry.multiplierLabel ? ` / ${ceeEntry.multiplierLabel}` : ""
+                                }`
+                              : "Non calculée"}
                           </span>
                         </div>
-                        <div className="flex items-center justify-between text-sm pt-2 border-t border-border/40">
-                          <span className="text-muted-foreground">Valorisation CEE</span>
-                          <span className="font-medium text-amber-600 text-right">
-                            {formatCurrency(valorisationEntry.valorisationPerUnitEur ?? 0)} / {getValorisationLabel(valorisationEntry)}
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Valorisation totale</span>
+                          <span className="font-semibold text-amber-600 text-right">
+                            {valorisationTotalDisplay}
                           </span>
                         </div>
-                      </>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Prime calculée</span>
+                          <span className="font-semibold text-emerald-600 text-right">
+                            {ceeEntry.result ? formatCurrency(ceeEntry.result.totalPrime) : "Non calculée"}
+                          </span>
+                        </div>
+                      </div>
                     ) : null}
                   </div>
                 );
