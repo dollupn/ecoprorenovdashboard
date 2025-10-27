@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
+import { withDefaultProductCeeConfig } from "@/lib/prime-cee-unified";
 
 export type DynamicFieldSchema = {
   name: string;
@@ -210,11 +211,11 @@ export const useUpdateLead = (_orgId: string | null) => {
 export const getOrganizationProducts = async (orgId: string) => {
   const { data, error } = await supabase
     .from("product_catalog")
-    .select("id, name, category, is_active")
+    .select("id, name, category, is_active, cee_config")
     .eq("org_id", orgId)
     .eq("is_active", true)
     .order("name", { ascending: true });
 
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map((item) => withDefaultProductCeeConfig(item));
 };

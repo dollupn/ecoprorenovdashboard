@@ -2,12 +2,17 @@ import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
+import {
+  withDefaultProductCeeConfig,
+  type ProductCeeConfig,
+} from "@/lib/prime-cee-unified";
 
 export type CategoryRecord = Tables<"categories">;
 export type ProductRecord = Tables<"product_catalog">;
 export type ProductKwhCumacRecord = Tables<"product_kwh_cumac">;
 
-export type ProductCatalogRecord = ProductRecord & {
+export type ProductCatalogRecord = Omit<ProductRecord, "cee_config"> & {
+  cee_config: ProductCeeConfig;
   kwh_cumac_values?: ProductKwhCumacRecord[];
 };
 
@@ -131,9 +136,14 @@ export const useProductCatalog = (
       const { data, error, count } = await query;
 
       if (error) throw error;
+
+      const sanitized = (data ?? []).map((item) =>
+        withDefaultProductCeeConfig(item),
+      ) as ProductCatalogRecord[];
+
       return {
-        data: (data ?? []) as ProductCatalogRecord[],
-        count: count ?? (data?.length ?? 0),
+        data: sanitized,
+        count: count ?? sanitized.length,
       };
     },
   });
@@ -181,7 +191,7 @@ const fetchProductWithRelations = async (id: string): Promise<ProductCatalogReco
     .single();
 
   if (error) throw error;
-  return data as ProductCatalogRecord;
+  return withDefaultProductCeeConfig(data) as ProductCatalogRecord;
 };
 
 export const useCreateProduct = (orgId: string | null) => {
@@ -214,7 +224,7 @@ export const useCreateProduct = (orgId: string | null) => {
           return fetchProductWithRelations(data.id);
         }
 
-        return data as ProductCatalogRecord;
+        return withDefaultProductCeeConfig(data) as ProductCatalogRecord;
       },
       onSuccess: () => {
         if (orgId) {
@@ -248,7 +258,7 @@ export const useUpdateProduct = (orgId: string | null) => {
         return fetchProductWithRelations(id);
       }
 
-      return data as ProductCatalogRecord;
+      return withDefaultProductCeeConfig(data) as ProductCatalogRecord;
     },
     onSuccess: () => {
       if (orgId) {

@@ -19,6 +19,7 @@ import type { Tables } from "@/integrations/supabase/types";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { getProjectClientName } from "@/lib/projects";
 import { getDynamicFieldNumericValue } from "@/lib/product-params";
+import { withDefaultProductCeeConfig, type ProductCeeConfig } from "@/lib/prime-cee-unified";
 import {
   Plus,
   Search,
@@ -47,7 +48,8 @@ type SiteStatus = "PLANIFIE" | "EN_PREPARATION" | "EN_COURS" | "SUSPENDU" | "TER
 type CofracStatus = "EN_ATTENTE" | "CONFORME" | "NON_CONFORME" | "A_PLANIFIER";
 
 type ProjectProduct = Tables<"project_products"> & {
-  product: (Pick<Tables<"product_catalog">, "code" | "params_schema"> & {
+  product: (Pick<Tables<"product_catalog">, "code" | "params_schema" | "cee_config"> & {
+    cee_config: ProductCeeConfig;
     kwh_cumac_values?: Tables<"product_kwh_cumac">[];
   }) | null;
 };
@@ -220,12 +222,19 @@ const Sites = () => {
       const { data, error } = await supabase
         .from("projects")
         .select(
-          "*, project_products(id, dynamic_params, product:product_catalog(code, params_schema, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))"
+          "*, project_products(id, dynamic_params, product:product_catalog(code, params_schema, cee_config, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))"
         )
         .eq("user_id", user.id);
 
       if (error) throw error;
-      return (data as ProjectWithProducts[]) ?? [];
+
+      return ((data as ProjectWithProducts[]) ?? []).map((project) => ({
+        ...project,
+        project_products: (project.project_products ?? []).map((pp) => ({
+          ...pp,
+          product: pp.product ? withDefaultProductCeeConfig(pp.product) : null,
+        })),
+      }));
     },
     enabled: !!user,
   });

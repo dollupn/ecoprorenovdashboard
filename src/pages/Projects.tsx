@@ -60,12 +60,14 @@ import {
   buildPrimeCeeEntries,
   computePrimeCee,
   getValorisationLabel,
+  withDefaultProductCeeConfig,
   type PrimeCeeComputation,
   type PrimeCeeProductCatalogEntry,
   type PrimeCeeProductDisplayMap,
   type PrimeCeeProductResult,
   type PrimeCeeValorisationEntry,
   type PrimeProductInput,
+  type ProductCeeConfig,
 } from "@/lib/prime-cee-unified";
 
 type Project = Tables<"projects">;
@@ -81,7 +83,9 @@ type ProductSummary = Pick<
   | "valorisation_bonification"
   | "valorisation_coefficient"
   | "valorisation_formula"
+  | "cee_config"
 > & {
+  cee_config: ProductCeeConfig;
   kwh_cumac_values?: Pick<Tables<"product_kwh_cumac">, "id" | "building_type" | "kwh_cumac">[];
 };
 type ProjectProduct = Pick<
@@ -157,7 +161,7 @@ const Projects = () => {
       let query = supabase
         .from("projects")
         .select(
-          "*, delegate:delegates(id, name, price_eur_per_mwh), lead:leads(email), project_products(id, product_id, quantity, dynamic_params, product:product_catalog(id, code, name, category, params_schema, valorisation_bonification, valorisation_coefficient, valorisation_formula, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))"
+          "*, delegate:delegates(id, name, price_eur_per_mwh), lead:leads(email), project_products(id, product_id, quantity, dynamic_params, product:product_catalog(id, code, name, category, params_schema, valorisation_bonification, valorisation_coefficient, valorisation_formula, cee_config, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))"
         )
         .order("created_at", { ascending: false });
 
@@ -172,7 +176,18 @@ const Projects = () => {
       const { data, error } = await query;
 
       if (error) throw error;
-      return (data ?? []) as ProjectWithRelations[];
+
+      const sanitized = (data ?? []).map((project) => ({
+        ...project,
+        project_products: (project.project_products ?? []).map((pp) => ({
+          ...pp,
+          product: pp.product
+            ? withDefaultProductCeeConfig(pp.product)
+            : null,
+        })),
+      }));
+
+      return sanitized as ProjectWithRelations[];
     },
     enabled: !!user && (!currentOrgId || !membersLoading),
   });

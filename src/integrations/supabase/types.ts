@@ -444,6 +444,7 @@ export type Database = {
         Row: {
           base_price_ht: number | null
           category: string | null
+          cee_config: Json | null
           code: string
           created_at: string
           custom_description_primary: string | null
@@ -476,6 +477,7 @@ export type Database = {
         Insert: {
           base_price_ht?: number | null
           category?: string | null
+          cee_config?: Json | null
           code: string
           created_at?: string
           custom_description_primary?: string | null
@@ -508,6 +510,7 @@ export type Database = {
         Update: {
           base_price_ht?: number | null
           category?: string | null
+          cee_config?: Json | null
           code?: string
           created_at?: string
           custom_description_primary?: string | null
