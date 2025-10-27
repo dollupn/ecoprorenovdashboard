@@ -56,9 +56,6 @@ type PrimeProductBase = Pick<
   | "is_active"
   | "params_schema"
   | "default_params"
-  | "valorisation_bonification"
-  | "valorisation_coefficient"
-  | "valorisation_formula"
   | "cee_config"
 >;
 
@@ -247,46 +244,17 @@ type MultiplierDetection = {
 };
 
 const resolveFormulaMultiplier = ({
-  formula,
   schemaFields,
   dynamicParams,
   quantity,
 }: {
-  formula: ProductCatalog["valorisation_formula"];
   schemaFields: SchemaField[];
   dynamicParams?: Record<string, unknown>;
   quantity?: number | null;
 }): MultiplierDetection | null => {
-  const normalized = normalizeValorisationFormula(formula);
-  if (!normalized) return null;
-
-  const coefficient = toPositiveNumber(normalized.coefficient) ?? 1;
-  const withCoefficientLabel = (label: string) =>
-    coefficient !== 1 ? `${label} × ${formatFormulaCoefficient(coefficient)}` : label;
-
-  if (normalized.variableKey === FORMULA_QUANTITY_KEY) {
-    const quantityValue = toPositiveNumber(quantity);
-    if (quantityValue) {
-      const label = normalized.variableLabel ?? "Quantité";
-      return { value: quantityValue * coefficient, label: withCoefficientLabel(label) };
-    }
-    return null;
-  }
-
-  if (!dynamicParams) return null;
-
-  const rawValue = dynamicParams[normalized.variableKey];
-  const numericValue = toNumber(rawValue);
-  if (!numericValue || numericValue <= 0) return null;
-
-  const match = schemaFields.find((field) => field.name === normalized.variableKey);
-  const label =
-    (normalized.variableLabel && normalized.variableLabel.length > 0 && normalized.variableLabel) ||
-    (typeof match?.label === "string" && match.label.length > 0 ? match.label : undefined) ||
-    (typeof match?.name === "string" && match.name.length > 0 ? match.name : undefined) ||
-    normalized.variableKey;
-
-  return { value: numericValue * coefficient, label: withCoefficientLabel(label) };
+  // Formula multiplier logic has been moved to cee_config
+  // This function is deprecated and returns null
+  return null;
 };
 
 // ============================================================================
@@ -377,7 +345,6 @@ export const getMultiplierValue = ({
   }
 
   const formulaMultiplier = resolveFormulaMultiplier({
-    formula: product.valorisation_formula,
     schemaFields,
     dynamicParams,
     quantity: quantityValue,
@@ -423,11 +390,8 @@ export const resolveBonificationFactor = (value: number | null | undefined) => {
   return numeric ?? 2;
 };
 
-export const resolveProductCoefficient = (
-  product: Pick<ProductCatalog, "valorisation_coefficient">,
-) => {
-  const numeric = toPositiveNumber(product.valorisation_coefficient);
-  return numeric ?? 1;
+export const resolveProductCoefficient = () => {
+  return 1;
 };
 
 // ============================================================================
@@ -508,9 +472,8 @@ export const computePrimeCee = ({
     const baseKwh = kwhEntry.kwh_cumac;
     if (baseKwh <= 0) continue;
 
-    const productBonification = toPositiveNumber(product.valorisation_bonification);
-    const bonification = resolveBonificationFactor(productBonification ?? primeBonification);
-    const coefficient = resolveProductCoefficient(product);
+    const bonification = resolveBonificationFactor(primeBonification);
+    const coefficient = resolveProductCoefficient();
 
     const valorisationPerUnitMwh = (baseKwh * bonification * coefficient) / 1000;
     if (!Number.isFinite(valorisationPerUnitMwh) || valorisationPerUnitMwh <= 0) {

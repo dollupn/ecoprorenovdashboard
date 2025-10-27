@@ -71,9 +71,6 @@ type ProductSummary = Pick<
   | "params_schema"
   | "is_active"
   | "default_params"
-  | "valorisation_bonification"
-  | "valorisation_coefficient"
-  | "valorisation_formula"
   | "cee_config"
 > & {
   cee_config: ProductCeeConfig;
@@ -199,16 +196,11 @@ const findKwhEntry = (
 };
 
 const resolveBonificationValue = (
-  product: ProductSummary,
   primeBonification: number | null | undefined,
 ) =>
-  toPositiveNumber(product.valorisation_bonification) ??
-  toPositiveNumber(primeBonification);
+  toPositiveNumber(primeBonification) ?? 2;
 
-const resolveCoefficientValue = (
-  product: ProductSummary,
-) =>
-  toPositiveNumber(product.valorisation_coefficient);
+const resolveCoefficientValue = () => 1;
 
 const resolveMultiplierDetails = (
   product: ProductSummary,
@@ -291,7 +283,7 @@ const ProjectDetails = () => {
       let query = supabase
         .from("projects")
         .select(
-          "*, delegate:delegates(id, name, price_eur_per_mwh), project_products(id, product_id, quantity, dynamic_params, product:product_catalog(id, code, name, category, params_schema, valorisation_bonification, valorisation_coefficient, valorisation_formula, cee_config, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))"
+          "*, delegate:delegates(id, name, price_eur_per_mwh), project_products(id, product_id, quantity, dynamic_params, product:product_catalog(id, code, name, category, params_schema, cee_config, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))"
         )
         .eq("id", id);
 
@@ -378,8 +370,8 @@ const ProjectDetails = () => {
       missingKwh = !buildingType || !kwhValue;
 
       if (!missingKwh && multiplierValue && multiplierValue > 0 && kwhValue) {
-        const bonification = resolveBonificationValue(product, primeBonification);
-        const coefficient = resolveCoefficientValue(product);
+        const bonification = resolveBonificationValue(primeBonification);
+        const coefficient = resolveCoefficientValue();
         const quantityValue = toNumber(item.quantity);
         const dynamicParams = isRecord(item.dynamic_params)
           ? (item.dynamic_params as DynamicParams)
@@ -393,7 +385,6 @@ const ProjectDetails = () => {
           quantity: quantityValue ?? null,
           delegatePriceEurPerMwh: delegatePrice ?? null,
           dynamicParams,
-          valorisationFormula: product.valorisation_formula,
         };
 
         result = computePrimeCeeEur(config);

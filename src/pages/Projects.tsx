@@ -80,9 +80,6 @@ type ProductSummary = Pick<
   | "params_schema"
   | "is_active"
   | "default_params"
-  | "valorisation_bonification"
-  | "valorisation_coefficient"
-  | "valorisation_formula"
   | "cee_config"
 > & {
   cee_config: ProductCeeConfig;
@@ -161,7 +158,7 @@ const Projects = () => {
       let query = supabase
         .from("projects")
         .select(
-          "*, delegate:delegates(id, name, price_eur_per_mwh), lead:leads(email), project_products(id, product_id, quantity, dynamic_params, product:product_catalog(id, code, name, category, params_schema, valorisation_bonification, valorisation_coefficient, valorisation_formula, cee_config, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))"
+          "*, delegate:delegates(id, name, price_eur_per_mwh), lead:leads(email), project_products(id, product_id, quantity, dynamic_params, product:product_catalog(id, code, name, category, params_schema, cee_config, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))"
         )
         .order("created_at", { ascending: false });
 

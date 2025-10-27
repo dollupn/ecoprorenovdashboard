@@ -489,9 +489,6 @@ export const ProductFormDialog = ({
       technical_sheet_url: values.technical_sheet_url,
       params_schema: values.params_schema,
       default_params: values.default_params,
-      valorisation_bonification: product?.valorisation_bonification ?? null,
-      valorisation_coefficient: product?.valorisation_coefficient ?? null,
-      valorisation_formula: product?.valorisation_formula ?? null,
       cee_config: normalizedCeeConfig,
     };
 

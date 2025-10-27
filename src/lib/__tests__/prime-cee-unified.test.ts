@@ -113,9 +113,6 @@ describe("computePrimeCee", () => {
     is_active: true,
     params_schema: null,
     default_params: null,
-    valorisation_bonification: null,
-    valorisation_coefficient: 1,
-    valorisation_formula: null,
     cee_config: DEFAULT_PRODUCT_CEE_CONFIG,
     kwh_cumac_values: [
       {
