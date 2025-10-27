@@ -1189,13 +1189,13 @@ export const ProductFormDialog = ({
                               {...field}
                               value={field.value ?? ""}
                               onChange={(event) => field.onChange(event.target.value)}
-                              placeholder="Exemple : KWH_CUMAC * BONUS_DOM * LED_WATT / MWH_DIVISOR"
+                              placeholder="Exemple : KWH_CUMAC * BONIFICATION * LED_WATT / MWH_DIVISOR"
                               rows={3}
                               disabled={isSubmitting}
                             />
                           </FormControl>
                           <p className="text-xs text-muted-foreground px-1">
-                            Variables disponibles : KWH_CUMAC, BONUS_DOM, LED_WATT, MWH_DIVISOR, BONIFICATION, COEFFICIENT.
+                            Variables disponibles : KWH_CUMAC, BONIFICATION, LED_WATT, MWH_DIVISOR, COEFFICIENT.
                           </p>
                           <FormMessage />
                         </FormItem>

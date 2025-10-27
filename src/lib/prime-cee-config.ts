@@ -60,10 +60,10 @@ export const PRODUCT_CEE_FORMULA_TEMPLATES: ProductCeeFormulaTemplate[] = [
   },
   {
     id: "lighting-led",
-    label: "Éclairage LED (BONUS_DOM × LED_WATT)",
+    label: "Éclairage LED (BONIFICATION × LED_WATT)",
     description:
-      "Formule spécifique aux opérations d'éclairage : KWH_CUMAC × BONUS_DOM × LED_WATT / MWH_DIVISOR.",
-    expression: "KWH_CUMAC * BONUS_DOM * LED_WATT / MWH_DIVISOR",
+      "Formule spécifique aux opérations d'éclairage : KWH_CUMAC × BONIFICATION × LED_WATT / MWH_DIVISOR.",
+    expression: "KWH_CUMAC * BONIFICATION * LED_WATT / MWH_DIVISOR",
     allowedCategories: ["lighting"],
     requiresLedWattConstant: true,
   },
@@ -71,7 +71,7 @@ export const PRODUCT_CEE_FORMULA_TEMPLATES: ProductCeeFormulaTemplate[] = [
     id: "custom",
     label: "Formule personnalisée",
     description:
-      "Définissez votre propre formule en utilisant les variables disponibles (KWH_CUMAC, BONUS_DOM, LED_WATT, MWH_DIVISOR, BONIFICATION, COEFFICIENT).",
+      "Définissez votre propre formule en utilisant les variables disponibles (KWH_CUMAC, BONIFICATION, LED_WATT, MWH_DIVISOR, COEFFICIENT).",
     expression: null,
     isCustom: true,
   },

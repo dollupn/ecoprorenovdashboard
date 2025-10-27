@@ -2,7 +2,6 @@ import { Parser } from "expr-eval";
 
 const DEFAULT_BONIFICATION = 2;
 const DEFAULT_COEFFICIENT = 1;
-const DEFAULT_BONUS_DOM = 1;
 const DEFAULT_LED_WATT = 1;
 const DEFAULT_MWH_DIVISOR = 1000;
 
@@ -101,9 +100,6 @@ const resolveNonNegativeFromRecord = (
 
 export type DynamicParams = Record<string, unknown> & {
   quantity?: number | string | null;
-  bonus_dom?: number | string | null;
-  bonusDom?: number | string | null;
-  BONUS_DOM?: number | string | null;
   led_watt?: number | string | null;
   ledWatt?: number | string | null;
   LED_WATT?: number | string | null;
@@ -116,7 +112,6 @@ export type CeeOverrides = Partial<{
   multiplier: number | null;
   delegatePriceEurPerMwh: number | null;
   valorisationTarif: number | null;
-  bonusDom: number | null;
   ledWatt: number | null;
   mwhDivisor: number | null;
 }>;
@@ -192,14 +187,6 @@ const resolveMultiplier = (config: CeeConfig) => {
   return 0;
 };
 
-const resolveBonusDom = (config: CeeConfig) =>
-  toPositiveNumber(config.overrides?.bonusDom) ??
-  resolvePositiveFromRecord(
-    config.dynamicParams,
-    ["bonus_dom", "bonusDom", "BONUS_DOM"],
-    DEFAULT_BONUS_DOM,
-  );
-
 const resolveLedWatt = (config: CeeConfig) =>
   toPositiveNumber(config.overrides?.ledWatt) ??
   resolvePositiveFromRecord(
@@ -245,14 +232,12 @@ export const computeValorisationMwh = (config: CeeConfig): ValorisationMwhResult
 
   const expression = getExpression(config.valorisationFormula);
   if (expression) {
-    const bonusDom = resolveBonusDom(config);
     const ledWatt = resolveLedWatt(config);
     const evaluated = evaluateExpression(expression, {
       KWH_CUMAC: kwh,
-      BONUS_DOM: bonusDom,
+      BONIFICATION: bonification,
       LED_WATT: ledWatt,
       MWH_DIVISOR: divisor,
-      BONIFICATION: bonification,
       COEFFICIENT: coefficient,
     });
 

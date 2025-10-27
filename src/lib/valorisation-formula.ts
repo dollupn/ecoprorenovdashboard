@@ -303,10 +303,8 @@ export type CalcCeeLightingResult = {
 };
 
 const DEFAULT_LED_WATT = 250;
-const DEFAULT_BONUS_DOM = 1;
 
 const LIGHTING_LED_WATT_KEYS = ["led_watt", "ledWatt", "LED_WATT"] as const;
-const LIGHTING_BONUS_DOM_KEYS = ["bonus_dom", "bonusDom", "BONUS_DOM"] as const;
 const LIGHTING_MULTIPLIER_KEYS = [
   "nombre_luminaire",
   "nombreLuminaire",
@@ -333,12 +331,6 @@ export const calcCeeLighting = ({
     0,
   );
 
-  const bonusDom = resolvePositiveFromDynamicParams(
-    dynamicParams,
-    LIGHTING_BONUS_DOM_KEYS,
-    DEFAULT_BONUS_DOM,
-  );
-
   const ledWatt = resolvePositiveFromDynamicParams(
     dynamicParams,
     LIGHTING_LED_WATT_KEYS,
@@ -347,7 +339,7 @@ export const calcCeeLighting = ({
 
   const adjustedBase =
     !warningMissingBase && basePerLuminaire
-      ? (basePerLuminaire * bonusDom * ledWatt) / DEFAULT_LED_WATT
+      ? (basePerLuminaire * bonification * ledWatt) / DEFAULT_LED_WATT
       : 0;
 
   const valorisationPerUnitMwh =
@@ -361,11 +353,10 @@ export const calcCeeLighting = ({
     console.table({
       buildingType: buildingType ?? "",
       nombreLuminaire,
-      bonusDom,
+      bonification,
       ledWatt,
       basePerLuminaire: basePerLuminaire ?? 0,
       adjustedBase,
-      bonification,
       coefficient,
       valorisationPerUnitMwh,
       valorisationPerUnitEur,

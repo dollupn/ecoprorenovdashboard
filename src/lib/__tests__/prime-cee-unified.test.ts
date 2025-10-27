@@ -199,7 +199,6 @@ describe("computePrimeCee", () => {
           dynamic_params: {
             nombre_luminaire: 40,
             led_watt: 200,
-            bonus_dom: 1.2,
           },
         },
       ],

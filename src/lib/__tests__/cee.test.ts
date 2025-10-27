@@ -37,10 +37,9 @@ describe("computeValorisationEur", () => {
       multiplier: 45,
       delegatePriceEurPerMwh: 6,
       valorisationFormula: {
-        expression: "KWH_CUMAC * BONUS_DOM * LED_WATT / MWH_DIVISOR",
+        expression: "KWH_CUMAC * BONIFICATION * LED_WATT / MWH_DIVISOR",
       },
       dynamicParams: {
-        bonus_dom: 1.3,
         led_watt: 30,
       },
     };
@@ -75,10 +74,9 @@ describe("computeProjectCeeTotals", () => {
       multiplier: 45,
       delegatePriceEurPerMwh: 6,
       valorisationFormula: {
-        expression: "KWH_CUMAC * BONUS_DOM * LED_WATT / MWH_DIVISOR",
+        expression: "KWH_CUMAC * BONIFICATION * LED_WATT / MWH_DIVISOR",
       },
       dynamicParams: {
-        bonus_dom: 1.3,
         led_watt: 30,
       },
     };
