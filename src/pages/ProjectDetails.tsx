@@ -34,6 +34,7 @@ import {
   FileText,
   Trash2,
   Mail,
+  AlertTriangle,
 } from "lucide-react";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useMembers } from "@/features/members/api";
@@ -60,6 +61,7 @@ import {
   type ProductCeeConfig,
 } from "@/lib/prime-cee-unified";
 import { formatFormulaCoefficient, FORMULA_QUANTITY_KEY } from "@/lib/valorisation-formula";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 type Project = Tables<"projects">;
 type ProductSummary = Pick<
@@ -118,6 +120,14 @@ type ProjectProductCeeEntry = {
     missingDynamicParams: boolean;
     missingKwh: boolean;
   };
+};
+
+type PrimeCeeLightingDetails = {
+  per_led_mwh?: number | string | null;
+  per_led_eur?: number | string | null;
+  total_mwh?: number | string | null;
+  total_eur?: number | string | null;
+  missing_base?: boolean | null;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -739,6 +749,18 @@ const ProjectDetails = () => {
                   ? `${labelBase} (${item.product.code})`
                   : labelBase;
 
+                const productCategory = (item.product?.category ?? "").toLowerCase();
+                const isLightingProduct = productCategory === "lighting";
+                const lightingDetails = (
+                  (ceeEntry.result as (PrimeCeeResult & { lighting?: PrimeCeeLightingDetails }) | null)?.lighting ??
+                  null
+                );
+                const lightingPerLedEur = toNumber(lightingDetails?.per_led_eur);
+                const lightingPerLedMwh = toNumber(lightingDetails?.per_led_mwh);
+                const lightingTotalMwh = toNumber(lightingDetails?.total_mwh);
+                const lightingTotalEur = toNumber(lightingDetails?.total_eur);
+                const lightingMissingBase = Boolean(lightingDetails?.missing_base);
+
                 let summaryDetails: string;
                 if (
                   ceeEntry.result &&
@@ -756,6 +778,43 @@ const ProjectDetails = () => {
                   summaryDetails = "Prime non calculée";
                 }
 
+                const valorisationLine = (() => {
+                  if (isLightingProduct) {
+                    if (lightingPerLedEur !== null) {
+                      return `Valorisation Nombre Led : ${formatCurrency(lightingPerLedEur)} / Nombre Led`;
+                    }
+                    if (ceeEntry.result) {
+                      return `Valorisation Nombre Led : ${formatCurrency(
+                        ceeEntry.result.valorisationPerUnitEur,
+                      )} / ${ceeEntry.multiplierLabel ?? "Nombre Led"}`;
+                    }
+                    return "Valorisation Nombre Led : Non calculée";
+                  }
+
+                  return ceeEntry.result
+                    ? `${formatCurrency(ceeEntry.result.valorisationPerUnitEur)} / ${
+                        ceeEntry.multiplierLabel ?? "unité"
+                      }`
+                    : "Non calculée";
+                })();
+
+                const lightingCalculationLine =
+                  isLightingProduct && lightingPerLedMwh !== null && lightingTotalMwh !== null
+                    ? `Soit ${formatDecimal(lightingPerLedMwh)} MWh × Nombre Led = ${formatDecimal(
+                        lightingTotalMwh,
+                      )} MWh`
+                    : null;
+
+                const primeValue = (() => {
+                  if (isLightingProduct) {
+                    if (lightingTotalEur !== null) {
+                      return lightingTotalEur;
+                    }
+                  }
+
+                  return ceeEntry.result?.totalPrime ?? null;
+                })();
+
                 return (
                   <div
                     key={`valorisation-summary-${entryId}`}
@@ -763,18 +822,29 @@ const ProjectDetails = () => {
                   >
                     <HandCoins className="w-4 h-4 text-amber-600 mt-0.5" />
                     <div className="flex flex-col gap-1 text-xs sm:text-sm">
-                      <span className="text-muted-foreground">{summaryLabel}</span>
-                      <span className="font-medium text-emerald-600 text-sm">
-                        {ceeEntry.result
-                          ? `${formatCurrency(ceeEntry.result.valorisationPerUnitEur)} / ${
-                              ceeEntry.multiplierLabel ?? "unité"
-                            }`
-                          : "Non calculée"}
-                      </span>
+                      <div className="flex items-center gap-1 text-muted-foreground">
+                        <span>{summaryLabel}</span>
+                        {isLightingProduct && lightingMissingBase ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex">
+                                <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" align="center" className="text-xs">
+                              kWh cumac manquant pour cette typologie
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : null}
+                      </div>
+                      <span className="font-medium text-emerald-600 text-sm">{valorisationLine}</span>
+                      {lightingCalculationLine ? (
+                        <span className="text-xs text-muted-foreground">{lightingCalculationLine}</span>
+                      ) : null}
                       <span className="text-xs text-muted-foreground">{summaryDetails}</span>
                       <span className="text-xs font-semibold text-amber-600">
-                        {ceeEntry.result
-                          ? `Prime calculée : ${formatCurrency(ceeEntry.result.totalPrime)}`
+                        {primeValue !== null
+                          ? `Prime calculée : ${formatCurrency(primeValue)}`
                           : "Prime non calculée"}
                       </span>
                     </div>
