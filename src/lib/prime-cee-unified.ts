@@ -453,10 +453,6 @@ export const computePrimeCee = ({
     totalPrime += productPrime;
     totalValorisationEur += valorisationTotalEur;
 
-    totalValorisationMwh += valorisationTotalMwh;
-    totalValorisationEur += valorisationTotalEur;
-    totalPrime += valorisationTotalEur;
-
     productResults.push({
       projectProductId: projectProduct.id ?? projectProduct.product_id,
       productId: product.id ?? projectProduct.product_id,

@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildPrimeCeeEntries,
+  computePrimeCee,
   type PrimeCeeComputation,
+  type PrimeCeeProductCatalogEntry,
   type PrimeCeeProductDisplayMap,
 } from "../prime-cee-unified";
 
@@ -92,5 +94,63 @@ describe("buildPrimeCeeEntries", () => {
 
     expect(entries).toHaveLength(1);
     expect(entries[0].projectProductId).toBe("pp-1");
+  });
+});
+
+describe("computePrimeCee", () => {
+  const baseProduct = ({
+    id,
+    kwh_cumac,
+  }: {
+    id: string;
+    kwh_cumac: number;
+  }): PrimeCeeProductCatalogEntry => ({
+    id,
+    name: `Product ${id}`,
+    code: `CODE-${id}`,
+    category: "CAT",
+    is_active: true,
+    params_schema: null,
+    default_params: null,
+    valorisation_bonification: null,
+    valorisation_coefficient: 1,
+    valorisation_formula: null,
+    kwh_cumac_values: [
+      {
+        building_type: "house",
+        kwh_cumac,
+      },
+    ],
+  });
+
+  it("aggregates totals without duplicating products", () => {
+    const productMap: Record<string, PrimeCeeProductCatalogEntry> = {
+      "prod-1": baseProduct({ id: "prod-1", kwh_cumac: 1000 }),
+      "prod-2": baseProduct({ id: "prod-2", kwh_cumac: 1500 }),
+    };
+
+    const result = computePrimeCee({
+      products: [
+        { product_id: "prod-1", quantity: 5 },
+        { product_id: "prod-2", quantity: 4 },
+      ],
+      productMap,
+      buildingType: "house",
+      delegate: { price_eur_per_mwh: 50 } as any,
+      primeBonification: 2,
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.products).toHaveLength(2);
+    expect(result?.totalValorisationMwh).toBeCloseTo(22, 5);
+    expect(result?.totalValorisationEur).toBeCloseTo(1100, 5);
+    expect(result?.totalPrime).toBeCloseTo(1100, 5);
+
+    const summedPrime = result?.products.reduce((sum, product) => sum + product.totalPrime, 0) ?? 0;
+    const summedValorisationMwh =
+      result?.products.reduce((sum, product) => sum + product.valorisationTotalMwh, 0) ?? 0;
+
+    expect(result?.totalPrime).toBeCloseTo(summedPrime, 5);
+    expect(result?.totalValorisationMwh).toBeCloseTo(summedValorisationMwh, 5);
   });
 });
