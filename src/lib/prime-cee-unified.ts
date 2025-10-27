@@ -4,6 +4,21 @@ import {
   formatFormulaCoefficient,
   normalizeValorisationFormula,
 } from "./valorisation-formula";
+import {
+  DEFAULT_PRODUCT_CEE_CONFIG,
+  formatProductCeeMultiplierLabel,
+  isQuantityMultiplier,
+  normalizeProductCeeConfig,
+  type ProductCeeConfig,
+} from "./prime-cee-config";
+
+export type { ProductCeeConfig } from "./prime-cee-config";
+export {
+  DEFAULT_PRODUCT_CEE_CONFIG,
+  formatProductCeeMultiplierLabel,
+  isQuantityMultiplier,
+  normalizeProductCeeConfig,
+};
 
 // ============================================================================
 // TYPES
@@ -30,33 +45,6 @@ type SchemaField = {
   name?: string;
   label?: string;
   [key: string]: unknown;
-};
-
-export type ProductCeeMultiplierConfig = {
-  key: string | null;
-  coefficient: number | null;
-};
-
-export type ProductCeeOverrideConfig = {
-  bonification: number | null;
-  coefficient: number | null;
-  multiplier: ProductCeeMultiplierConfig | null;
-};
-
-export type ProductCeeConfig = {
-  defaults: ProductCeeOverrideConfig;
-  overrides: Record<string, ProductCeeOverrideConfig>;
-};
-
-export const EMPTY_PRODUCT_CEE_OVERRIDE: ProductCeeOverrideConfig = {
-  bonification: null,
-  coefficient: null,
-  multiplier: null,
-};
-
-export const DEFAULT_PRODUCT_CEE_CONFIG: ProductCeeConfig = {
-  defaults: { ...EMPTY_PRODUCT_CEE_OVERRIDE },
-  overrides: {},
 };
 
 type PrimeProductBase = Pick<
@@ -167,64 +155,6 @@ const toPositiveNumber = (value: unknown): number | null => {
     return value;
   }
   return null;
-};
-
-const toNullableNumber = (value: unknown): number | null => toNumber(value);
-
-const sanitizeMultiplierConfig = (value: unknown): ProductCeeMultiplierConfig | null => {
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  const key = typeof value.key === "string" && value.key.trim().length > 0 ? value.key.trim() : null;
-  const coefficient = toNullableNumber(value.coefficient);
-
-  if (!key && coefficient === null) {
-    return null;
-  }
-
-  return {
-    key,
-    coefficient,
-  };
-};
-
-const sanitizeOverrideConfig = (value: unknown): ProductCeeOverrideConfig => {
-  if (!isRecord(value)) {
-    return { ...EMPTY_PRODUCT_CEE_OVERRIDE };
-  }
-
-  return {
-    bonification: toNullableNumber(value.bonification),
-    coefficient: toNullableNumber(value.coefficient),
-    multiplier: sanitizeMultiplierConfig(value.multiplier),
-  };
-};
-
-export const normalizeProductCeeConfig = (value: unknown): ProductCeeConfig => {
-  if (!isRecord(value)) {
-    return { ...DEFAULT_PRODUCT_CEE_CONFIG, defaults: { ...EMPTY_PRODUCT_CEE_OVERRIDE }, overrides: {} };
-  }
-
-  const overrides: Record<string, ProductCeeOverrideConfig> = {};
-
-  if (isRecord(value.overrides)) {
-    for (const [rawKey, rawValue] of Object.entries(value.overrides)) {
-      if (typeof rawKey !== "string") {
-        continue;
-      }
-      const key = rawKey.trim();
-      if (key.length === 0) {
-        continue;
-      }
-      overrides[key] = sanitizeOverrideConfig(rawValue);
-    }
-  }
-
-  return {
-    defaults: sanitizeOverrideConfig(value.defaults),
-    overrides,
-  };
 };
 
 export const withDefaultProductCeeConfig = <T extends { cee_config?: unknown }>(
@@ -363,6 +293,61 @@ const resolveFormulaMultiplier = ({
 // MULTIPLIER RESOLUTION (PUBLIC API)
 // ============================================================================
 
+const resolveCeeConfigMultiplier = ({
+  ceeConfig,
+  schemaFields,
+  dynamicParams,
+  quantity,
+}: {
+  ceeConfig: ProductCeeConfig | null | undefined;
+  schemaFields: SchemaField[];
+  dynamicParams?: Record<string, unknown>;
+  quantity?: number | null;
+}): MultiplierDetection | null => {
+  if (!ceeConfig) {
+    return null;
+  }
+
+  const multiplierKey =
+    typeof ceeConfig.primeMultiplierParam === "string"
+      ? ceeConfig.primeMultiplierParam
+      : null;
+
+  if (!multiplierKey) {
+    return null;
+  }
+
+  const coefficient = toPositiveNumber(ceeConfig.primeMultiplierCoefficient) ?? 1;
+  const withCoefficientLabel = (label: string) => formatProductCeeMultiplierLabel(label, coefficient);
+
+  if (isQuantityMultiplier(multiplierKey)) {
+    if (quantity && quantity > 0) {
+      return { value: quantity * coefficient, label: withCoefficientLabel("Quantité") };
+    }
+    return null;
+  }
+
+  if (!dynamicParams) {
+    return null;
+  }
+
+  const rawValue = dynamicParams[multiplierKey];
+  const numericValue = toNumber(rawValue);
+  if (!numericValue || numericValue <= 0) {
+    return null;
+  }
+
+  const match = schemaFields.find((field) => field.name === multiplierKey);
+  const label =
+    (typeof match?.label === "string" && match.label.trim().length > 0
+      ? match.label
+      : undefined) ??
+    (typeof match?.name === "string" && match.name.trim().length > 0 ? match.name : undefined) ??
+    multiplierKey;
+
+  return { value: numericValue * coefficient, label: withCoefficientLabel(label) };
+};
+
 /**
  * Detects the multiplier (champ dynamique) from product parameters
  * Priority: surface_isolee > nombre_led > quantity > other dynamic fields
@@ -379,6 +364,17 @@ export const getMultiplierValue = ({
     ? (projectProduct.dynamic_params as Record<string, unknown>)
     : undefined;
   const quantityValue = toPositiveNumber(projectProduct.quantity);
+
+  const ceeConfigMultiplier = resolveCeeConfigMultiplier({
+    ceeConfig: product.cee_config ?? DEFAULT_PRODUCT_CEE_CONFIG,
+    schemaFields,
+    dynamicParams,
+    quantity: quantityValue,
+  });
+
+  if (ceeConfigMultiplier) {
+    return ceeConfigMultiplier;
+  }
 
   const formulaMultiplier = resolveFormulaMultiplier({
     formula: product.valorisation_formula,
