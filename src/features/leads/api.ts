@@ -148,9 +148,21 @@ export const useLeadsList = (orgId: string | null, filters?: LeadFilters, search
       }
 
       if (sanitizedSearch) {
-        query = query.or(
-          `full_name.ilike.%${sanitizedSearch}%,email.ilike.%${sanitizedSearch}%,phone_raw.ilike.%${sanitizedSearch}%,city.ilike.%${sanitizedSearch}%,postal_code.ilike.%${sanitizedSearch}%,company.ilike.%${sanitizedSearch}%,siren.ilike.%${sanitizedSearch}%,product_name.ilike.%${sanitizedSearch}%,utm_source.ilike.%${sanitizedSearch}%`
-        );
+        const searchFilters = [
+          "full_name",
+          "email",
+          "phone_raw",
+          "city",
+          "postal_code",
+          "company",
+          "siren",
+          "product_name",
+          "utm_source",
+        ]
+          .map((column) => `${column}.ilike.%${sanitizedSearch}%`)
+          .join(",");
+
+        query = query.or(searchFilters);
       }
 
       const { data, error } = await query;
