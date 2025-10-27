@@ -33,12 +33,12 @@ export const LEGACY_QUANTITY_KEY = "__quantity__" as const;
 
 export const CATEGORY_MULTIPLIER_KEYS = {
   isolation: "surface_isolee",
-  eclairage: "nombre_luminaire",
+  eclairage: "nombre_led",
 } as const;
 
 const CATEGORY_MULTIPLIER_LABELS: Record<string, string> = {
   isolation: "Surface isolée",
-  eclairage: "Nombre de luminaire",
+  eclairage: "Nombre de LED",
 };
 
 type CategoryMultiplierKeyMap = typeof CATEGORY_MULTIPLIER_KEYS;
@@ -205,15 +205,15 @@ export const normalizeValorisationFormula = (
 
   const normalizedKey = normalizeKey(variableKey);
 
-  if (normalizedKey === "nombre_luminaire") {
+  if (normalizedKey === "nombre_led" || normalizedKey === "nombre_luminaire") {
     const candidates = [
       raw.variableValue,
       (raw as Record<string, unknown>).variable_value,
-      raw.nombre_luminaire,
-      raw.nombreLuminaire,
       raw.nombre_led,
       raw.nombreLed,
       (raw as Record<string, unknown>)["Nombre Led"],
+      raw.nombre_luminaire,
+      raw.nombreLuminaire,
     ];
 
     for (const candidate of candidates) {
@@ -306,12 +306,13 @@ const DEFAULT_LED_WATT = 250;
 
 const LIGHTING_LED_WATT_KEYS = ["led_watt", "ledWatt", "LED_WATT"] as const;
 const LIGHTING_MULTIPLIER_KEYS = [
-  "nombre_luminaire",
-  "nombreLuminaire",
-  "NOMBRE_LUMINAIRE",
-  "nombre_de_luminaire",
-  "nombreDeLuminaire",
-  "NOMBRE_DE_LUMINAIRE",
+  "nombre_led",
+  "nombreLed",
+  "NOMBRE_LED",
+  "Nombre Led",
+  "nombre_de_led",
+  "nombreDeLed",
+  "NOMBRE_DE_LED",
 ] as const;
 
 export const calcCeeLighting = ({
@@ -325,7 +326,7 @@ export const calcCeeLighting = ({
   const basePerLuminaire = getKwhCumacBasePerBuilding(kwhEntries, buildingType);
   const warningMissingBase = basePerLuminaire === null;
 
-  const nombreLuminaire = resolveNonNegativeFromDynamicParams(
+  const nombreLed = resolveNonNegativeFromDynamicParams(
     dynamicParams,
     LIGHTING_MULTIPLIER_KEYS,
     0,
@@ -343,16 +344,16 @@ export const calcCeeLighting = ({
       : 0;
 
   const valorisationPerUnitMwh =
-    adjustedBase > 0 ? (adjustedBase * bonification * coefficient) / 1000 : 0;
+    adjustedBase > 0 ? (adjustedBase * coefficient) / 1000 : 0;
 
   const valorisationPerUnitEur = valorisationPerUnitMwh * delegatePrice;
-  const valorisationTotalMwh = valorisationPerUnitMwh * nombreLuminaire;
-  const valorisationTotalEur = valorisationPerUnitEur * nombreLuminaire;
+  const valorisationTotalMwh = valorisationPerUnitMwh * nombreLed;
+  const valorisationTotalEur = valorisationPerUnitEur * nombreLed;
 
   if (process.env.NODE_ENV !== "production") {
     console.table({
       buildingType: buildingType ?? "",
-      nombreLuminaire,
+      nombreLed,
       bonification,
       ledWatt,
       basePerLuminaire: basePerLuminaire ?? 0,
@@ -373,7 +374,7 @@ export const calcCeeLighting = ({
     coefficient,
     valorisationPerUnitMwh,
     valorisationPerUnitEur,
-    multiplier: nombreLuminaire,
+    multiplier: nombreLed,
     valorisationTotalMwh,
     valorisationTotalEur,
     warningMissingBase,
