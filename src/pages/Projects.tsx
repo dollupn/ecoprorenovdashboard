@@ -207,10 +207,15 @@ const Projects = () => {
     totalValorisationEur: number;
     delegatePrice: number;
     products: PrimeCeeProductResult[];
+    displayedPrimeEntries: PrimeCeeValorisationEntry[];
+    fallbackPrimeEntries: PrimeCeeValorisationEntry[];
+    valorisationProductEntries: PrimeCeeProductResult[];
+    fallbackProductEntry?: PrimeCeeProductResult;
   };
 
   const projectValorisationSummaries = useMemo(() => {
     return projects.reduce<Record<string, ProjectValorisationSummary>>((acc, project) => {
+      const displayedProducts = getDisplayedProducts(project.project_products);
       const projectProducts = project.project_products.reduce<PrimeProductInput[]>((pAcc, pp) => {
         pAcc.push({
           id: pp.id,
@@ -228,6 +233,9 @@ const Projects = () => {
         return pMap;
       }, {});
 
+      const displayedProductMap = buildProjectProductDisplayMap(displayedProducts);
+      const fullProductMap = buildProjectProductDisplayMap(project.project_products);
+
       const result = computePrimeCee({
         products: projectProducts,
         productMap,
@@ -236,6 +244,29 @@ const Projects = () => {
         primeBonification,
       });
 
+      const displayedPrimeEntries = buildPrimeCeeEntries({
+        computation: result ?? null,
+        productMap: displayedProductMap,
+      });
+
+      const fallbackPrimeEntries = displayedPrimeEntries.length
+        ? displayedPrimeEntries
+        : buildPrimeCeeEntries({
+            computation: result ?? null,
+            productMap: fullProductMap,
+          });
+
+      const valorisationProductEntries = (result?.products ?? []).filter(
+        (entry): entry is PrimeCeeProductResult =>
+          Boolean(entry && entry.valorisationTotalEur && entry.valorisationTotalEur > 0),
+      );
+
+      const fallbackProductEntry =
+        valorisationProductEntries[0] ??
+        (result?.products ?? []).find(
+          (entry) => typeof entry.valorisationTotalMwh === "number" && entry.valorisationTotalMwh > 0,
+        );
+
       acc[project.id] = {
         computation: result ?? null,
         totalPrime: result?.totalPrime ?? 0,
@@ -243,6 +274,10 @@ const Projects = () => {
         totalValorisationEur: result?.totalValorisationEur ?? 0,
         delegatePrice: result?.delegatePrice ?? 0,
         products: result?.products ?? [],
+        displayedPrimeEntries,
+        fallbackPrimeEntries,
+        valorisationProductEntries,
+        fallbackProductEntry,
       };
 
       return acc;
@@ -278,33 +313,47 @@ const Projects = () => {
     }, {});
   }, [projects]);
 
-  const filteredProjects = useMemo(() => {
-    const normalizedSearch = searchTerm.trim().toLowerCase();
+  type ProcessedProject = {
+    project: ProjectWithRelations;
+    displayedProducts: ProjectProduct[];
+    dynamicFieldEntries: ReturnType<typeof getDynamicFieldEntries>[];
+    searchableText: string;
+    displayedValorisationEntries: PrimeCeeProductResult[];
+    clientName: string;
+    projectEmail: string | null;
+    surfaceFacturee: number;
+  };
 
-    let base = projects;
-
-    if (assignedFilter !== "all") {
-      base = base.filter((project) => project.assigned_to === assignedFilter);
-    }
-
-    if (!normalizedSearch) {
-      return base;
-    }
-
-    return base.filter((project) => {
-      const clientName = getProjectClientName(project);
+  const processedProjects = useMemo<ProcessedProject[]>(() => {
+    return projects.map((project) => {
       const displayedProducts = getDisplayedProducts(project.project_products);
+      const dynamicFieldEntries = displayedProducts.map((item) =>
+        getDynamicFieldEntries(item.product?.params_schema ?? null, item.dynamic_params),
+      );
 
-      const productCodes = displayedProducts
-        .map((item) => item.product?.code ?? "")
-        .join(" ");
+      const clientName = getProjectClientName(project);
+      const projectEmail =
+        (project as Project & { email?: string | null; client_email?: string | null }).email ??
+        (project as Project & { email?: string | null; client_email?: string | null }).client_email ??
+        project.lead?.email ??
+        null;
 
-      const dynamicValues = displayedProducts
-        .flatMap((item) =>
-          getDynamicFieldEntries(
-            item.product?.params_schema ?? null,
-            item.dynamic_params
-          ).map((entry) => entry.value?.toString().toLowerCase())
+      const valorisationSummary = projectValorisationSummaries[project.id];
+      const valorisationPrimeEntries = valorisationSummary?.displayedPrimeEntries ?? [];
+      const valorisationProductEntries = valorisationSummary?.valorisationProductEntries ?? [];
+      const displayedValorisationEntries =
+        valorisationPrimeEntries.length > 0 ? valorisationPrimeEntries : valorisationProductEntries;
+
+      const dynamicValues = dynamicFieldEntries
+        .flatMap((entries) =>
+          entries
+            .map((entry) => {
+              if (entry.value === undefined || entry.value === null) {
+                return null;
+              }
+              return String(entry.value).toLowerCase();
+            })
+            .filter((value): value is string => Boolean(value)),
         )
         .join(" ");
 
@@ -317,19 +366,44 @@ const Projects = () => {
         project.siren ?? "",
         project.city,
         project.postal_code,
-        productCodes,
+        displayedProducts.map((item) => item.product?.code ?? "").join(" "),
         project.assigned_to,
         project.source ?? "",
-        project.lead?.email ?? "",
+        projectEmail ?? "",
         project.delegate?.name ?? "",
         dynamicValues,
       ]
         .join(" ")
         .toLowerCase();
 
-      return searchable.includes(normalizedSearch);
+      return {
+        project,
+        displayedProducts,
+        dynamicFieldEntries,
+        displayedValorisationEntries,
+        searchableText: searchable,
+        clientName,
+        projectEmail,
+        surfaceFacturee: surfaceFactureeByProject[project.id] ?? 0,
+      } satisfies ProcessedProject;
     });
-  }, [searchTerm, projects, assignedFilter]);
+  }, [projects, projectValorisationSummaries, surfaceFactureeByProject]);
+
+  const filteredProjects = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
+    let base = processedProjects;
+
+    if (assignedFilter !== "all") {
+      base = base.filter((item) => item.project.assigned_to === assignedFilter);
+    }
+
+    if (!normalizedSearch) {
+      return base;
+    }
+
+    return base.filter((item) => item.searchableText.includes(normalizedSearch));
+  }, [searchTerm, processedProjects, assignedFilter]);
 
   const handleViewProject = (projectId: string) => {
     navigate(`/projects/${projectId}`);
@@ -371,33 +445,14 @@ const Projects = () => {
     const address = (project as Project & { address?: string | null }).address ?? "";
 
     const valorisationSummary = projectValorisationSummaries[project.id];
-    const valorisationProductEntries = (valorisationSummary?.products ?? [])
-      .filter(
-        (entry): entry is PrimeCeeProductResult =>
-          Boolean(entry && entry.valorisationTotalEur && entry.valorisationTotalEur > 0),
-      );
-    const fallbackValorisation =
-      valorisationSummary?.products.find(
-        (entry) => typeof entry.valorisationTotalEur === "number" && entry.valorisationTotalEur > 0,
-      ) ??
-      valorisationSummary?.products.find(
-        (entry) => typeof entry.valorisationTotalMwh === "number" && entry.valorisationTotalMwh > 0,
-      );
+    const valorisationProductEntries = valorisationSummary?.valorisationProductEntries ?? [];
+    const fallbackValorisation = valorisationSummary?.fallbackProductEntry;
     const selectedValorisation = valorisationProductEntries[0] ?? fallbackValorisation;
     const valorisationTotalEur =
       selectedValorisation?.valorisationTotalEur ?? selectedValorisation?.totalPrime ?? 0;
-    const valorisationPrimeEntries = buildPrimeCeeEntries({
-      computation: valorisationSummary?.computation ?? null,
-      productMap: buildProjectProductDisplayMap(displayedProducts),
-    });
-    let fallbackPrimeValorisation: PrimeCeeValorisationEntry | undefined;
-    if (!valorisationPrimeEntries.length) {
-      fallbackPrimeValorisation = buildPrimeCeeEntries({
-        computation: valorisationSummary?.computation ?? null,
-        productMap: buildProjectProductDisplayMap(project.project_products),
-      }).find((entry) => entry.valorisationTotalMwh > 0);
-    }
-    const selectedPrimeValorisation = valorisationPrimeEntries[0] ?? fallbackPrimeValorisation;
+    const primeEntries = valorisationSummary?.displayedPrimeEntries ?? [];
+    const fallbackPrimeEntries = valorisationSummary?.fallbackPrimeEntries ?? [];
+    const selectedPrimeValorisation = (primeEntries.length ? primeEntries : fallbackPrimeEntries)[0];
     const valorisationMwh = selectedPrimeValorisation?.valorisationTotalMwh ?? 0;
     const valorisationBase = selectedPrimeValorisation?.valorisationPerUnitEur ?? 0;
     const surfaceFacturee = surfaceFactureeByProject[project.id] ?? 0;
@@ -450,13 +505,10 @@ const Projects = () => {
   };
 
   const projectOptions = useMemo<SiteProjectOption[]>(() => {
-    return projects.map((project) => {
-      const clientName = getProjectClientName(project);
-      const displayedProducts = getDisplayedProducts(project.project_products);
+    return processedProjects.map(({ project, displayedProducts, clientName, surfaceFacturee }) => {
       const firstProduct = displayedProducts[0]?.product ?? project.project_products?.[0]?.product;
       const productLabel = firstProduct?.code || project.product_name || "";
       const address = (project as Project & { address?: string | null }).address ?? "";
-      const surfaceFacturee = surfaceFactureeByProject[project.id] ?? undefined;
 
       return {
         id: project.id,
@@ -466,10 +518,10 @@ const Projects = () => {
         address,
         city: project.city ?? "",
         postal_code: project.postal_code ?? "",
-        surface_facturee: surfaceFacturee && surfaceFacturee > 0 ? surfaceFacturee : undefined,
+        surface_facturee: surfaceFacturee > 0 ? surfaceFacturee : undefined,
       } satisfies SiteProjectOption;
     });
-  }, [projects, surfaceFactureeByProject]);
+  }, [processedProjects]);
 
   const handleSubmitSite = useCallback(async (values: SiteFormValues) => {
     if (!user || !currentOrgId) return;
@@ -607,29 +659,19 @@ const Projects = () => {
 
         {/* Projects Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredProjects.map((project) => {
-            const displayedProducts = getDisplayedProducts(project.project_products);
-            const statusConfig = statusMap[project.status ?? ""];
-            const badgeStyle = getProjectStatusBadgeStyle(statusConfig?.color);
-            const statusLabel = statusConfig?.label ?? project.status ?? "Statut";
-            const clientName = getProjectClientName(project);
-            const projectEmail =
-              (project as Project & { email?: string | null; client_email?: string | null }).email ??
-              (project as Project & { email?: string | null; client_email?: string | null }).client_email ??
-              project.lead?.email ??
-              null;
-            const projectCostValue = project.estimated_value ?? null;
-            const valorisationSummary = projectValorisationSummaries[project.id];
-            const valorisationPrimeEntries = buildPrimeCeeEntries({
-              computation: valorisationSummary?.computation ?? null,
-              productMap: buildProjectProductDisplayMap(displayedProducts),
-            });
-            const valorisationProductEntries = (valorisationSummary?.products ?? [])
-              .filter((entry): entry is PrimeCeeProductResult =>
-                Boolean(entry && entry.valorisationPerUnitEur && entry.valorisationPerUnitEur > 0)
-              );
-            const displayedValorisationEntries: PrimeCeeProductResult[] =
-              valorisationPrimeEntries.length ? valorisationPrimeEntries : valorisationProductEntries;
+          {filteredProjects.map(
+            ({
+              project,
+              displayedProducts,
+              dynamicFieldEntries,
+              displayedValorisationEntries,
+              clientName,
+              projectEmail,
+            }) => {
+              const statusConfig = statusMap[project.status ?? ""];
+              const badgeStyle = getProjectStatusBadgeStyle(statusConfig?.color);
+              const statusLabel = statusConfig?.label ?? project.status ?? "Statut";
+              const projectCostValue = project.estimated_value ?? null;
 
             return (
               <Card
@@ -707,12 +749,9 @@ const Projects = () => {
                     </div>
 
                     {displayedProducts.map((item, index) => {
-                      const dynamicFields = getDynamicFieldEntries(
-                        item.product?.params_schema ?? null,
-                        item.dynamic_params
-                      );
+                      const dynamicFields = dynamicFieldEntries[index];
 
-                      if (!dynamicFields.length) {
+                      if (!dynamicFields?.length) {
                         return null;
                       }
 
@@ -827,7 +866,7 @@ const Projects = () => {
                     })}
                     {displayedValorisationEntries.map((entry) => (
                       <div
-                        key={`${project.id}-valorisation-${entry.projectProductId}`}
+                        key={`${project.id}-valorisation-summary-${entry.projectProductId}`}
                         className="flex items-center justify-between"
                       >
                         <span className="text-sm text-muted-foreground">
@@ -904,7 +943,8 @@ const Projects = () => {
                 </CardContent>
               </Card>
             );
-          })}
+          },
+          )}
         </div>
 
         {filteredProjects.length === 0 && (
