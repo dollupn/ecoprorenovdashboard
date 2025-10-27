@@ -10,6 +10,7 @@ describe("buildPrimeCeeEntries", () => {
   const baseComputation: PrimeCeeComputation = {
     totalPrime: 750,
     totalValorisationMwh: 15,
+    totalValorisationEur: 750,
     delegatePrice: 50,
     products: [
       {
@@ -21,9 +22,12 @@ describe("buildPrimeCeeEntries", () => {
         bonification: 2,
         coefficient: 1,
         valorisationPerUnitMwh: 1.5,
+        valorisationPerUnitEur: 75,
+        valorisationLabel: "Valorisation Surface isolée",
         multiplier: 10,
         multiplierLabel: "Surface isolée",
         valorisationTotalMwh: 15,
+        valorisationTotalEur: 750,
         delegatePrice: 50,
         totalPrime: 750,
       },
@@ -66,9 +70,12 @@ describe("buildPrimeCeeEntries", () => {
           bonification: 2,
           coefficient: 1,
           valorisationPerUnitMwh: 1,
+          valorisationPerUnitEur: 40,
+          valorisationLabel: "Valorisation Quantité",
           multiplier: 0,
           multiplierLabel: "Quantité",
           valorisationTotalMwh: 0,
+          valorisationTotalEur: 0,
           delegatePrice: 40,
           totalPrime: 0,
         },

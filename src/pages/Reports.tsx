@@ -149,7 +149,7 @@ const Reports = () => {
         title: `Objectif CA ${currentYear}`,
         value: `${revenueProgress}% atteint`,
         description:
-          ANNUAL_REVENUE_TARGET === 0
+          ANNUAL_REVENUE_TARGET > 0
             ? "Définissez un objectif annuel pour suivre votre progression."
             : yearToDatePaid >= ANNUAL_REVENUE_TARGET
               ? `Objectif dépassé avec ${formatCurrency(yearToDatePaid)} encaissés.`

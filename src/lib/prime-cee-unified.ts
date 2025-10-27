@@ -51,8 +51,8 @@ export type PrimeCeeProductCatalogEntry = Pick<
 export type PrimeCeeProductResult = {
   projectProductId: string;
   productId: string;
-  productCode?: string | null;
-  productName?: string | null;
+  productCode: string | null;
+  productName: string | null;
   baseKwh: number;
   bonification: number;
   coefficient: number;
@@ -171,8 +171,8 @@ export const buildPrimeCeeEntries = ({
 
       return {
         ...product,
-        productCode: mapEntry.productCode ?? product.productCode,
-        productName: mapEntry.productName ?? product.productName,
+        productCode: mapEntry.productCode ?? product.productCode ?? null,
+        productName: mapEntry.productName ?? product.productName ?? null,
         valorisationPerUnit: roundToTwo(valorisationPerUnitRaw),
       } satisfies PrimeCeeValorisationEntry;
     })
@@ -425,7 +425,14 @@ export const computePrimeCee = ({
       continue;
     }
 
-    const multiplierDetection = getMultiplierValue({ product, projectProduct });
+    const multiplierDetection = getMultiplierValue({ 
+      product, 
+      projectProduct: {
+        product_id: projectProduct.product_id,
+        quantity: projectProduct.quantity,
+        dynamic_params: projectProduct.dynamic_params as any,
+      }
+    });
     const multiplierValue =
       multiplierDetection && Number.isFinite(multiplierDetection.value) && multiplierDetection.value > 0
         ? multiplierDetection.value
@@ -453,8 +460,8 @@ export const computePrimeCee = ({
     productResults.push({
       projectProductId: projectProduct.id ?? projectProduct.product_id,
       productId: product.id ?? projectProduct.product_id,
-      productCode: product.code,
-      productName: product.name,
+      productCode: product.code ?? null,
+      productName: product.name ?? null,
       baseKwh,
       bonification,
       coefficient,

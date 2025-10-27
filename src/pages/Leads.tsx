@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
+import { useCallback, useMemo, useRef, useState, useEffect, type ChangeEvent, type DragEvent } from "react";
 
 import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

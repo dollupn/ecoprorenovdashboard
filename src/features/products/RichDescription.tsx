@@ -86,8 +86,8 @@ const sanitize = (html: string) => {
     }
   });
 
-  DOMPurify.addHook("uponSanitizeAttribute", (_node, data) => {
-    const tag = data.tagName?.toLowerCase();
+  DOMPurify.addHook("uponSanitizeAttribute", (node, data) => {
+    const tag = (node as Element).tagName?.toLowerCase();
     const attr = data.attrName?.toLowerCase();
 
     if (!tag || !attr) {

@@ -130,7 +130,11 @@ const calculateProjectMwh = (project: ProjectWithProducts) => {
 
     const multiplier = getMultiplierValue({ 
       product: product as PrimeCeeProductCatalogEntry, 
-      projectProduct 
+      projectProduct: {
+        product_id: product.id,
+        quantity: projectProduct.quantity,
+        dynamic_params: projectProduct.dynamic_params,
+      }
     });
     
     if (!multiplier || multiplier.value <= 0) {

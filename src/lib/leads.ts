@@ -544,7 +544,7 @@ const sanitizeLeadDynamicFields = (
         const rawOptions = Array.isArray(field.options)
           ? field.options
           : typeof field.options === "string"
-            ? field.options.split(",")
+            ? (field.options as string).split(",")
             : [];
 
         const cleanedOptions = rawOptions
