@@ -49,37 +49,159 @@ const formatDecimalValue = (value: number | null | undefined, fallback: number) 
   return decimalFormatter.format(numeric);
 };
 
-type DynamicSchemaField = { name: string; label?: string | null };
+type DynamicSchemaField = { name: string; label?: string | null } & Record<string, unknown>;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isSchemaField = (field: unknown): field is DynamicSchemaField =>
+  isRecord(field) && typeof field.name === "string";
 
 const extractSchemaFields = (schema: unknown): DynamicSchemaField[] => {
   if (!schema) return [];
 
   if (Array.isArray(schema)) {
-    return schema.filter((field): field is DynamicSchemaField => {
-      return (
-        typeof field === "object" &&
-        field !== null &&
-        !Array.isArray(field) &&
-        typeof (field as Record<string, unknown>).name === "string"
-      );
-    }) as DynamicSchemaField[];
+    const fields = schema.filter(isSchemaField) as DynamicSchemaField[];
+    const hasInvalidEntries = fields.length !== schema.length;
+    return hasInvalidEntries ? fields : (schema as DynamicSchemaField[]);
   }
 
-  if (typeof schema === "object" && schema !== null) {
+  if (isRecord(schema)) {
     const fields = (schema as Record<string, unknown>).fields;
     if (Array.isArray(fields)) {
-      return fields.filter((field): field is DynamicSchemaField => {
-        return (
-          typeof field === "object" &&
-          field !== null &&
-          !Array.isArray(field) &&
-          typeof (field as Record<string, unknown>).name === "string"
-        );
-      }) as DynamicSchemaField[];
+      return fields.filter(isSchemaField) as DynamicSchemaField[];
     }
   }
 
   return [];
+};
+
+const buildDefaultsFromFields = (fields: DynamicSchemaField[]): Record<string, unknown> => {
+  const defaults: Record<string, unknown> = {};
+
+  fields.forEach((field) => {
+    const rawDefault = isRecord(field)
+      ? "defaultValue" in field && field.defaultValue !== undefined
+        ? field.defaultValue
+        : "default" in field && field.default !== undefined
+          ? field.default
+          : "value" in field && field.value !== undefined
+            ? field.value
+            : undefined
+      : undefined;
+
+    if (rawDefault !== undefined) {
+      defaults[field.name] = rawDefault;
+    }
+  });
+
+  return defaults;
+};
+
+const normalizeSchemaValue = (value: unknown) => {
+  if (Array.isArray(value)) {
+    const fields = extractSchemaFields(value);
+    const shouldUpdate = fields.length !== value.length;
+    return { schema: shouldUpdate ? fields : (value as DynamicSchemaField[]), shouldUpdate };
+  }
+
+  if (!value) {
+    return { schema: [] as DynamicSchemaField[], shouldUpdate: value !== undefined && value !== null };
+  }
+
+  if (isRecord(value)) {
+    const fields = extractSchemaFields(value.fields);
+    return { schema: fields, shouldUpdate: true };
+  }
+
+  return { schema: [] as DynamicSchemaField[], shouldUpdate: true };
+};
+
+const normalizeDefaultsValue = (value: unknown) => {
+  if (!value) {
+    return {
+      defaults: {} as Record<string, unknown>,
+      schemaFromDefaults: [] as DynamicSchemaField[],
+      shouldUpdate: value !== undefined && value !== null,
+    };
+  }
+
+  if (Array.isArray(value)) {
+    const schemaFromDefaults = extractSchemaFields(value);
+    return {
+      defaults: buildDefaultsFromFields(schemaFromDefaults),
+      schemaFromDefaults,
+      shouldUpdate: true,
+    };
+  }
+
+  if (isRecord(value)) {
+    const recordValue = value as Record<string, unknown>;
+    const schemaFromDefaults = extractSchemaFields(recordValue.schema ?? recordValue.fields);
+
+    if (isRecord(recordValue.defaults)) {
+      return {
+        defaults: { ...(recordValue.defaults as Record<string, unknown>) },
+        schemaFromDefaults,
+        shouldUpdate: true,
+      };
+    }
+
+    if ("schema" in recordValue || "fields" in recordValue || "defaults" in recordValue) {
+      const defaults: Record<string, unknown> = {};
+      Object.entries(recordValue).forEach(([key, val]) => {
+        if (key === "schema" || key === "fields" || key === "defaults") {
+          return;
+        }
+        defaults[key] = val;
+      });
+
+      return { defaults, schemaFromDefaults, shouldUpdate: true };
+    }
+
+    return {
+      defaults: recordValue,
+      schemaFromDefaults,
+      shouldUpdate: false,
+    };
+  }
+
+  return {
+    defaults: {} as Record<string, unknown>,
+    schemaFromDefaults: [] as DynamicSchemaField[],
+    shouldUpdate: true,
+  };
+};
+
+const normalizeDynamicFieldsState = (
+  schemaInput: unknown,
+  defaultsInput: unknown,
+): {
+  schema: DynamicSchemaField[];
+  defaults: Record<string, unknown>;
+  schemaShouldUpdate: boolean;
+  defaultsShouldUpdate: boolean;
+} => {
+  const { schema, shouldUpdate: schemaNeedsUpdate } = normalizeSchemaValue(schemaInput);
+  const {
+    defaults,
+    schemaFromDefaults,
+    shouldUpdate: defaultsNeedUpdate,
+  } = normalizeDefaultsValue(defaultsInput);
+
+  const effectiveSchema = schema.length > 0 ? schema : schemaFromDefaults;
+
+  const shouldUpdateSchema =
+    schemaNeedsUpdate ||
+    (!Array.isArray(schemaInput) && effectiveSchema.length > 0) ||
+    (Array.isArray(schemaInput) && schemaInput.length === 0 && effectiveSchema.length > 0);
+
+  return {
+    schema: effectiveSchema,
+    defaults,
+    schemaShouldUpdate: shouldUpdateSchema,
+    defaultsShouldUpdate: defaultsNeedUpdate,
+  };
 };
 
 const kwhValueSchema = z
@@ -244,6 +366,11 @@ export const ProductFormDialog = ({
     [product?.cee_config],
   );
 
+  const productDynamicFields = useMemo(
+    () => normalizeDynamicFieldsState(product?.params_schema ?? null, product?.default_params ?? null),
+    [product?.params_schema, product?.default_params],
+  );
+
   const defaultValues = useMemo<ProductFormValues>(
     () => ({
       name: product?.name ?? "",
@@ -263,8 +390,8 @@ export const ProductFormDialog = ({
       supplier_name: product?.supplier_name ?? null,
       supplier_reference: product?.supplier_reference ?? null,
       technical_sheet_url: product?.technical_sheet_url ?? null,
-      params_schema: product?.params_schema ?? null,
-      default_params: product?.default_params ?? null,
+      params_schema: productDynamicFields.schema,
+      default_params: productDynamicFields.defaults,
       kwh_cumac: allBuildingTypes.reduce<Record<string, number | null>>((acc, type) => {
         const match = product?.kwh_cumac_values?.find((entry) => entry.building_type?.trim() === type);
         acc[type] = match?.kwh_cumac ?? null;
@@ -272,7 +399,7 @@ export const ProductFormDialog = ({
       }, {}),
       cee_config: sanitizedCeeConfig,
     }),
-    [product, allBuildingTypes, sanitizedCeeConfig],
+    [product, allBuildingTypes, sanitizedCeeConfig, productDynamicFields],
   );
 
   const form = useForm<ProductFormValues>({
@@ -415,7 +542,30 @@ export const ProductFormDialog = ({
   const watchedEcoAdmin = form.watch("eco_admin_percentage");
   const watchedEcoFurn = form.watch("eco_furn_percentage");
   const watchedEcoLog = form.watch("eco_log_percentage");
-  const paramsSchema = form.watch("params_schema");
+  const watchedParamsSchema = form.watch("params_schema");
+  const watchedDefaultParams = form.watch("default_params");
+
+  const {
+    schema: normalizedParamsSchema,
+    defaults: normalizedDefaultParams,
+    schemaShouldUpdate,
+    defaultsShouldUpdate,
+  } = useMemo(
+    () => normalizeDynamicFieldsState(watchedParamsSchema, watchedDefaultParams),
+    [watchedParamsSchema, watchedDefaultParams],
+  );
+
+  useEffect(() => {
+    if (schemaShouldUpdate) {
+      form.setValue("params_schema", normalizedParamsSchema);
+    }
+  }, [schemaShouldUpdate, normalizedParamsSchema, form]);
+
+  useEffect(() => {
+    if (defaultsShouldUpdate) {
+      form.setValue("default_params", normalizedDefaultParams);
+    }
+  }, [defaultsShouldUpdate, normalizedDefaultParams, form]);
 
   const ceeCategoryValue = form.watch("cee_config.category");
   const ceeTemplateValue = form.watch("cee_config.formulaTemplate");
@@ -432,11 +582,11 @@ export const ProductFormDialog = ({
 
   const dynamicSchemaFields = useMemo(
     () =>
-      extractSchemaFields(paramsSchema).map((field) => ({
+      extractSchemaFields(normalizedParamsSchema).map((field) => ({
         name: field.name,
         label: field.label && field.label.trim().length > 0 ? field.label : field.name,
       })),
-    [paramsSchema],
+    [normalizedParamsSchema],
   );
 
   const selectedCeeTemplate = useMemo(
@@ -1193,8 +1343,8 @@ export const ProductFormDialog = ({
                       <FormControl>
                         <DynamicFieldsEditor
                           value={{
-                            schema: (form.watch("params_schema") as any) || [],
-                            defaults: (form.watch("default_params") as any) || {},
+                            schema: normalizedParamsSchema as any,
+                            defaults: normalizedDefaultParams as any,
                           }}
                           onChange={(value) => {
                             form.setValue("params_schema", value.schema);
