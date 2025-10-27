@@ -1,4 +1,8 @@
-import { FORMULA_QUANTITY_KEY } from "./valorisation-formula";
+import {
+  getCategoryDefaultMultiplierKey,
+  LEGACY_QUANTITY_KEY,
+  resolveMultiplierKeyForCategory,
+} from "./valorisation-formula";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -87,28 +91,22 @@ export type ProductCeeConfig = {
   ledWattConstant: number | null;
 };
 
+const getDefaultMultiplierKey = (category: ProductCeeCategory) =>
+  getCategoryDefaultMultiplierKey(category) ?? LEGACY_QUANTITY_KEY;
+
 export const DEFAULT_PRODUCT_CEE_CONFIG: ProductCeeConfig = {
   category: "isolation",
   formulaTemplate: "standard",
   formulaExpression: null,
-  primeMultiplierParam: FORMULA_QUANTITY_KEY,
+  primeMultiplierParam: getDefaultMultiplierKey("isolation"),
   primeMultiplierCoefficient: null,
   ledWattConstant: null,
 };
 
-const sanitizeMultiplierKey = (value: unknown): string | null => {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-  if (trimmed === "quantity") {
-    return FORMULA_QUANTITY_KEY;
-  }
-  return trimmed;
-};
+const sanitizeMultiplierKey = (
+  value: unknown,
+  category: ProductCeeCategory,
+): string | null => resolveMultiplierKeyForCategory(value, category);
 
 export const normalizeProductCeeConfig = (value: unknown): ProductCeeConfig => {
   if (!isRecord(value)) {
@@ -155,11 +153,14 @@ export const normalizeProductCeeConfig = (value: unknown): ProductCeeConfig => {
       : null
     : template.expression ?? null;
 
-  const rawMultiplier = sanitizeMultiplierKey(
-    value.primeMultiplierParam ?? value.prime_multiplier_param ?? legacyMultiplier?.key,
-  );
+  const defaultMultiplierKey = getDefaultMultiplierKey(category);
+  const rawMultiplier =
+    sanitizeMultiplierKey(
+      value.primeMultiplierParam ?? value.prime_multiplier_param,
+      category,
+    ) ?? sanitizeMultiplierKey(legacyMultiplier?.key, category);
 
-  const multiplierParam = rawMultiplier ?? DEFAULT_PRODUCT_CEE_CONFIG.primeMultiplierParam;
+  const multiplierParam = rawMultiplier ?? defaultMultiplierKey;
 
   const multiplierCoefficient =
     toPositiveNumber(
@@ -196,6 +197,4 @@ export const formatProductCeeMultiplierLabel = (
   }`;
 };
 
-export const isQuantityMultiplier = (value: string | null | undefined) =>
-  value === FORMULA_QUANTITY_KEY || value === "quantity";
 
