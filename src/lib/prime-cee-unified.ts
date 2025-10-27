@@ -32,7 +32,34 @@ type SchemaField = {
   [key: string]: unknown;
 };
 
-export type PrimeCeeProductCatalogEntry = Pick<
+export type ProductCeeMultiplierConfig = {
+  key: string | null;
+  coefficient: number | null;
+};
+
+export type ProductCeeOverrideConfig = {
+  bonification: number | null;
+  coefficient: number | null;
+  multiplier: ProductCeeMultiplierConfig | null;
+};
+
+export type ProductCeeConfig = {
+  defaults: ProductCeeOverrideConfig;
+  overrides: Record<string, ProductCeeOverrideConfig>;
+};
+
+export const EMPTY_PRODUCT_CEE_OVERRIDE: ProductCeeOverrideConfig = {
+  bonification: null,
+  coefficient: null,
+  multiplier: null,
+};
+
+export const DEFAULT_PRODUCT_CEE_CONFIG: ProductCeeConfig = {
+  defaults: { ...EMPTY_PRODUCT_CEE_OVERRIDE },
+  overrides: {},
+};
+
+type PrimeProductBase = Pick<
   ProductCatalog,
   | "id"
   | "name"
@@ -44,7 +71,11 @@ export type PrimeCeeProductCatalogEntry = Pick<
   | "valorisation_bonification"
   | "valorisation_coefficient"
   | "valorisation_formula"
-> & {
+  | "cee_config"
+>;
+
+export type PrimeCeeProductCatalogEntry = Omit<PrimeProductBase, "cee_config"> & {
+  cee_config: ProductCeeConfig;
   kwh_cumac_values?: ProductKwhValue[];
 };
 
@@ -137,6 +168,71 @@ const toPositiveNumber = (value: unknown): number | null => {
   }
   return null;
 };
+
+const toNullableNumber = (value: unknown): number | null => toNumber(value);
+
+const sanitizeMultiplierConfig = (value: unknown): ProductCeeMultiplierConfig | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const key = typeof value.key === "string" && value.key.trim().length > 0 ? value.key.trim() : null;
+  const coefficient = toNullableNumber(value.coefficient);
+
+  if (!key && coefficient === null) {
+    return null;
+  }
+
+  return {
+    key,
+    coefficient,
+  };
+};
+
+const sanitizeOverrideConfig = (value: unknown): ProductCeeOverrideConfig => {
+  if (!isRecord(value)) {
+    return { ...EMPTY_PRODUCT_CEE_OVERRIDE };
+  }
+
+  return {
+    bonification: toNullableNumber(value.bonification),
+    coefficient: toNullableNumber(value.coefficient),
+    multiplier: sanitizeMultiplierConfig(value.multiplier),
+  };
+};
+
+export const normalizeProductCeeConfig = (value: unknown): ProductCeeConfig => {
+  if (!isRecord(value)) {
+    return { ...DEFAULT_PRODUCT_CEE_CONFIG, defaults: { ...EMPTY_PRODUCT_CEE_OVERRIDE }, overrides: {} };
+  }
+
+  const overrides: Record<string, ProductCeeOverrideConfig> = {};
+
+  if (isRecord(value.overrides)) {
+    for (const [rawKey, rawValue] of Object.entries(value.overrides)) {
+      if (typeof rawKey !== "string") {
+        continue;
+      }
+      const key = rawKey.trim();
+      if (key.length === 0) {
+        continue;
+      }
+      overrides[key] = sanitizeOverrideConfig(rawValue);
+    }
+  }
+
+  return {
+    defaults: sanitizeOverrideConfig(value.defaults),
+    overrides,
+  };
+};
+
+export const withDefaultProductCeeConfig = <T extends { cee_config?: unknown }>(
+  product: T,
+): Omit<T, "cee_config"> & { cee_config: ProductCeeConfig } => ({
+  ...product,
+  cee_config: normalizeProductCeeConfig(product.cee_config),
+});
 
 const roundToTwo = (value: number) => Math.round(value * 100) / 100;
 

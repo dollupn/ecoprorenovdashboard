@@ -1,7 +1,9 @@
 import type { Tables } from "@/integrations/supabase/types";
+import type { ProductCeeConfig } from "@/lib/prime-cee-unified";
 
 type QuoteProjectProduct = {
-  product: (Pick<Tables<"product_catalog">, "code"> & {
+  product: (Pick<Tables<"product_catalog">, "code" | "cee_config"> & {
+    cee_config: ProductCeeConfig;
     kwh_cumac_values?: Tables<"product_kwh_cumac">[];
   }) | null;
 };

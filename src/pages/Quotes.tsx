@@ -26,6 +26,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useToast } from "@/hooks/use-toast";
+import { withDefaultProductCeeConfig } from "@/lib/prime-cee-unified";
 
 import {
   Search,
@@ -162,7 +163,7 @@ const fetchQuotes = async ({
   let query = supabase
     .from("quotes")
     .select(
-      "*, projects(project_ref, client_name, product_name, project_products(product:product_catalog(code, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac))))"
+      "*, projects(project_ref, client_name, product_name, project_products(product:product_catalog(code, cee_config, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac))))"
     )
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
@@ -178,7 +179,30 @@ const fetchQuotes = async ({
     throw error;
   }
 
-  return (data ?? []) as QuoteRecord[];
+  const sanitized = (data ?? []).map((quote) => {
+    if (!quote.projects?.project_products) {
+      return quote;
+    }
+
+    return {
+      ...quote,
+      projects: {
+        ...quote.projects,
+        project_products: quote.projects.project_products.map((projectProduct) => {
+          if (!projectProduct?.product) {
+            return projectProduct;
+          }
+
+          return {
+            ...projectProduct,
+            product: withDefaultProductCeeConfig(projectProduct.product),
+          };
+        }),
+      },
+    } satisfies QuoteRecord;
+  });
+
+  return sanitized as QuoteRecord[];
 };
 
 const Quotes = () => {

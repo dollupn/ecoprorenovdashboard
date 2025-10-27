@@ -79,7 +79,13 @@ const SITE_ACTIVITY_TITLES: Partial<Record<SiteStatus, string>> = {
   LIVRE: "Chantier livré",
 };
 
-import { isProductExcluded, getMultiplierValue, type PrimeCeeProductCatalogEntry } from "@/lib/prime-cee-unified";
+import {
+  isProductExcluded,
+  getMultiplierValue,
+  withDefaultProductCeeConfig,
+  type PrimeCeeProductCatalogEntry,
+  type ProductCeeConfig,
+} from "@/lib/prime-cee-unified";
 
 type ProjectWithProducts = Pick<
   Tables<"projects">,
@@ -89,8 +95,9 @@ type ProjectWithProducts = Pick<
     Pick<Tables<"project_products">, "quantity" | "dynamic_params"> & {
       product?: Pick<
         Tables<"product_catalog">,
-        "id" | "code" | "category" | "params_schema" | "is_active" | "default_params"
+        "id" | "code" | "category" | "params_schema" | "is_active" | "default_params" | "cee_config"
       > & {
+        cee_config: ProductCeeConfig;
         kwh_cumac_values?: Pick<Tables<"product_kwh_cumac">, "building_type" | "kwh_cumac">[] | null;
       } | null;
     }
@@ -272,7 +279,7 @@ export const useDashboardMetrics = (
           .from("projects")
           .select(
             `id, status, updated_at, surface_isolee_m2, city, client_name, building_type,
-            project_products(id, quantity, dynamic_params, product:product_catalog(category, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))`
+            project_products(id, quantity, dynamic_params, product:product_catalog(category, cee_config, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))`
           )
           .eq("org_id", orgId)
           .in("status", [...ACTIVE_PROJECT_STATUSES, ...PROJECT_SURFACE_STATUSES]),
@@ -314,7 +321,13 @@ export const useDashboardMetrics = (
       if (qualifiedLeads.error) throw qualifiedLeads.error;
       if (acceptedProjects.error) throw acceptedProjects.error;
 
-      const projets = projectsData.data ?? [];
+      const projets = (projectsData.data ?? []).map((project) => ({
+        ...project,
+        project_products: (project.project_products ?? []).map((pp) => ({
+          ...pp,
+          product: pp.product ? withDefaultProductCeeConfig(pp.product) : null,
+        })),
+      }));
       const sites = sitesData.data ?? [];
       const rdv = leadsRdv.data ?? [];
       const quotes = pendingQuotes.data ?? [];

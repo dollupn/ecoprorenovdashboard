@@ -51,11 +51,13 @@ import {
   buildPrimeCeeEntries,
   computePrimeCee,
   getValorisationLabel,
+  withDefaultProductCeeConfig,
   type PrimeCeeComputation,
   type PrimeCeeProductCatalogEntry,
   type PrimeCeeProductDisplayMap,
   type PrimeCeeProductResult,
   type PrimeProductInput,
+  type ProductCeeConfig,
 } from "@/lib/prime-cee-unified";
 
 type Project = Tables<"projects">;
@@ -71,7 +73,9 @@ type ProductSummary = Pick<
   | "valorisation_bonification"
   | "valorisation_coefficient"
   | "valorisation_formula"
+  | "cee_config"
 > & {
+  cee_config: ProductCeeConfig;
   kwh_cumac_values?: Pick<Tables<"product_kwh_cumac">, "id" | "building_type" | "kwh_cumac">[];
 };
 
@@ -153,7 +157,7 @@ const ProjectDetails = () => {
       let query = supabase
         .from("projects")
         .select(
-          "*, delegate:delegates(id, name, price_eur_per_mwh), project_products(id, product_id, quantity, dynamic_params, product:product_catalog(id, code, name, category, params_schema, valorisation_bonification, valorisation_coefficient, valorisation_formula, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))"
+          "*, delegate:delegates(id, name, price_eur_per_mwh), project_products(id, product_id, quantity, dynamic_params, product:product_catalog(id, code, name, category, params_schema, valorisation_bonification, valorisation_coefficient, valorisation_formula, cee_config, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))"
         )
         .eq("id", id);
 
@@ -168,7 +172,18 @@ const ProjectDetails = () => {
       const { data, error } = await query.maybeSingle();
 
       if (error) throw error;
-      return (data as ProjectWithRelations | null) ?? null;
+
+      if (!data) {
+        return null;
+      }
+
+      return {
+        ...data,
+        project_products: (data.project_products ?? []).map((pp) => ({
+          ...pp,
+          product: pp.product ? withDefaultProductCeeConfig(pp.product) : null,
+        })),
+      } as ProjectWithRelations;
     },
     enabled: !!id && !!user?.id && (!currentOrgId || !membersLoading),
   });
