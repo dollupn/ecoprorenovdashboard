@@ -537,7 +537,7 @@ export const computePrimeCee = ({
       projectProduct: {
         product_id: projectProduct.product_id,
         quantity: projectProduct.quantity,
-        dynamic_params: dynamicParams ?? undefined,
+        dynamic_params: (dynamicParams ?? null) as any,
       }
     });
     const multiplierValue =

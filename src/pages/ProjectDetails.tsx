@@ -65,8 +65,8 @@ import {
   getCategoryDefaultMultiplierKey,
   LEGACY_QUANTITY_KEY,
   resolveMultiplierKeyForCategory,
+  FORMULA_QUANTITY_KEY,
 } from "@/lib/valorisation-formula";
-import { formatFormulaCoefficient, FORMULA_QUANTITY_KEY } from "@/lib/valorisation-formula";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 type Project = Tables<"projects">;
