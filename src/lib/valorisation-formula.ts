@@ -128,14 +128,24 @@ const resolveFromDynamicParams = (
     return fallback;
   }
 
-  for (const key of keys) {
-    if (!Object.prototype.hasOwnProperty.call(params, key)) {
-      continue;
-    }
+  // Create a normalized map of keys for case-insensitive lookup
+  const normalizedParams: Record<string, unknown> = {};
+  const keyMapping: Record<string, string> = {};
+  
+  for (const [paramKey, paramValue] of Object.entries(params)) {
+    const normalizedKey = paramKey.toLowerCase().replace(/[\s_-]+/g, '');
+    normalizedParams[normalizedKey] = paramValue;
+    keyMapping[normalizedKey] = paramKey;
+  }
 
-    const numeric = toFiniteNumber((params as Record<string, unknown>)[key]);
-    if (numeric !== null && predicate(numeric)) {
-      return numeric;
+  for (const key of keys) {
+    const normalizedSearchKey = key.toLowerCase().replace(/[\s_-]+/g, '');
+    
+    if (normalizedSearchKey in normalizedParams) {
+      const numeric = toFiniteNumber(normalizedParams[normalizedSearchKey]);
+      if (numeric !== null && predicate(numeric)) {
+        return numeric;
+      }
     }
   }
 
