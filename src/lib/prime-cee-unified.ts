@@ -1,5 +1,7 @@
 import type { Tables } from "@/integrations/supabase/types";
 import {
+  FORMULA_QUANTITY_KEY,
+  calcCeeLighting,
   formatFormulaCoefficient,
   getCategoryDefaultMultiplierKey,
   LEGACY_QUANTITY_KEY,
@@ -77,6 +79,7 @@ export type PrimeCeeProductResult = {
   valorisationTotalEur: number;
   delegatePrice: number;
   totalPrime: number;
+  hasMissingKwhCumac: boolean;
 };
 
 export type PrimeCeeComputation = {
@@ -405,6 +408,16 @@ export const isProductExcluded = (product: { category?: string | null; code?: st
   );
 };
 
+const isLightingProduct = (product: { category?: string | null; code?: string | null }) => {
+  const category = (product.category ?? "").trim().toLowerCase();
+  if (category === "lighting") {
+    return true;
+  }
+
+  const code = (product.code ?? "").trim().toUpperCase();
+  return code.startsWith("BAT-EQ-127");
+};
+
 export const getValorisationLabel = (
   entry?: Pick<PrimeCeeProductResult, "multiplierLabel"> | null,
 ) => {
@@ -459,6 +472,50 @@ export const computePrimeCee = ({
 
     if (isProductExcluded(product)) continue;
 
+    const dynamicParams = isRecord(projectProduct.dynamic_params)
+      ? (projectProduct.dynamic_params as Record<string, unknown>)
+      : null;
+
+    const bonification = resolveBonificationFactor(primeBonification);
+    const coefficient = resolveProductCoefficient();
+
+    if (isLightingProduct(product)) {
+      const lightingResult = calcCeeLighting({
+        kwhEntries: product.kwh_cumac_values,
+        buildingType,
+        dynamicParams,
+        bonification,
+        coefficient,
+        delegatePrice,
+      });
+
+      totalValorisationMwh += lightingResult.valorisationTotalMwh;
+      totalPrime += lightingResult.valorisationTotalEur;
+      totalValorisationEur += lightingResult.valorisationTotalEur;
+
+      productResults.push({
+        projectProductId: projectProduct.id ?? projectProduct.product_id,
+        productId: product.id ?? projectProduct.product_id,
+        productCode: product.code ?? null,
+        productName: product.name ?? null,
+        baseKwh: lightingResult.baseKwh,
+        bonification: lightingResult.bonification,
+        coefficient: lightingResult.coefficient,
+        valorisationPerUnitMwh: lightingResult.valorisationPerUnitMwh,
+        valorisationPerUnitEur: lightingResult.valorisationPerUnitEur,
+        valorisationLabel: "Valorisation Nombre de luminaire",
+        multiplier: lightingResult.multiplier,
+        multiplierLabel: "Nombre de luminaire",
+        valorisationTotalMwh: lightingResult.valorisationTotalMwh,
+        valorisationTotalEur: lightingResult.valorisationTotalEur,
+        delegatePrice,
+        totalPrime: lightingResult.valorisationTotalEur,
+        hasMissingKwhCumac: lightingResult.warningMissingBase,
+      });
+
+      continue;
+    }
+
     const kwhEntry = product.kwh_cumac_values?.find(
       (value) => value.building_type === buildingType && typeof value.kwh_cumac === "number",
     );
@@ -470,20 +527,17 @@ export const computePrimeCee = ({
     const baseKwh = kwhEntry.kwh_cumac;
     if (baseKwh <= 0) continue;
 
-    const bonification = resolveBonificationFactor(primeBonification);
-    const coefficient = resolveProductCoefficient();
-
     const valorisationPerUnitMwh = (baseKwh * bonification * coefficient) / 1000;
     if (!Number.isFinite(valorisationPerUnitMwh) || valorisationPerUnitMwh <= 0) {
       continue;
     }
 
-    const multiplierDetection = getMultiplierValue({ 
-      product, 
+    const multiplierDetection = getMultiplierValue({
+      product,
       projectProduct: {
         product_id: projectProduct.product_id,
         quantity: projectProduct.quantity,
-        dynamic_params: projectProduct.dynamic_params as any,
+        dynamic_params: dynamicParams ?? undefined,
       }
     });
     const multiplierValue =
@@ -523,6 +577,7 @@ export const computePrimeCee = ({
       valorisationTotalEur,
       delegatePrice,
       totalPrime: valorisationTotalEur,
+      hasMissingKwhCumac: false,
     });
   }
 
