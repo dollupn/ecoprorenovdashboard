@@ -59,7 +59,7 @@ import {
   withDefaultProductCeeConfig,
   type ProductCeeConfig,
 } from "@/lib/prime-cee-unified";
-import { formatFormulaCoefficient } from "@/lib/valorisation-formula";
+import { formatFormulaCoefficient, FORMULA_QUANTITY_KEY } from "@/lib/valorisation-formula";
 
 type Project = Tables<"projects">;
 type ProductSummary = Pick<
@@ -183,24 +183,6 @@ const getSchemaFieldLabel = (
   return null;
 };
 
-const findOverrideForBuilding = (
-  config: ProductCeeConfig | undefined,
-  buildingType: string | null | undefined,
-) => {
-  if (!config || !buildingType) return null;
-
-  const normalized = normalizeKey(buildingType);
-  if (!normalized) return null;
-
-  for (const [key, value] of Object.entries(config.overrides ?? {})) {
-    if (normalizeKey(key) === normalized) {
-      return value ?? null;
-    }
-  }
-
-  return null;
-};
-
 const findKwhEntry = (
   product: ProductSummary | null | undefined,
   buildingType: string | null | undefined,
@@ -218,42 +200,29 @@ const findKwhEntry = (
 
 const resolveBonificationValue = (
   product: ProductSummary,
-  override: ReturnType<typeof findOverrideForBuilding>,
   primeBonification: number | null | undefined,
 ) =>
-  toPositiveNumber(override?.bonification) ??
-  toPositiveNumber(product.cee_config.defaults?.bonification) ??
   toPositiveNumber(product.valorisation_bonification) ??
   toPositiveNumber(primeBonification);
 
 const resolveCoefficientValue = (
   product: ProductSummary,
-  override: ReturnType<typeof findOverrideForBuilding>,
 ) =>
-  toPositiveNumber(override?.coefficient) ??
-  toPositiveNumber(product.cee_config.defaults?.coefficient) ??
   toPositiveNumber(product.valorisation_coefficient);
 
 const resolveMultiplierDetails = (
   product: ProductSummary,
   projectProduct: ProjectProduct,
-  override: ReturnType<typeof findOverrideForBuilding>,
 ): { value: number | null; label: string | null; missingDynamicParams: boolean } => {
-  const overrideConfig = override?.multiplier;
-  const defaultConfig = product.cee_config.defaults?.multiplier;
-  const multiplierConfig =
-    overrideConfig && overrideConfig.key
-      ? overrideConfig
-      : defaultConfig && defaultConfig.key
-        ? defaultConfig
-        : null;
+  const multiplierParam = product.cee_config.primeMultiplierParam;
+  const multiplierCoefficient = product.cee_config.primeMultiplierCoefficient;
 
-  if (multiplierConfig?.key) {
-    const schemaLabel = getSchemaFieldLabel(product.params_schema, multiplierConfig.key);
-    const coefficient = toPositiveNumber(multiplierConfig.coefficient) ?? 1;
+  if (multiplierParam && multiplierParam !== FORMULA_QUANTITY_KEY) {
+    const schemaLabel = getSchemaFieldLabel(product.params_schema, multiplierParam);
+    const coefficient = toPositiveNumber(multiplierCoefficient) ?? 1;
     const targets = schemaLabel
-      ? [multiplierConfig.key, schemaLabel]
-      : [multiplierConfig.key];
+      ? [multiplierParam, schemaLabel]
+      : [multiplierParam];
     const dynamicValue = getDynamicFieldNumericValue(
       product.params_schema,
       projectProduct.dynamic_params,
@@ -261,7 +230,7 @@ const resolveMultiplierDetails = (
     );
 
     if (dynamicValue !== null && dynamicValue > 0) {
-      const labelBase = schemaLabel ?? multiplierConfig.key;
+      const labelBase = schemaLabel ?? multiplierParam;
       const label =
         coefficient !== 1
           ? `${labelBase} × ${formatFormulaCoefficient(coefficient)}`
@@ -276,7 +245,7 @@ const resolveMultiplierDetails = (
 
     return {
       value: null,
-      label: schemaLabel ?? multiplierConfig.key,
+      label: schemaLabel ?? multiplierParam,
       missingDynamicParams: true,
     };
   }
@@ -399,8 +368,7 @@ const ProjectDetails = () => {
         } satisfies ProjectProductCeeEntry;
       }
 
-      const override = findOverrideForBuilding(product.cee_config, buildingType);
-      const multiplierDetails = resolveMultiplierDetails(product, item, override);
+      const multiplierDetails = resolveMultiplierDetails(product, item);
       multiplierLabel = multiplierDetails.label;
       multiplierValue = multiplierDetails.value;
       missingDynamicParams = multiplierDetails.missingDynamicParams;
@@ -410,8 +378,8 @@ const ProjectDetails = () => {
       missingKwh = !buildingType || !kwhValue;
 
       if (!missingKwh && multiplierValue && multiplierValue > 0 && kwhValue) {
-        const bonification = resolveBonificationValue(product, override, primeBonification);
-        const coefficient = resolveCoefficientValue(product, override);
+        const bonification = resolveBonificationValue(product, primeBonification);
+        const coefficient = resolveCoefficientValue(product);
         const quantityValue = toNumber(item.quantity);
         const dynamicParams = isRecord(item.dynamic_params)
           ? (item.dynamic_params as DynamicParams)

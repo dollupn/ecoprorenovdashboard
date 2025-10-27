@@ -1261,7 +1261,7 @@ export const ProductFormDialog = ({
                               <Button
                                 type="button"
                                 variant="secondary"
-                                size="xs"
+                                size="sm"
                                 onClick={() => field.onChange(FORMULA_QUANTITY_KEY)}
                                 disabled={isSubmitting}
                               >
@@ -1272,7 +1272,7 @@ export const ProductFormDialog = ({
                                   key={option.name}
                                   type="button"
                                   variant="secondary"
-                                  size="xs"
+                                  size="sm"
                                   onClick={() => field.onChange(option.name)}
                                   disabled={isSubmitting}
                                 >
