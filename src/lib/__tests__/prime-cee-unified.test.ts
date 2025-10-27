@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildPrimeCeeEntries,
   computePrimeCee,
+  DEFAULT_PRODUCT_CEE_CONFIG,
   type PrimeCeeComputation,
   type PrimeCeeProductCatalogEntry,
   type PrimeCeeProductDisplayMap,
@@ -115,6 +116,7 @@ describe("computePrimeCee", () => {
     valorisation_bonification: null,
     valorisation_coefficient: 1,
     valorisation_formula: null,
+    cee_config: DEFAULT_PRODUCT_CEE_CONFIG,
     kwh_cumac_values: [
       {
         building_type: "house",

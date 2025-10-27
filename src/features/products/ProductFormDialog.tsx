@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Loader2, Plus } from "lucide-react";
+import { Parser } from "expr-eval";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -18,14 +19,20 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { getProjectBuildingTypes } from "@/lib/buildings";
+import { FORMULA_QUANTITY_KEY } from "@/lib/valorisation-formula";
 import {
-  FORMULA_QUANTITY_KEY,
-  normalizeValorisationFormula,
-  type ValorisationFormulaConfig,
-} from "@/lib/valorisation-formula";
+  DEFAULT_PRODUCT_CEE_CONFIG,
+  PRODUCT_CEE_CATEGORIES,
+  PRODUCT_CEE_FORMULA_TEMPLATES,
+  formatProductCeeMultiplierLabel,
+  getProductCeeFormulaTemplateById,
+  isQuantityMultiplier,
+  normalizeProductCeeConfig,
+} from "@/lib/prime-cee-config";
 import type { TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 import type { ProductCatalogRecord, CategoryRecord, ProductKwhCumacInput } from "./api";
 import { useCreateProduct, useUpdateProduct } from "./api";
@@ -80,17 +87,82 @@ const kwhValueSchema = z
   .min(0, "La valeur doit être positive")
   .nullable();
 
-const valorisationFormulaSchema = z
+const ceeCategoryValues = PRODUCT_CEE_CATEGORIES.map((item) => item.value) as [
+  (typeof PRODUCT_CEE_CATEGORIES)[number]["value"],
+  ...(typeof PRODUCT_CEE_CATEGORIES)[number]["value"][],
+];
+
+const ceeTemplateValues = PRODUCT_CEE_FORMULA_TEMPLATES.map((item) => item.id) as [
+  (typeof PRODUCT_CEE_FORMULA_TEMPLATES)[number]["id"],
+  ...(typeof PRODUCT_CEE_FORMULA_TEMPLATES)[number]["id"][],
+];
+
+const ceeConfigSchema = z
   .object({
-    variableKey: z.string().min(1, "Sélectionnez une variable"),
-    variableLabel: z.string().optional().nullable(),
-    coefficient: z
+    category: z.enum(ceeCategoryValues, { required_error: "Sélectionnez une catégorie" }),
+    formulaTemplate: z.enum(ceeTemplateValues, { required_error: "Sélectionnez une formule" }),
+    formulaExpression: z
+      .string({ invalid_type_error: "Saisissez une formule valide" })
+      .max(500, "La formule ne peut pas dépasser 500 caractères")
+      .optional()
+      .nullable(),
+    primeMultiplierParam: z
+      .string({ invalid_type_error: "Saisissez un champ valide" })
+      .max(120, "Le champ est trop long")
+      .optional()
+      .nullable(),
+    primeMultiplierCoefficient: z
       .number({ invalid_type_error: "Saisissez un coefficient valide" })
       .gt(0, "Le coefficient doit être positif")
       .optional()
       .nullable(),
+    ledWattConstant: z
+      .number({ invalid_type_error: "Saisissez une valeur valide" })
+      .gt(0, "La valeur doit être positive")
+      .optional()
+      .nullable(),
   })
-  .strict();
+  .superRefine((value, ctx) => {
+    const template = getProductCeeFormulaTemplateById(value.formulaTemplate) ?? null;
+
+    if (template?.allowedCategories && !template.allowedCategories.includes(value.category)) {
+      ctx.addIssue({
+        path: ["formulaTemplate"],
+        code: z.ZodIssueCode.custom,
+        message: "Cette formule n'est pas disponible pour la catégorie choisie",
+      });
+    }
+
+    if (template?.requiresLedWattConstant && (!value.ledWattConstant || value.ledWattConstant <= 0)) {
+      ctx.addIssue({
+        path: ["ledWattConstant"],
+        code: z.ZodIssueCode.custom,
+        message: "Indiquez la puissance moyenne d'un luminaire LED",
+      });
+    }
+
+    if (template?.isCustom) {
+      const expression = value.formulaExpression?.trim();
+      if (!expression) {
+        ctx.addIssue({
+          path: ["formulaExpression"],
+          code: z.ZodIssueCode.custom,
+          message: "Saisissez une formule personnalisée",
+        });
+        return;
+      }
+
+      try {
+        Parser.parse(expression);
+      } catch (error) {
+        ctx.addIssue({
+          path: ["formulaExpression"],
+          code: z.ZodIssueCode.custom,
+          message: "Formule invalide",
+        });
+      }
+    }
+  });
 
 const productSchema = z.object({
   name: z.string().min(2, "Le nom est requis").max(200),
@@ -121,17 +193,7 @@ const productSchema = z.object({
   params_schema: z.any().optional().nullable(),
   default_params: z.any().optional().nullable(),
   kwh_cumac: z.record(kwhValueSchema).default({}),
-  valorisation_bonification: z
-    .number({ invalid_type_error: "Saisissez une bonification valide" })
-    .min(0, "La bonification doit être positive")
-    .optional()
-    .nullable(),
-  valorisation_coefficient: z
-    .number({ invalid_type_error: "Saisissez un coefficient valide" })
-    .min(0, "Le coefficient doit être positif")
-    .optional()
-    .nullable(),
-  valorisation_formula: valorisationFormulaSchema.optional().nullable(),
+  cee_config: ceeConfigSchema,
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -177,6 +239,11 @@ export const ProductFormDialog = ({
   const createProduct = useCreateProduct(orgId);
   const updateProduct = useUpdateProduct(orgId);
 
+  const sanitizedCeeConfig = useMemo(
+    () => normalizeProductCeeConfig(product?.cee_config ?? DEFAULT_PRODUCT_CEE_CONFIG),
+    [product?.cee_config],
+  );
+
   const defaultValues = useMemo<ProductFormValues>(
     () => ({
       name: product?.name ?? "",
@@ -203,13 +270,9 @@ export const ProductFormDialog = ({
         acc[type] = match?.kwh_cumac ?? null;
         return acc;
       }, {}),
-      valorisation_bonification:
-        typeof product?.valorisation_bonification === "number" ? product.valorisation_bonification : 2,
-      valorisation_coefficient:
-        typeof product?.valorisation_coefficient === "number" ? product.valorisation_coefficient : 1,
-      valorisation_formula: normalizeValorisationFormula(product?.valorisation_formula) ?? null,
+      cee_config: sanitizedCeeConfig,
     }),
-    [product, allBuildingTypes],
+    [product, allBuildingTypes, sanitizedCeeConfig],
   );
 
   const form = useForm<ProductFormValues>({
@@ -242,25 +305,42 @@ export const ProductFormDialog = ({
       return;
     }
 
-    const schemaFields = extractSchemaFields(values.params_schema);
-    const normalizedFormula = normalizeValorisationFormula(values.valorisation_formula);
+    const ceeConfigInput = values.cee_config ?? DEFAULT_PRODUCT_CEE_CONFIG;
+    const template = getProductCeeFormulaTemplateById(ceeConfigInput.formulaTemplate) ?? null;
 
-    let payloadFormula: ValorisationFormulaConfig | null = null;
+    const multiplierParamRaw = ceeConfigInput.primeMultiplierParam?.trim();
+    const multiplierParamNormalized = multiplierParamRaw
+      ? multiplierParamRaw === "quantity"
+        ? FORMULA_QUANTITY_KEY
+        : multiplierParamRaw
+      : null;
 
-    if (normalizedFormula) {
-      if (normalizedFormula.variableKey === FORMULA_QUANTITY_KEY) {
-        payloadFormula = {
-          ...normalizedFormula,
-          variableLabel: normalizedFormula.variableLabel ?? "Quantité",
-        };
-      } else {
-        const match = schemaFields.find((field) => field.name === normalizedFormula.variableKey);
-        payloadFormula = {
-          ...normalizedFormula,
-          variableLabel: match?.label ?? normalizedFormula.variableLabel ?? normalizedFormula.variableKey,
-        };
-      }
-    }
+    const multiplierCoefficientNormalized =
+      typeof ceeConfigInput.primeMultiplierCoefficient === "number" &&
+      Number.isFinite(ceeConfigInput.primeMultiplierCoefficient) &&
+      ceeConfigInput.primeMultiplierCoefficient > 0
+        ? ceeConfigInput.primeMultiplierCoefficient
+        : null;
+
+    const ledWattNormalized =
+      ceeConfigInput.category === "lighting" &&
+      typeof ceeConfigInput.ledWattConstant === "number" &&
+      Number.isFinite(ceeConfigInput.ledWattConstant) &&
+      ceeConfigInput.ledWattConstant > 0
+        ? ceeConfigInput.ledWattConstant
+        : null;
+
+    const expressionNormalized = template?.isCustom
+      ? ceeConfigInput.formulaExpression?.trim() ?? null
+      : template?.expression ?? null;
+
+    const normalizedCeeConfig = normalizeProductCeeConfig({
+      ...ceeConfigInput,
+      formulaExpression: expressionNormalized,
+      primeMultiplierParam: multiplierParamNormalized ?? FORMULA_QUANTITY_KEY,
+      primeMultiplierCoefficient: multiplierCoefficientNormalized,
+      ledWattConstant: ledWattNormalized,
+    });
 
     const basePayload: Omit<TablesInsert<"product_catalog">, "org_id" | "owner_id"> = {
       name: values.name.trim(),
@@ -282,11 +362,10 @@ export const ProductFormDialog = ({
       technical_sheet_url: values.technical_sheet_url,
       params_schema: values.params_schema,
       default_params: values.default_params,
-      valorisation_bonification:
-        typeof values.valorisation_bonification === "number" ? values.valorisation_bonification : null,
-      valorisation_coefficient:
-        typeof values.valorisation_coefficient === "number" ? values.valorisation_coefficient : null,
-      valorisation_formula: payloadFormula,
+      valorisation_bonification: product?.valorisation_bonification ?? null,
+      valorisation_coefficient: product?.valorisation_coefficient ?? null,
+      valorisation_formula: product?.valorisation_formula ?? null,
+      cee_config: normalizedCeeConfig,
     };
 
     const kwhValues = values.kwh_cumac ?? {};
@@ -338,14 +417,11 @@ export const ProductFormDialog = ({
   const watchedEcoLog = form.watch("eco_log_percentage");
   const paramsSchema = form.watch("params_schema");
 
-  const watchedBonification = form.watch("valorisation_bonification");
-  const watchedCoefficient = form.watch("valorisation_coefficient");
-  const watchedFormulaValue = form.watch("valorisation_formula");
-
-  const normalizedFormulaValue = useMemo(
-    () => normalizeValorisationFormula(watchedFormulaValue),
-    [watchedFormulaValue],
-  );
+  const ceeCategoryValue = form.watch("cee_config.category");
+  const ceeTemplateValue = form.watch("cee_config.formulaTemplate");
+  const ceeMultiplierParamValue = form.watch("cee_config.primeMultiplierParam");
+  const ceeMultiplierCoefficientValue = form.watch("cee_config.primeMultiplierCoefficient");
+  const ceeFormulaExpressionValue = form.watch("cee_config.formulaExpression");
 
   const priceTTC = useMemo(() => {
     if (watchedBasePrice && watchedTva !== null && watchedTva !== undefined) {
@@ -363,73 +439,44 @@ export const ProductFormDialog = ({
     [paramsSchema],
   );
 
-  const formulaOptions = useMemo(() => {
-    const baseOptions = dynamicSchemaFields.map((field) => ({
-      value: field.name,
-      label: field.label,
-    }));
-    return [
-      { value: "auto", label: "Détection automatique" },
-      ...baseOptions,
-      { value: FORMULA_QUANTITY_KEY, label: "Quantité" },
-    ];
-  }, [dynamicSchemaFields]);
-
-  const bonificationDisplay = useMemo(() => formatDecimalValue(watchedBonification, 2), [watchedBonification]);
-  const coefficientDisplay = useMemo(() => formatDecimalValue(watchedCoefficient, 1), [watchedCoefficient]);
-
-  const formulaPreviewLabel = useMemo(() => {
-    if (!normalizedFormulaValue || !normalizedFormulaValue.variableKey) {
-      return "multiplicateur détecté automatiquement";
-    }
-
-    if (normalizedFormulaValue.variableKey === FORMULA_QUANTITY_KEY) {
-      return normalizedFormulaValue.variableLabel ?? "Quantité";
-    }
-
-    const matchField = dynamicSchemaFields.find((field) => field.name === normalizedFormulaValue.variableKey);
-    if (matchField?.label && matchField.label.trim().length > 0) return matchField.label;
-    if (matchField?.name && matchField.name.trim().length > 0) return matchField.name;
-
-    if (normalizedFormulaValue.variableLabel && normalizedFormulaValue.variableLabel.trim().length > 0) {
-      return normalizedFormulaValue.variableLabel;
-    }
-
-    return normalizedFormulaValue.variableKey;
-  }, [dynamicSchemaFields, normalizedFormulaValue]);
-
-  const formulaCoefficientDisplay = useMemo(
-    () => formatDecimalValue(normalizedFormulaValue?.coefficient, 1),
-    [normalizedFormulaValue],
+  const selectedCeeTemplate = useMemo(
+    () => getProductCeeFormulaTemplateById(ceeTemplateValue) ?? null,
+    [ceeTemplateValue],
   );
 
-  const formulaMultiplierDescription = useMemo(() => {
-    if (!normalizedFormulaValue || !normalizedFormulaValue.coefficient) {
-      return formulaPreviewLabel;
+  const ceeMultiplierPreview = useMemo(() => {
+    const rawKey = ceeMultiplierParamValue?.trim() || FORMULA_QUANTITY_KEY;
+
+    if (isQuantityMultiplier(rawKey)) {
+      return formatProductCeeMultiplierLabel("Quantité", ceeMultiplierCoefficientValue ?? null);
     }
-    return `${formulaPreviewLabel} × coefficient (${formulaCoefficientDisplay})`;
-  }, [formulaCoefficientDisplay, formulaPreviewLabel, normalizedFormulaValue]);
+
+    const matchField = dynamicSchemaFields.find((field) => field.name === rawKey);
+    const label =
+      (matchField?.label && matchField.label.trim().length > 0 ? matchField.label : undefined) ??
+      (matchField?.name && matchField.name.trim().length > 0 ? matchField.name : undefined) ??
+      rawKey;
+
+    return formatProductCeeMultiplierLabel(label, ceeMultiplierCoefficientValue ?? null);
+  }, [ceeMultiplierParamValue, ceeMultiplierCoefficientValue, dynamicSchemaFields]);
 
   useEffect(() => {
-    const current = form.getValues("valorisation_formula");
-    if (!current || !current.variableKey || current.variableKey === FORMULA_QUANTITY_KEY) {
-      if (current?.variableKey === FORMULA_QUANTITY_KEY && !current.variableLabel) {
-        form.setValue("valorisation_formula", { ...current, variableLabel: "Quantité" });
-      }
+    const template = getProductCeeFormulaTemplateById(ceeTemplateValue);
+    if (!template || template.isCustom) {
       return;
     }
 
-    const match = dynamicSchemaFields.find((field) => field.name === current.variableKey);
-    if (!match) {
-      form.setValue("valorisation_formula", null);
-      return;
+    const expectedExpression = template.expression ?? null;
+    if (form.getValues("cee_config.formulaExpression") !== expectedExpression) {
+      form.setValue("cee_config.formulaExpression", expectedExpression);
     }
+  }, [ceeTemplateValue, form]);
 
-    const nextLabel = match.label ?? match.name;
-    if (nextLabel && current.variableLabel !== nextLabel) {
-      form.setValue("valorisation_formula", { ...current, variableLabel: nextLabel });
+  useEffect(() => {
+    if (ceeCategoryValue !== "lighting" && form.getValues("cee_config.ledWattConstant") !== null) {
+      form.setValue("cee_config.ledWattConstant", null);
     }
-  }, [dynamicSchemaFields, form]);
+  }, [ceeCategoryValue, form]);
 
   const ecoEstimation = useMemo(() => {
     if (watchedBasePrice === null || watchedBasePrice === undefined) return null;
@@ -896,19 +943,118 @@ export const ProductFormDialog = ({
 
                 <div className="space-y-4 rounded-lg border p-4">
                   <div>
-                    <h3 className="text-sm font-medium">Valorisation CEE</h3>
+                    <h3 className="text-sm font-medium">Configuration Prime CEE</h3>
                     <p className="text-xs text-muted-foreground">
-                      Configurez la bonification, le coefficient fixe et le champ utilisé comme multiplicateur dans la prime.
+                      Sélectionnez la catégorie, la formule de valorisation et le champ utilisé pour calculer la prime CEE.
                     </p>
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-2">
                     <FormField
                       control={form.control}
-                      name="valorisation_bonification"
+                      name="cee_config.category"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Bonification</FormLabel>
+                          <FormLabel>Catégorie</FormLabel>
+                          <FormControl>
+                            <Select
+                              value={field.value}
+                              onValueChange={field.onChange}
+                              disabled={isSubmitting}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Choisir une catégorie" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {PRODUCT_CEE_CATEGORIES.map((category) => (
+                                  <SelectItem key={category.value} value={category.value}>
+                                    {category.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="cee_config.formulaTemplate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Formule CEE</FormLabel>
+                          <FormControl>
+                            <Select
+                              value={field.value}
+                              onValueChange={field.onChange}
+                              disabled={isSubmitting}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Choisir une formule" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {PRODUCT_CEE_FORMULA_TEMPLATES.map((template) => (
+                                  <SelectItem key={template.id} value={template.id}>
+                                    {template.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  {selectedCeeTemplate ? (
+                    <div className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                      {selectedCeeTemplate.description}
+                    </div>
+                  ) : null}
+
+                  {selectedCeeTemplate?.isCustom ? (
+                    <FormField
+                      control={form.control}
+                      name="cee_config.formulaExpression"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Formule personnalisée</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              {...field}
+                              value={field.value ?? ""}
+                              onChange={(event) => field.onChange(event.target.value)}
+                              placeholder="Exemple : KWH_CUMAC * BONUS_DOM * LED_WATT / MWH_DIVISOR"
+                              rows={3}
+                              disabled={isSubmitting}
+                            />
+                          </FormControl>
+                          <p className="text-xs text-muted-foreground px-1">
+                            Variables disponibles : KWH_CUMAC, BONUS_DOM, LED_WATT, MWH_DIVISOR, BONIFICATION, COEFFICIENT.
+                          </p>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ) : (
+                    <div className="rounded-md border border-dashed border-border/60 bg-muted/20 px-3 py-2 text-xs">
+                      <p className="font-medium text-foreground">Formule appliquée</p>
+                      <p className="mt-1 whitespace-pre-wrap text-muted-foreground">
+                        {selectedCeeTemplate?.expression ?? "(kWh cumac × bonification × coefficient) / 1000"}
+                      </p>
+                    </div>
+                  )}
+
+                  {ceeCategoryValue === "lighting" || selectedCeeTemplate?.requiresLedWattConstant ? (
+                    <FormField
+                      control={form.control}
+                      name="cee_config.ledWattConstant"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Puissance LED moyenne (W)</FormLabel>
                           <FormControl>
                             <Input
                               type="number"
@@ -926,11 +1072,65 @@ export const ProductFormDialog = ({
                                 field.onChange(parsed);
                               }}
                               onBlur={field.onBlur}
-                              placeholder="2"
+                              placeholder="30"
                               disabled={isSubmitting}
                             />
                           </FormControl>
-                          <p className="text-xs text-muted-foreground px-1">Valeur par défaut : 2.</p>
+                          <p className="text-xs text-muted-foreground px-1">
+                            Valeur utilisée pour calculer la valorisation des opérations d&apos;éclairage.
+                          </p>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ) : null}
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <FormField
+                      control={form.control}
+                      name="cee_config.primeMultiplierParam"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Champ multiplicateur (Prime CEE)</FormLabel>
+                          <FormControl>
+                            <Input
+                              value={field.value ?? ""}
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                field.onChange(value.trim().length === 0 ? null : value);
+                              }}
+                              placeholder="__quantity__"
+                              disabled={isSubmitting}
+                            />
+                          </FormControl>
+                          <p className="text-xs text-muted-foreground">
+                            Utilisez "__quantity__" pour la quantité ou choisissez un champ dynamique ci-dessous.
+                          </p>
+                          {dynamicSchemaFields.length > 0 ? (
+                            <div className="flex flex-wrap gap-2 pt-1">
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="xs"
+                                onClick={() => field.onChange(FORMULA_QUANTITY_KEY)}
+                                disabled={isSubmitting}
+                              >
+                                Quantité
+                              </Button>
+                              {dynamicSchemaFields.map((option) => (
+                                <Button
+                                  key={option.name}
+                                  type="button"
+                                  variant="secondary"
+                                  size="xs"
+                                  onClick={() => field.onChange(option.name)}
+                                  disabled={isSubmitting}
+                                >
+                                  {option.label}
+                                </Button>
+                              ))}
+                            </div>
+                          ) : null}
                           <FormMessage />
                         </FormItem>
                       )}
@@ -938,10 +1138,10 @@ export const ProductFormDialog = ({
 
                     <FormField
                       control={form.control}
-                      name="valorisation_coefficient"
+                      name="cee_config.primeMultiplierCoefficient"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Coefficient fixe</FormLabel>
+                          <FormLabel>Coefficient du multiplicateur</FormLabel>
                           <FormControl>
                             <Input
                               type="number"
@@ -963,129 +1163,23 @@ export const ProductFormDialog = ({
                               disabled={isSubmitting}
                             />
                           </FormControl>
-                          <p className="text-xs text-muted-foreground px-1">Exemple : puissance électrique (250 W).</p>
+                          <p className="text-xs text-muted-foreground px-1">
+                            Optionnel. Permet de pondérer le champ sélectionné (ex. surface × 1.3).
+                          </p>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
                   </div>
 
-                  <FormField
-                    control={form.control}
-                    name="valorisation_formula"
-                    render={({ field }) => {
-                      const current = field.value as ValorisationFormulaConfig | null;
-                      const selectedKey = current?.variableKey ?? "auto";
-                      const selectedOption = formulaOptions.find((option) => option.value === selectedKey);
-                      const normalized = normalizeValorisationFormula(current);
-
-                      const multiplierLabel =
-                        selectedKey === "auto"
-                          ? "multiplicateur détecté automatiquement"
-                          : selectedOption?.label ?? normalized?.variableLabel ?? selectedKey;
-
-                      const rawCoefficient =
-                        typeof current?.coefficient === "number" && Number.isFinite(current.coefficient)
-                          ? current.coefficient
-                          : normalized?.coefficient ?? null;
-
-                      const formulaErrors = form.formState.errors.valorisation_formula as
-                        | { coefficient?: { message?: string } }
-                        | undefined;
-                      const coefficientError = formulaErrors?.coefficient?.message;
-
-                      return (
-                        <FormItem>
-                          <FormLabel>Champ multiplicateur (Prime CEE)</FormLabel>
-                          <FormControl>
-                            <Select
-                              value={selectedKey}
-                              onValueChange={(value) => {
-                                if (value === "auto") {
-                                  field.onChange(null);
-                                  return;
-                                }
-
-                                const preservedCoefficient =
-                                  typeof current?.coefficient === "number" && Number.isFinite(current.coefficient)
-                                    ? current.coefficient
-                                    : normalized?.coefficient ?? null;
-
-                                if (value === FORMULA_QUANTITY_KEY) {
-                                  field.onChange({
-                                    variableKey: FORMULA_QUANTITY_KEY,
-                                    variableLabel: "Quantité",
-                                    coefficient: preservedCoefficient,
-                                  });
-                                  return;
-                                }
-
-                                const option = formulaOptions.find((item) => item.value === value);
-                                field.onChange({
-                                  variableKey: value,
-                                  variableLabel: option?.label ?? value,
-                                  coefficient: preservedCoefficient,
-                                });
-                              }}
-                              disabled={isSubmitting}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Choisir un champ" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {formulaOptions.map((option) => (
-                                  <SelectItem key={option.value} value={option.value}>
-                                    {option.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </FormControl>
-                          <p className="text-xs text-muted-foreground">
-                            Sélectionnez le champ dynamique qui multipliera la valorisation pour obtenir la prime.
-                          </p>
-                          {selectedKey !== "auto" ? (
-                            <div className="mt-3 space-y-3 rounded-md border border-dashed border-border/60 bg-muted/20 p-3">
-                              <p className="text-xs font-medium text-foreground">Champ sélectionné : {multiplierLabel}</p>
-                              <div className="space-y-1">
-                                <label className="text-xs font-medium text-foreground">Coefficient du champ (optionnel)</label>
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  step="0.01"
-                                  value={rawCoefficient ?? ""}
-                                  onChange={(event) => {
-                                    if (!current) return;
-
-                                    const value = event.target.value;
-                                    if (value === "") {
-                                      field.onChange({ ...current, coefficient: null });
-                                      return;
-                                    }
-
-                                    const parsed = Number(value);
-                                    if (Number.isNaN(parsed)) return;
-
-                                    field.onChange({ ...current, coefficient: parsed });
-                                  }}
-                                  disabled={isSubmitting}
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                  Multiplicateur appliqué au champ sélectionné (ex. puissance d&apos;un luminaire en watts).
-                                </p>
-                                {coefficientError ? <p className="text-xs text-destructive">{coefficientError}</p> : null}
-                              </div>
-                            </div>
-                          ) : null}
-                          <FormMessage />
-                        </FormItem>
-                      );
-                    }}
-                  />
-
                   <div className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                    Formule : ((kWh cumac × bonification ({bonificationDisplay}) × coefficient fixe ({coefficientDisplay})) / 1000) ×{" "}
-                    {formulaMultiplierDescription}.
+                    <p className="font-medium text-foreground">Multiplicateur appliqué</p>
+                    <p className="mt-1">{ceeMultiplierPreview}</p>
+                    {selectedCeeTemplate?.isCustom ? (
+                      <p className="mt-2 text-muted-foreground">
+                        Formule personnalisée : {ceeFormulaExpressionValue?.trim() || "Non définie"}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
               </TabsContent>
