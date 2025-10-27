@@ -59,7 +59,12 @@ import {
   withDefaultProductCeeConfig,
   type ProductCeeConfig,
 } from "@/lib/prime-cee-unified";
-import { formatFormulaCoefficient, FORMULA_QUANTITY_KEY } from "@/lib/valorisation-formula";
+import {
+  formatFormulaCoefficient,
+  getCategoryDefaultMultiplierKey,
+  LEGACY_QUANTITY_KEY,
+  resolveMultiplierKeyForCategory,
+} from "@/lib/valorisation-formula";
 
 type Project = Tables<"projects">;
 type ProductSummary = Pick<
@@ -206,15 +211,22 @@ const resolveMultiplierDetails = (
   product: ProductSummary,
   projectProduct: ProjectProduct,
 ): { value: number | null; label: string | null; missingDynamicParams: boolean } => {
-  const multiplierParam = product.cee_config.primeMultiplierParam;
+  const rawMultiplierParam = product.cee_config.primeMultiplierParam;
   const multiplierCoefficient = product.cee_config.primeMultiplierCoefficient;
+  const ceeCategory = product.cee_config.category ?? product.category ?? null;
+  const defaultMultiplierKey =
+    getCategoryDefaultMultiplierKey(ceeCategory) ?? getCategoryDefaultMultiplierKey(product.category) ?? null;
 
-  if (multiplierParam && multiplierParam !== FORMULA_QUANTITY_KEY) {
-    const schemaLabel = getSchemaFieldLabel(product.params_schema, multiplierParam);
+  const multiplierParam = resolveMultiplierKeyForCategory(rawMultiplierParam, ceeCategory);
+  const effectiveMultiplierKey =
+    multiplierParam === LEGACY_QUANTITY_KEY && defaultMultiplierKey ? defaultMultiplierKey : multiplierParam;
+
+  if (effectiveMultiplierKey && effectiveMultiplierKey !== LEGACY_QUANTITY_KEY) {
+    const schemaLabel = getSchemaFieldLabel(product.params_schema, effectiveMultiplierKey);
     const coefficient = toPositiveNumber(multiplierCoefficient) ?? 1;
     const targets = schemaLabel
-      ? [multiplierParam, schemaLabel]
-      : [multiplierParam];
+      ? [effectiveMultiplierKey, schemaLabel]
+      : [effectiveMultiplierKey];
     const dynamicValue = getDynamicFieldNumericValue(
       product.params_schema,
       projectProduct.dynamic_params,
@@ -237,7 +249,7 @@ const resolveMultiplierDetails = (
 
     return {
       value: null,
-      label: schemaLabel ?? multiplierParam,
+      label: schemaLabel ?? effectiveMultiplierKey,
       missingDynamicParams: true,
     };
   }

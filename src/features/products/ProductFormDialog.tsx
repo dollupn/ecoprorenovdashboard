@@ -23,14 +23,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { getProjectBuildingTypes } from "@/lib/buildings";
-import { FORMULA_QUANTITY_KEY } from "@/lib/valorisation-formula";
+import {
+  getCategoryDefaultMultiplierKey,
+  getCategoryDefaultMultiplierLabel,
+  LEGACY_QUANTITY_KEY,
+  resolveMultiplierKeyForCategory,
+} from "@/lib/valorisation-formula";
 import {
   DEFAULT_PRODUCT_CEE_CONFIG,
   PRODUCT_CEE_CATEGORIES,
   PRODUCT_CEE_FORMULA_TEMPLATES,
   formatProductCeeMultiplierLabel,
   getProductCeeFormulaTemplateById,
-  isQuantityMultiplier,
   normalizeProductCeeConfig,
 } from "@/lib/prime-cee-config";
 import type { TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
@@ -436,11 +440,8 @@ export const ProductFormDialog = ({
     const template = getProductCeeFormulaTemplateById(ceeConfigInput.formulaTemplate) ?? null;
 
     const multiplierParamRaw = ceeConfigInput.primeMultiplierParam?.trim();
-    const multiplierParamNormalized = multiplierParamRaw
-      ? multiplierParamRaw === "quantity"
-        ? FORMULA_QUANTITY_KEY
-        : multiplierParamRaw
-      : null;
+    const multiplierParamNormalized =
+      resolveMultiplierKeyForCategory(multiplierParamRaw, ceeConfigInput.category) ?? null;
 
     const multiplierCoefficientNormalized =
       typeof ceeConfigInput.primeMultiplierCoefficient === "number" &&
@@ -464,7 +465,10 @@ export const ProductFormDialog = ({
     const normalizedCeeConfig = normalizeProductCeeConfig({
       ...ceeConfigInput,
       formulaExpression: expressionNormalized,
-      primeMultiplierParam: multiplierParamNormalized ?? FORMULA_QUANTITY_KEY,
+      primeMultiplierParam:
+        multiplierParamNormalized ??
+        getCategoryDefaultMultiplierKey(ceeConfigInput.category) ??
+        LEGACY_QUANTITY_KEY,
       primeMultiplierCoefficient: multiplierCoefficientNormalized,
       ledWattConstant: ledWattNormalized,
     });
@@ -592,10 +596,16 @@ export const ProductFormDialog = ({
   );
 
   const ceeMultiplierPreview = useMemo(() => {
-    const rawKey = ceeMultiplierParamValue?.trim() || FORMULA_QUANTITY_KEY;
+    const defaultKey =
+      getCategoryDefaultMultiplierKey(ceeCategoryValue) ?? LEGACY_QUANTITY_KEY;
+    const rawKey = ceeMultiplierParamValue?.trim() || defaultKey;
 
-    if (isQuantityMultiplier(rawKey)) {
-      return formatProductCeeMultiplierLabel("Quantité", ceeMultiplierCoefficientValue ?? null);
+    if (rawKey === defaultKey) {
+      const defaultLabel =
+        getCategoryDefaultMultiplierLabel(ceeCategoryValue) ??
+        (defaultKey === LEGACY_QUANTITY_KEY ? "Quantité" : defaultKey);
+
+      return formatProductCeeMultiplierLabel(defaultLabel, ceeMultiplierCoefficientValue ?? null);
     }
 
     const matchField = dynamicSchemaFields.find((field) => field.name === rawKey);
@@ -605,7 +615,12 @@ export const ProductFormDialog = ({
       rawKey;
 
     return formatProductCeeMultiplierLabel(label, ceeMultiplierCoefficientValue ?? null);
-  }, [ceeMultiplierParamValue, ceeMultiplierCoefficientValue, dynamicSchemaFields]);
+  }, [
+    ceeMultiplierParamValue,
+    ceeMultiplierCoefficientValue,
+    dynamicSchemaFields,
+    ceeCategoryValue,
+  ]);
 
   useEffect(() => {
     const template = getProductCeeFormulaTemplateById(ceeTemplateValue);
@@ -1236,51 +1251,59 @@ export const ProductFormDialog = ({
                     <FormField
                       control={form.control}
                       name="cee_config.primeMultiplierParam"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Champ multiplicateur (Prime CEE)</FormLabel>
-                          <FormControl>
-                            <Input
-                              value={field.value ?? ""}
-                              onChange={(event) => {
-                                const value = event.target.value;
-                                field.onChange(value.trim().length === 0 ? null : value);
-                              }}
-                              placeholder="__quantity__"
-                              disabled={isSubmitting}
-                            />
-                          </FormControl>
-                          <p className="text-xs text-muted-foreground">
-                            Utilisez "__quantity__" pour la quantité ou choisissez un champ dynamique ci-dessous.
-                          </p>
-                          {dynamicSchemaFields.length > 0 ? (
-                            <div className="flex flex-wrap gap-2 pt-1">
-                              <Button
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => field.onChange(FORMULA_QUANTITY_KEY)}
+                      render={({ field }) => {
+                        const defaultKey =
+                          getCategoryDefaultMultiplierKey(ceeCategoryValue) ?? LEGACY_QUANTITY_KEY;
+                        const defaultLabel =
+                          getCategoryDefaultMultiplierLabel(ceeCategoryValue) ??
+                          (defaultKey === LEGACY_QUANTITY_KEY ? "Quantité" : defaultKey);
+
+                        return (
+                          <FormItem>
+                            <FormLabel>Champ multiplicateur (Prime CEE)</FormLabel>
+                            <FormControl>
+                              <Input
+                                value={field.value ?? ""}
+                                onChange={(event) => {
+                                  const value = event.target.value;
+                                  field.onChange(value.trim().length === 0 ? null : value);
+                                }}
+                                placeholder={defaultKey}
                                 disabled={isSubmitting}
-                              >
-                                Quantité
-                              </Button>
-                              {dynamicSchemaFields.map((option) => (
+                              />
+                            </FormControl>
+                            <p className="text-xs text-muted-foreground">
+                              {`Utilisez "${defaultLabel}" pour appliquer le multiplicateur par défaut ou choisissez un champ dynamique ci-dessous.`}
+                            </p>
+                            {dynamicSchemaFields.length > 0 ? (
+                              <div className="flex flex-wrap gap-2 pt-1">
                                 <Button
-                                  key={option.name}
                                   type="button"
                                   variant="secondary"
                                   size="sm"
-                                  onClick={() => field.onChange(option.name)}
+                                  onClick={() => field.onChange(defaultKey)}
                                   disabled={isSubmitting}
                                 >
-                                  {option.label}
+                                  {defaultLabel}
                                 </Button>
-                              ))}
-                            </div>
-                          ) : null}
-                          <FormMessage />
-                        </FormItem>
-                      )}
+                                {dynamicSchemaFields.map((option) => (
+                                  <Button
+                                    key={option.name}
+                                    type="button"
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => field.onChange(option.name)}
+                                    disabled={isSubmitting}
+                                  >
+                                    {option.label}
+                                  </Button>
+                                ))}
+                              </div>
+                            ) : null}
+                            <FormMessage />
+                          </FormItem>
+                        );
+                      }}
                     />
 
                     <FormField

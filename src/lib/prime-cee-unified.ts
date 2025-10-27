@@ -1,24 +1,20 @@
 import type { Tables } from "@/integrations/supabase/types";
 import {
-  FORMULA_QUANTITY_KEY,
   formatFormulaCoefficient,
+  getCategoryDefaultMultiplierKey,
+  LEGACY_QUANTITY_KEY,
   normalizeValorisationFormula,
+  resolveMultiplierKeyForCategory,
 } from "./valorisation-formula";
 import {
   DEFAULT_PRODUCT_CEE_CONFIG,
   formatProductCeeMultiplierLabel,
-  isQuantityMultiplier,
   normalizeProductCeeConfig,
   type ProductCeeConfig,
 } from "./prime-cee-config";
 
 export type { ProductCeeConfig } from "./prime-cee-config";
-export {
-  DEFAULT_PRODUCT_CEE_CONFIG,
-  formatProductCeeMultiplierLabel,
-  isQuantityMultiplier,
-  normalizeProductCeeConfig,
-};
+export { DEFAULT_PRODUCT_CEE_CONFIG, formatProductCeeMultiplierLabel, normalizeProductCeeConfig };
 
 // ============================================================================
 // TYPES
@@ -276,19 +272,21 @@ const resolveCeeConfigMultiplier = ({
     return null;
   }
 
-  const multiplierKey =
+  const rawMultiplierKey =
     typeof ceeConfig.primeMultiplierParam === "string"
-      ? ceeConfig.primeMultiplierParam
+      ? ceeConfig.primeMultiplierParam.trim()
       : null;
-
-  if (!multiplierKey) {
-    return null;
-  }
+  const resolvedMultiplierKey = resolveMultiplierKeyForCategory(rawMultiplierKey, ceeConfig.category);
+  const defaultMultiplierKey = getCategoryDefaultMultiplierKey(ceeConfig.category);
+  const multiplierKey =
+    resolvedMultiplierKey === LEGACY_QUANTITY_KEY && defaultMultiplierKey
+      ? defaultMultiplierKey
+      : resolvedMultiplierKey;
 
   const coefficient = toPositiveNumber(ceeConfig.primeMultiplierCoefficient) ?? 1;
   const withCoefficientLabel = (label: string) => formatProductCeeMultiplierLabel(label, coefficient);
 
-  if (isQuantityMultiplier(multiplierKey)) {
+  if (!multiplierKey || multiplierKey === LEGACY_QUANTITY_KEY) {
     if (quantity && quantity > 0) {
       return { value: quantity * coefficient, label: withCoefficientLabel("Quantité") };
     }
