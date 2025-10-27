@@ -33,9 +33,9 @@ export interface ProjectStatusSetting {
 
 export const DEFAULT_PROJECT_STATUSES: ProjectStatusSetting[] = [
   {
-    id: "NOUVEAU",
-    value: "NOUVEAU",
-    label: "Nouveau",
+    id: "PROSPECTION",
+    value: "PROSPECTION",
+    label: "Prospection",
     color: "#3B82F6",
   },
   {
