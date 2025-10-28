@@ -1341,12 +1341,19 @@ const Projects = () => {
                         clientName,
                         projectEmail,
                         surfaceFacturee,
+                        category,
                       }) => {
                         const statusConfig = statusMap[project.status ?? ""];
                         const badgeStyle = getProjectStatusBadgeStyle(statusConfig?.color);
                         const statusLabel = statusConfig?.label ?? project.status ?? "Statut";
                         const projectCostValue = project.estimated_value ?? null;
                         const valorisationSummary = displayedValorisationEntries[0];
+                        const categoryLabel =
+                          category === "EQ"
+                            ? "Éclairage"
+                            : category === "EN"
+                              ? "Isolation"
+                              : null;
 
                         return (
                           <TableRow
@@ -1355,11 +1362,6 @@ const Projects = () => {
                           >
                             <TableCell className="align-top">
                               <div className="font-semibold text-primary">{project.project_ref}</div>
-                              {project.source && (
-                                <div className="mt-1 text-xs text-muted-foreground">
-                                  Source : {project.source}
-                                </div>
-                              )}
                             </TableCell>
                             <TableCell className="align-top">
                               <div className="font-medium text-foreground">{clientName}</div>
@@ -1416,20 +1418,15 @@ const Projects = () => {
                                 </div>
                               )}
                             </TableCell>
-                            <TableCell className="align-top">
+                            <TableCell className="align-top space-y-1">
+                              {categoryLabel && (
+                                <div className="text-sm font-medium text-foreground">
+                                  {categoryLabel}
+                                </div>
+                              )}
                               <Badge variant="outline" style={badgeStyle}>
                                 {statusLabel}
                               </Badge>
-                              {project.delegate && (
-                                <div className="mt-2 text-xs text-muted-foreground">
-                                  {project.delegate.name}
-                                  {typeof project.delegate.price_eur_per_mwh === "number" && (
-                                    <span className="block text-muted-foreground/80">
-                                      {formatCurrency(project.delegate.price_eur_per_mwh)} / MWh
-                                    </span>
-                                  )}
-                                </div>
-                              )}
                             </TableCell>
                             <TableCell className="align-top space-y-2">
                               {typeof projectCostValue === "number" && (
