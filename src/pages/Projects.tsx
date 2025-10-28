@@ -43,6 +43,7 @@ import {
   HandCoins,
   LayoutGrid,
   List,
+  HardHat,
 } from "lucide-react";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useMembers } from "@/features/members/api";
@@ -1095,277 +1096,274 @@ const Projects = () => {
                     <Card
                       key={project.id}
                       className={cn(
-                        "relative overflow-hidden border border-border/60 bg-card shadow-card transition-shadow duration-300",
-                        "hover:shadow-elevated focus-within:ring-2 focus-within:ring-primary/40 focus-within:ring-offset-2",
+                        "group relative overflow-hidden border bg-card shadow-sm transition-all duration-300",
+                        "hover:shadow-md hover:border-primary/20 cursor-pointer",
                       )}
                       role="button"
                       tabIndex={0}
                       onClick={handleCardActivation}
                       onKeyDown={handleCardKeyDown}
                     >
-                      <span
+                      {/* Top accent bar */}
+                      <div
                         aria-hidden="true"
                         className={cn(
-                          "pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r",
+                          "absolute inset-x-0 top-0 h-1 bg-gradient-to-r transition-opacity",
                           categoryMetadata.accentBar,
                         )}
                       />
-                      <CardHeader className="flex flex-col gap-4 pb-4">
-                        <div className="flex flex-col gap-3">
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex items-start gap-3">
-                              <span
-                                className={cn(
-                                  "flex h-10 w-10 items-center justify-center rounded-full",
-                                  categoryMetadata.iconWrapper,
-                                )}
-                              >
-                                <CategoryIcon aria-hidden="true" className="h-5 w-5" />
-                                <span className="sr-only">{categoryMetadata.srLabel}</span>
-                              </span>
-                              <div className="space-y-1">
-                                <CardTitle className="text-lg font-semibold text-foreground">
-                                  {project.project_ref || "Sans référence"}
-                                </CardTitle>
-                                {productName ? (
-                                  <p className="text-sm font-medium text-muted-foreground">{productName}</p>
-                                ) : null}
+                      
+                      <CardHeader className="space-y-4 pb-3">
+                        {/* Header: Category Icon, Ref, Status, Edit */}
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start gap-3 flex-1 min-w-0">
+                            <div
+                              className={cn(
+                                "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+                                categoryMetadata.iconWrapper,
+                              )}
+                            >
+                              <CategoryIcon className="h-4 w-4" aria-hidden="true" />
+                              <span className="sr-only">{categoryMetadata.srLabel}</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-base font-semibold text-foreground truncate">
+                                {project.project_ref || "Sans référence"}
+                              </h3>
+                              <div className="flex items-center gap-2 mt-1">
+                                <Badge variant="outline" style={badgeStyle} className="text-xs">
+                                  {statusLabel}
+                                </Badge>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline" style={badgeStyle}>
-                                {statusLabel}
-                              </Badge>
-                              <AddProjectDialog
-                                mode="edit"
-                                projectId={project.id}
-                                projectRef={project.project_ref}
-                                initialValues={editInitialValues}
-                                onProjectUpdated={() => void refetch()}
-                                trigger={(
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="gap-1 text-muted-foreground hover:text-primary"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                    }}
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                    Modifier
-                                  </Button>
-                                )}
-                              />
-                            </div>
                           </div>
-                          <div className="space-y-1 text-sm text-muted-foreground">
-                            <p className="font-medium text-foreground">{contactDisplay}</p>
-                            {companyDisplay ? <p>{companyDisplay}</p> : null}
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                              {project.siren ? <span>SIREN : {project.siren}</span> : null}
-                              {sourceLabel ? <span>Source : {sourceLabel}</span> : null}
-                            </div>
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                              {project.phone ? (
-                                <a
-                                  href={`tel:${project.phone}`}
-                                  className="flex items-center gap-1"
-                                >
-                                  <Phone aria-hidden="true" className="h-4 w-4" />
-                                  {project.phone}
-                                </a>
-                              ) : null}
-                              {projectEmail ? (
-                                <a
-                                  href={`mailto:${projectEmail}`}
-                                  className="flex items-center gap-1"
-                                >
-                                  <Mail aria-hidden="true" className="h-4 w-4" />
-                                  {projectEmail}
-                                </a>
-                              ) : null}
-                            </div>
+                          
+                          <AddProjectDialog
+                            mode="edit"
+                            projectId={project.id}
+                            projectRef={project.project_ref}
+                            initialValues={editInitialValues}
+                            onProjectUpdated={() => void refetch()}
+                            trigger={
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="shrink-0 h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                                <span className="sr-only">Modifier</span>
+                              </Button>
+                            }
+                          />
+                        </div>
+
+                        {/* Contact Info */}
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium text-foreground">{contactDisplay}</p>
+                          {companyDisplay && (
+                            <p className="text-xs text-muted-foreground">{companyDisplay}</p>
+                          )}
+                          
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+                            {project.siren && (
+                              <span className="flex items-center gap-1">
+                                <span className="font-medium">SIREN:</span> {project.siren}
+                              </span>
+                            )}
+                            {project.phone && (
+                              <a
+                                href={`tel:${project.phone}`}
+                                className="flex items-center gap-1 hover:text-primary transition-colors"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Phone className="h-3 w-3" />
+                                {project.phone}
+                              </a>
+                            )}
+                            {projectEmail && (
+                              <a
+                                href={`mailto:${projectEmail}`}
+                                className="flex items-center gap-1 hover:text-primary transition-colors"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Mail className="h-3 w-3" />
+                                {projectEmail}
+                              </a>
+                            )}
                           </div>
                         </div>
                       </CardHeader>
-                      <CardContent className="space-y-6">
-                        <div className="space-y-3">
-                          {displayedProducts.length ? (
-                            <div className="flex flex-wrap gap-2">
+
+                      <CardContent className="space-y-4 pb-4">
+                        {/* Products & Address */}
+                        <div className="space-y-2.5">
+                          {displayedProducts.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
                               {displayedProducts.map((item, index) => (
                                 <Badge
                                   key={`${project.id}-${item.product?.code ?? index}`}
                                   variant="secondary"
-                                  className="text-xs font-medium"
+                                  className="text-[10px] font-medium px-2 py-0.5"
                                 >
                                   {item.product?.code ?? "Produit"}
                                 </Badge>
                               ))}
                             </div>
-                          ) : null}
-                          {formattedAddress ? (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <MapPin aria-hidden="true" className="h-4 w-4" />
-                              <span>{formattedAddress}</span>
+                          )}
+                          
+                          {formattedAddress && (
+                            <div className="flex items-start gap-2 text-xs text-muted-foreground">
+                              <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                              <span className="line-clamp-2">{formattedAddress}</span>
                             </div>
-                          ) : null}
-                          {dynamicFieldItems.length > 0 ? (
-                            <dl className="grid gap-3 text-sm sm:grid-cols-2">
-                              {dynamicFieldItems.map((item) => (
-                                <div key={item.key} className="flex items-center justify-between gap-3">
-                                  <dt className="text-muted-foreground">{item.label}</dt>
-                                  <dd className="font-medium text-right text-foreground">{item.value}</dd>
-                                </div>
-                              ))}
-                            </dl>
-                          ) : null}
+                          )}
                         </div>
-                        {(project.surface_batiment_m2 ||
-                          project.surface_isolee_m2 ||
-                          surfaceFacturee ||
-                          startDate ||
-                          endDate) && (
-                          <div className="grid gap-4 text-sm sm:grid-cols-2">
-                            {project.surface_batiment_m2 ? (
-                              <div className="space-y-1">
-                                <span className="text-muted-foreground">Surface bâtiment</span>
-                                <span className="font-medium text-foreground">
-                                  {formatDecimal(project.surface_batiment_m2)} m²
-                                </span>
+
+                        {/* Dynamic Fields */}
+                        {dynamicFieldItems.length > 0 && (
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                            {dynamicFieldItems.map((item) => (
+                              <div key={item.key} className="flex justify-between gap-2">
+                                <span className="text-muted-foreground truncate">{item.label}</span>
+                                <span className="font-medium text-foreground shrink-0">{item.value}</span>
                               </div>
-                            ) : null}
-                            {project.surface_isolee_m2 ? (
-                              <div className="space-y-1">
-                                <span className="text-muted-foreground">Surface isolée</span>
-                                <span className="font-medium text-foreground">
-                                  {formatDecimal(project.surface_isolee_m2)} m²
-                                </span>
-                              </div>
-                            ) : null}
-                            {showSurfaceFacturee ? (
-                              <div className="space-y-1">
-                                <span className="text-muted-foreground">Surface facturée</span>
-                                <span className="font-medium text-foreground">
-                                  {formatDecimal(surfaceFacturee)} m²
-                                </span>
-                              </div>
-                            ) : null}
-                            {startDate || endDate ? (
-                              <div className="space-y-1 sm:col-span-2">
-                                <div className="flex items-center gap-2 text-muted-foreground">
-                                  <Calendar aria-hidden="true" className="h-4 w-4" />
-                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                    {startDate ? (
-                                      <span className="flex items-center gap-1">
-                                        <span>Début :</span>
-                                        <span className="font-medium text-foreground">
-                                          {startDate.toLocaleDateString("fr-FR")}
-                                        </span>
-                                      </span>
-                                    ) : null}
-                                    {startDate && endDate ? <span aria-hidden="true">•</span> : null}
-                                    {endDate ? (
-                                      <span className="flex items-center gap-1">
-                                        <span>Fin prévue :</span>
-                                        <span className="font-medium text-foreground">
-                                          {endDate.toLocaleDateString("fr-FR")}
-                                        </span>
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                </div>
-                              </div>
-                            ) : null}
+                            ))}
                           </div>
                         )}
-                        <dl className="grid gap-4 sm:grid-cols-2">
-                          <div>
-                            <dt className="text-sm font-medium text-muted-foreground">Prime CEE totale</dt>
-                            <dd className="mt-1 text-base font-semibold text-emerald-600">
-                              {formatCurrency(totalPrime)}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt className="text-sm font-medium text-muted-foreground">Référence externe</dt>
-                            <dd className="mt-1 text-base text-foreground">
-                              {externalReference && externalReference.length > 0
-                                ? externalReference
-                                : "Non renseignée"}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt className="text-sm font-medium text-muted-foreground">MWh généré</dt>
-                            <dd className="mt-1 text-base font-semibold text-foreground">
-                              {formatDecimal(totalValorisationMwh)} MWh
-                            </dd>
-                          </div>
-                          <div>
-                            <dt className="text-sm font-medium text-muted-foreground">Assigné à</dt>
-                            <dd className="mt-1 text-base text-foreground">
-                              {assignedTo && assignedTo.length > 0 ? assignedTo : "Non assigné"}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt className="text-sm font-medium text-muted-foreground">Source</dt>
-                            <dd className="mt-1 text-base text-foreground">
-                              {sourceLabel && sourceLabel.length > 0 ? sourceLabel : "Non renseignée"}
-                            </dd>
-                          </div>
-                          {delegateName ? (
-                            <div>
-                              <dt className="text-sm font-medium text-muted-foreground">Délégataire</dt>
-                              <dd className="mt-1 text-base text-foreground">
-                                <span className="flex items-center gap-1">
-                                  <UserRound aria-hidden="true" className="h-4 w-4" />
-                                  <span>{delegateName}</span>
-                                  {formattedDelegatePrice ? (
-                                    <span className="text-xs text-muted-foreground">
-                                      ({formattedDelegatePrice} / MWh)
+
+                        {/* Surfaces & Dates */}
+                        {(project.surface_batiment_m2 || project.surface_isolee_m2 || showSurfaceFacturee || startDate || endDate) && (
+                          <div className="rounded-lg bg-muted/30 p-3 space-y-2">
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                              {project.surface_batiment_m2 && (
+                                <div>
+                                  <div className="text-muted-foreground">Surface bâtiment</div>
+                                  <div className="font-medium text-foreground mt-0.5">
+                                    {formatDecimal(project.surface_batiment_m2)} m²
+                                  </div>
+                                </div>
+                              )}
+                              {project.surface_isolee_m2 && (
+                                <div>
+                                  <div className="text-muted-foreground">Surface isolée</div>
+                                  <div className="font-medium text-foreground mt-0.5">
+                                    {formatDecimal(project.surface_isolee_m2)} m²
+                                  </div>
+                                </div>
+                              )}
+                              {showSurfaceFacturee && (
+                                <div>
+                                  <div className="text-muted-foreground">Surface facturée</div>
+                                  <div className="font-medium text-foreground mt-0.5">
+                                    {formatDecimal(surfaceFacturee)} m²
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            
+                            {(startDate || endDate) && (
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1 border-t border-border/40">
+                                <Calendar className="h-3.5 w-3.5 shrink-0" />
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                  {startDate && (
+                                    <span>
+                                      Début: <span className="font-medium text-foreground">{startDate.toLocaleDateString("fr-FR")}</span>
                                     </span>
-                                  ) : null}
-                                </span>
-                              </dd>
+                                  )}
+                                  {startDate && endDate && <span>•</span>}
+                                  {endDate && (
+                                    <span>
+                                      Fin: <span className="font-medium text-foreground">{endDate.toLocaleDateString("fr-FR")}</span>
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Financial Info - Compact Grid */}
+                        <div className="grid grid-cols-2 gap-3 text-xs">
+                          <div className="space-y-1">
+                            <div className="text-muted-foreground">Prime CEE totale</div>
+                            <div className="text-sm font-semibold text-emerald-600">
+                              {formatCurrency(totalPrime)}
                             </div>
-                          ) : null}
-                          {typeof projectCostValue === "number" ? (
-                            <div>
-                              <dt className="text-sm font-medium text-muted-foreground">Coût du chantier</dt>
-                              <dd className="mt-1 text-base font-semibold text-primary">
+                          </div>
+                          
+                          <div className="space-y-1">
+                            <div className="text-muted-foreground">MWh généré</div>
+                            <div className="text-sm font-semibold text-foreground">
+                              {formatDecimal(totalValorisationMwh)} MWh
+                            </div>
+                          </div>
+                          
+                          {typeof projectCostValue === "number" && (
+                            <div className="space-y-1">
+                              <div className="text-muted-foreground">Coût chantier</div>
+                              <div className="text-sm font-semibold text-primary">
                                 {formatCurrency(projectCostValue)}
-                              </dd>
+                              </div>
                             </div>
-                          ) : null}
-                          {primeCeeEuro !== null ? (
-                            <div>
-                              <dt className="text-sm font-medium text-muted-foreground">Prime CEE estimée</dt>
-                              <dd className="mt-1 text-base font-semibold text-emerald-600">
+                          )}
+                          
+                          {primeCeeEuro !== null && primeCeeEuro !== totalPrime && (
+                            <div className="space-y-1">
+                              <div className="text-muted-foreground">Prime CEE estimée</div>
+                              <div className="text-sm font-semibold text-emerald-600">
                                 {formatCurrency(primeCeeEuro)}
-                              </dd>
+                              </div>
                             </div>
-                          ) : null}
-                        </dl>
-                        {displayedValorisationEntries.length > 0 ? (
-                          <div className="space-y-3 text-sm">
+                          )}
+                        </div>
+
+                        {/* Assignment & References - Compact */}
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground border-t border-border/40 pt-3">
+                          {assignedTo && (
+                            <span className="flex items-center gap-1">
+                              <span className="font-medium">Assigné:</span> {assignedTo}
+                            </span>
+                          )}
+                          {externalReference && (
+                            <span className="flex items-center gap-1">
+                              <span className="font-medium">Réf. ext:</span> {externalReference}
+                            </span>
+                          )}
+                          {delegateName && (
+                            <span className="flex items-center gap-1">
+                              <UserRound className="h-3 w-3" />
+                              {delegateName}
+                              {formattedDelegatePrice && (
+                                <span className="text-[10px]">({formattedDelegatePrice}/MWh)</span>
+                              )}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Valorisation Details (if any) */}
+                        {displayedValorisationEntries.length > 0 && (
+                          <div className="space-y-2">
                             {displayedValorisationEntries.map((entry) => {
                               const valorisationLabel = (entry.valorisationLabel || "Valorisation m²/LED").trim();
                               return (
                                 <div
                                   key={`${project.id}-valorisation-${entry.projectProductId}`}
-                                  className="space-y-1 rounded-md border border-border/60 bg-muted/30 p-3"
+                                  className="rounded-md border bg-muted/20 p-2.5 space-y-1.5"
                                 >
-                                  <div className="flex items-start justify-between gap-3">
-                                    <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
                                       {valorisationLabel}
-                                      {entry.productCode ? ` (${entry.productCode})` : ""}
+                                      {entry.productCode && ` (${entry.productCode})`}
                                     </span>
-                                    <span className="text-sm font-semibold text-amber-600 text-right">
+                                    <span className="text-xs font-semibold text-amber-600">
                                       {formatCurrency(entry.valorisationTotalEur ?? entry.totalPrime ?? 0)}
                                     </span>
                                   </div>
-                                  <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+                                  <div className="flex items-center justify-between text-[10px] text-muted-foreground">
                                     <span>
-                                      {`${formatDecimal(entry.valorisationPerUnitMwh)} MWh × ${entry.multiplierLabel}`}
+                                      {formatDecimal(entry.valorisationPerUnitMwh)} MWh × {entry.multiplierLabel}
                                     </span>
                                     <span className="font-semibold text-emerald-600">
                                       {formatCurrency(entry.valorisationPerUnitEur ?? 0)} / {entry.multiplierLabel}
@@ -1375,31 +1373,33 @@ const Projects = () => {
                               );
                             })}
                           </div>
-                        ) : null}
-                        <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:flex-wrap">
+                        )}
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-2 pt-2">
                           <Button
                             size="sm"
                             variant="outline"
-                            className="w-full sm:w-auto"
+                            className="flex-1 h-8 text-xs"
                             onClick={(event) => {
                               event.stopPropagation();
                               handleCreateQuote(project);
                             }}
                           >
-                            <FileText aria-hidden="true" className="mr-2 h-4 w-4" />
+                            <FileText className="mr-1.5 h-3.5 w-3.5" />
                             Devis
                           </Button>
                           <Button
                             size="sm"
                             variant="secondary"
-                            className="w-full sm:w-auto"
+                            className="flex-1 h-8 text-xs"
                             onClick={(event) => {
                               event.stopPropagation();
                               handleCreateSite(project);
                             }}
                           >
-                            <Hammer aria-hidden="true" className="mr-2 h-4 w-4" />
-                            Créer chantier
+                            <HardHat className="mr-1.5 h-3.5 w-3.5" />
+                            Chantier
                           </Button>
                         </div>
                       </CardContent>
