@@ -7,7 +7,7 @@ import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { AddProjectDialog } from "@/components/projects/AddProjectDialog";
+import { AddProjectDialog, type ProjectFormValues } from "@/components/projects/AddProjectDialog";
 import {
   AddQuoteDialog,
   type QuoteFormValues,
@@ -36,6 +36,7 @@ import {
   HandCoins,
   Mail,
   UserRound,
+  Pencil,
   LayoutGrid,
   List,
 } from "lucide-react";
@@ -863,6 +864,168 @@ const Projects = () => {
           </CardContent>
         </Card>
 
+        {/* Projects Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+          {filteredProjects.map(
+            ({
+              project,
+              displayedProducts,
+              dynamicFieldEntries,
+              displayedValorisationEntries,
+              clientName,
+              projectEmail,
+            }) => {
+              const statusConfig = statusMap[project.status ?? ""];
+              const badgeStyle = getProjectStatusBadgeStyle(statusConfig?.color);
+              const statusLabel = statusConfig?.label ?? project.status ?? "Statut";
+              const projectCostValue = project.estimated_value ?? null;
+              const projectProductsForForm = (project.project_products ?? []).map((item) => ({
+                product_id: item.product_id ?? "",
+                quantity:
+                  typeof item.quantity === "number" && Number.isFinite(item.quantity)
+                    ? item.quantity
+                    : 1,
+                dynamic_params: item.dynamic_params ?? {},
+              }));
+
+              const editInitialValues: Partial<ProjectFormValues> = {
+                client_first_name: project.client_first_name ?? "",
+                client_last_name: project.client_last_name ?? "",
+                company: project.company ?? "",
+                phone: project.phone ?? "",
+                hq_address: project.hq_address ?? "",
+                hq_city: project.hq_city ?? "",
+                hq_postal_code: project.hq_postal_code ?? "",
+                same_address: project.same_address ?? false,
+                address: (project as Project & { address?: string }).address ?? "",
+                city: project.city ?? "",
+                postal_code: project.postal_code ?? "",
+                siren: project.siren ?? "",
+                external_reference: project.external_reference ?? "",
+                products: projectProductsForForm.length > 0 ? projectProductsForForm : undefined,
+                building_type: project.building_type ?? "",
+                usage: project.usage ?? "",
+                delegate_id: project.delegate_id ?? project.delegate?.id ?? undefined,
+                signatory_name: project.signatory_name ?? "",
+                signatory_title: project.signatory_title ?? "",
+                surface_batiment_m2: project.surface_batiment_m2 ?? undefined,
+                status: project.status ?? "",
+                assigned_to: project.assigned_to ?? "",
+                source: project.source ?? "",
+                date_debut_prevue: project.date_debut_prevue ?? undefined,
+                date_fin_prevue: project.date_fin_prevue ?? undefined,
+                estimated_value: project.estimated_value ?? undefined,
+                lead_id: project.lead_id ?? undefined,
+              };
+
+              return (
+                <Card
+                  key={project.id}
+                  className="shadow-card bg-gradient-card border border-black/10 transition-all duration-300 hover:shadow-elevated dark:border-white/10"
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <CardTitle className="text-lg font-bold text-primary">
+                          {project.project_ref}
+                        </CardTitle>
+                        <p className="text-sm text-muted-foreground mt-1 space-y-1">
+                          <span className="block">
+                            {clientName}
+                            {project.company && (
+                              <span className="block text-xs">{project.company}</span>
+                            )}
+                            {project.siren && (
+                              <span className="block text-xs text-muted-foreground/80">
+                                SIREN : {project.siren}
+                              </span>
+                            )}
+                            {project.source && (
+                              <span className="block text-xs text-muted-foreground/80">
+                                Source : {project.source}
+                              </span>
+                            )}
+                          </span>
+                          {project.phone && (
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground/80">
+                              <Phone className="w-3.5 h-3.5" />
+                              {project.phone}
+                            </span>
+                          )}
+                          {projectEmail && (
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground/80">
+                              <Mail className="w-3.5 h-3.5" />
+                              {projectEmail}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" style={badgeStyle}>
+                          {statusLabel}
+                        </Badge>
+                        <AddProjectDialog
+                          mode="edit"
+                          projectId={project.id}
+                          projectRef={project.project_ref}
+                          initialValues={editInitialValues}
+                          onProjectUpdated={() => void refetch()}
+                          trigger={(
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="gap-1 text-muted-foreground hover:text-primary"
+                            >
+                              <Pencil className="w-4 h-4" />
+                              Modifier
+                            </Button>
+                          )}
+                        />
+                      </div>
+                    </div>
+                  </CardHeader>
+
+                <CardContent className="space-y-4">
+                  {/* Product & Location */}
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap gap-2">
+                      {displayedProducts.length ? (
+                        displayedProducts.map((item, index) => (
+                          <Badge
+                            key={`${project.id}-${item.product?.code}-${index}`}
+                            variant="secondary"
+                            className="text-xs font-medium"
+                          >
+                            {item.product?.code}
+                          </Badge>
+                        ))
+                      ) : (
+                        <span className="text-sm text-muted-foreground">
+                          Aucun produit à afficher
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <MapPin className="w-4 h-4" />
+                      {(project as Project & { address?: string }).address
+                        ? `${(project as Project & { address?: string }).address} • ${project.postal_code} ${project.city}`
+                        : `${project.city} (${project.postal_code})`}
+                    </div>
+
+                    {displayedProducts.map((item, index) => {
+                      const dynamicFields = dynamicFieldEntries[index];
+
+                      if (!dynamicFields?.length) {
+                        return null;
+                      }
+
+                      return (
+                        <div
+                          key={`${project.id}-dynamic-${index}`}
+                          className="space-y-1 text-xs text-muted-foreground"
+                        >
+                          {dynamicFields.map((field) => (
         {filteredProjects.length > 0 ? (
           viewMode === "card" ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
