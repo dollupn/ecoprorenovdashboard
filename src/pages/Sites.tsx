@@ -36,12 +36,16 @@ import {
   ShieldCheck,
   Ruler,
   HandCoins,
+  X,
 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
 type SiteStatus = "PLANIFIE" | "EN_PREPARATION" | "EN_COURS" | "SUSPENDU" | "TERMINE" | "LIVRE";
@@ -152,6 +156,10 @@ const getStatusColor = (status: SiteStatus) => {
   return colors[status];
 };
 
+const STATUS_OPTIONS: { value: SiteStatus; label: string }[] = (
+  ["PLANIFIE", "EN_PREPARATION", "EN_COURS", "SUSPENDU", "TERMINE", "LIVRE"] as const
+).map((status) => ({ value: status, label: getStatusLabel(status) }));
+
 const getProgressColor = (percentage: number) => {
   if (percentage === 0) return "bg-gray-200";
   if (percentage < 50) return "bg-orange-500";
@@ -191,6 +199,8 @@ const Sites = () => {
   const [activeSiteId, setActiveSiteId] = useState<string | null>(null);
   const [dialogInitialValues, setDialogInitialValues] = useState<Partial<SiteFormValues>>();
   const [sortByCee, setSortByCee] = useState(false);
+  const [selectedStatuses, setSelectedStatuses] = useState<SiteStatus[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
   
   const location = useLocation();
   const navigate = useNavigate();
@@ -523,6 +533,64 @@ const Sites = () => {
     }
   };
 
+  const handleStatusFilterChange = useCallback(
+    (status: SiteStatus, checked: boolean | "indeterminate") => {
+      const isChecked = checked === true;
+      setSelectedStatuses((previous) => {
+        if (isChecked) {
+          if (previous.includes(status)) {
+            return previous;
+          }
+          return [...previous, status];
+        }
+
+        return previous.filter((item) => item !== status);
+      });
+    },
+    [],
+  );
+
+  const handleClearFilters = useCallback(() => {
+    setSelectedStatuses([]);
+    setSearchTerm("");
+  }, []);
+
+  const hasActiveFilters = selectedStatuses.length > 0 || searchTerm.trim().length > 0;
+
+  const filteredSites = useMemo(() => {
+    if (!sites) return [];
+
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
+    return sites.filter((site) => {
+      const siteStatus = (site.status ?? "") as SiteStatus;
+      const matchesStatus =
+        selectedStatuses.length === 0 || (siteStatus && selectedStatuses.includes(siteStatus));
+
+      if (!matchesStatus) {
+        return false;
+      }
+
+      if (normalizedSearch.length === 0) {
+        return true;
+      }
+
+      const searchableValues = [
+        site.site_ref,
+        site.project_ref,
+        site.client_name,
+        site.product_name,
+        site.address,
+        site.city,
+        site.postal_code,
+      ]
+        .filter((value): value is string => Boolean(value))
+        .map((value) => value.toLowerCase());
+
+      return searchableValues.some((value) => value.includes(normalizedSearch));
+    });
+  }, [sites, selectedStatuses, searchTerm]);
+
   type SitesLocationState = {
     createSite?: {
       projectId: string;
@@ -622,6 +690,8 @@ const Sites = () => {
                 <Input
                   placeholder="Rechercher par référence, client, adresse..."
                   className="pl-10"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
                 />
               </div>
               <div className="flex items-center gap-2">
@@ -638,7 +708,67 @@ const Sites = () => {
                   Prime CEE (croissant)
                 </Button>
               </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline">
+                    <Filter className="w-4 h-4 mr-2" />
+                    {selectedStatuses.length > 0
+                      ? `Filtres (${selectedStatuses.length})`
+                      : "Filtres"}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-60">
+                  <DropdownMenuLabel>Filtrer par statut</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {STATUS_OPTIONS.map((status) => (
+                    <DropdownMenuCheckboxItem
+                      key={status.value}
+                      checked={selectedStatuses.includes(status.value)}
+                      onCheckedChange={(checked) => handleStatusFilterChange(status.value, checked)}
+                    >
+                      {status.label}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setSelectedStatuses([])}>
+                    Réinitialiser les filtres
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
+            {hasActiveFilters && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                <span>Filtres actifs :</span>
+                {searchTerm.trim().length > 0 && (
+                  <Badge variant="secondary" className="flex items-center gap-1">
+                    Recherche :
+                    <span className="font-medium text-foreground">{searchTerm}</span>
+                    <button
+                      type="button"
+                      onClick={() => setSearchTerm("")}
+                      className="ml-1 inline-flex rounded-full p-0.5 text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                )}
+                {selectedStatuses.map((status) => (
+                  <Badge key={status} variant="outline" className="flex items-center gap-1">
+                    {getStatusLabel(status)}
+                    <button
+                      type="button"
+                      onClick={() => handleStatusFilterChange(status, false)}
+                      className="ml-1 inline-flex rounded-full p-0.5 text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+                <Button variant="ghost" size="sm" onClick={handleClearFilters}>
+                  Effacer tout
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 
