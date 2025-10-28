@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { AddProjectDialog } from "@/components/projects/AddProjectDialog";
@@ -40,6 +39,7 @@ import {
   LayoutGrid,
   List,
 } from "lucide-react";
+import { Search, Calendar, MapPin, Euro, FileText, Eye, Phone, Hammer, HandCoins, Mail, UserRound } from "lucide-react";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useMembers } from "@/features/members/api";
 import { useToast } from "@/hooks/use-toast";
@@ -129,6 +129,65 @@ const SURFACE_FACTUREE_TARGETS = ["surface_facturee", "surface facturée"] as co
 
 type ViewMode = "card" | "list";
 const VIEW_MODE_STORAGE_KEY = "projects:view-mode";
+const PROJECT_CATEGORY_VALUES = ["EQ", "EN"] as const;
+
+type ProjectCategoryValue = (typeof PROJECT_CATEGORY_VALUES)[number];
+type CategoryFilterValue = "all" | ProjectCategoryValue;
+type StatusFilterValue = "active" | "all";
+
+const normalizeCategorySource = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+
+const detectCategoryFromValue = (value?: string | null): ProjectCategoryValue | null => {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = normalizeCategorySource(value);
+  const directMatch = normalized.match(/\b(EQ|EN)\b/);
+  if (directMatch) {
+    return directMatch[1] as ProjectCategoryValue;
+  }
+
+  const hyphenMatch = normalized.match(/BAT-(EQ|EN)/);
+  if (hyphenMatch) {
+    return hyphenMatch[1] as ProjectCategoryValue;
+  }
+
+  const segments = normalized.split(/[^A-Z]/).filter(Boolean);
+  for (const segment of segments) {
+    if (segment === "EQ" || segment === "EN") {
+      return segment as ProjectCategoryValue;
+    }
+  }
+
+  return null;
+};
+
+const deriveProjectCategory = (
+  project: ProjectWithRelations,
+  projectProducts: ProjectProduct[],
+): ProjectCategoryValue | null => {
+  const candidates: Array<string | null | undefined> = [
+    project.usage,
+    project.project_ref,
+    project.product_name,
+    ...projectProducts.map((item) => item.product?.code),
+    ...projectProducts.map((item) => item.product?.name),
+  ];
+
+  for (const candidate of candidates) {
+    const detected = detectCategoryFromValue(candidate);
+    if (detected) {
+      return detected;
+    }
+  }
+
+  return null;
+};
 
 const buildProjectProductDisplayMap = (
   projectProducts?: ProjectProduct[],
@@ -150,6 +209,7 @@ const buildProjectProductDisplayMap = (
 
 const Projects = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const { currentOrgId } = useOrg();
   const { data: members = [], isLoading: membersLoading } = useMembers(currentOrgId);
@@ -157,6 +217,11 @@ const Projects = () => {
   const { primeBonification } = useOrganizationPrimeSettings();
   const [searchTerm, setSearchTerm] = useState("");
   const [assignedFilter, setAssignedFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilterValue>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilterValue>(() => {
+    const statusParam = searchParams.get("status");
+    return statusParam === "all" ? "all" : "active";
+  });
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
   const [quoteInitialValues, setQuoteInitialValues] =
     useState<Partial<QuoteFormValues>>({});
@@ -226,6 +291,12 @@ const Projects = () => {
     });
     return Array.from(unique).sort((a, b) => a.localeCompare(b));
   }, [projects]);
+
+  useEffect(() => {
+    const statusParam = searchParams.get("status");
+    const nextStatus: StatusFilterValue = statusParam === "all" ? "all" : "active";
+    setStatusFilter((previous) => (previous === nextStatus ? previous : nextStatus));
+  }, [searchParams]);
 
   useEffect(() => {
     if (assignedFilter !== "all" && !assignedOptions.includes(assignedFilter)) {
@@ -362,6 +433,7 @@ const Projects = () => {
     clientName: string;
     projectEmail: string | null;
     surfaceFacturee: number;
+    category: ProjectCategoryValue | null;
   };
 
   const processedProjects = useMemo<ProcessedProject[]>(() => {
@@ -425,6 +497,7 @@ const Projects = () => {
         clientName,
         projectEmail,
         surfaceFacturee: surfaceFactureeByProject[project.id] ?? 0,
+        category: deriveProjectCategory(project, project.project_products ?? []),
       } satisfies ProcessedProject;
     });
   }, [projects, projectValorisationSummaries, surfaceFactureeByProject]);
@@ -433,6 +506,14 @@ const Projects = () => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
     let base = processedProjects;
+
+    if (statusFilter === "active") {
+      base = base.filter((item) => item.project.status !== "LIVRE");
+    }
+
+    if (categoryFilter !== "all") {
+      base = base.filter((item) => item.category === categoryFilter);
+    }
 
     if (assignedFilter !== "all") {
       base = base.filter((item) => item.project.assigned_to === assignedFilter);
@@ -443,7 +524,35 @@ const Projects = () => {
     }
 
     return base.filter((item) => item.searchableText.includes(normalizedSearch));
-  }, [searchTerm, processedProjects, assignedFilter]);
+  }, [searchTerm, processedProjects, assignedFilter, statusFilter, categoryFilter]);
+
+  const handleStatusFilterChange = useCallback(
+    (value: string) => {
+      const next: StatusFilterValue = value === "all" ? "all" : "active";
+      setStatusFilter(next);
+      setSearchParams(
+        (previous) => {
+          const params = new URLSearchParams(previous);
+          if (next === "all") {
+            params.set("status", "all");
+          } else {
+            params.delete("status");
+          }
+          return params;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
+  const handleCategoryFilterChange = useCallback((value: string) => {
+    if (value === "EQ" || value === "EN") {
+      setCategoryFilter(value);
+      return;
+    }
+    setCategoryFilter("all");
+  }, []);
 
   const handleViewProject = (projectId: string) => {
     navigate(`/projects/${projectId}`);
@@ -710,10 +819,45 @@ const Projects = () => {
                     ))}
                   </SelectContent>
                 </Select>
-                <Button variant="outline">
-                  <Filter className="w-4 h-4 mr-2" />
-                  Filtres
-                </Button>
+                <div className="flex flex-col gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Catégorie
+                  </span>
+                  <ToggleGroup
+                    type="single"
+                    value={categoryFilter}
+                    onValueChange={handleCategoryFilterChange}
+                    className="flex-wrap justify-start"
+                  >
+                    <ToggleGroupItem value="all" className="px-3 py-1 text-xs font-semibold uppercase">
+                      ALL
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="EQ" className="px-3 py-1 text-xs font-semibold uppercase">
+                      EQ
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="EN" className="px-3 py-1 text-xs font-semibold uppercase">
+                      EN
+                    </ToggleGroupItem>
+                  </ToggleGroup>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Statut
+                  </span>
+                  <ToggleGroup
+                    type="single"
+                    value={statusFilter}
+                    onValueChange={handleStatusFilterChange}
+                    className="flex-wrap justify-start"
+                  >
+                    <ToggleGroupItem value="active" className="px-3 py-1 text-xs font-medium">
+                      Actifs
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="all" className="px-3 py-1 text-xs font-medium">
+                      Inclure LIVRÉ
+                    </ToggleGroupItem>
+                  </ToggleGroup>
+                </div>
               </div>
             </div>
           </CardContent>
