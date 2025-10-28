@@ -7,6 +7,9 @@ import {
   startOfYear,
   subYears,
 } from "date-fns";
+import { aggregateEnergyByCategory, type EnergyBreakdownEntry, type ProjectWithProducts } from "@/lib/energy";
+import { withDefaultProductCeeConfig } from "@/lib/prime-cee-unified";
+import { DEFAULT_PROJECT_STATUSES } from "@/lib/projects";
 
 const SITE_STATUS_LABELS = {
   PLANIFIE: "Planifié",
@@ -29,6 +32,16 @@ const SITE_ACTIVE_STATUSES: SiteStatus[] = [
 const SITE_COMPLETED_STATUSES: SiteStatus[] = ["TERMINE", "LIVRE"];
 
 const MARGIN_TARGET = 0.35;
+
+const PROJECT_STATUS_VALUES = DEFAULT_PROJECT_STATUSES.map((status) => status.value);
+const PROJECT_SURFACE_STATUSES = PROJECT_STATUS_VALUES.filter((status) =>
+  ["EN_COURS", "LIVRE"].includes(status)
+);
+
+const isStatusValue = <T extends string>(
+  statuses: readonly T[],
+  value: string | null | undefined,
+): value is T => (value ? (statuses as readonly string[]).includes(value) : false);
 
 const toSiteStatus = (status: string | null | undefined): SiteStatus | null =>
   status && status in SITE_STATUS_LABELS ? (status as SiteStatus) : null;
@@ -74,6 +87,10 @@ export interface ReportsData {
     activeCount: number;
     completedCount: number;
   };
+  energy: {
+    totalMwh: number;
+    breakdown: EnergyBreakdownEntry[];
+  };
   generatedAt: string;
 }
 
@@ -115,7 +132,7 @@ export const useReportsData = (orgId: string | null, options: QueryOptions = {})
       const currentYearStart = startOfYear(now);
       const previousYearStart = startOfYear(subYears(now, 1));
 
-      const [leadsRes, sitesRes] = await Promise.all([
+      const [leadsRes, sitesRes, projectsRes] = await Promise.all([
         supabase
           .from("leads")
           .select("id, status, utm_source, created_at")
@@ -128,13 +145,35 @@ export const useReportsData = (orgId: string | null, options: QueryOptions = {})
           )
           .eq("org_id", orgId)
           .gte("created_at", previousYearStart.toISOString()),
+        supabase
+          .from("projects")
+          .select(
+            `id, status, updated_at, surface_isolee_m2, city, client_name, building_type,
+            project_products(id, quantity, dynamic_params, product:product_catalog(category, cee_config, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))`
+          )
+          .eq("org_id", orgId)
+          .in("status", PROJECT_SURFACE_STATUSES),
       ]);
 
       if (leadsRes.error) throw leadsRes.error;
       if (sitesRes.error) throw sitesRes.error;
+      if (projectsRes.error) throw projectsRes.error;
 
       const leads = (leadsRes.data ?? []) as LeadRow[];
       const sites = (sitesRes.data ?? []) as SiteRow[];
+      const projects = (projectsRes.data ?? []).map(
+        (project): ProjectWithProducts => ({
+          ...project,
+          project_products: (project.project_products ?? []).map((pp) => ({
+            ...pp,
+            product: pp.product ? withDefaultProductCeeConfig(pp.product) : null,
+          })),
+        })
+      );
+
+      const energyAggregation = aggregateEnergyByCategory(projects, {
+        shouldIncludeProject: (project) => isStatusValue(PROJECT_SURFACE_STATUSES, project.status),
+      });
 
       const sourceStats = new Map<string, { leads: number; qualified: number }>();
       let qualifiedLeads = 0;
@@ -249,6 +288,10 @@ export const useReportsData = (orgId: string | null, options: QueryOptions = {})
           topProjects,
           activeCount,
           completedCount,
+        },
+        energy: {
+          totalMwh: energyAggregation.totalMwh,
+          breakdown: energyAggregation.breakdown,
         },
         generatedAt: now.toISOString(),
       } satisfies ReportsData;

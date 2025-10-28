@@ -31,6 +31,7 @@ import {
   AlertCircle,
   ArrowUpRight,
   ArrowDownRight,
+  Zap,
 } from "lucide-react";
 import { useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -54,6 +55,10 @@ const formatPercent = (value: number) =>
     style: "percent",
     maximumFractionDigits: 0,
   }).format(value);
+
+const energyFormatter = new Intl.NumberFormat("fr-FR", {
+  maximumFractionDigits: 1,
+});
 
 type Highlight = {
   title: string;
@@ -140,6 +145,8 @@ const Reports = () => {
   const activeSites = reportsQuery.data?.sites.activeCount ?? 0;
 
   const topProjects = reportsQuery.data?.sites.topProjects ?? [];
+  const energyMetrics = reportsQuery.data?.energy;
+  const energyBreakdown = energyMetrics?.breakdown ?? [];
 
   const highlightLoading = queriesEnabled && (revenueQuery.isLoading || reportsQuery.isLoading);
 
@@ -475,6 +482,51 @@ const Reports = () => {
                       </span>
                     )}
                   </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-card border-0 bg-gradient-card">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Zap className="h-4 w-4 text-primary" />
+                Énergie cumulée
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {reportsQuery.isLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-9 w-24" />
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-3 w-3/4" />
+                </div>
+              ) : reportsQuery.error ? (
+                <p className="text-sm text-destructive">Erreur de chargement</p>
+              ) : (
+                <>
+                  <p className="text-3xl font-semibold">
+                    {energyFormatter.format(energyMetrics?.totalMwh ?? 0)} MWh
+                  </p>
+                  {energyMetrics && energyBreakdown.length > 0 ? (
+                    <ul className="space-y-1 text-sm text-muted-foreground">
+                      {energyBreakdown.map((entry) => (
+                        <li
+                          key={entry.category}
+                          className="flex items-center justify-between gap-4"
+                        >
+                          <span>{entry.category}</span>
+                          <span className="font-medium text-foreground">
+                            {energyFormatter.format(entry.mwh)} MWh
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Aucune donnée par catégorie
+                    </p>
+                  )}
                 </>
               )}
             </CardContent>

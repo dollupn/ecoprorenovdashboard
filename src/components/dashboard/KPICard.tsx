@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -14,6 +15,8 @@ interface KPICardProps {
   isLoading?: boolean;
   error?: string;
   badgeLabel?: string;
+  details?: ReactNode;
+  detailsWhileLoading?: ReactNode;
 }
 
 export function KPICard({
@@ -26,6 +29,8 @@ export function KPICard({
   isLoading = false,
   error,
   badgeLabel,
+  details,
+  detailsWhileLoading,
 }: KPICardProps) {
   const changeColor = cn(
     "text-xs flex items-center gap-1",
@@ -59,6 +64,11 @@ export function KPICard({
           <div className="space-y-2">
             <Skeleton className="h-8 w-24" />
             {change && <Skeleton className="h-3 w-32" />}
+            {detailsWhileLoading && (
+              <div className="mt-3 text-xs text-muted-foreground">
+                {detailsWhileLoading}
+              </div>
+            )}
           </div>
         ) : error ? (
           <p className="text-sm text-destructive">{error}</p>
@@ -68,6 +78,11 @@ export function KPICard({
               {value}
             </div>
             {change && <p className={changeColor}>{change}</p>}
+            {details && (
+              <div className="mt-3 text-xs text-muted-foreground">
+                {details}
+              </div>
+            )}
           </>
         )}
       </CardContent>
