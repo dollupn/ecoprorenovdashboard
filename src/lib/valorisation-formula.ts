@@ -314,7 +314,17 @@ export type CalcCeeLightingResult = {
 
 const DEFAULT_LED_WATT = 250;
 
-const LIGHTING_LED_WATT_KEYS = ["led_watt", "ledWatt", "LED_WATT"] as const;
+const LIGHTING_LED_WATT_KEYS = [
+  "led_watt",
+  "ledWatt",
+  "LED_WATT",
+  "LED Watt",
+  "puissance_led",
+  "puissanceLed",
+  "PUISSANCE_LED",
+  "Puissance LED",
+] as const;
+
 const LIGHTING_MULTIPLIER_KEYS = [
   "nombre_led",
   "nombreLed",
@@ -323,6 +333,15 @@ const LIGHTING_MULTIPLIER_KEYS = [
   "nombre_de_led",
   "nombreDeLed",
   "NOMBRE_DE_LED",
+  "nombre_luminaire",
+  "nombreLuminaire",
+  "NOMBRE_LUMINAIRE",
+  "Nombre Luminaire",
+  "nombre_de_luminaire",
+  "nombreDeLuminaire",
+  "NOMBRE_DE_LUMINAIRE",
+  "Nombre de LED",
+  "Nombre de Led",
 ] as const;
 
 export const calcCeeLighting = ({
