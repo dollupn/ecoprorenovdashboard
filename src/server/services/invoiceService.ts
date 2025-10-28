@@ -7,7 +7,11 @@ import {
 import { ForbiddenError, NotFoundError, ValidationError } from "../errors";
 import { type ProjectStatus } from "./statusHelpers";
 
-const ALLOWED_INVOICE_STATUSES: ProjectStatus[] = ["VISITE_TECHNIQUE", "LIVRE"];
+const ALLOWED_INVOICE_STATUSES: ProjectStatus[] = [
+  "VISITE_TECHNIQUE",
+  "CHANTIER_TERMINE",
+  "LIVRE",
+];
 
 const isAllowedForInvoice = (status: string): status is ProjectStatus => {
   const normalized = (status ?? "").toUpperCase() as ProjectStatus;
