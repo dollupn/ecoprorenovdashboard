@@ -1182,26 +1182,30 @@ const Projects = () => {
                                 </span>
                               </div>
                             ) : null}
-                            {startDate ? (
-                              <div className="space-y-1">
-                                <span className="flex items-center gap-2 text-muted-foreground">
+                            {startDate || endDate ? (
+                              <div className="space-y-1 sm:col-span-2">
+                                <div className="flex items-center gap-2 text-muted-foreground">
                                   <Calendar aria-hidden="true" className="h-4 w-4" />
-                                  Début
-                                </span>
-                                <span className="font-medium text-foreground">
-                                  {startDate.toLocaleDateString("fr-FR")}
-                                </span>
-                              </div>
-                            ) : null}
-                            {endDate ? (
-                              <div className="space-y-1">
-                                <span className="flex items-center gap-2 text-muted-foreground">
-                                  <Calendar aria-hidden="true" className="h-4 w-4" />
-                                  Fin prévue
-                                </span>
-                                <span className="font-medium text-foreground">
-                                  {endDate.toLocaleDateString("fr-FR")}
-                                </span>
+                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                    {startDate ? (
+                                      <span className="flex items-center gap-1">
+                                        <span>Début :</span>
+                                        <span className="font-medium text-foreground">
+                                          {startDate.toLocaleDateString("fr-FR")}
+                                        </span>
+                                      </span>
+                                    ) : null}
+                                    {startDate && endDate ? <span aria-hidden="true">•</span> : null}
+                                    {endDate ? (
+                                      <span className="flex items-center gap-1">
+                                        <span>Fin prévue :</span>
+                                        <span className="font-medium text-foreground">
+                                          {endDate.toLocaleDateString("fr-FR")}
+                                        </span>
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                </div>
                               </div>
                             ) : null}
                           </div>
