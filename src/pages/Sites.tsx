@@ -190,6 +190,7 @@ const Sites = () => {
   const [dialogMode, setDialogMode] = useState<"create" | "edit">("create");
   const [activeSiteId, setActiveSiteId] = useState<string | null>(null);
   const [dialogInitialValues, setDialogInitialValues] = useState<Partial<SiteFormValues>>();
+  const [sortByCee, setSortByCee] = useState(false);
   
   const location = useLocation();
   const navigate = useNavigate();
@@ -581,6 +582,20 @@ const Sites = () => {
     handleOpenCreate,
   ]);
 
+  const filteredSites = useMemo(() => {
+    const filtered = [...sites];
+
+    if (sortByCee) {
+      filtered.sort((a, b) => {
+        const aValue = a.valorisation_cee ?? 0;
+        const bValue = b.valorisation_cee ?? 0;
+        return aValue - bValue;
+      });
+    }
+
+    return filtered;
+  }, [sites, sortByCee]);
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -609,16 +624,26 @@ const Sites = () => {
                   className="pl-10"
                 />
               </div>
-              <Button variant="outline">
-                <Filter className="w-4 h-4 mr-2" />
-                Filtres
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="outline">
+                  <Filter className="w-4 h-4 mr-2" />
+                  Filtres
+                </Button>
+                <Button
+                  variant={sortByCee ? "default" : "outline"}
+                  onClick={() => setSortByCee((prev) => !prev)}
+                  className={sortByCee ? "bg-primary text-primary-foreground" : undefined}
+                >
+                  <HandCoins className="w-4 h-4 mr-2" />
+                  Prime CEE (croissant)
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {sites.map((site) => (
+          {filteredSites.map((site) => (
             <Card
               key={site.id}
               className="shadow-card bg-gradient-card border-0 hover:shadow-elevated transition-all duration-300"
