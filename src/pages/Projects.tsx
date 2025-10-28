@@ -1019,7 +1019,15 @@ const Projects = () => {
                   };
 
                   const handleCardKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-                    if (event.key === "Enter" || event.key === " ") {
+                    if (event.defaultPrevented) {
+                      return;
+                    }
+
+                    if (event.currentTarget !== event.target) {
+                      return;
+                    }
+
+                    if (event.key === "Enter" || event.key === " " || event.key === "Spacebar") {
                       event.preventDefault();
                       handleCardActivation();
                     }
