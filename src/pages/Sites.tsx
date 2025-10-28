@@ -217,7 +217,7 @@ const Sites = () => {
   const { data: members = [], isLoading: membersLoading } = useMembers(currentOrgId);
 
   const { data: sites = [], isLoading, refetch } = useQuery({
-    queryKey: ["sites", currentOrgId],
+    queryKey: ["sites", currentOrgId, user?.id],
     queryFn: async () => {
       if (!currentOrgId) return [];
 
