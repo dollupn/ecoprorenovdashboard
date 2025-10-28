@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { KeyboardEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -1013,6 +1014,17 @@ const Projects = () => {
                     lead_id: project.lead_id ?? undefined,
                   };
 
+                  const handleCardActivation = () => {
+                    handleViewProject(project.id);
+                  };
+
+                  const handleCardKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      handleCardActivation();
+                    }
+                  };
+
                   return (
                     <Card
                       key={project.id}
@@ -1020,6 +1032,10 @@ const Projects = () => {
                         "relative overflow-hidden border border-border/60 bg-card shadow-card transition-shadow duration-300",
                         "hover:shadow-elevated focus-within:ring-2 focus-within:ring-primary/40 focus-within:ring-offset-2",
                       )}
+                      role="button"
+                      tabIndex={0}
+                      onClick={handleCardActivation}
+                      onKeyDown={handleCardKeyDown}
                     >
                       <span
                         aria-hidden="true"
@@ -1066,6 +1082,9 @@ const Projects = () => {
                                     variant="ghost"
                                     size="sm"
                                     className="gap-1 text-muted-foreground hover:text-primary"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                    }}
                                   >
                                     <Pencil className="h-4 w-4" />
                                     Modifier
@@ -1286,16 +1305,10 @@ const Projects = () => {
                             size="sm"
                             variant="outline"
                             className="w-full sm:w-auto"
-                            onClick={() => handleViewProject(project.id)}
-                          >
-                            <Eye aria-hidden="true" className="mr-2 h-4 w-4" />
-                            Voir
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="w-full sm:w-auto"
-                            onClick={() => handleCreateQuote(project)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleCreateQuote(project);
+                            }}
                           >
                             <FileText aria-hidden="true" className="mr-2 h-4 w-4" />
                             Devis
@@ -1304,7 +1317,10 @@ const Projects = () => {
                             size="sm"
                             variant="secondary"
                             className="w-full sm:w-auto"
-                            onClick={() => handleCreateSite(project)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleCreateSite(project);
+                            }}
                           >
                             <Hammer aria-hidden="true" className="mr-2 h-4 w-4" />
                             Créer chantier
