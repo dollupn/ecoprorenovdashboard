@@ -1255,7 +1255,7 @@ const Projects = () => {
                             </dd>
                           </div>
                           <div>
-                            <dt className="text-sm font-medium text-muted-foreground">MWh généré par projet</dt>
+                            <dt className="text-sm font-medium text-muted-foreground">MWh généré</dt>
                             <dd className="mt-1 text-base font-semibold text-foreground">
                               {formatDecimal(totalValorisationMwh)} MWh
                             </dd>
