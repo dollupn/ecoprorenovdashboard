@@ -477,6 +477,7 @@ const Projects = () => {
     projectEmail: string | null;
     surfaceFacturee: number;
     category: ProjectCategoryValue | null;
+    shouldHideSurfaceFactureeRow: boolean;
   };
 
   const processedProjects = useMemo<ProcessedProject[]>(() => {
@@ -530,6 +531,25 @@ const Projects = () => {
         .join(" ")
         .toLowerCase();
 
+      const surfaceFactureeValue = surfaceFactureeByProject[project.id] ?? 0;
+      const category = deriveProjectCategory(project, project.project_products ?? []);
+      const hasEnCode = displayedProducts.some((item) =>
+        (item.product?.code ?? "").toUpperCase().includes("EN"),
+      );
+      const hasSurfaceIsolee =
+        typeof project.surface_isolee_m2 === "number" && Number.isFinite(project.surface_isolee_m2);
+      const surfaceIsoleeValue = hasSurfaceIsolee ? (project.surface_isolee_m2 as number) : null;
+      const hasSurfaceFacturee =
+        typeof surfaceFactureeValue === "number" &&
+        Number.isFinite(surfaceFactureeValue) &&
+        surfaceFactureeValue > 0;
+      const shouldHideSurfaceFactureeRow =
+        (category === "EN" || hasEnCode) &&
+        hasSurfaceIsolee &&
+        hasSurfaceFacturee &&
+        surfaceIsoleeValue !== null &&
+        Math.round(surfaceIsoleeValue) === Math.round(surfaceFactureeValue);
+
       return {
         project,
         displayedProducts,
@@ -538,8 +558,9 @@ const Projects = () => {
         searchableText: searchable,
         clientName,
         projectEmail,
-        surfaceFacturee: surfaceFactureeByProject[project.id] ?? 0,
-        category: deriveProjectCategory(project, project.project_products ?? []),
+        surfaceFacturee: surfaceFactureeValue,
+        category,
+        shouldHideSurfaceFactureeRow,
       } satisfies ProcessedProject;
     });
   }, [projects, projectValorisationSummaries, surfaceFactureeByProject]);
@@ -923,6 +944,7 @@ const Projects = () => {
                   clientName,
                   projectEmail,
                   surfaceFacturee,
+                  shouldHideSurfaceFactureeRow,
                   category,
                 }) => {
                   const statusConfig = statusMap[project.status ?? ""];
@@ -978,6 +1000,7 @@ const Projects = () => {
                   const endDate = project.date_fin_prevue ? new Date(project.date_fin_prevue) : null;
                   const projectCostValue = project.estimated_value ?? null;
                   const primeCeeEuro = resolvePrimeCeeEuro(project);
+                  const showSurfaceFacturee = surfaceFacturee > 0 && !shouldHideSurfaceFactureeRow;
                   const projectProductsForForm = (project.project_products ?? []).map((item) => ({
                     product_id: item.product_id ?? "",
                     quantity:
@@ -1180,7 +1203,7 @@ const Projects = () => {
                                 </span>
                               </div>
                             ) : null}
-                            {surfaceFacturee ? (
+                            {showSurfaceFacturee ? (
                               <div className="space-y-1">
                                 <span className="text-muted-foreground">Surface facturée</span>
                                 <span className="font-medium text-foreground">
@@ -1370,6 +1393,7 @@ const Projects = () => {
                         clientName,
                         projectEmail,
                         surfaceFacturee,
+                        shouldHideSurfaceFactureeRow,
                       }) => {
                         const statusConfig = statusMap[project.status ?? ""];
                         const badgeStyle = getProjectStatusBadgeStyle(statusConfig?.color);
@@ -1442,7 +1466,7 @@ const Projects = () => {
                                   ? `${(project as Project & { address?: string }).address} • ${project.postal_code} ${project.city}`
                                   : `${project.city} (${project.postal_code})`}
                               </div>
-                              {surfaceFacturee > 0 && (
+                              {surfaceFacturee > 0 && !shouldHideSurfaceFactureeRow && (
                                 <div className="mt-2 text-xs text-muted-foreground">
                                   Surface facturée :{" "}
                                   <span className="font-medium text-foreground">
