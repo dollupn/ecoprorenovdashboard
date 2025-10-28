@@ -999,6 +999,7 @@ export type Database = {
           id: string
           is_active: boolean
           is_default: boolean
+          pricing_details: string | null
           name: string
           org_id: string
           updated_at: string
@@ -1009,6 +1010,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_default?: boolean
+          pricing_details?: string | null
           name: string
           org_id: string
           updated_at?: string
@@ -1019,6 +1021,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_default?: boolean
+          pricing_details?: string | null
           name?: string
           org_id?: string
           updated_at?: string

@@ -30,14 +30,14 @@ import type { Tables } from "@/integrations/supabase/types";
 
 type Subcontractor = Tables<"subcontractors">;
 
-const sanitizeDescription = (value: string) => {
+const sanitizeRichText = (value: string | null | undefined) => {
   if (!value) return null;
   return isRichTextEmpty(value) ? null : value;
 };
 
 interface EditSubcontractorDialogProps {
   subcontractor: Subcontractor;
-  onSubmit: (payload: { id: string; name: string; description: string | null }) => Promise<void>;
+  onSubmit: (payload: { id: string; name: string; description: string; pricing: string }) => Promise<void>;
   isSubmitting: boolean;
 }
 
@@ -45,12 +45,14 @@ function EditSubcontractorDialog({ subcontractor, onSubmit, isSubmitting }: Edit
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(subcontractor.name);
   const [description, setDescription] = useState(subcontractor.description ?? "");
+  const [pricing, setPricing] = useState(subcontractor.pricing_details ?? "");
 
   const handleOpenChange = (nextOpen: boolean) => {
     setOpen(nextOpen);
     if (nextOpen) {
       setName(subcontractor.name);
       setDescription(subcontractor.description ?? "");
+      setPricing(subcontractor.pricing_details ?? "");
     }
   };
 
@@ -60,7 +62,8 @@ function EditSubcontractorDialog({ subcontractor, onSubmit, isSubmitting }: Edit
       await onSubmit({
         id: subcontractor.id,
         name: name.trim(),
-        description: sanitizeDescription(description),
+        description,
+        pricing,
       });
       setOpen(false);
     } catch (error) {
@@ -98,6 +101,14 @@ function EditSubcontractorDialog({ subcontractor, onSubmit, isSubmitting }: Edit
               placeholder="Spécialiste en isolation thermique"
             />
           </div>
+          <div className="space-y-2">
+            <Label htmlFor={`edit-subcontractor-pricing-${subcontractor.id}`}>Tarification</Label>
+            <RichTextEditor
+              value={pricing}
+              onChange={setPricing}
+              placeholder="Exemple : Forfait pose 80€ / m², déplacement 50€."
+            />
+          </div>
         </div>
         <DialogFooter className="gap-2">
           <Button variant="ghost" onClick={() => setOpen(false)}>
@@ -118,7 +129,7 @@ export function SubcontractorSettingsPanel() {
   const { currentOrgId } = useOrg();
   const queryClient = useQueryClient();
 
-  const [newSubcontractor, setNewSubcontractor] = useState({ name: "", description: "" });
+  const [newSubcontractor, setNewSubcontractor] = useState({ name: "", description: "", pricing: "" });
 
   const { data: subcontractors = [], isLoading } = useQuery({
     queryKey: ["subcontractors", currentOrgId],
@@ -126,7 +137,7 @@ export function SubcontractorSettingsPanel() {
       if (!currentOrgId) return [];
       const { data, error } = await supabase
         .from("subcontractors")
-        .select("id, name, description, is_default, is_active, org_id")
+        .select("id, name, description, pricing_details, is_default, is_active, org_id")
         .eq("org_id", currentOrgId)
         .eq("is_active", true)
         .order("name");
@@ -137,18 +148,19 @@ export function SubcontractorSettingsPanel() {
   });
 
   const createSubcontractor = useMutation({
-    mutationFn: async (payload: { name: string; description: string }) => {
+    mutationFn: async (payload: { name: string; description: string; pricing: string }) => {
       if (!currentOrgId) throw new Error("missing-organization");
       const { error } = await supabase.from("subcontractors").insert({
         org_id: currentOrgId,
         name: payload.name,
-        description: sanitizeDescription(payload.description),
+        description: sanitizeRichText(payload.description),
+        pricing_details: sanitizeRichText(payload.pricing),
       });
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["subcontractors", currentOrgId] });
-      setNewSubcontractor({ name: "", description: "" });
+      setNewSubcontractor({ name: "", description: "", pricing: "" });
       toast({ title: "Sous-traitant créé" });
     },
     onError: () => {
@@ -161,10 +173,14 @@ export function SubcontractorSettingsPanel() {
   });
 
   const updateSubcontractor = useMutation({
-    mutationFn: async (payload: { id: string; name: string; description: string | null }) => {
+    mutationFn: async (payload: { id: string; name: string; description: string; pricing: string }) => {
       const { error } = await supabase
         .from("subcontractors")
-        .update({ name: payload.name, description: payload.description })
+        .update({
+          name: payload.name,
+          description: sanitizeRichText(payload.description),
+          pricing_details: sanitizeRichText(payload.pricing),
+        })
         .eq("id", payload.id);
       if (error) throw error;
     },
@@ -240,6 +256,7 @@ export function SubcontractorSettingsPanel() {
     createSubcontractor.mutate({
       name: newSubcontractor.name.trim(),
       description: newSubcontractor.description,
+      pricing: newSubcontractor.pricing,
     });
   };
 
@@ -270,8 +287,20 @@ export function SubcontractorSettingsPanel() {
               placeholder="Spécialiste en isolation thermique"
             />
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="subcontractor-pricing">Tarification</Label>
+            <RichTextEditor
+              value={newSubcontractor.pricing}
+              onChange={(html) => setNewSubcontractor((prev) => ({ ...prev, pricing: html }))}
+              placeholder="Décrivez ici les tarifs ou forfaits proposés..."
+            />
+          </div>
           <div className="flex justify-end">
-            <Button onClick={handleCreate} className="gap-2" disabled={!newSubcontractor.name.trim() || createSubcontractor.isPending}>
+            <Button
+              onClick={handleCreate}
+              className="gap-2"
+              disabled={!newSubcontractor.name.trim() || createSubcontractor.isPending}
+            >
               {createSubcontractor.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               Ajouter un sous-traitant
             </Button>
@@ -295,17 +324,30 @@ export function SubcontractorSettingsPanel() {
                 key={subcontractor.id}
                 className="flex flex-col gap-4 rounded-lg border border-border/60 p-4 sm:flex-row sm:items-start sm:justify-between"
               >
-                <div className="flex-1 space-y-2">
+                <div className="flex-1 space-y-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-medium text-foreground">{subcontractor.name}</p>
                     {subcontractor.is_default ? <Badge variant="secondary">Par défaut</Badge> : null}
                   </div>
-                  <div
-                    className="prose prose-sm max-w-none text-muted-foreground"
-                    dangerouslySetInnerHTML={{
-                      __html: subcontractor.description ?? "<p>Aucune description fournie.</p>",
-                    }}
-                  />
+                  <div className="space-y-3">
+                    <div
+                      className="prose prose-sm max-w-none text-muted-foreground"
+                      dangerouslySetInnerHTML={{
+                        __html: subcontractor.description ?? "<p>Aucune description fournie.</p>",
+                      }}
+                    />
+                    <div className="rounded-md border border-border/60 bg-muted/40 p-3">
+                      <p className="text-sm font-medium text-foreground">Tarification</p>
+                      <div
+                        className="prose prose-sm mt-2 max-w-none text-muted-foreground"
+                        dangerouslySetInnerHTML={{
+                          __html:
+                            subcontractor.pricing_details ??
+                            "<p class=\"text-muted-foreground\">Tarification non renseignée.</p>",
+                        }}
+                      />
+                    </div>
+                  </div>
                 </div>
                 <div className="flex flex-col gap-2 sm:w-52">
                   <div className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2">
