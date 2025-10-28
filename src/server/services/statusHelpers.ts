@@ -6,12 +6,17 @@ export type ProjectStatus =
   | "NOUVEAU"
   | "ETUDE"
   | "DEVIS_ENVOYE"
+  | "DEVIS_SIGNE"
   | "ACCEPTE"
   | "A_PLANIFIER"
   | "VISITE_TECHNIQUE"
   | "EN_COURS"
+  | "CHANTIER_PLANIFIE"
+  | "CHANTIER_EN_COURS"
+  | "CHANTIER_TERMINE"
   | "LIVRE"
-  | "CLOTURE";
+  | "CLOTURE"
+  | "ANNULE";
 
 export type ChantierStatus =
   | "PLANIFIE"
@@ -25,12 +30,17 @@ const PROJECT_STATUS_ORDER: ProjectStatus[] = [
   "NOUVEAU",
   "ETUDE",
   "DEVIS_ENVOYE",
+  "DEVIS_SIGNE",
   "ACCEPTE",
-  "A_PLANIFIER",
   "VISITE_TECHNIQUE",
+  "A_PLANIFIER",
+  "CHANTIER_PLANIFIE",
   "EN_COURS",
+  "CHANTIER_EN_COURS",
+  "CHANTIER_TERMINE",
   "LIVRE",
   "CLOTURE",
+  "ANNULE",
 ];
 
 const CHANTIER_STATUS_FLOW: Record<ChantierStatus, ChantierStatus[]> = {
@@ -43,11 +53,11 @@ const CHANTIER_STATUS_FLOW: Record<ChantierStatus, ChantierStatus[]> = {
 };
 
 const CHANTIER_TO_PROJECT_STATUS: Partial<Record<ChantierStatus, ProjectStatus>> = {
-  PLANIFIE: "A_PLANIFIER",
-  EN_PREPARATION: "A_PLANIFIER",
-  EN_COURS: "EN_COURS",
-  SUSPENDU: "EN_COURS",
-  TERMINE: "LIVRE",
+  PLANIFIE: "CHANTIER_PLANIFIE",
+  EN_PREPARATION: "CHANTIER_PLANIFIE",
+  EN_COURS: "CHANTIER_EN_COURS",
+  SUSPENDU: "CHANTIER_EN_COURS",
+  TERMINE: "CHANTIER_TERMINE",
   LIVRE: "LIVRE",
 };
 
