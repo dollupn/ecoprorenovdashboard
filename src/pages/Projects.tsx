@@ -1105,16 +1105,22 @@ const Projects = () => {
                             </div>
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                               {project.phone ? (
-                                <span className="flex items-center gap-1">
+                                <a
+                                  href={`tel:${project.phone}`}
+                                  className="flex items-center gap-1"
+                                >
                                   <Phone aria-hidden="true" className="h-4 w-4" />
                                   {project.phone}
-                                </span>
+                                </a>
                               ) : null}
                               {projectEmail ? (
-                                <span className="flex items-center gap-1">
+                                <a
+                                  href={`mailto:${projectEmail}`}
+                                  className="flex items-center gap-1"
+                                >
                                   <Mail aria-hidden="true" className="h-4 w-4" />
                                   {projectEmail}
-                                </span>
+                                </a>
                               ) : null}
                             </div>
                           </div>
@@ -1392,16 +1398,22 @@ const Projects = () => {
                               {(project.phone || projectEmail) && (
                                 <div className="mt-2 space-y-1 text-xs text-muted-foreground">
                                   {project.phone && (
-                                    <div className="flex items-center gap-1">
+                                    <a
+                                      href={`tel:${project.phone}`}
+                                      className="flex items-center gap-1"
+                                    >
                                       <Phone className="h-3.5 w-3.5" />
                                       {project.phone}
-                                    </div>
+                                    </a>
                                   )}
                                   {projectEmail && (
-                                    <div className="flex items-center gap-1">
+                                    <a
+                                      href={`mailto:${projectEmail}`}
+                                      className="flex items-center gap-1"
+                                    >
                                       <Mail className="h-3.5 w-3.5" />
                                       {projectEmail}
-                                    </div>
+                                    </a>
                                   )}
                                 </div>
                               )}
