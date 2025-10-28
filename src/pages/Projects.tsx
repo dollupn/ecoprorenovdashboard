@@ -916,16 +916,13 @@ const Projects = () => {
                   clientName,
                   projectEmail,
                   surfaceFacturee,
+                  category,
                 }) => {
                   const statusConfig = statusMap[project.status ?? ""];
                   const badgeStyle = getProjectStatusBadgeStyle(statusConfig?.color);
                   const statusLabel = statusConfig?.label ?? project.status ?? "Statut";
-                  const category =
-                    displayedProducts[0]?.product?.category ??
-                    project.project_products?.[0]?.product?.category ??
-                    null;
-                  const categoryKey = (category ?? "") as keyof typeof CATEGORY_METADATA;
-                  const categoryMetadata = CATEGORY_METADATA[categoryKey] ?? DEFAULT_CATEGORY_METADATA;
+                  const categoryMetadata =
+                    (category ? CATEGORY_METADATA[category] : null) ?? DEFAULT_CATEGORY_METADATA;
                   const CategoryIcon = categoryMetadata.icon;
                   const totalPrime =
                     projectValorisationSummaries[project.id]?.totalPrime ?? project.prime_cee ?? 0;
