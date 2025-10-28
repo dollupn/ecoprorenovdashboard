@@ -476,6 +476,8 @@ export const AddProjectDialog = ({
 }: AddProjectDialogProps) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isManualHqAddress, setIsManualHqAddress] = useState(false);
+  const [isManualSiteAddress, setIsManualSiteAddress] = useState(false);
   const isEditMode = mode === "edit";
   const { user } = useAuth();
   const { currentOrgId } = useOrg();
@@ -831,6 +833,7 @@ export const AddProjectDialog = ({
   const watchedProducts = useWatch({ control: form.control, name: "products" });
   const watchedBuildingType = useWatch({ control: form.control, name: "building_type" });
   const watchedDelegateId = useWatch({ control: form.control, name: "delegate_id" });
+  const sameAddress = form.watch("same_address");
 
   const productMap = useMemo(() => {
     if (!productsData) return {};
@@ -1193,7 +1196,7 @@ export const AddProjectDialog = ({
         ? initialValues.status
         : defaultStatus;
 
-    form.reset({
+    const resetValues = {
       ...baseDefaultValues,
       ...initialValues,
       status: nextStatus,
@@ -1204,7 +1207,15 @@ export const AddProjectDialog = ({
       address: initialValues?.address ?? "",
       date_debut_prevue: initialValues?.date_debut_prevue ?? defaultStartDate ?? "",
       products: productList,
-    } as ProjectFormValues);
+    } as ProjectFormValues;
+
+    form.reset(resetValues);
+    setIsManualHqAddress(
+      Boolean(resetValues.hq_address && (!resetValues.hq_city || !resetValues.hq_postal_code))
+    );
+    setIsManualSiteAddress(
+      Boolean(resetValues.address && (!resetValues.city || !resetValues.postal_code))
+    );
   }, [
     open,
     ecoProducts,
@@ -1218,6 +1229,13 @@ export const AddProjectDialog = ({
     defaultStartDate,
     defaultDelegateId,
   ]);
+  
+  useEffect(() => {
+    if (!open) {
+      setIsManualHqAddress(false);
+      setIsManualSiteAddress(false);
+    }
+  }, [open]);
   // **** end merged effect ****
 
   const handleEcoToggle = useCallback(
@@ -1528,6 +1546,8 @@ export const AddProjectDialog = ({
         delegate_id: defaultDelegateId ?? "",
         products: ecoEntries.length ? ecoEntries : [createProductEntry()],
       } as ProjectFormValues);
+      setIsManualHqAddress(false);
+      setIsManualSiteAddress(false);
       setOpen(false);
       await onProjectAdded?.();
     } catch (error) {
@@ -1684,16 +1704,36 @@ export const AddProjectDialog = ({
                     <FormControl>
                       <AddressAutocomplete
                         value={field.value}
-                        onChange={(address, city, postalCode) => {
-                          form.setValue("hq_address", address);
-                          form.setValue("hq_city", city);
-                          form.setValue("hq_postal_code", postalCode);
-                          
-                          // If same_address is checked, also update site address
-                          if (form.watch("same_address")) {
-                            form.setValue("address", address);
-                            form.setValue("city", city);
-                            form.setValue("postal_code", postalCode);
+                        onChange={(address, city, postalCode, options) => {
+                          const isManual = options?.manual ?? false;
+                          setIsManualHqAddress(isManual);
+                          form.setValue("hq_address", address, {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          });
+                          form.setValue("hq_city", city, {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          });
+                          form.setValue("hq_postal_code", postalCode, {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          });
+
+                          if (sameAddress) {
+                            form.setValue("address", address, {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            });
+                            form.setValue("city", city, {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            });
+                            form.setValue("postal_code", postalCode, {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            });
+                            setIsManualSiteAddress(isManual);
                           }
                         }}
                         disabled={loading}
@@ -1712,7 +1752,11 @@ export const AddProjectDialog = ({
                     <FormItem>
                       <FormLabel>Ville du siège *</FormLabel>
                       <FormControl>
-                        <Input {...field} disabled />
+                        <Input
+                          {...field}
+                          disabled={loading}
+                          readOnly={!isManualHqAddress}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -1725,7 +1769,11 @@ export const AddProjectDialog = ({
                     <FormItem>
                       <FormLabel>Code postal du siège *</FormLabel>
                       <FormControl>
-                        <Input {...field} disabled />
+                        <Input
+                          {...field}
+                          disabled={loading}
+                          readOnly={!isManualHqAddress}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -1744,8 +1792,9 @@ export const AddProjectDialog = ({
                     <Checkbox
                       checked={field.value}
                       onCheckedChange={async (checked) => {
-                        field.onChange(checked);
-                        if (checked) {
+                        const isChecked = checked === true;
+                        field.onChange(isChecked);
+                        if (isChecked) {
                           // Copy headquarters address to site address
                           const hqAddress = form.getValues("hq_address");
                           const hqCity = form.getValues("hq_city");
@@ -1753,8 +1802,11 @@ export const AddProjectDialog = ({
                           form.setValue("address", hqAddress);
                           form.setValue("city", hqCity);
                           form.setValue("postal_code", hqPostalCode);
+                          setIsManualSiteAddress(isManualHqAddress);
                           // Trigger validation for the updated fields
                           await form.trigger(["address", "city", "postal_code"]);
+                        } else {
+                          setIsManualSiteAddress(false);
                         }
                       }}
                     />
@@ -1781,12 +1833,23 @@ export const AddProjectDialog = ({
                     <FormControl>
                       <AddressAutocomplete
                         value={field.value}
-                        onChange={(address, city, postalCode) => {
-                          form.setValue("address", address);
-                          form.setValue("city", city);
-                          form.setValue("postal_code", postalCode);
+                        onChange={(address, city, postalCode, options) => {
+                          const isManual = options?.manual ?? false;
+                          setIsManualSiteAddress(isManual);
+                          form.setValue("address", address, {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          });
+                          form.setValue("city", city, {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          });
+                          form.setValue("postal_code", postalCode, {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          });
                         }}
-                        disabled={loading || form.watch("same_address")}
+                        disabled={loading || sameAddress}
                       />
                     </FormControl>
                     <FormMessage />
@@ -1802,7 +1865,11 @@ export const AddProjectDialog = ({
                     <FormItem>
                       <FormLabel>Ville *</FormLabel>
                       <FormControl>
-                        <Input {...field} disabled />
+                        <Input
+                          {...field}
+                          disabled={loading || sameAddress}
+                          readOnly={!isManualSiteAddress}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -1815,7 +1882,11 @@ export const AddProjectDialog = ({
                     <FormItem>
                       <FormLabel>Code postal *</FormLabel>
                       <FormControl>
-                        <Input {...field} disabled />
+                        <Input
+                          {...field}
+                          disabled={loading || sameAddress}
+                          readOnly={!isManualSiteAddress}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

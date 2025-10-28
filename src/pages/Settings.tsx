@@ -389,6 +389,7 @@ export default function Settings() {
     description:
       "Entreprise spécialisée dans les rénovations énergétiques globales pour les particuliers et les copropriétés.",
   });
+  const [isManualCompanyAddress, setIsManualCompanyAddress] = useState(false);
   const [organizationPrimeSettings, setOrganizationPrimeSettings] = useState<{
     businessLocation: BusinessLocation;
     primeBonification: string;
@@ -481,6 +482,17 @@ export default function Settings() {
       isCancelled = true;
     };
   }, [currentOrgId, toast]);
+
+  useEffect(() => {
+    if (!companyInfo.address) {
+      setIsManualCompanyAddress(false);
+      return;
+    }
+
+    if (!companyInfo.city || !companyInfo.postalCode) {
+      setIsManualCompanyAddress(true);
+    }
+  }, [companyInfo.address, companyInfo.city, companyInfo.postalCode]);
   useEffect(() => {
     const state = location.state as SettingsLocationState | null;
     if (!state?.driveAuth) return;
@@ -984,37 +996,45 @@ export default function Settings() {
                     </div>
                     <div className="md:col-span-2 space-y-2">
                       <Label htmlFor="company-address">Adresse</Label>
-                      <AddressAutocomplete
-                        value={companyInfo.address}
-                        onChange={(address, city, postalCode) =>
-                          setCompanyInfo((p) => ({
-                            ...p,
-                            address,
-                            city,
-                            postalCode,
-                          }))
-                        }
-                      />
+                        <AddressAutocomplete
+                          value={companyInfo.address}
+                          onChange={(address, city, postalCode, options) => {
+                            const isManual = options?.manual ?? false;
+                            setIsManualCompanyAddress(isManual);
+                            setCompanyInfo((p) => ({
+                              ...p,
+                              address,
+                              city,
+                              postalCode,
+                            }));
+                          }}
+                        />
                     </div>
                     <div className="grid gap-4 md:grid-cols-2 md:col-span-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="company-city">Ville</Label>
-                        <Input
-                          id="company-city"
-                          value={companyInfo.city}
-                          readOnly
-                          placeholder="Sélectionnez une adresse"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="company-postal">Code postal</Label>
-                        <Input
-                          id="company-postal"
-                          value={companyInfo.postalCode}
-                          readOnly
-                          placeholder="Sélectionnez une adresse"
-                        />
-                      </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="company-city">Ville</Label>
+                          <Input
+                            id="company-city"
+                            value={companyInfo.city}
+                            readOnly={!isManualCompanyAddress}
+                            onChange={(e) =>
+                              setCompanyInfo((p) => ({ ...p, city: e.target.value }))
+                            }
+                            placeholder="Sélectionnez une adresse"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="company-postal">Code postal</Label>
+                          <Input
+                            id="company-postal"
+                            value={companyInfo.postalCode}
+                            readOnly={!isManualCompanyAddress}
+                            onChange={(e) =>
+                              setCompanyInfo((p) => ({ ...p, postalCode: e.target.value }))
+                            }
+                            placeholder="Sélectionnez une adresse"
+                          />
+                        </div>
                     </div>
                     <div className="grid gap-4 md:grid-cols-2 md:col-span-2">
                       <div className="space-y-2">

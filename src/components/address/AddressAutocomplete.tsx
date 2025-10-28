@@ -14,9 +14,18 @@ interface Address {
   };
 }
 
+interface AddressChangeOptions {
+  manual?: boolean;
+}
+
 interface AddressAutocompleteProps {
   value: string;
-  onChange: (address: string, city: string, postalCode: string) => void;
+  onChange: (
+    address: string,
+    city: string,
+    postalCode: string,
+    options?: AddressChangeOptions
+  ) => void;
   disabled?: boolean;
 }
 
@@ -65,9 +74,20 @@ export function AddressAutocomplete({ value, onChange, disabled }: AddressAutoco
     const fullAddress = address.properties.label;
     const city = address.properties.city;
     const postalCode = address.properties.postcode;
-    
+
     setSearch(fullAddress);
-    onChange(fullAddress, city, postalCode);
+    onChange(fullAddress, city, postalCode, { manual: false });
+    setOpen(false);
+  };
+
+  const handleManualSelect = () => {
+    const trimmedSearch = search.trim();
+    if (!trimmedSearch) {
+      return;
+    }
+
+    setSearch(trimmedSearch);
+    onChange(trimmedSearch, "", "", { manual: true });
     setOpen(false);
   };
 
@@ -99,10 +119,15 @@ export function AddressAutocomplete({ value, onChange, disabled }: AddressAutoco
               <div className="flex items-center justify-center p-4">
                 <Loader2 className="h-4 w-4 animate-spin" />
               </div>
-            ) : search.length < 3 ? (
+            ) : search.trim().length < 3 ? (
               "Tapez au moins 3 caractères"
             ) : (
-              "Aucune adresse trouvée"
+              <div className="flex flex-col items-center gap-3 p-4 text-center text-sm">
+                <p className="text-muted-foreground">Aucune adresse trouvée</p>
+                <Button size="sm" variant="secondary" onClick={handleManualSelect}>
+                  Utiliser cette adresse
+                </Button>
+              </div>
             )}
           </CommandEmpty>
           {suggestions.length > 0 && (

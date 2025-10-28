@@ -112,6 +112,7 @@ interface LeadFormDialogProps {
 export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
   const [open, setOpen] = useState(false);
   const [drivePhoto, setDrivePhoto] = useState<DriveFileMetadata | null>(null);
+  const [isManualAddress, setIsManualAddress] = useState(false);
   const { user } = useAuth();
   const { currentOrgId } = useOrg();
   const { toast } = useToast();
@@ -361,6 +362,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         extra_fields: {},
       });
       setDrivePhoto(null);
+      setIsManualAddress(false);
       setOpen(false);
       await onCreated?.();
     } catch (error) {
@@ -423,6 +425,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         extra_fields: {},
       });
       setDrivePhoto(null);
+      setIsManualAddress(false);
     }
   };
 
@@ -544,10 +547,12 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
                   <FormControl>
                     <AddressAutocomplete
                       value={field.value}
-                      onChange={(address, city, postalCode) => {
+                      onChange={(address, city, postalCode, options) => {
+                        const isManual = options?.manual ?? false;
+                        setIsManualAddress(isManual);
                         field.onChange(address);
-                        form.setValue("city", city);
-                        form.setValue("postal_code", postalCode);
+                        form.setValue("city", city, { shouldDirty: true, shouldValidate: true });
+                        form.setValue("postal_code", postalCode, { shouldDirty: true, shouldValidate: true });
                       }}
                       disabled={isSubmitting}
                     />
@@ -565,7 +570,11 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
                   <FormItem>
                     <FormLabel>Ville *</FormLabel>
                     <FormControl>
-                      <Input {...field} disabled={isSubmitting} readOnly />
+                      <Input
+                        {...field}
+                        disabled={isSubmitting}
+                        readOnly={!isManualAddress}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -578,7 +587,11 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
                   <FormItem>
                     <FormLabel>Code postal *</FormLabel>
                     <FormControl>
-                      <Input {...field} disabled={isSubmitting} readOnly />
+                      <Input
+                        {...field}
+                        disabled={isSubmitting}
+                        readOnly={!isManualAddress}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
