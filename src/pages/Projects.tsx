@@ -305,25 +305,27 @@ const Projects = () => {
   }, [projectStatuses]);
 
   const memberNameById = useMemo(() => {
-    return members.reduce<Record<string, string>>((acc, member) => {
+    const result: Record<string, string> = {};
+    members.forEach((member) => {
       if (!member?.user_id) {
-        return acc;
+        return;
       }
 
       const fullName = member.profiles?.full_name?.trim();
-      acc[member.user_id] = fullName && fullName.length > 0 ? fullName : "Utilisateur";
-      return acc;
-    }, {});
+      result[member.user_id] = fullName && fullName.length > 0 ? fullName : "Utilisateur";
+    });
+    return result;
   }, [members]);
 
   const memberIdByName = useMemo(() => {
-    return Object.entries(memberNameById).reduce<Record<string, string>>((acc, [id, name]) => {
+    const result: Record<string, string> = {};
+    Object.entries(memberNameById).forEach(([id, name]) => {
       const normalized = name.trim().toLowerCase();
-      if (normalized.length > 0 && !acc[normalized]) {
-        acc[normalized] = id;
+      if (normalized.length > 0 && !result[normalized]) {
+        result[normalized] = id;
       }
-      return acc;
-    }, {});
+    });
+    return result;
   }, [memberNameById]);
 
   const { data: projects = [], isLoading, refetch } = useQuery<ProjectWithRelations[]>({

@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useState } from "react";
-import { useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -16,6 +15,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -93,7 +93,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Progress } from "@/components/ui/progress";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -1195,25 +1194,27 @@ const ProjectDetails = () => {
   const [activeSite, setActiveSite] = useState<ProjectSite | null>(null);
 
   const memberNameById = useMemo(() => {
-    return members.reduce<Record<string, string>>((acc, member) => {
+    const result: Record<string, string> = {};
+    members.forEach((member) => {
       if (!member?.user_id) {
-        return acc;
+        return;
       }
 
       const fullName = member.profiles?.full_name?.trim();
-      acc[member.user_id] = fullName && fullName.length > 0 ? fullName : "Utilisateur";
-      return acc;
-    }, {});
+      result[member.user_id] = fullName && fullName.length > 0 ? fullName : "Utilisateur";
+    });
+    return result;
   }, [members]);
 
   const memberIdByName = useMemo(() => {
-    return Object.entries(memberNameById).reduce<Record<string, string>>((acc, [id, name]) => {
+    const result: Record<string, string> = {};
+    Object.entries(memberNameById).forEach(([id, name]) => {
       const normalized = name.trim().toLowerCase();
-      if (normalized.length > 0 && !acc[normalized]) {
-        acc[normalized] = id;
+      if (normalized.length > 0 && !result[normalized]) {
+        result[normalized] = id;
       }
-      return acc;
-    }, {});
+    });
+    return result;
   }, [memberNameById]);
 
   const currentMember = members.find((member) => member.user_id === user?.id);
@@ -2455,290 +2456,9 @@ const ProjectDetails = () => {
       </Tabs>
 
       </div>
-
-  const [activeTab, setActiveTab] = useState("informations");
-
-  const statusMutation = useMutation({
-    mutationFn: async (newStatus: string) => {
-      if (!project) {
-        throw new Error("Projet introuvable");
-      }
-
-      let query = supabase.from("projects").update({ status: newStatus }).eq("id", project.id);
-      if (currentOrgId) {
-        query = query.eq("org_id", currentOrgId);
-      }
-
-      const { error: updateError } = await query;
-      if (updateError) {
-        throw updateError;
-      }
-    },
-    onSuccess: () => {
-      toast({
-        title: "Statut mis à jour",
-        description: "Le statut du projet a été modifié avec succès.",
-      });
-      void refetch();
-    },
-    onError: (updateError) => {
-      const message =
-        updateError instanceof Error
-          ? updateError.message
-          : "Impossible de mettre à jour le statut du projet.";
-      toast({
-        title: "Erreur",
-        description: message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const startChantierMutation = useMutation({
-    mutationFn: async (values: AvantChantierFormValues) => {
-      if (!project) {
-        throw new Error("Projet introuvable");
-      }
-
-      const response = await fetch(`/api/projects/${project.id}/start-chantier`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          projectId: project.id,
-          siteRef: values.siteRef,
-          startDate: values.startDate,
-          expectedEndDate: values.expectedEndDate || null,
-          teamLead: values.teamLead?.trim() || null,
-          notes: values.notes?.trim() || null,
-        }),
-      });
-
-      let payload: unknown = null;
-      try {
-        payload = await response.json();
-      } catch (parseError) {
-        payload = null;
-      }
-
-      if (!response.ok) {
-        const errorMessage =
-          payload && typeof payload === "object" && payload !== null && "error" in payload
-            ? String((payload as { error?: string }).error)
-            : "Impossible de démarrer le chantier.";
-        throw new Error(errorMessage);
-      }
-
-      return payload;
-    },
-    onSuccess: () => {
-      toast({
-        title: "Chantier initialisé",
-        description: "Le chantier a été créé avec succès à partir du projet.",
-      });
-      setActiveTab("apres");
-    },
-    onError: (error) => {
-      const message = error instanceof Error ? error.message : "Impossible de démarrer le chantier.";
-      toast({
-        title: "Erreur",
-        description: message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleStatusChange = (value: string) => {
-    statusMutation.mutate(value);
-  };
-
-  const handleAvantChantierSubmit = async (values: AvantChantierFormValues) => {
-    await startChantierMutation.mutateAsync(values);
-  };
-
-  const handleShareProject = async () => {
-    if (!project) return;
-
-    const shareData = {
-      title: project.project_ref,
-      text: `Projet ${project.project_ref} – ${project.city}`,
-      url: typeof window !== "undefined" ? window.location.href : "",
-    };
-
-    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
-      try {
-        await navigator.share(shareData);
-        return;
-      } catch (shareError) {
-        if (shareError instanceof Error && shareError.name === "AbortError") {
-          return;
-        }
-      }
-    }
-
-    if (shareData.url && typeof navigator !== "undefined" && navigator.clipboard) {
-      try {
-        await navigator.clipboard.writeText(shareData.url);
-        toast({
-          title: "Lien copié",
-          description: "Le lien du projet a été copié dans le presse-papiers.",
-        });
-        return;
-      } catch (clipboardError) {
-        console.error("Clipboard error", clipboardError);
-      }
-    }
-
-    toast({
-      title: "Partage indisponible",
-      description: "Impossible de partager automatiquement ce projet depuis ce navigateur.",
-      variant: "destructive",
-    });
-  };
-
-  const progressValue = computeStatusProgress(project?.status ?? null, projectStatuses);
-  const canDeleteProject = !!project && (isAdmin || project.user_id === user?.id);
-
-  if (isLoading || membersLoading) {
-    return (
-      <Layout>
-        <div className="flex items-center justify-center h-96">
-          <p className="text-muted-foreground">Chargement du projet...</p>
-        </div>
-      </Layout>
-    );
-  }
-
-  if (!project || error) {
-    return (
-      <Layout>
-        <div className="space-y-6">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" onClick={() => navigate(-1)}>
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Retour
-            </Button>
-            <h1 className="text-2xl font-semibold">Projet introuvable</h1>
-          </div>
-          <Card className="shadow-card bg-gradient-card border-0">
-            <CardContent className="py-10 text-center text-muted-foreground">
-              Le projet que vous recherchez n'existe pas ou a été supprimé.
-            </CardContent>
-          </Card>
-        </div>
-      </Layout>
-    );
-  }
-
-  return (
-    <Layout>
-      <div className="space-y-6">
-        <ProjectHeader
-          project={project}
-          statusOptions={projectStatuses}
-          badgeStyle={badgeStyle}
-          statusLabel={statusLabel}
-          onBack={() => navigate(-1)}
-          onStatusChange={handleStatusChange}
-          isStatusUpdating={statusMutation.isPending}
-          onOpenQuote={handleOpenQuote}
-          onDelete={() => setDeleteDialogOpen(true)}
-          onShare={handleShareProject}
-          onOpenDocuments={() => setActiveTab("documents")}
-          canDelete={canDeleteProject}
-          isDeleting={isDeleting}
-          progressValue={progressValue}
-          productCodes={productCodes}
-        />
-
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="w-full sm:w-auto">
-            <TabsTrigger value="informations" className="flex-1 sm:flex-none">
-              Informations générales
-            </TabsTrigger>
-            <TabsTrigger value="documents" className="flex-1 sm:flex-none">
-              Documents
-            </TabsTrigger>
-            <TabsTrigger value="apres" className="flex-1 sm:flex-none">
-              Après chantier
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="informations" className="mt-6 space-y-6">
-            <InformationsGeneralesTab
-              project={project}
-              projectEmail={projectEmail}
-              projectCostValue={projectCostValue}
-              displayedPrimeValue={displayedPrimeValue}
-              onSubmitAvantChantier={handleAvantChantierSubmit}
-              isStartingChantier={startChantierMutation.isPending}
-            />
-          </TabsContent>
-
-          <TabsContent value="documents" className="mt-6 space-y-6">
-            <DocumentsTab project={project} />
-          </TabsContent>
-
-          <TabsContent value="apres" className="mt-6 space-y-6">
-            <ApresChantierTab
-              project={project}
-              ceeEntryMap={ceeEntryMap}
-              projectProducts={projectProducts}
-              hasComputedCeeTotals={hasComputedCeeTotals}
-              ceeTotals={ceeTotals}
-            />
-          </TabsContent>
-        </Tabs>
-      </div>
-
-      {canDeleteProject ? (
-        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Supprimer le projet ?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Cette action est irréversible. Le projet {project.project_ref || "sélectionné"} sera définitivement supprimé.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={isDeleting}>Annuler</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDeleteProject} disabled={isDeleting}>
-                {isDeleting ? "Suppression..." : "Confirmer"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      ) : null}
-
-      <AddQuoteDialog
-        open={quoteDialogOpen}
-        onOpenChange={(open) => {
-          setQuoteDialogOpen(open);
-          if (!open) {
-            setQuoteInitialValues({});
-          }
-        }}
-        initialValues={quoteInitialValues}
-      />
-      <SiteDialog
-        open={siteDialogOpen}
-        mode={siteDialogMode}
-        onOpenChange={(open) => {
-          setSiteDialogOpen(open);
-          if (!open) {
-            setSiteInitialValues(undefined);
-            setActiveSite(null);
-            setSiteDialogMode("create");
-          }
-        }}
-        onSubmit={handleSubmitSite}
-        initialValues={siteInitialValues}
-        orgId={currentOrgId}
-        projects={projectSiteOptions}
-      />
     </Layout>
   );
+
 };
 
 export default ProjectDetails;

@@ -573,13 +573,14 @@ export const SiteDialog = ({
   const resolvedOrgId = orgId ?? initialValues?.org_id ?? null;
   const { data: members = [], isLoading: membersLoading } = useMembers(resolvedOrgId);
   const memberNameById = useMemo(() => {
-    return members.reduce<Record<string, string>>((acc, member) => {
+    const result: Record<string, string> = {};
+    members.forEach((member) => {
       const name = member.profiles?.full_name?.trim();
       if (member.user_id) {
-        acc[member.user_id] = name && name.length > 0 ? name : "Utilisateur";
+        result[member.user_id] = name && name.length > 0 ? name : "Utilisateur";
       }
-      return acc;
-    }, {});
+    });
+    return result;
   }, [members]);
   const memberOptions = useMemo(
     () =>
