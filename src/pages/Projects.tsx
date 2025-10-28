@@ -128,6 +128,18 @@ const formatDecimal = (value: number) => decimalFormatter.format(value);
 
 const SURFACE_FACTUREE_TARGETS = ["surface_facturee", "surface facturée"] as const;
 
+const resolvePrimeCeeEuro = (project: Project | null | undefined) => {
+  if (!project) return null;
+
+  if (
+    typeof project.prime_cee_total_cents === "number" &&
+    Number.isFinite(project.prime_cee_total_cents)
+  ) {
+    return project.prime_cee_total_cents / 100;
+  }
+
+  if (typeof project.prime_cee === "number" && Number.isFinite(project.prime_cee)) {
+    return project.prime_cee;
 type ViewMode = "card" | "list";
 const VIEW_MODE_STORAGE_KEY = "projects:view-mode";
 const PROJECT_CATEGORY_VALUES = ["EQ", "EN"] as const;
@@ -950,6 +962,28 @@ const Projects = () => {
               const startDate = project.date_debut_prevue ? new Date(project.date_debut_prevue) : null;
               const endDate = project.date_fin_prevue ? new Date(project.date_fin_prevue) : null;
               const projectCostValue = project.estimated_value ?? null;
+              const primeCeeEuro = resolvePrimeCeeEuro(project);
+
+              return (
+              <Card
+                key={project.id}
+                className="shadow-card bg-gradient-card border border-black/10 transition-all duration-300 hover:shadow-elevated dark:border-white/10"
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <CardTitle className="text-lg font-bold text-primary">
+                        {project.project_ref}
+                      </CardTitle>
+                      <p className="text-sm text-muted-foreground mt-1 space-y-1">
+                        <span className="block">
+                          {clientName}
+                          {project.company && (
+                            <span className="block text-xs">{project.company}</span>
+                          )}
+                          {project.siren && (
+                            <span className="block text-xs text-muted-foreground/80">
+                              SIREN : {project.siren}
               const projectProductsForForm = (project.project_products ?? []).map((item) => ({
                 product_id: item.product_id ?? "",
                 quantity:
@@ -1453,6 +1487,37 @@ const Projects = () => {
                           })}
                         </div>
 
+                  {/* Value & Assignment */}
+                  <div className="pt-2 border-t space-y-2">
+                    {typeof projectCostValue === "number" && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">Coût du chantier:</span>
+                        <div className="flex items-center gap-1 text-sm font-bold text-primary">
+                          <Euro className="w-4 h-4" />
+                          {formatCurrency(projectCostValue)}
+                        </div>
+                      </div>
+                    )}
+                    {primeCeeEuro !== null && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">Prime CEE:</span>
+                        <div className="flex items-center gap-1 text-sm font-bold text-emerald-600">
+                          <HandCoins className="w-4 h-4" />
+                          {formatCurrency(primeCeeEuro)}
+                        </div>
+                      </div>
+                    )}
+                    {displayedValorisationEntries.map((entry) => {
+                      const valorisationLabel = (entry.valorisationLabel || "Valorisation m²/LED").trim();
+                      return (
+                        <div
+                          key={`${project.id}-valorisation-${entry.projectProductId}`}
+                          className="space-y-1"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                              {valorisationLabel}
+                              {entry.productCode ? ` (${entry.productCode})` : ""}
                         {/* Technical Details */}
                         {(project.surface_batiment_m2 || project.surface_isolee_m2) && (
                           <div className="space-y-2">

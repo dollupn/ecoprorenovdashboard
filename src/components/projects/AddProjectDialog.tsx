@@ -451,6 +451,20 @@ const getInitialDynamicParams = (product?: ProductCatalogEntry | null) => {
   return initialParams;
 };
 
+const computePrimeCeePersistence = (
+  totalPrime: number | null | undefined,
+): { primeCeeEuro: number | undefined; primeCeeCents: number | undefined } => {
+  if (typeof totalPrime !== "number" || !Number.isFinite(totalPrime)) {
+    return { primeCeeEuro: undefined, primeCeeCents: undefined };
+  }
+
+  const cents = Math.round(totalPrime * 100);
+  return {
+    primeCeeEuro: cents / 100,
+    primeCeeCents: cents,
+  };
+};
+
 export const AddProjectDialog = ({
   onProjectAdded,
   onProjectUpdated,
@@ -1317,7 +1331,9 @@ export const AddProjectDialog = ({
         primeBonification,
         productMap,
       });
-      const sanitizedPrimeCee = primeCeeValue ? primeCeeValue.totalPrime : undefined;
+      const { primeCeeEuro, primeCeeCents } = computePrimeCeePersistence(
+        primeCeeValue?.totalPrime,
+      );
 
       const firstProduct = productsData?.find((p) => p.id === data.products[0]?.product_id);
       const product_name = firstProduct?.name || "";
@@ -1438,6 +1454,37 @@ export const AddProjectDialog = ({
           {
             user_id: user.id,
             org_id: currentOrgId,
+            project_ref,
+            client_name,
+            client_first_name: clientFirstName,
+            client_last_name: clientLastName,
+            product_name, // Pour compatibilité
+            hq_address: normalizedHqAddress ? normalizedHqAddress : undefined,
+            hq_city: data.hq_city || undefined,
+            hq_postal_code: data.hq_postal_code || undefined,
+            same_address: data.same_address || false,
+            address: normalizedAddress ? normalizedAddress : undefined,
+            external_reference: normalizedExternalRef ? normalizedExternalRef : undefined,
+            city: data.city,
+            postal_code: data.postal_code,
+            status: data.status,
+            assigned_to: data.assigned_to,
+            source: data.source || undefined,
+            company: data.company || undefined,
+            phone: data.phone || undefined,
+            siren: normalizedSiren && normalizedSiren.length > 0 ? normalizedSiren : null,
+            building_type: data.building_type || undefined,
+            usage: data.usage || undefined,
+            prime_cee: primeCeeEuro,
+            prime_cee_total_cents: primeCeeCents,
+            delegate_id: data.delegate_id,
+            signatory_name: data.signatory_name || undefined,
+            signatory_title: data.signatory_title || undefined,
+            surface_batiment_m2: data.surface_batiment_m2 || undefined,
+            date_debut_prevue: data.date_debut_prevue || undefined,
+            date_fin_prevue: data.date_fin_prevue || undefined,
+            estimated_value: projectCost,
+            lead_id: data.lead_id || undefined,
             project_ref: generatedProjectRef,
             ...basePayload,
           },

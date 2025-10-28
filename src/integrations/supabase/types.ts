@@ -671,6 +671,7 @@ export type Database = {
           phone: string | null
           postal_code: string
           prime_cee: number | null
+          prime_cee_total_cents: number | null
           product_name: string
           project_ref: string
           same_address: boolean | null
@@ -711,6 +712,7 @@ export type Database = {
           phone?: string | null
           postal_code: string
           prime_cee?: number | null
+          prime_cee_total_cents?: number | null
           product_name: string
           project_ref: string
           same_address?: boolean | null
@@ -751,6 +753,7 @@ export type Database = {
           phone?: string | null
           postal_code?: string
           prime_cee?: number | null
+          prime_cee_total_cents?: number | null
           product_name?: string
           project_ref?: string
           same_address?: boolean | null

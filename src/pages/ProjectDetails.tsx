@@ -115,6 +115,23 @@ const decimalFormatter = new Intl.NumberFormat("fr-FR", {
 const formatCurrency = (value: number) => currencyFormatter.format(value);
 const formatDecimal = (value: number) => decimalFormatter.format(value);
 
+const resolvePrimeCeeEuro = (project: Project | null | undefined) => {
+  if (!project) return null;
+
+  if (
+    typeof project.prime_cee_total_cents === "number" &&
+    Number.isFinite(project.prime_cee_total_cents)
+  ) {
+    return project.prime_cee_total_cents / 100;
+  }
+
+  if (typeof project.prime_cee === "number" && Number.isFinite(project.prime_cee)) {
+    return project.prime_cee;
+  }
+
+  return null;
+};
+
 type ProjectProductCeeEntry = {
   projectProductId: string;
   productCode: string | null;
@@ -549,12 +566,18 @@ const ProjectDetails = () => {
   const projectCostValue = project?.estimated_value ?? null;
   const projectEmail = (project as Project & { email?: string })?.email ?? null;
 
-  const displayedPrimeValue =
-    typeof project?.prime_cee === "number"
-      ? project.prime_cee
-      : hasComputedCeeTotals
-        ? ceeTotals.totalPrime
-        : null;
+  const displayedPrimeValue = (() => {
+    const storedPrime = resolvePrimeCeeEuro(project);
+    if (storedPrime !== null) {
+      return storedPrime;
+    }
+
+    if (hasComputedCeeTotals) {
+      return ceeTotals.totalPrime;
+    }
+
+    return null;
+  })();
 
   return (
     <Layout>
