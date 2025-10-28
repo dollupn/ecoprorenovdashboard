@@ -345,6 +345,7 @@ const Sites = () => {
         valorisation_cee: 0,
         team_members: [{ name: "" }],
         additional_costs: [],
+        subcontractor_payment_confirmed: false,
       };
 
       setDialogMode("create");
@@ -380,6 +381,7 @@ const Sites = () => {
       montant_commission: site.montant_commission || 0,
       valorisation_cee: site.valorisation_cee || 0,
       notes: site.notes || "",
+      subcontractor_payment_confirmed: Boolean(site.subcontractor_payment_confirmed),
       team_members: (site.team_members && site.team_members.length > 0)
         ? site.team_members.map(name => ({ name }))
         : [{ name: "" }],
@@ -429,6 +431,7 @@ const Sites = () => {
       isolation_utilisee_m2: values.isolation_utilisee_m2,
       montant_commission: values.montant_commission,
       valorisation_cee: values.valorisation_cee,
+      subcontractor_payment_confirmed: values.subcontractor_payment_confirmed,
       notes: values.notes?.trim() || null,
       team_members: sanitizedTeam.length > 0 ? sanitizedTeam : null,
       additional_costs: sanitizedCosts.length > 0 ? sanitizedCosts : [],

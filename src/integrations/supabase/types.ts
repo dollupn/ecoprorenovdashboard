@@ -880,6 +880,7 @@ export type Database = {
           isolation_utilisee_m2: number | null
           montant_commission: number | null
           notes: string | null
+          subcontractor_payment_confirmed: boolean
           org_id: string | null
           postal_code: string
           product_name: string
@@ -913,6 +914,7 @@ export type Database = {
           isolation_utilisee_m2?: number | null
           montant_commission?: number | null
           notes?: string | null
+          subcontractor_payment_confirmed?: boolean
           org_id?: string | null
           postal_code: string
           product_name: string
@@ -946,6 +948,7 @@ export type Database = {
           isolation_utilisee_m2?: number | null
           montant_commission?: number | null
           notes?: string | null
+          subcontractor_payment_confirmed?: boolean
           org_id?: string | null
           postal_code?: string
           product_name?: string
