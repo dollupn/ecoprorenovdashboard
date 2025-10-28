@@ -822,20 +822,14 @@ export const SiteDialog = ({
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {availableProjects.length > 0 ? (
-                              availableProjects.map((project) => (
-                                <SelectItem
-                                  key={project.id ?? project.project_ref}
-                                  value={project.project_ref}
-                                >
-                                {project.project_ref} • {getProjectClientName(project)}
-                                </SelectItem>
-                              ))
-                            ) : (
-                              <SelectItem value="" disabled>
-                                Aucun projet disponible
+                            {availableProjects.map((project) => (
+                              <SelectItem
+                                key={project.id ?? project.project_ref}
+                                value={project.project_ref}
+                              >
+                              {project.project_ref} • {getProjectClientName(project)}
                               </SelectItem>
-                            )}
+                            ))}
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground">
@@ -959,7 +953,6 @@ export const SiteDialog = ({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="">Aucun sous-traitant</SelectItem>
                           {subcontractors.map((option) => (
                             <SelectItem key={option.id} value={option.id}>
                               {option.name}

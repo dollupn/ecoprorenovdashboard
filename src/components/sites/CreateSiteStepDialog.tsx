@@ -379,7 +379,6 @@ export const CreateSiteStepDialog = ({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="">Aucun sous-traitant</SelectItem>
                           {subcontractors.map((option) => (
                             <SelectItem key={option.id} value={option.id}>
                               {option.name}
