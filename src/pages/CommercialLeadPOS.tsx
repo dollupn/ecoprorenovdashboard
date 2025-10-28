@@ -14,7 +14,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
-import { Building2, Camera, Check, ClipboardPlus, Phone, Upload, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  Building2,
+  Camera,
+  Check,
+  ClipboardPlus,
+  Phone,
+  Upload,
+  ChevronDown,
+  ChevronUp,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Progress } from "@/components/ui/progress";
@@ -23,6 +34,20 @@ import { useOrg } from "@/features/organizations/OrgContext";
 import { useLeadProductTypes } from "@/features/leads/api";
 import { useProjectBuildingTypes } from "@/hooks/useProjectBuildingTypes";
 import { useProjectUsages } from "@/hooks/useProjectUsages";
+
+type BuildingMeasurement = {
+  length: string;
+  width: string;
+  height: string;
+};
+
+const EMPTY_BUILDING: BuildingMeasurement = {
+  length: "",
+  width: "",
+  height: "",
+};
+
+const MAX_BUILDINGS = 3;
 
 const initialFormState = {
   creationDate: new Date().toISOString().split('T')[0],
@@ -44,9 +69,7 @@ const initialFormState = {
   subsidyReceived: "no",
   subsidyDetails: "",
   selectedProducts: [] as string[],
-  buildingLength: "",
-  buildingWidth: "",
-  buildingHeight: "",
+  buildings: [{ ...EMPTY_BUILDING }],
   luminaireCount: "",
   notes: "",
 };
@@ -144,6 +167,45 @@ const CommercialLeadPOS = () => {
     (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       setFormState((prev) => ({ ...prev, [field]: event.target.value }));
     };
+
+  const handleBuildingChange = (index: number, field: keyof BuildingMeasurement) =>
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const value = event.target.value;
+      setFormState((prev) => ({
+        ...prev,
+        buildings: prev.buildings.map((building, idx) =>
+          idx === index ? { ...building, [field]: value } : building
+        ),
+      }));
+    };
+
+  const handleAddBuilding = () => {
+    setFormState((prev) => {
+      if (prev.buildings.length >= MAX_BUILDINGS) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        buildings: [...prev.buildings, { ...EMPTY_BUILDING }],
+      };
+    });
+  };
+
+  const handleRemoveBuilding = (index: number) => {
+    setFormState((prev) => {
+      if (prev.buildings.length <= 1) {
+        return prev;
+      }
+
+      const buildings = prev.buildings.filter((_, idx) => idx !== index);
+
+      return {
+        ...prev,
+        buildings: buildings.length > 0 ? buildings : [{ ...EMPTY_BUILDING }],
+      };
+    });
+  };
 
   const handleSelectChange = (field: keyof FormState) => (value: string) => {
     setFormState((prev) => ({ ...prev, [field]: value }));
@@ -598,47 +660,84 @@ const CommercialLeadPOS = () => {
                   )}
 
                   <div className="grid gap-2">
-                    <Label className="text-base font-semibold">Mesures du bâtiment</Label>
-                    <div className="grid gap-4 md:grid-cols-3">
-                      <div className="grid gap-2">
-                        <Label htmlFor="buildingLength">Longueur (m)</Label>
-                        <Input
-                          id="buildingLength"
-                          type="number"
-                          min="0"
-                          step="0.1"
-                          value={formState.buildingLength}
-                          onChange={handleInputChange("buildingLength")}
-                          placeholder="Longueur totale"
-                          className="h-12"
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="buildingWidth">Largeur (m)</Label>
-                        <Input
-                          id="buildingWidth"
-                          type="number"
-                          min="0"
-                          step="0.1"
-                          value={formState.buildingWidth}
-                          onChange={handleInputChange("buildingWidth")}
-                          placeholder="Largeur totale"
-                          className="h-12"
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="buildingHeight">Hauteur (m)</Label>
-                        <Input
-                          id="buildingHeight"
-                          type="number"
-                          min="0"
-                          step="0.1"
-                          value={formState.buildingHeight}
-                          onChange={handleInputChange("buildingHeight")}
-                          placeholder="Hauteur totale"
-                          className="h-12"
-                        />
-                      </div>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-base font-semibold">Mesures des bâtiments</Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleAddBuilding}
+                        disabled={formState.buildings.length >= MAX_BUILDINGS || isSubmitting}
+                      >
+                        <Plus className="mr-2 h-4 w-4" />
+                        Ajouter un bâtiment
+                      </Button>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Vous pouvez ajouter jusqu'à {MAX_BUILDINGS} bâtiments.
+                    </p>
+                    <div className="space-y-4">
+                      {formState.buildings.map((building, index) => (
+                        <div key={index} className="space-y-4 rounded-lg border p-4">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">Bâtiment {index + 1}</span>
+                            {formState.buildings.length > 1 ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => handleRemoveBuilding(index)}
+                                disabled={isSubmitting}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Supprimer
+                              </Button>
+                            ) : null}
+                          </div>
+                          <div className="grid gap-4 md:grid-cols-3">
+                            <div className="grid gap-2">
+                              <Label htmlFor={`building-length-${index}`}>Longueur (m)</Label>
+                              <Input
+                                id={`building-length-${index}`}
+                                type="number"
+                                min="0"
+                                step="0.1"
+                                value={building.length}
+                                onChange={handleBuildingChange(index, "length")}
+                                placeholder="Longueur totale"
+                                className="h-12"
+                              />
+                            </div>
+                            <div className="grid gap-2">
+                              <Label htmlFor={`building-width-${index}`}>Largeur (m)</Label>
+                              <Input
+                                id={`building-width-${index}`}
+                                type="number"
+                                min="0"
+                                step="0.1"
+                                value={building.width}
+                                onChange={handleBuildingChange(index, "width")}
+                                placeholder="Largeur totale"
+                                className="h-12"
+                              />
+                            </div>
+                            <div className="grid gap-2">
+                              <Label htmlFor={`building-height-${index}`}>Hauteur (m)</Label>
+                              <Input
+                                id={`building-height-${index}`}
+                                type="number"
+                                min="0"
+                                step="0.1"
+                                value={building.height}
+                                onChange={handleBuildingChange(index, "height")}
+                                placeholder="Hauteur totale"
+                                className="h-12"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
 

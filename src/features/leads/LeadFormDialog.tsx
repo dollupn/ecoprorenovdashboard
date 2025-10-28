@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Plus, Loader2 } from "lucide-react";
+import { Plus, Loader2, Trash2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useOrg } from "@/features/organizations/OrgContext";
 
@@ -81,6 +81,12 @@ const optionalNumericString = z
     return !Number.isNaN(Number(normalized));
   }, "Veuillez saisir un nombre valide");
 
+const buildingMeasurementSchema = z.object({
+  length: optionalNumericString,
+  width: optionalNumericString,
+  height: optionalNumericString,
+});
+
 const leadSchema = z.object({
   first_name: z.string().min(2, "Le prénom doit contenir au moins 2 caractères"),
   last_name: z.string().min(2, "Le nom doit contenir au moins 2 caractères"),
@@ -96,9 +102,10 @@ const leadSchema = z.object({
   status: leadStatusEnum,
   commentaire: z.string().optional(),
   remarks: z.string().optional(),
-  building_length: optionalNumericString,
-  building_width: optionalNumericString,
-  building_height: optionalNumericString,
+  buildings: z
+    .array(buildingMeasurementSchema)
+    .min(1, "Ajoutez au moins un bâtiment")
+    .max(3, "Vous pouvez ajouter jusqu'à 3 bâtiments"),
   assigned_to: z.string().optional(),
   extra_fields: z.record(z.any()).default({}),
 });
@@ -108,6 +115,9 @@ type LeadFormValues = z.infer<typeof leadSchema>;
 interface LeadFormDialogProps {
   onCreated?: () => void | Promise<void>;
 }
+
+const DEFAULT_BUILDING = { length: "", width: "", height: "" } as const;
+const MAX_BUILDINGS = 3;
 
 export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
   const [open, setOpen] = useState(false);
@@ -148,9 +158,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
       status: defaultStatusValue,
       commentaire: "",
       remarks: "",
-      building_length: "",
-      building_width: "",
-      building_height: "",
+      buildings: [{ ...DEFAULT_BUILDING }],
       assigned_to: user?.id ?? "",
       extra_fields: {},
     },
@@ -170,6 +178,15 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
 
   const { data: productTypes } = useLeadProductTypes(orgId);
   const { data: members } = useQueryOrganizationMembers(orgId);
+
+  const {
+    fields: buildingFields,
+    append: appendBuilding,
+    remove: removeBuilding,
+  } = useFieldArray({
+    control: form.control,
+    name: "buildings",
+  });
 
   const currentMemberRole = useMemo(() => {
     if (!members || !user?.id) return null;
@@ -278,9 +295,24 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
       const parsed = Number(normalized);
       return Number.isNaN(parsed) ? null : parsed;
     };
-    const buildingLength = parseDimension(values.building_length);
-    const buildingWidth = parseDimension(values.building_width);
-    const buildingHeight = parseDimension(values.building_height);
+    const sanitizedBuildings = values.buildings
+      .map((building, index) => {
+        const length = parseDimension(building.length);
+        const width = parseDimension(building.width);
+        const height = parseDimension(building.height);
+
+        return {
+          order: index + 1,
+          length,
+          width,
+          height,
+        };
+      })
+      .filter((building) =>
+        building.length !== null || building.width !== null || building.height !== null
+      );
+
+    const primaryBuilding = sanitizedBuildings[0];
 
     try {
       const extraFields = { ...values.extra_fields };
@@ -304,9 +336,10 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         ...extraFields,
         first_name: values.first_name,
         last_name: values.last_name,
-        building_length: buildingLength,
-        building_width: buildingWidth,
-        building_height: buildingHeight,
+        building_length: primaryBuilding?.length ?? null,
+        building_width: primaryBuilding?.width ?? null,
+        building_height: primaryBuilding?.height ?? null,
+        buildings: sanitizedBuildings.length > 0 ? sanitizedBuildings : null,
         remarks: values.remarks?.trim() || null,
       };
 
@@ -355,9 +388,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         status: resetStatus,
         commentaire: "",
         remarks: "",
-        building_length: "",
-        building_width: "",
-        building_height: "",
+        buildings: [{ ...DEFAULT_BUILDING }],
         assigned_to: user.id,
         extra_fields: {},
       });
@@ -418,15 +449,23 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         status: resetStatus,
         commentaire: "",
         remarks: "",
-        building_length: "",
-        building_width: "",
-        building_height: "",
+        buildings: [{ ...DEFAULT_BUILDING }],
         assigned_to: user?.id ?? "",
         extra_fields: {},
       });
       setDrivePhoto(null);
       setIsManualAddress(false);
     }
+  };
+
+  const handleAddBuilding = () => {
+    if (buildingFields.length >= MAX_BUILDINGS) return;
+    appendBuilding({ ...DEFAULT_BUILDING });
+  };
+
+  const handleRemoveBuilding = (index: number) => {
+    if (buildingFields.length <= 1) return;
+    removeBuilding(index);
   };
 
   return (
@@ -670,66 +709,103 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-lg">Mesures du bâtiment</CardTitle>
+                <div className="flex items-center justify-between gap-4">
+                  <CardTitle className="text-lg">Mesures des bâtiments</CardTitle>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleAddBuilding}
+                    disabled={isSubmitting || buildingFields.length >= MAX_BUILDINGS}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Ajouter un bâtiment
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Vous pouvez ajouter jusqu'à {MAX_BUILDINGS} bâtiments.
+                </p>
               </CardHeader>
-              <CardContent className="grid gap-4 md:grid-cols-3">
-                <FormField
-                  control={form.control}
-                  name="building_length"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Longueur (m)</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type="number"
-                          step="0.01"
-                          inputMode="decimal"
+              <CardContent className="space-y-4">
+                {buildingFields.map((field, index) => (
+                  <div key={field.id} className="space-y-4 rounded-lg border p-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-medium">Bâtiment {index + 1}</h4>
+                      {buildingFields.length > 1 ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => handleRemoveBuilding(index)}
                           disabled={isSubmitting}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="building_width"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Largeur (m)</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type="number"
-                          step="0.01"
-                          inputMode="decimal"
-                          disabled={isSubmitting}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="building_height"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Hauteur (m)</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type="number"
-                          step="0.01"
-                          inputMode="decimal"
-                          disabled={isSubmitting}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Supprimer
+                        </Button>
+                      ) : null}
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <FormField
+                        control={form.control}
+                        name={`buildings.${index}.length` as const}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Longueur (m)</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                type="number"
+                                step="0.01"
+                                inputMode="decimal"
+                                disabled={isSubmitting}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name={`buildings.${index}.width` as const}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Largeur (m)</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                type="number"
+                                step="0.01"
+                                inputMode="decimal"
+                                disabled={isSubmitting}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name={`buildings.${index}.height` as const}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Hauteur (m)</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                type="number"
+                                step="0.01"
+                                inputMode="decimal"
+                                disabled={isSubmitting}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </div>
+                ))}
               </CardContent>
             </Card>
 
