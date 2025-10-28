@@ -1162,7 +1162,7 @@ const computeStatusProgress = (statusValue: string | null | undefined, statuses:
   }
 
   const normalized = statusValue.trim().toUpperCase();
-  const index = statuses.findIndex((status) => status.value === normalized);
+  const index = statuses.findIndex((status) => status?.value === normalized);
   if (index === -1) {
     return 0;
   }
@@ -1535,7 +1535,7 @@ const ProjectDetails = () => {
     [ceeEntries],
   );
 
-  const statusConfig = projectStatuses.find((status) => status.value === project.status);
+  const statusConfig = projectStatuses.find((status) => status?.value === project.status);
   const badgeStyle = getProjectStatusBadgeStyle(statusConfig?.color);
   const statusLabel = statusConfig?.label ?? project.status ?? "Statut";
 
