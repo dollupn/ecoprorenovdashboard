@@ -82,6 +82,7 @@ import {
 } from "@/integrations/googleDrive";
 import { LeadSettingsPanel } from "@/features/settings/LeadSettingsPanel";
 import { QuoteSettingsPanel } from "@/features/settings/QuoteSettingsPanel";
+import { SubcontractorSettingsPanel } from "@/features/settings/SubcontractorSettingsPanel";
 import { AppointmentSettingsPanel } from "@/features/settings/AppointmentSettingsPanel";
 
 const ROLE_OPTIONS = ["Administrateur", "Manager", "Commercial", "Technicien"] as const;
@@ -313,7 +314,7 @@ const sessionOptions = [
   { value: "120", label: "2 heures" },
 ];
 
-type SettingsSection = "general" | "lead" | "quotes" | "calendar";
+type SettingsSection = "general" | "lead" | "quotes" | "subcontractors" | "calendar";
 
 const SETTINGS_SECTIONS: Array<{
   id: SettingsSection;
@@ -323,6 +324,7 @@ const SETTINGS_SECTIONS: Array<{
   { id: "general", label: "Paramètres généraux", icon: SettingsIcon },
   { id: "lead", label: "Paramètres Lead", icon: Settings2 },
   { id: "quotes", label: "Paramètres Devis", icon: FileText },
+  { id: "subcontractors", label: "Paramètres sous-traitant", icon: Users },
   { id: "calendar", label: "Types de RDV", icon: Calendar },
 ];
 
@@ -2332,6 +2334,7 @@ export default function Settings() {
             {activeSection === "general" && <GeneralSection />}
             {activeSection === "lead" && <LeadSettingsPanel />}
             {activeSection === "quotes" && <QuoteSettingsPanel />}
+            {activeSection === "subcontractors" && <SubcontractorSettingsPanel />}
             {activeSection === "calendar" && <AppointmentSettingsPanel />}
           </div>
         </div>

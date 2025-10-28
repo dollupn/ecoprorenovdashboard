@@ -36,6 +36,7 @@ import {
   ShieldCheck,
   Ruler,
   HandCoins,
+  Handshake,
   X,
 } from "lucide-react";
 import {
@@ -128,6 +129,7 @@ type Site = Tables<"sites"> & {
   valorisation_cee?: number | null;
   cofrac_status?: string | null;
   notes?: string | null;
+  subcontractor?: { id: string; name: string } | null;
 };
 
 const SURFACE_FACTUREE_TARGETS = ["surface_facturee", "surface facturée"] as const;
@@ -198,6 +200,7 @@ const Sites = () => {
   const [dialogMode, setDialogMode] = useState<"create" | "edit">("create");
   const [activeSiteId, setActiveSiteId] = useState<string | null>(null);
   const [dialogInitialValues, setDialogInitialValues] = useState<Partial<SiteFormValues>>();
+  const [sortByCee, setSortByCee] = useState(false);
   const [selectedStatuses, setSelectedStatuses] = useState<SiteStatus[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   
@@ -211,10 +214,12 @@ const Sites = () => {
     queryKey: ["sites", user?.id],
     queryFn: async () => {
       if (!user) return [];
-      
+
       const { data, error } = await supabase
         .from("sites")
-        .select("*")
+        .select(
+          "*, subcontractor:subcontractors!sites_subcontractor_id_fkey(id, name)"
+        )
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
@@ -353,8 +358,10 @@ const Sites = () => {
         isolation_utilisee_m2: 0,
         montant_commission: 0,
         valorisation_cee: 0,
-        team_members: [{ name: "" }],
+        subcontractor_id: null,
+        team_members: [],
         additional_costs: [],
+        subcontractor_payment_confirmed: false,
       };
 
       setDialogMode("create");
@@ -390,9 +397,11 @@ const Sites = () => {
       montant_commission: site.montant_commission || 0,
       valorisation_cee: site.valorisation_cee || 0,
       notes: site.notes || "",
+      subcontractor_payment_confirmed: Boolean(site.subcontractor_payment_confirmed),
+      subcontractor_id: site.subcontractor_id ?? null,
       team_members: (site.team_members && site.team_members.length > 0)
-        ? site.team_members.map(name => ({ name }))
-        : [{ name: "" }],
+        ? site.team_members.map((name) => ({ name }))
+        : [],
       additional_costs: normalizeAdditionalCosts(site.additional_costs ?? []),
     });
     setDialogOpen(true);
@@ -402,7 +411,9 @@ const Sites = () => {
   const handleSubmitSite = async (values: SiteFormValues) => {
     if (!user || !currentOrgId) return;
 
-    const sanitizedTeam = values.team_members.map((member) => member.name.trim()).filter(Boolean);
+    const sanitizedTeam = (values.team_members ?? [])
+      .map((member) => member.name.trim())
+      .filter(Boolean);
     const sanitizedCosts = values.additional_costs
       ? values.additional_costs
           .filter((cost) => cost.label.trim().length > 0)
@@ -439,9 +450,11 @@ const Sites = () => {
       isolation_utilisee_m2: values.isolation_utilisee_m2,
       montant_commission: values.montant_commission,
       valorisation_cee: values.valorisation_cee,
+      subcontractor_payment_confirmed: values.subcontractor_payment_confirmed,
       notes: values.notes?.trim() || null,
       team_members: sanitizedTeam.length > 0 ? sanitizedTeam : null,
       additional_costs: sanitizedCosts.length > 0 ? sanitizedCosts : [],
+      subcontractor_id: values.subcontractor_id ?? null,
       user_id: user.id,
       org_id: currentOrgId,
     };
@@ -649,6 +662,20 @@ const Sites = () => {
     handleOpenCreate,
   ]);
 
+  const filteredSites = useMemo(() => {
+    const filtered = [...sites];
+
+    if (sortByCee) {
+      filtered.sort((a, b) => {
+        const aValue = a.valorisation_cee ?? 0;
+        const bValue = b.valorisation_cee ?? 0;
+        return aValue - bValue;
+      });
+    }
+
+    return filtered;
+  }, [sites, sortByCee]);
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -678,6 +705,20 @@ const Sites = () => {
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
                 />
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline">
+                  <Filter className="w-4 h-4 mr-2" />
+                  Filtres
+                </Button>
+                <Button
+                  variant={sortByCee ? "default" : "outline"}
+                  onClick={() => setSortByCee((prev) => !prev)}
+                  className={sortByCee ? "bg-primary text-primary-foreground" : undefined}
+                >
+                  <HandCoins className="w-4 h-4 mr-2" />
+                  Prime CEE (croissant)
+                </Button>
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -854,19 +895,34 @@ const Sites = () => {
                   </div>
                 </div>
 
-                <div className="pt-2 border-t space-y-2">
-                  <div className="flex items-center gap-2 text-sm">
-                    <Users className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">Équipe :</span>
+                {(site.subcontractor?.name || (site.team_members ?? []).length > 0) ? (
+                  <div className="pt-2 border-t space-y-2">
+                    {site.subcontractor?.name ? (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Handshake className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-muted-foreground">Sous-traitant :</span>
+                        <Badge variant="secondary" className="text-xs">
+                          {site.subcontractor.name}
+                        </Badge>
+                      </div>
+                    ) : null}
+                    {(site.team_members ?? []).length > 0 ? (
+                      <div>
+                        <div className="flex items-center gap-2 text-sm">
+                          <Users className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-muted-foreground">Équipe :</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1 ml-6">
+                          {(site.team_members || []).map((member, index) => (
+                            <Badge key={index} variant="secondary" className="text-xs">
+                              {member}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
-                  <div className="flex flex-wrap gap-1 ml-6">
-                    {(site.team_members || []).map((member, index) => (
-                      <Badge key={index} variant="secondary" className="text-xs">
-                        {member}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
+                ) : null}
 
                 <div className="flex flex-wrap gap-2 pt-2">
                   <Button size="sm" variant="outline" className="flex-1" onClick={() => handleEditSite(site)}>
@@ -899,7 +955,7 @@ const Sites = () => {
                     <CheckCircle2 className="w-4 h-4 mr-1" /> Terminer
                   </Button>
                   <Button size="sm" variant="ghost" className="flex-1" disabled>
-                    <Clock className="w-4 h-4 mr-1" /> Planning
+                    <Clock className="w-4 h-4 mr-1" /> Set RDV
                   </Button>
                 </div>
               </CardContent>
