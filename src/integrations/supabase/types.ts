@@ -995,6 +995,7 @@ export type Database = {
           description: string | null
           id: string
           is_active: boolean
+          is_default: boolean
           name: string
           org_id: string
           updated_at: string
@@ -1004,6 +1005,7 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean
+          is_default?: boolean
           name: string
           org_id: string
           updated_at?: string
@@ -1013,6 +1015,7 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean
+          is_default?: boolean
           name?: string
           org_id?: string
           updated_at?: string
