@@ -1074,6 +1074,12 @@ export type Database = {
         }
         Returns: boolean
       }
+      lookup_user_id_by_email: {
+        Args: {
+          email: string
+        }
+        Returns: string | null
+      }
       is_admin: {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
