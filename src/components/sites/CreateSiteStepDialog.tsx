@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { useQuery } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -29,6 +30,8 @@ import {
 } from "@/components/ui/select";
 import { ChevronLeft, ChevronRight, Upload, X, CheckCircle2 } from "lucide-react";
 import type { SiteProjectOption } from "./SiteDialog";
+import { supabase } from "@/integrations/supabase/client";
+import { useOrg } from "@/features/organizations/OrgContext";
 
 const siteStepSchema = z.object({
   // Step 1: Informations générales - All optional for navigation
@@ -42,7 +45,7 @@ const siteStepSchema = z.object({
   
   // Step 2: Détails techniques
   surface_facturee: z.coerce.number().min(0).optional().default(0),
-  team_members: z.string().optional(),
+  subcontractor_id: z.string().uuid().optional().nullable(),
   notes: z.string().optional(),
   
   // Step 3: Avant chantier (photos)
@@ -75,6 +78,26 @@ export const CreateSiteStepDialog = ({
 }: CreateSiteStepDialogProps) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [photosAvant, setPhotosAvant] = useState<File[]>([]);
+  const { currentOrgId } = useOrg();
+
+  const { data: subcontractors = [], isLoading: subcontractorsLoading } = useQuery({
+    queryKey: ["subcontractors", currentOrgId],
+    queryFn: async () => {
+      if (!currentOrgId) return [] as { id: string; name: string }[];
+
+      const { data, error } = await supabase
+        .from("subcontractors")
+        .select("id, name")
+        .eq("org_id", currentOrgId)
+        .eq("is_active", true)
+        .order("name");
+
+      if (error) throw error;
+
+      return (data ?? []) as { id: string; name: string }[];
+    },
+    enabled: !!currentOrgId,
+  });
 
   const form = useForm<CreateSiteStepValues>({
     resolver: zodResolver(siteStepSchema),
@@ -87,7 +110,7 @@ export const CreateSiteStepDialog = ({
       postal_code: "",
       date_debut: new Date().toISOString().slice(0, 10),
       surface_facturee: 0,
-      team_members: "",
+      subcontractor_id: null,
       notes: "",
       photos_avant: [],
     },
@@ -108,6 +131,10 @@ export const CreateSiteStepDialog = ({
     const projectRef = form.watch("project_ref");
     return projects.find(p => p.project_ref === projectRef);
   }, [form.watch("project_ref"), projects]);
+
+  const selectedSubcontractorId = form.watch("subcontractor_id");
+  const selectedSubcontractor =
+    subcontractors.find((option) => option.id === selectedSubcontractorId) ?? null;
 
   const progress = (currentStep / STEPS.length) * 100;
 
@@ -329,17 +356,37 @@ export const CreateSiteStepDialog = ({
 
                 <FormField
                   control={form.control}
-                  name="team_members"
+                  name="subcontractor_id"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Équipe / Sous-traitants</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Noms des membres de l'équipe (un par ligne)"
-                          {...field}
-                          rows={4}
-                        />
-                      </FormControl>
+                      <FormLabel>Sous-traitant</FormLabel>
+                      <Select
+                        onValueChange={(value) => field.onChange(value === "" ? null : value)}
+                        value={field.value ?? ""}
+                        disabled={subcontractorsLoading}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue
+                              placeholder={
+                                subcontractorsLoading
+                                  ? "Chargement..."
+                                  : subcontractors.length === 0
+                                  ? "Aucun sous-traitant configuré"
+                                  : "Sélectionner un sous-traitant"
+                              }
+                            />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="">Aucun sous-traitant</SelectItem>
+                          {subcontractors.map((option) => (
+                            <SelectItem key={option.id} value={option.id}>
+                              {option.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -458,6 +505,12 @@ export const CreateSiteStepDialog = ({
                     <div>
                       <p className="text-sm text-muted-foreground">Surface</p>
                       <p className="font-medium">{form.getValues("surface_facturee")} m²</p>
+                    </div>
+                  )}
+                  {selectedSubcontractor && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Sous-traitant</p>
+                      <p className="font-medium">{selectedSubcontractor.name}</p>
                     </div>
                   )}
                   {photosAvant.length > 0 && (

@@ -211,7 +211,7 @@ const statusConfig: Record<
 
 const googleIntegration = {
   connected: true,
-  calendarName: "Planning Equipe Commerciale",
+  calendarName: "Set RDV Equipe Commerciale",
   lastSync: subMinutes(new Date(), 42),
   primaryEmail: "planning@ecoprorenov.fr",
 };
@@ -325,7 +325,7 @@ const CalendarPage = () => {
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-              Planning & Rendez-vous
+              Set RDV & Rendez-vous
             </h1>
             <p className="text-muted-foreground mt-1">
               Visualisez vos visites techniques, réunions commerciales et synchronisations Google Calendar

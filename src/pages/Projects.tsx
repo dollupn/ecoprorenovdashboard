@@ -688,7 +688,8 @@ const Projects = () => {
       isolation_utilisee_m2: 0,
       montant_commission: 0,
       valorisation_cee: valorisationTotalEur,
-      team_members: [{ name: "" }],
+      subcontractor_id: null,
+      team_members: [],
       additional_costs: [],
       subcontractor_payment_confirmed: false,
     });
@@ -717,7 +718,9 @@ const Projects = () => {
   const handleSubmitSite = useCallback(async (values: SiteFormValues) => {
     if (!user || !currentOrgId) return;
 
-    const sanitizedTeam = values.team_members.map((member) => member.name.trim()).filter(Boolean);
+    const sanitizedTeam = (values.team_members ?? [])
+      .map((member) => member.name.trim())
+      .filter(Boolean);
     const sanitizedCosts = values.additional_costs
       ? values.additional_costs
           .filter((cost) => cost.label.trim().length > 0)
@@ -758,6 +761,7 @@ const Projects = () => {
       notes: values.notes?.trim() || null,
       team_members: sanitizedTeam.length > 0 ? sanitizedTeam : null,
       additional_costs: sanitizedCosts.length > 0 ? sanitizedCosts : [],
+      subcontractor_id: values.subcontractor_id ?? null,
       user_id: user.id,
       org_id: currentOrgId,
     };

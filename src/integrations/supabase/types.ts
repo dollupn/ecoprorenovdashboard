@@ -891,6 +891,7 @@ export type Database = {
           revenue: number | null
           site_ref: string
           status: string
+          subcontractor_id: string | null
           surface_facturee: number | null
           team_members: string[] | null
           updated_at: string
@@ -925,6 +926,7 @@ export type Database = {
           revenue?: number | null
           site_ref: string
           status?: string
+          subcontractor_id?: string | null
           surface_facturee?: number | null
           team_members?: string[] | null
           updated_at?: string
@@ -959,6 +961,7 @@ export type Database = {
           revenue?: number | null
           site_ref?: string
           status?: string
+          subcontractor_id?: string | null
           surface_facturee?: number | null
           team_members?: string[] | null
           updated_at?: string
@@ -980,6 +983,13 @@ export type Database = {
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "sites_subcontractor_id_fkey"
+            columns: ["subcontractor_id"]
+            isOneToOne: false
+            referencedRelation: "subcontractors"
+            referencedColumns: ["id"]
+          },
         ]
       }
       subcontractors: {
@@ -988,6 +998,7 @@ export type Database = {
           description: string | null
           id: string
           is_active: boolean
+          is_default: boolean
           name: string
           org_id: string
           updated_at: string
@@ -997,6 +1008,7 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean
+          is_default?: boolean
           name: string
           org_id: string
           updated_at?: string
@@ -1006,6 +1018,7 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean
+          is_default?: boolean
           name?: string
           org_id?: string
           updated_at?: string
