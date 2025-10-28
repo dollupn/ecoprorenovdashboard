@@ -66,6 +66,26 @@ const DashboardPage = () => {
 
   const conversionDelta = metricsQuery.data?.tauxConversion.delta ?? null;
 
+  const energyBreakdown = metricsQuery.data?.energyByCategory ?? [];
+  const energyDetails = metricsQuery.data
+    ? energyBreakdown.length > 0
+      ? (
+          <ul className="space-y-1">
+            {energyBreakdown.map((entry) => (
+              <li key={entry.category} className="flex items-center justify-between gap-4">
+                <span>{entry.category}</span>
+                <span className="font-medium text-foreground">
+                  {`${energyFormatter.format(entry.mwh)} MWh`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )
+      : (
+          <p>Aucune donnée par catégorie</p>
+        )
+    : undefined;
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -248,6 +268,14 @@ const DashboardPage = () => {
             gradient="from-yellow-500 to-orange-500"
             isLoading={metricsQuery.isLoading || !queriesEnabled}
             error={metricsQuery.error ? "Erreur" : undefined}
+            details={energyDetails}
+            detailsWhileLoading={
+              <div className="space-y-1">
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-3/4" />
+                <Skeleton className="h-3 w-2/3" />
+              </div>
+            }
           />
         </div>
 

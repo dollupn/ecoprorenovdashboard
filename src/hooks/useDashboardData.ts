@@ -80,82 +80,11 @@ const SITE_ACTIVITY_TITLES: Partial<Record<SiteStatus, string>> = {
 };
 
 import {
-  isProductExcluded,
-  getMultiplierValue,
-  withDefaultProductCeeConfig,
-  type PrimeCeeProductCatalogEntry,
-  type ProductCeeConfig,
-} from "@/lib/prime-cee-unified";
-
-type ProjectWithProducts = Pick<
-  Tables<"projects">,
-  "id" | "status" | "updated_at" | "surface_isolee_m2" | "city" | "client_name" | "building_type"
-> & {
-  project_products?: (
-    Pick<Tables<"project_products">, "quantity" | "dynamic_params"> & {
-      product?: Pick<
-        Tables<"product_catalog">,
-        "id" | "code" | "category" | "params_schema" | "is_active" | "default_params" | "cee_config"
-      > & {
-        cee_config: ProductCeeConfig;
-        kwh_cumac_values?: Pick<Tables<"product_kwh_cumac">, "building_type" | "kwh_cumac">[] | null;
-      } | null;
-    }
-  )[] | null;
-};
-
-const calculateProjectMwh = (project: ProjectWithProducts) => {
-  if (!isStatusValue(PROJECT_SURFACE_STATUSES, project.status)) {
-    return 0;
-  }
-
-  if (!project.building_type) {
-    return 0;
-  }
-
-  const products = project.project_products ?? [];
-
-  return products.reduce((sum, projectProduct) => {
-    if (!projectProduct?.product) {
-      return sum;
-    }
-
-    const { product } = projectProduct;
-
-    // Exclude ECO-* products
-    if (isProductExcluded(product)) {
-      return sum;
-    }
-
-    const kwhEntry = product.kwh_cumac_values?.find(
-      (entry) => entry && entry.building_type === project.building_type
-    );
-
-    if (!kwhEntry || typeof kwhEntry.kwh_cumac !== "number") {
-      return sum;
-    }
-
-    const multiplier = getMultiplierValue({ 
-      product: product as PrimeCeeProductCatalogEntry, 
-      projectProduct: {
-        product_id: product.id,
-        quantity: projectProduct.quantity,
-        dynamic_params: projectProduct.dynamic_params,
-      }
-    });
-    
-    if (!multiplier || multiplier.value <= 0) {
-      return sum;
-    }
-
-    const productMwh = (kwhEntry.kwh_cumac / 1000) * multiplier.value;
-    return sum + productMwh;
-  }, 0);
-};
-
-const calculateTotalMwh = (projects: ProjectWithProducts[]) => {
-  return projects.reduce((acc, project) => acc + calculateProjectMwh(project), 0);
-};
+  aggregateEnergyByCategory,
+  type EnergyBreakdownEntry,
+  type ProjectWithProducts,
+} from "@/lib/energy";
+import { withDefaultProductCeeConfig } from "@/lib/prime-cee-unified";
 
 const INVOICE_ACTIVITY_STATUS_LABELS = {
   SENT: "Envoyée",
@@ -186,6 +115,7 @@ export interface DashboardMetrics {
   rdvProgrammesSemaine: number;
   surfaceIsoleeMois: number;
   totalMwh: number;
+  energyByCategory: EnergyBreakdownEntry[];
   tauxConversion: {
     rate: number;
     delta: number | null;
@@ -321,13 +251,15 @@ export const useDashboardMetrics = (
       if (qualifiedLeads.error) throw qualifiedLeads.error;
       if (acceptedProjects.error) throw acceptedProjects.error;
 
-      const projets = (projectsData.data ?? []).map((project) => ({
-        ...project,
-        project_products: (project.project_products ?? []).map((pp) => ({
-          ...pp,
-          product: pp.product ? withDefaultProductCeeConfig(pp.product) : null,
-        })),
-      }));
+      const projets = (projectsData.data ?? []).map(
+        (project): ProjectWithProducts => ({
+          ...project,
+          project_products: (project.project_products ?? []).map((pp) => ({
+            ...pp,
+            product: pp.product ? withDefaultProductCeeConfig(pp.product) : null,
+          })),
+        })
+      );
       const sites = sitesData.data ?? [];
       const rdv = leadsRdv.data ?? [];
       const quotes = pendingQuotes.data ?? [];
@@ -351,7 +283,10 @@ export const useDashboardMetrics = (
         })
         .reduce((acc, project) => acc + (project.surface_isolee_m2 ?? 0), 0);
 
-      const totalMwh = calculateTotalMwh(projets as any);
+      const energyAggregation = aggregateEnergyByCategory(projets, {
+        shouldIncludeProject: (project) => isStatusValue(PROJECT_SURFACE_STATUSES, project.status),
+      });
+      const totalMwh = energyAggregation.totalMwh;
 
       const qualified = qualifiedLeads.data ?? [];
       const accepted = acceptedProjects.data ?? [];
@@ -396,6 +331,7 @@ export const useDashboardMetrics = (
         rdvProgrammesSemaine: rdv.length,
         surfaceIsoleeMois: surfaceIsolee,
         totalMwh: Number.isFinite(totalMwh) ? Number(totalMwh.toFixed(2)) : 0,
+        energyByCategory: energyAggregation.breakdown,
         tauxConversion: {
           rate: Number(currentRate.toFixed(1)),
           delta: delta === null ? null : Number(delta.toFixed(1)),
