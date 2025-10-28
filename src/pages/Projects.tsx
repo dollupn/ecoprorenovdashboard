@@ -7,6 +7,7 @@ import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { AddProjectDialog, type ProjectFormValues } from "@/components/projects/AddProjectDialog";
 import {
   AddQuoteDialog,
@@ -469,6 +470,7 @@ const Projects = () => {
     project: ProjectWithRelations;
     displayedProducts: ProjectProduct[];
     dynamicFieldEntries: ReturnType<typeof getDynamicFieldEntries>[];
+    displayedValorisationEntries: PrimeCeeValorisationEntry[];
     searchableText: string;
     clientName: string;
     projectEmail: string | null;
@@ -531,6 +533,7 @@ const Projects = () => {
         project,
         displayedProducts,
         dynamicFieldEntries,
+        displayedValorisationEntries: projectValorisationSummaries[project.id]?.displayedPrimeEntries ?? [],
         searchableText: searchable,
         clientName,
         projectEmail,
@@ -977,7 +980,7 @@ const Projects = () => {
                       typeof item.quantity === "number" && Number.isFinite(item.quantity)
                         ? item.quantity
                         : 1,
-                    dynamic_params: item.dynamic_params ?? {},
+                    dynamic_params: (item.dynamic_params ?? {}) as Record<string, any>,
                   }));
 
                   const editInitialValues: Partial<ProjectFormValues> = {

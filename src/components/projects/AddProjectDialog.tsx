@@ -1359,7 +1359,7 @@ export const AddProjectDialog = ({
         siren: normalizedSiren && normalizedSiren.length > 0 ? normalizedSiren : null,
         building_type: data.building_type || undefined,
         usage: data.usage || undefined,
-        prime_cee: sanitizedPrimeCee,
+        prime_cee: primeCeeEuro,
         delegate_id: data.delegate_id,
         signatory_name: data.signatory_name || undefined,
         signatory_title: data.signatory_title || undefined,
@@ -1454,7 +1454,6 @@ export const AddProjectDialog = ({
           {
             user_id: user.id,
             org_id: currentOrgId,
-            project_ref,
             client_name,
             client_first_name: clientFirstName,
             client_last_name: clientLastName,
@@ -1498,7 +1497,7 @@ export const AddProjectDialog = ({
         project_id: createdProject.id,
         product_id: p.product_id,
         quantity: p.quantity,
-        dynamic_params: p.dynamic_params || {},
+        dynamic_params: (p.dynamic_params || {}) as Record<string, any>,
       }));
 
       const { error: productsInsertError } = await supabase
