@@ -850,10 +850,17 @@ const Projects = () => {
           })
       : [];
 
+    const projectRef = values.project_ref?.trim?.() ?? "";
+    const clientName = values.client_name?.trim?.() ?? "";
+    const matchedProject = projectOptions.find(
+      (option) => option.project_ref === projectRef,
+    );
+    const projectId = typeof matchedProject?.id === "string" ? matchedProject.id : null;
+
     const siteData = {
       site_ref: values.site_ref,
-      project_ref: values.project_ref,
-      client_name: values.client_name,
+      project_ref: projectRef,
+      client_name: clientName,
       product_name: values.product_name?.trim() || "",
       address: values.address,
       city: values.city,
@@ -879,6 +886,7 @@ const Projects = () => {
       user_id: user.id,
       created_by: user.id,
       org_id: currentOrgId,
+      project_id: projectId,
     };
 
     try {
@@ -892,16 +900,19 @@ const Projects = () => {
 
       setSiteDialogOpen(false);
       setSiteInitialValues(undefined);
-      
-      // Navigate to sites page
-      navigate("/sites");
     } catch (error) {
       console.error("Error saving site:", error);
       showToast("Erreur", {
         description: "Impossible de créer le chantier.",
       });
     }
-  }, [user, currentOrgId, navigate, memberIdByName, memberNameById]);
+  }, [
+    user,
+    currentOrgId,
+    projectOptions,
+    memberIdByName,
+    memberNameById,
+  ]);
 
   if (isLoading || membersLoading) {
     return (
