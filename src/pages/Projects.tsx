@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { KeyboardEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -476,6 +477,7 @@ const Projects = () => {
     projectEmail: string | null;
     surfaceFacturee: number;
     category: ProjectCategoryValue | null;
+    shouldHideSurfaceFactureeRow: boolean;
   };
 
   const processedProjects = useMemo<ProcessedProject[]>(() => {
@@ -529,6 +531,25 @@ const Projects = () => {
         .join(" ")
         .toLowerCase();
 
+      const surfaceFactureeValue = surfaceFactureeByProject[project.id] ?? 0;
+      const category = deriveProjectCategory(project, project.project_products ?? []);
+      const hasEnCode = displayedProducts.some((item) =>
+        (item.product?.code ?? "").toUpperCase().includes("EN"),
+      );
+      const hasSurfaceIsolee =
+        typeof project.surface_isolee_m2 === "number" && Number.isFinite(project.surface_isolee_m2);
+      const surfaceIsoleeValue = hasSurfaceIsolee ? (project.surface_isolee_m2 as number) : null;
+      const hasSurfaceFacturee =
+        typeof surfaceFactureeValue === "number" &&
+        Number.isFinite(surfaceFactureeValue) &&
+        surfaceFactureeValue > 0;
+      const shouldHideSurfaceFactureeRow =
+        (category === "EN" || hasEnCode) &&
+        hasSurfaceIsolee &&
+        hasSurfaceFacturee &&
+        surfaceIsoleeValue !== null &&
+        Math.round(surfaceIsoleeValue) === Math.round(surfaceFactureeValue);
+
       return {
         project,
         displayedProducts,
@@ -537,8 +558,9 @@ const Projects = () => {
         searchableText: searchable,
         clientName,
         projectEmail,
-        surfaceFacturee: surfaceFactureeByProject[project.id] ?? 0,
-        category: deriveProjectCategory(project, project.project_products ?? []),
+        surfaceFacturee: surfaceFactureeValue,
+        category,
+        shouldHideSurfaceFactureeRow,
       } satisfies ProcessedProject;
     });
   }, [projects, projectValorisationSummaries, surfaceFactureeByProject]);
@@ -688,8 +710,10 @@ const Projects = () => {
       isolation_utilisee_m2: 0,
       montant_commission: 0,
       valorisation_cee: valorisationTotalEur,
-      team_members: [{ name: "" }],
+      subcontractor_id: null,
+      team_members: [],
       additional_costs: [],
+      subcontractor_payment_confirmed: false,
     });
     setSiteDialogOpen(true);
   };
@@ -716,7 +740,9 @@ const Projects = () => {
   const handleSubmitSite = useCallback(async (values: SiteFormValues) => {
     if (!user || !currentOrgId) return;
 
-    const sanitizedTeam = values.team_members.map((member) => member.name.trim()).filter(Boolean);
+    const sanitizedTeam = (values.team_members ?? [])
+      .map((member) => member.name.trim())
+      .filter(Boolean);
     const sanitizedCosts = values.additional_costs
       ? values.additional_costs
           .filter((cost) => cost.label.trim().length > 0)
@@ -753,9 +779,11 @@ const Projects = () => {
       isolation_utilisee_m2: values.isolation_utilisee_m2,
       montant_commission: values.montant_commission,
       valorisation_cee: values.valorisation_cee,
+      subcontractor_payment_confirmed: values.subcontractor_payment_confirmed,
       notes: values.notes?.trim() || null,
       team_members: sanitizedTeam.length > 0 ? sanitizedTeam : null,
       additional_costs: sanitizedCosts.length > 0 ? sanitizedCosts : [],
+      subcontractor_id: values.subcontractor_id ?? null,
       user_id: user.id,
       org_id: currentOrgId,
     };
@@ -916,16 +944,14 @@ const Projects = () => {
                   clientName,
                   projectEmail,
                   surfaceFacturee,
+                  shouldHideSurfaceFactureeRow,
+                  category,
                 }) => {
                   const statusConfig = statusMap[project.status ?? ""];
                   const badgeStyle = getProjectStatusBadgeStyle(statusConfig?.color);
                   const statusLabel = statusConfig?.label ?? project.status ?? "Statut";
-                  const category =
-                    displayedProducts[0]?.product?.category ??
-                    project.project_products?.[0]?.product?.category ??
-                    null;
-                  const categoryKey = (category ?? "") as keyof typeof CATEGORY_METADATA;
-                  const categoryMetadata = CATEGORY_METADATA[categoryKey] ?? DEFAULT_CATEGORY_METADATA;
+                  const categoryMetadata =
+                    (category ? CATEGORY_METADATA[category] : null) ?? DEFAULT_CATEGORY_METADATA;
                   const CategoryIcon = categoryMetadata.icon;
                   const totalPrime =
                     projectValorisationSummaries[project.id]?.totalPrime ?? project.prime_cee ?? 0;
@@ -974,6 +1000,7 @@ const Projects = () => {
                   const endDate = project.date_fin_prevue ? new Date(project.date_fin_prevue) : null;
                   const projectCostValue = project.estimated_value ?? null;
                   const primeCeeEuro = resolvePrimeCeeEuro(project);
+                  const showSurfaceFacturee = surfaceFacturee > 0 && !shouldHideSurfaceFactureeRow;
                   const projectProductsForForm = (project.project_products ?? []).map((item) => ({
                     product_id: item.product_id ?? "",
                     quantity:
@@ -1013,6 +1040,17 @@ const Projects = () => {
                     lead_id: project.lead_id ?? undefined,
                   };
 
+                  const handleCardActivation = () => {
+                    handleViewProject(project.id);
+                  };
+
+                  const handleCardKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      handleCardActivation();
+                    }
+                  };
+
                   return (
                     <Card
                       key={project.id}
@@ -1020,6 +1058,10 @@ const Projects = () => {
                         "relative overflow-hidden border border-border/60 bg-card shadow-card transition-shadow duration-300",
                         "hover:shadow-elevated focus-within:ring-2 focus-within:ring-primary/40 focus-within:ring-offset-2",
                       )}
+                      role="button"
+                      tabIndex={0}
+                      onClick={handleCardActivation}
+                      onKeyDown={handleCardKeyDown}
                     >
                       <span
                         aria-hidden="true"
@@ -1066,6 +1108,9 @@ const Projects = () => {
                                     variant="ghost"
                                     size="sm"
                                     className="gap-1 text-muted-foreground hover:text-primary"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                    }}
                                   >
                                     <Pencil className="h-4 w-4" />
                                     Modifier
@@ -1083,16 +1128,22 @@ const Projects = () => {
                             </div>
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                               {project.phone ? (
-                                <span className="flex items-center gap-1">
+                                <a
+                                  href={`tel:${project.phone}`}
+                                  className="flex items-center gap-1"
+                                >
                                   <Phone aria-hidden="true" className="h-4 w-4" />
                                   {project.phone}
-                                </span>
+                                </a>
                               ) : null}
                               {projectEmail ? (
-                                <span className="flex items-center gap-1">
+                                <a
+                                  href={`mailto:${projectEmail}`}
+                                  className="flex items-center gap-1"
+                                >
                                   <Mail aria-hidden="true" className="h-4 w-4" />
                                   {projectEmail}
-                                </span>
+                                </a>
                               ) : null}
                             </div>
                           </div>
@@ -1152,7 +1203,7 @@ const Projects = () => {
                                 </span>
                               </div>
                             ) : null}
-                            {surfaceFacturee ? (
+                            {showSurfaceFacturee ? (
                               <div className="space-y-1">
                                 <span className="text-muted-foreground">Surface facturée</span>
                                 <span className="font-medium text-foreground">
@@ -1160,26 +1211,30 @@ const Projects = () => {
                                 </span>
                               </div>
                             ) : null}
-                            {startDate ? (
-                              <div className="space-y-1">
-                                <span className="flex items-center gap-2 text-muted-foreground">
+                            {startDate || endDate ? (
+                              <div className="space-y-1 sm:col-span-2">
+                                <div className="flex items-center gap-2 text-muted-foreground">
                                   <Calendar aria-hidden="true" className="h-4 w-4" />
-                                  Début
-                                </span>
-                                <span className="font-medium text-foreground">
-                                  {startDate.toLocaleDateString("fr-FR")}
-                                </span>
-                              </div>
-                            ) : null}
-                            {endDate ? (
-                              <div className="space-y-1">
-                                <span className="flex items-center gap-2 text-muted-foreground">
-                                  <Calendar aria-hidden="true" className="h-4 w-4" />
-                                  Fin prévue
-                                </span>
-                                <span className="font-medium text-foreground">
-                                  {endDate.toLocaleDateString("fr-FR")}
-                                </span>
+                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                    {startDate ? (
+                                      <span className="flex items-center gap-1">
+                                        <span>Début :</span>
+                                        <span className="font-medium text-foreground">
+                                          {startDate.toLocaleDateString("fr-FR")}
+                                        </span>
+                                      </span>
+                                    ) : null}
+                                    {startDate && endDate ? <span aria-hidden="true">•</span> : null}
+                                    {endDate ? (
+                                      <span className="flex items-center gap-1">
+                                        <span>Fin prévue :</span>
+                                        <span className="font-medium text-foreground">
+                                          {endDate.toLocaleDateString("fr-FR")}
+                                        </span>
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                </div>
                               </div>
                             ) : null}
                           </div>
@@ -1200,7 +1255,7 @@ const Projects = () => {
                             </dd>
                           </div>
                           <div>
-                            <dt className="text-sm font-medium text-muted-foreground">MWh généré par projet</dt>
+                            <dt className="text-sm font-medium text-muted-foreground">MWh généré</dt>
                             <dd className="mt-1 text-base font-semibold text-foreground">
                               {formatDecimal(totalValorisationMwh)} MWh
                             </dd>
@@ -1286,16 +1341,10 @@ const Projects = () => {
                             size="sm"
                             variant="outline"
                             className="w-full sm:w-auto"
-                            onClick={() => handleViewProject(project.id)}
-                          >
-                            <Eye aria-hidden="true" className="mr-2 h-4 w-4" />
-                            Voir
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="w-full sm:w-auto"
-                            onClick={() => handleCreateQuote(project)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleCreateQuote(project);
+                            }}
                           >
                             <FileText aria-hidden="true" className="mr-2 h-4 w-4" />
                             Devis
@@ -1304,7 +1353,10 @@ const Projects = () => {
                             size="sm"
                             variant="secondary"
                             className="w-full sm:w-auto"
-                            onClick={() => handleCreateSite(project)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleCreateSite(project);
+                            }}
                           >
                             <Hammer aria-hidden="true" className="mr-2 h-4 w-4" />
                             Créer chantier
@@ -1342,6 +1394,7 @@ const Projects = () => {
                         projectEmail,
                         surfaceFacturee,
                         category,
+                        shouldHideSurfaceFactureeRow,
                       }) => {
                         const statusConfig = statusMap[project.status ?? ""];
                         const badgeStyle = getProjectStatusBadgeStyle(statusConfig?.color);
@@ -1371,16 +1424,22 @@ const Projects = () => {
                               {(project.phone || projectEmail) && (
                                 <div className="mt-2 space-y-1 text-xs text-muted-foreground">
                                   {project.phone && (
-                                    <div className="flex items-center gap-1">
+                                    <a
+                                      href={`tel:${project.phone}`}
+                                      className="flex items-center gap-1"
+                                    >
                                       <Phone className="h-3.5 w-3.5" />
                                       {project.phone}
-                                    </div>
+                                    </a>
                                   )}
                                   {projectEmail && (
-                                    <div className="flex items-center gap-1">
+                                    <a
+                                      href={`mailto:${projectEmail}`}
+                                      className="flex items-center gap-1"
+                                    >
                                       <Mail className="h-3.5 w-3.5" />
                                       {projectEmail}
-                                    </div>
+                                    </a>
                                   )}
                                 </div>
                               )}
@@ -1409,7 +1468,7 @@ const Projects = () => {
                                   ? `${(project as Project & { address?: string }).address} • ${project.postal_code} ${project.city}`
                                   : `${project.city} (${project.postal_code})`}
                               </div>
-                              {surfaceFacturee > 0 && (
+                              {surfaceFacturee > 0 && !shouldHideSurfaceFactureeRow && (
                                 <div className="mt-2 text-xs text-muted-foreground">
                                   Surface facturée :{" "}
                                   <span className="font-medium text-foreground">
