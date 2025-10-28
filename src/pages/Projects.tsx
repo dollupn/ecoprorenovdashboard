@@ -297,6 +297,13 @@ const Projects = () => {
   const currentMember = members.find((member) => member.user_id === user?.id);
   const isAdmin = currentMember?.role === "admin" || currentMember?.role === "owner";
 
+  const inactiveProjectStatuses = useMemo(() => {
+    const inactiveValues = projectStatuses
+      .map((status) => status.value)
+      .filter((status) => ["LIVRE", "ANNULE"].includes(status));
+    return new Set(inactiveValues);
+  }, [projectStatuses]);
+
   const memberNameById = useMemo(() => {
     return members.reduce<Record<string, string>>((acc, member) => {
       if (!member?.user_id) {
@@ -633,7 +640,7 @@ const Projects = () => {
     let base = processedProjects;
 
     if (statusFilter === "active") {
-      base = base.filter((item) => item.project.status !== "LIVRE");
+      base = base.filter((item) => !inactiveProjectStatuses.has(item.project.status ?? ""));
     } else if (statusFilter !== "all") {
       base = base.filter((item) => (item.project.status ?? "") === statusFilter);
     }
@@ -651,7 +658,14 @@ const Projects = () => {
     }
 
     return base.filter((item) => item.searchableText.includes(normalizedSearch));
-  }, [searchTerm, processedProjects, assignedFilter, statusFilter, categoryFilter]);
+  }, [
+    searchTerm,
+    processedProjects,
+    assignedFilter,
+    statusFilter,
+    categoryFilter,
+    inactiveProjectStatuses,
+  ]);
 
   const handleStatusFilterChange = useCallback(
     (value: string) => {
