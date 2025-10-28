@@ -369,11 +369,11 @@ export const calcCeeLighting = ({
 
   const adjustedBase =
     !warningMissingBase && basePerLuminaire
-      ? (basePerLuminaire * bonification * ledWatt) / DEFAULT_LED_WATT
+      ? (basePerLuminaire * bonification * ledWatt) / 1000
       : 0;
 
   const valorisationPerUnitMwh =
-    adjustedBase > 0 ? (adjustedBase * coefficient) / 1000 : 0;
+    adjustedBase > 0 ? adjustedBase * coefficient : 0;
 
   const valorisationPerUnitEur = valorisationPerUnitMwh * delegatePrice;
   const valorisationTotalMwh = valorisationPerUnitMwh * nombreLed;
