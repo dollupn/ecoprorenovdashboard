@@ -27,14 +27,15 @@ import {
 import {
   Search,
   Filter,
-  Calendar,
-  MapPin,
-  Euro,
   FileText,
   Eye,
-  Phone,
   Hammer,
-  HandCoins,
+  Lightbulb,
+  Thermometer,
+  Layers,
+  MapPin,
+  Calendar,
+  Phone,
   Mail,
   UserRound,
 } from "lucide-react";
@@ -51,15 +52,15 @@ import {
 } from "@/components/ui/select";
 import {
   getDynamicFieldEntries,
-  formatDynamicFieldValue,
   getDynamicFieldNumericValue,
+  formatDynamicFieldValue,
 } from "@/lib/product-params";
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 import { useOrganizationPrimeSettings } from "@/features/organizations/useOrganizationPrimeSettings";
+import { cn } from "@/lib/utils";
 import {
   buildPrimeCeeEntries,
   computePrimeCee,
-  getValorisationLabel,
   withDefaultProductCeeConfig,
   type PrimeCeeComputation,
   type PrimeCeeProductCatalogEntry,
@@ -110,7 +111,6 @@ const decimalFormatter = new Intl.NumberFormat("fr-FR", {
   minimumFractionDigits: 0,
   maximumFractionDigits: 2,
 });
-
 const formatCurrency = (value: number) => currencyFormatter.format(value);
 const formatDecimal = (value: number) => decimalFormatter.format(value);
 
@@ -133,6 +133,28 @@ const buildProjectProductDisplayMap = (
     return acc;
   }, {});
 };
+
+const CATEGORY_METADATA = {
+  EQ: {
+    icon: Lightbulb,
+    iconWrapper: "bg-yellow-100 text-yellow-800 ring-1 ring-inset ring-yellow-200",
+    accentBar: "from-yellow-200/70 via-yellow-200/0 to-transparent",
+    srLabel: "Catégorie EQ",
+  },
+  EN: {
+    icon: Thermometer,
+    iconWrapper: "bg-sky-100 text-sky-800 ring-1 ring-inset ring-sky-200",
+    accentBar: "from-sky-200/70 via-sky-200/0 to-transparent",
+    srLabel: "Catégorie EN",
+  },
+} as const;
+
+const DEFAULT_CATEGORY_METADATA = {
+  icon: Layers,
+  iconWrapper: "bg-muted text-muted-foreground",
+  accentBar: "from-muted/60 via-muted/0 to-transparent",
+  srLabel: "Catégorie inconnue",
+} as const;
 
 const Projects = () => {
   const navigate = useNavigate();
@@ -330,7 +352,6 @@ const Projects = () => {
     displayedProducts: ProjectProduct[];
     dynamicFieldEntries: ReturnType<typeof getDynamicFieldEntries>[];
     searchableText: string;
-    displayedValorisationEntries: PrimeCeeProductResult[];
     clientName: string;
     projectEmail: string | null;
     surfaceFacturee: number;
@@ -351,11 +372,6 @@ const Projects = () => {
         null;
 
       const valorisationSummary = projectValorisationSummaries[project.id];
-      const valorisationPrimeEntries = valorisationSummary?.displayedPrimeEntries ?? [];
-      const valorisationProductEntries = valorisationSummary?.valorisationProductEntries ?? [];
-      const displayedValorisationEntries =
-        valorisationPrimeEntries.length > 0 ? valorisationPrimeEntries : valorisationProductEntries;
-
       const dynamicValues = dynamicFieldEntries
         .flatMap((entries) =>
           entries
@@ -384,6 +400,10 @@ const Projects = () => {
         projectEmail ?? "",
         project.delegate?.name ?? "",
         dynamicValues,
+        valorisationSummary?.totalPrime ? String(valorisationSummary.totalPrime) : "",
+        valorisationSummary?.totalValorisationMwh
+          ? String(valorisationSummary.totalValorisationMwh)
+          : "",
       ]
         .join(" ")
         .toLowerCase();
@@ -392,7 +412,6 @@ const Projects = () => {
         project,
         displayedProducts,
         dynamicFieldEntries,
-        displayedValorisationEntries,
         searchableText: searchable,
         clientName,
         projectEmail,
@@ -670,292 +689,310 @@ const Projects = () => {
         </Card>
 
         {/* Projects Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
           {filteredProjects.map(
             ({
               project,
               displayedProducts,
               dynamicFieldEntries,
-              displayedValorisationEntries,
               clientName,
               projectEmail,
+              surfaceFacturee,
             }) => {
               const statusConfig = statusMap[project.status ?? ""];
               const badgeStyle = getProjectStatusBadgeStyle(statusConfig?.color);
               const statusLabel = statusConfig?.label ?? project.status ?? "Statut";
-              const projectCostValue = project.estimated_value ?? null;
+              const category =
+                displayedProducts[0]?.product?.category ??
+                project.project_products?.[0]?.product?.category ??
+                null;
+              const categoryKey = (category ?? "") as keyof typeof CATEGORY_METADATA;
+              const categoryMetadata = CATEGORY_METADATA[categoryKey] ?? DEFAULT_CATEGORY_METADATA;
+              const CategoryIcon = categoryMetadata.icon;
+              const totalPrime =
+                projectValorisationSummaries[project.id]?.totalPrime ?? project.prime_cee ?? 0;
+              const totalValorisationMwh =
+                projectValorisationSummaries[project.id]?.totalValorisationMwh ?? 0;
+              const externalReference = project.external_reference?.trim();
+              const sourceLabel = project.source?.trim();
+              const assignedTo = project.assigned_to?.trim();
+              const delegateName = project.delegate?.name?.trim();
+              const delegatePrice = project.delegate?.price_eur_per_mwh;
+              const formattedDelegatePrice =
+                typeof delegatePrice === "number" ? formatCurrency(delegatePrice) : null;
+              const trimmedClientName = clientName?.trim() ?? "";
+              const trimmedCompany = project.company?.trim() ?? "";
+              const trimmedFallbackClient = project.client_name?.trim() ?? "";
+              const contactDisplay =
+                trimmedClientName || trimmedFallbackClient || trimmedCompany || "Client non renseigné";
+              const companyDisplay =
+                trimmedCompany && trimmedCompany.toLowerCase() !== contactDisplay.toLowerCase()
+                  ? trimmedCompany
+                  : "";
+              const productName =
+                project.product_name?.trim() ||
+                displayedProducts[0]?.product?.name ||
+                displayedProducts[0]?.product?.code ||
+                null;
+              const addressValue = (project as Project & { address?: string | null }).address?.trim();
+              const cityParts = [project.postal_code, project.city].filter((part) => part && part.length > 0);
+              const cityDisplay = cityParts.join(" ");
+              const formattedAddress = addressValue
+                ? cityDisplay
+                  ? `${addressValue} • ${cityDisplay}`
+                  : addressValue
+                : cityDisplay;
+              const dynamicFieldItems = dynamicFieldEntries.flatMap((entries, index) =>
+                entries.map((field) => {
+                  const value = formatDynamicFieldValue(field);
+                  return {
+                    key: `${project.id}-${displayedProducts[index]?.product?.code ?? index}-${field.name}`,
+                    label: field.label,
+                    value: String(value),
+                  };
+                }),
+              );
+              const startDate = project.date_debut_prevue ? new Date(project.date_debut_prevue) : null;
+              const endDate = project.date_fin_prevue ? new Date(project.date_fin_prevue) : null;
 
-            return (
-              <Card
-                key={project.id}
-                className="shadow-card bg-gradient-card border border-black/10 transition-all duration-300 hover:shadow-elevated dark:border-white/10"
-              >
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <CardTitle className="text-lg font-bold text-primary">
-                        {project.project_ref}
-                      </CardTitle>
-                      <p className="text-sm text-muted-foreground mt-1 space-y-1">
-                        <span className="block">
-                          {clientName}
-                          {project.company && (
-                            <span className="block text-xs">{project.company}</span>
-                          )}
-                          {project.siren && (
-                            <span className="block text-xs text-muted-foreground/80">
-                              SIREN : {project.siren}
-                            </span>
-                          )}
-                          {project.source && (
-                            <span className="block text-xs text-muted-foreground/80">
-                              Source : {project.source}
-                            </span>
-                          )}
-                        </span>
-                        {project.phone && (
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground/80">
-                            <Phone className="w-3.5 h-3.5" />
-                            {project.phone}
-                          </span>
-                        )}
-                        {projectEmail && (
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground/80">
-                            <Mail className="w-3.5 h-3.5" />
-                            {projectEmail}
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                    <Badge variant="outline" style={badgeStyle}>
-                      {statusLabel}
-                    </Badge>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="space-y-4">
-                  {/* Product & Location */}
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap gap-2">
-                      {displayedProducts.length ? (
-                        displayedProducts.map((item, index) => (
-                          <Badge
-                            key={`${project.id}-${item.product?.code}-${index}`}
-                            variant="secondary"
-                            className="text-xs font-medium"
+              return (
+                <Card
+                  key={project.id}
+                  className={cn(
+                    "relative overflow-hidden border border-border/60 bg-card shadow-card transition-shadow duration-300",
+                    "hover:shadow-elevated focus-within:ring-2 focus-within:ring-primary/40 focus-within:ring-offset-2",
+                  )}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r",
+                      categoryMetadata.accentBar,
+                    )}
+                  />
+                  <CardHeader className="flex flex-col gap-4 pb-4">
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-3">
+                          <span
+                            className={cn(
+                              "flex h-10 w-10 items-center justify-center rounded-full",
+                              categoryMetadata.iconWrapper,
+                            )}
                           >
-                            {item.product?.code}
-                          </Badge>
-                        ))
-                      ) : (
-                        <span className="text-sm text-muted-foreground">
-                          Aucun produit à afficher
-                        </span>
-                      )}
+                            <CategoryIcon aria-hidden="true" className="h-5 w-5" />
+                            <span className="sr-only">{categoryMetadata.srLabel}</span>
+                          </span>
+                          <div className="space-y-1">
+                            <CardTitle className="text-lg font-semibold text-foreground">
+                              {project.project_ref || "Sans référence"}
+                            </CardTitle>
+                            {productName ? (
+                              <p className="text-sm font-medium text-muted-foreground">{productName}</p>
+                            ) : null}
+                          </div>
+                        </div>
+                        <Badge variant="outline" style={badgeStyle}>
+                          {statusLabel}
+                        </Badge>
+                      </div>
+                      <div className="space-y-1 text-sm text-muted-foreground">
+                        <p className="font-medium text-foreground">{contactDisplay}</p>
+                        {companyDisplay ? <p>{companyDisplay}</p> : null}
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          {project.siren ? <span>SIREN : {project.siren}</span> : null}
+                          {sourceLabel ? <span>Source : {sourceLabel}</span> : null}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          {project.phone ? (
+                            <span className="flex items-center gap-1">
+                              <Phone aria-hidden="true" className="h-4 w-4" />
+                              {project.phone}
+                            </span>
+                          ) : null}
+                          {projectEmail ? (
+                            <span className="flex items-center gap-1">
+                              <Mail aria-hidden="true" className="h-4 w-4" />
+                              {projectEmail}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <MapPin className="w-4 h-4" />
-                      {(project as Project & { address?: string }).address
-                        ? `${(project as Project & { address?: string }).address} • ${project.postal_code} ${project.city}`
-                        : `${project.city} (${project.postal_code})`}
-                    </div>
+                  </CardHeader>
 
-                    {displayedProducts.map((item, index) => {
-                      const dynamicFields = dynamicFieldEntries[index];
-
-                      if (!dynamicFields?.length) {
-                        return null;
-                      }
-
-                      return (
-                        <div
-                          key={`${project.id}-dynamic-${index}`}
-                          className="space-y-1 text-xs text-muted-foreground"
-                        >
-                          {dynamicFields.map((field) => (
-                            <div
-                              key={`${project.id}-${item.product?.code}-${field.label}`}
-                              className="flex items-center justify-between gap-2"
+                  <CardContent className="space-y-6">
+                    <div className="space-y-3">
+                      {displayedProducts.length ? (
+                        <div className="flex flex-wrap gap-2">
+                          {displayedProducts.map((item, index) => (
+                            <Badge
+                              key={`${project.id}-${item.product?.code ?? index}`}
+                              variant="secondary"
+                              className="text-xs font-medium"
                             >
-                              <span>{field.label}</span>
-                              <span className="font-medium text-foreground">
-                                {String(formatDynamicFieldValue(field))}
-                              </span>
-                            </div>
+                              {item.product?.code ?? "Produit"}
+                            </Badge>
                           ))}
                         </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Technical Details */}
-                  {(project.surface_batiment_m2 || project.surface_isolee_m2) && (
-                    <div className="space-y-2">
-                      {project.surface_batiment_m2 && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Surface bâtiment:</span>
-                          <span className="font-medium">{project.surface_batiment_m2} m²</span>
+                      ) : null}
+                      {formattedAddress ? (
+                        <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                          <MapPin aria-hidden="true" className="mt-0.5 h-4 w-4" />
+                          <span>{formattedAddress}</span>
                         </div>
-                      )}
-                      {project.surface_isolee_m2 && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Surface isolée:</span>
-                          <span className="font-medium">{project.surface_isolee_m2} m²</span>
-                        </div>
-                      )}
+                      ) : null}
+                      {dynamicFieldItems.length > 0 ? (
+                        <dl className="grid gap-3 text-sm sm:grid-cols-2">
+                          {dynamicFieldItems.map((item) => (
+                            <div key={item.key} className="flex items-center justify-between gap-3">
+                              <dt className="text-muted-foreground">{item.label}</dt>
+                              <dd className="font-medium text-right text-foreground">{item.value}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      ) : null}
                     </div>
-                  )}
 
-                  {/* Timeline */}
-                  {project.date_debut_prevue && (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-sm">
-                        <Calendar className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-muted-foreground">Début:</span>
-                        <span className="font-medium">
-                          {new Date(project.date_debut_prevue).toLocaleDateString("fr-FR")}
-                        </span>
-                      </div>
-                      {project.date_fin_prevue && (
-                        <div className="flex items-center gap-2 text-sm ml-6">
-                          <span className="text-muted-foreground">Fin prévue:</span>
-                          <span className="font-medium">
-                            {new Date(project.date_fin_prevue).toLocaleDateString("fr-FR")}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Value & Assignment */}
-                  <div className="pt-2 border-t space-y-2">
-                    {typeof projectCostValue === "number" && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Coût du chantier:</span>
-                        <div className="flex items-center gap-1 text-sm font-bold text-primary">
-                          <Euro className="w-4 h-4" />
-                          {formatCurrency(projectCostValue)}
-                        </div>
-                      </div>
-                    )}
-                    {typeof project.prime_cee === "number" && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Prime CEE:</span>
-                        <div className="flex items-center gap-1 text-sm font-bold text-emerald-600">
-                          <HandCoins className="w-4 h-4" />
-                          {formatCurrency(project.prime_cee)}
-                        </div>
-                      </div>
-                    )}
-                    {displayedValorisationEntries.map((entry) => {
-                      const valorisationLabel = (entry.valorisationLabel || "Valorisation m²/LED").trim();
-                      return (
-                        <div
-                          key={`${project.id}-valorisation-${entry.projectProductId}`}
-                          className="space-y-1"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                              {valorisationLabel}
-                              {entry.productCode ? ` (${entry.productCode})` : ""}
-                            </span>
-                            <span className="text-sm font-semibold text-emerald-600 text-right">
-                              {formatCurrency(entry.valorisationPerUnitEur ?? 0)} / {entry.multiplierLabel}
+                    {(project.surface_batiment_m2 ||
+                      project.surface_isolee_m2 ||
+                      surfaceFacturee ||
+                      startDate ||
+                      endDate) && (
+                      <div className="grid gap-4 text-sm sm:grid-cols-2">
+                        {project.surface_batiment_m2 ? (
+                          <div className="space-y-1">
+                            <span className="text-muted-foreground">Surface bâtiment</span>
+                            <span className="font-medium text-foreground">
+                              {formatDecimal(project.surface_batiment_m2)} m²
                             </span>
                           </div>
-                          <div className="flex items-start justify-between gap-3 text-xs text-muted-foreground">
-                            <span>
-                              {`${formatDecimal(entry.valorisationPerUnitMwh)} MWh × ${entry.multiplierLabel} = ${formatDecimal(
-                                entry.valorisationTotalMwh,
-                              )} MWh`}
-                            </span>
-                            <span className="font-semibold text-amber-600 text-right">
-                              Prime calculée : {formatCurrency(entry.valorisationTotalEur ?? entry.totalPrime ?? 0)}
+                        ) : null}
+                        {project.surface_isolee_m2 ? (
+                          <div className="space-y-1">
+                            <span className="text-muted-foreground">Surface isolée</span>
+                            <span className="font-medium text-foreground">
+                              {formatDecimal(project.surface_isolee_m2)} m²
                             </span>
                           </div>
+                        ) : null}
+                        {surfaceFacturee ? (
+                          <div className="space-y-1">
+                            <span className="text-muted-foreground">Surface facturée</span>
+                            <span className="font-medium text-foreground">
+                              {formatDecimal(surfaceFacturee)} m²
+                            </span>
+                          </div>
+                        ) : null}
+                        {startDate ? (
+                          <div className="space-y-1">
+                            <span className="flex items-center gap-2 text-muted-foreground">
+                              <Calendar aria-hidden="true" className="h-4 w-4" />
+                              Début
+                            </span>
+                            <span className="font-medium text-foreground">
+                              {startDate.toLocaleDateString("fr-FR")}
+                            </span>
+                          </div>
+                        ) : null}
+                        {endDate ? (
+                          <div className="space-y-1">
+                            <span className="flex items-center gap-2 text-muted-foreground">
+                              <Calendar aria-hidden="true" className="h-4 w-4" />
+                              Fin prévue
+                            </span>
+                            <span className="font-medium text-foreground">
+                              {endDate.toLocaleDateString("fr-FR")}
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+
+                    <dl className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <dt className="text-sm font-medium text-muted-foreground">Prime CEE totale</dt>
+                        <dd className="mt-1 text-base font-semibold text-emerald-600">
+                          {formatCurrency(totalPrime)}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-sm font-medium text-muted-foreground">Référence externe</dt>
+                        <dd className="mt-1 text-base text-foreground">
+                          {externalReference && externalReference.length > 0
+                            ? externalReference
+                            : "Non renseignée"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-sm font-medium text-muted-foreground">MWh généré par projet</dt>
+                        <dd className="mt-1 text-base font-semibold text-foreground">
+                          {formatDecimal(totalValorisationMwh)} MWh
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-sm font-medium text-muted-foreground">Assigné à</dt>
+                        <dd className="mt-1 text-base text-foreground">
+                          {assignedTo && assignedTo.length > 0 ? assignedTo : "Non assigné"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-sm font-medium text-muted-foreground">Source</dt>
+                        <dd className="mt-1 text-base text-foreground">
+                          {sourceLabel && sourceLabel.length > 0 ? sourceLabel : "Non renseignée"}
+                        </dd>
+                      </div>
+                      {delegateName ? (
+                        <div>
+                          <dt className="text-sm font-medium text-muted-foreground">Délégataire</dt>
+                          <dd className="mt-1 text-base text-foreground">
+                            <span className="flex items-center gap-1">
+                              <UserRound aria-hidden="true" className="h-4 w-4" />
+                              <span>{delegateName}</span>
+                              {formattedDelegatePrice ? (
+                                <span className="text-xs text-muted-foreground">
+                                  ({formattedDelegatePrice} / MWh)
+                                </span>
+                              ) : null}
+                            </span>
+                          </dd>
                         </div>
-                      );
-                    })}
-                    {displayedValorisationEntries.map((entry) => (
-                      <div
-                        key={`${project.id}-valorisation-summary-${entry.projectProductId}`}
-                        className="flex items-center justify-between"
+                      ) : null}
+                    </dl>
+
+                    <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:flex-wrap">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full sm:w-auto"
+                        onClick={() => handleViewProject(project.id)}
                       >
-                        <span className="text-sm text-muted-foreground">
-                          Valorisation CEE
-                          {entry.productCode ? ` (${entry.productCode})` : ""}:
-                        </span>
-                        <span className="text-sm font-semibold text-amber-600 text-right">
-                          {formatCurrency(entry.valorisationPerUnitEur ?? 0)} / {getValorisationLabel(entry)}
-                        </span>
-                      </div>
-                    ))}
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground flex items-center gap-1">
-                        <UserRound className="w-4 h-4" />
-                        Délégataire:
-                      </span>
-                      <span className="font-medium flex items-center gap-1 text-right">
-                        {project.delegate ? (
-                          <>
-                            {project.delegate.name}
-                            {typeof project.delegate.price_eur_per_mwh === "number" ? (
-                              <span className="text-xs text-muted-foreground">
-                                ({formatCurrency(project.delegate.price_eur_per_mwh)} / MWh)
-                              </span>
-                            ) : null}
-                          </>
-                        ) : (
-                          "Non défini"
-                        )}
-                      </span>
+                        <Eye aria-hidden="true" className="mr-2 h-4 w-4" />
+                        Voir
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full sm:w-auto"
+                        onClick={() => handleCreateQuote(project)}
+                      >
+                        <FileText aria-hidden="true" className="mr-2 h-4 w-4" />
+                        Devis
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="w-full sm:w-auto"
+                        onClick={() => handleCreateSite(project)}
+                      >
+                        <Hammer aria-hidden="true" className="mr-2 h-4 w-4" />
+                        Créer chantier
+                      </Button>
                     </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Source:</span>
-                      <span className="font-medium">
-                        {project.source && project.source.trim().length > 0
-                          ? project.source
-                          : "Non renseigné"}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Assigné à:</span>
-                      <span className="font-medium">{project.assigned_to}</span>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex gap-2 pt-2 flex-wrap">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-1"
-                      onClick={() => handleViewProject(project.id)}
-                    >
-                      <Eye className="w-4 h-4 mr-1" />
-                      Voir
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleCreateQuote(project)}
-                    >
-                      <FileText className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      className="flex-1"
-                      onClick={() => handleCreateSite(project)}
-                    >
-                      <Hammer className="w-4 h-4 mr-1" />
-                      Créer chantier
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          },
+                  </CardContent>
+                </Card>
+              );
+            },
           )}
         </div>
 
