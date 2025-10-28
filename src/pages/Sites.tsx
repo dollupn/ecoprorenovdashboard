@@ -17,6 +17,7 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import type { Tables } from "@/integrations/supabase/types";
 import { useOrg } from "@/features/organizations/OrgContext";
+import { useMembers } from "@/features/members/api";
 import { getProjectClientName } from "@/lib/projects";
 import { getDynamicFieldNumericValue } from "@/lib/product-params";
 import { withDefaultProductCeeConfig, type ProductCeeConfig } from "@/lib/prime-cee-unified";
@@ -63,6 +64,7 @@ type ProjectWithProducts = Tables<"projects"> & {
 };
 
 type SiteAdditionalCostFormValue = SiteFormValues["additional_costs"][number];
+type SiteTeamMemberFormValue = SiteFormValues["team_members"][number];
 
 const createEmptyAdditionalCost = (): SiteAdditionalCostFormValue => ({
   label: "",
@@ -133,6 +135,9 @@ type Site = Tables<"sites"> & {
 };
 
 const SURFACE_FACTUREE_TARGETS = ["surface_facturee", "surface facturée"] as const;
+
+const isUuid = (value: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim());
 
 const getStatusLabel = (status: SiteStatus) => {
   const labels: Record<SiteStatus, string> = {
@@ -209,24 +214,25 @@ const Sites = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const { currentOrgId } = useOrg();
+  const { data: members = [], isLoading: membersLoading } = useMembers(currentOrgId);
 
   const { data: sites = [], isLoading, refetch } = useQuery({
-    queryKey: ["sites", user?.id],
+    queryKey: ["sites", currentOrgId],
     queryFn: async () => {
-      if (!user) return [];
+      if (!currentOrgId) return [];
 
       const { data, error } = await supabase
         .from("sites")
         .select(
           "*, subcontractor:subcontractors!sites_subcontractor_id_fkey(id, name)"
         )
-        .eq("user_id", user.id)
+        .eq("org_id", currentOrgId)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
       return data as Site[];
     },
-    enabled: !!user,
+    enabled: !!currentOrgId,
   });
 
   const { data: projects = [], isLoading: projectsLoading } = useQuery<ProjectWithProducts[]>({
@@ -253,6 +259,78 @@ const Sites = () => {
     },
     enabled: !!user,
   });
+
+  const memberNameById = useMemo(() => {
+    return members.reduce<Record<string, string>>((acc, member) => {
+      if (!member?.user_id) {
+        return acc;
+      }
+
+      const fullName = member.profiles?.full_name?.trim();
+      acc[member.user_id] = fullName && fullName.length > 0 ? fullName : "Utilisateur";
+      return acc;
+    }, {});
+  }, [members]);
+
+  const memberIdByName = useMemo(() => {
+    return Object.entries(memberNameById).reduce<Record<string, string>>((acc, [id, name]) => {
+      const normalized = name.trim().toLowerCase();
+      if (normalized.length > 0 && !acc[normalized]) {
+        acc[normalized] = id;
+      }
+      return acc;
+    }, {});
+  }, [memberNameById]);
+
+  const mapTeamMembersToFormValues = useCallback(
+    (teamMembers: string[] | null | undefined): SiteTeamMemberFormValue[] => {
+      if (!Array.isArray(teamMembers)) {
+        return [];
+      }
+
+      const uniqueMembers = new Map<string, SiteTeamMemberFormValue>();
+
+      for (const rawMember of teamMembers) {
+        if (typeof rawMember !== "string") {
+          continue;
+        }
+
+        const trimmed = rawMember.trim();
+        if (trimmed.length === 0) {
+          continue;
+        }
+
+        if (isUuid(trimmed)) {
+          if (!uniqueMembers.has(trimmed)) {
+            uniqueMembers.set(trimmed, {
+              id: trimmed,
+              name: memberNameById[trimmed] ?? trimmed,
+            });
+          }
+          continue;
+        }
+
+        const normalized = trimmed.toLowerCase();
+        const matchedId = memberIdByName[normalized];
+        if (matchedId) {
+          if (!uniqueMembers.has(matchedId)) {
+            uniqueMembers.set(matchedId, {
+              id: matchedId,
+              name: memberNameById[matchedId] ?? trimmed,
+            });
+          }
+          continue;
+        }
+
+        if (!uniqueMembers.has(trimmed)) {
+          uniqueMembers.set(trimmed, { id: trimmed, name: trimmed });
+        }
+      }
+
+      return Array.from(uniqueMembers.values());
+    },
+    [memberIdByName, memberNameById],
+  );
 
   const surfaceFactureeByProject = useMemo(() => {
     return projects.reduce<Record<string, number>>((acc, project) => {
@@ -399,9 +477,7 @@ const Sites = () => {
       notes: site.notes || "",
       subcontractor_payment_confirmed: Boolean(site.subcontractor_payment_confirmed),
       subcontractor_id: site.subcontractor_id ?? null,
-      team_members: (site.team_members && site.team_members.length > 0)
-        ? site.team_members.map((name) => ({ name }))
-        : [],
+      team_members: mapTeamMembersToFormValues(site.team_members ?? []),
       additional_costs: normalizeAdditionalCosts(site.additional_costs ?? []),
     });
     setDialogOpen(true);
@@ -411,9 +487,30 @@ const Sites = () => {
   const handleSubmitSite = async (values: SiteFormValues) => {
     if (!user || !currentOrgId) return;
 
-    const sanitizedTeam = (values.team_members ?? [])
-      .map((member) => member.name.trim())
-      .filter(Boolean);
+    const sanitizedTeam = Array.from(
+      new Set(
+        (values.team_members ?? [])
+          .map((member) => {
+            if (!member) return null;
+
+            const rawId = typeof member.id === "string" ? member.id.trim() : "";
+            if (rawId && (isUuid(rawId) || memberNameById[rawId])) {
+              return rawId;
+            }
+
+            const rawName = typeof member.name === "string" ? member.name.trim() : "";
+            if (rawName.length > 0) {
+              const matchedId = memberIdByName[rawName.toLowerCase()];
+              if (matchedId) {
+                return matchedId;
+              }
+            }
+
+            return null;
+          })
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
     const sanitizedCosts = values.additional_costs
       ? values.additional_costs
           .filter((cost) => cost.label.trim().length > 0)
@@ -680,6 +777,8 @@ const Sites = () => {
     return filtered;
   }, [filteredSites, sortByCee]);
 
+  const isSitesLoading = isLoading || membersLoading;
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -788,8 +887,13 @@ const Sites = () => {
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {sortedFilteredSites.map((site) => (
+        {isSitesLoading ? (
+          <div className="flex items-center justify-center py-20">
+            <p className="text-muted-foreground">Chargement des chantiers...</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+            {sortedFilteredSites.map((site) => (
             <Card
               key={site.id}
               className="shadow-card bg-gradient-card border-0 hover:shadow-elevated transition-all duration-300"
@@ -899,34 +1003,43 @@ const Sites = () => {
                   </div>
                 </div>
 
-                {(site.subcontractor?.name || (site.team_members ?? []).length > 0) ? (
-                  <div className="pt-2 border-t space-y-2">
-                    {site.subcontractor?.name ? (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Handshake className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-muted-foreground">Sous-traitant :</span>
-                        <Badge variant="secondary" className="text-xs">
-                          {site.subcontractor.name}
-                        </Badge>
-                      </div>
-                    ) : null}
-                    {(site.team_members ?? []).length > 0 ? (
-                      <div>
+                {(() => {
+                  const teamMembers = mapTeamMembersToFormValues(site.team_members ?? []);
+                  const hasTeamMembers = teamMembers.length > 0;
+
+                  if (!site.subcontractor?.name && !hasTeamMembers) {
+                    return null;
+                  }
+
+                  return (
+                    <div className="pt-2 border-t space-y-2">
+                      {site.subcontractor?.name ? (
                         <div className="flex items-center gap-2 text-sm">
-                          <Users className="w-4 h-4 text-muted-foreground" />
-                          <span className="text-muted-foreground">Équipe :</span>
+                          <Handshake className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-muted-foreground">Sous-traitant :</span>
+                          <Badge variant="secondary" className="text-xs">
+                            {site.subcontractor.name}
+                          </Badge>
                         </div>
-                        <div className="flex flex-wrap gap-1 ml-6">
-                          {(site.team_members || []).map((member, index) => (
-                            <Badge key={index} variant="secondary" className="text-xs">
-                              {member}
-                            </Badge>
-                          ))}
+                      ) : null}
+                      {hasTeamMembers ? (
+                        <div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <Users className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-muted-foreground">Équipe :</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1 ml-6">
+                            {teamMembers.map((member) => (
+                              <Badge key={member.id} variant="secondary" className="text-xs">
+                                {member.name ?? member.id}
+                              </Badge>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
+                      ) : null}
+                    </div>
+                  );
+                })()}
 
                 <div className="flex flex-wrap gap-2 pt-2">
                   <Button size="sm" variant="outline" className="flex-1" onClick={() => handleEditSite(site)}>
@@ -965,7 +1078,8 @@ const Sites = () => {
               </CardContent>
             </Card>
           ))}
-        </div>
+          </div>
+        )}
       </div>
 
       <SiteDialog
