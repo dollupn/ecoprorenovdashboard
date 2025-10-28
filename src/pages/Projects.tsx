@@ -153,7 +153,7 @@ const PROJECT_CATEGORY_VALUES = ["EQ", "EN"] as const;
 
 type ProjectCategoryValue = (typeof PROJECT_CATEGORY_VALUES)[number];
 type CategoryFilterValue = "all" | ProjectCategoryValue;
-type StatusFilterValue = "active" | "all";
+type StatusFilterValue = "active" | "all" | ProjectStatusSetting["value"];
 
 const normalizeCategorySource = (value: string) =>
   value
@@ -262,7 +262,15 @@ const Projects = () => {
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilterValue>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>(() => {
     const statusParam = searchParams.get("status");
-    return statusParam === "all" ? "all" : "active";
+    if (!statusParam) {
+      return "active";
+    }
+
+    if (statusParam === "all" || statusParam === "active") {
+      return statusParam;
+    }
+
+    return statusParam as StatusFilterValue;
   });
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
   const [quoteInitialValues, setQuoteInitialValues] =
@@ -334,11 +342,40 @@ const Projects = () => {
     return Array.from(unique).sort((a, b) => a.localeCompare(b));
   }, [projects]);
 
+  const statusValues = useMemo(() => projectStatuses.map((status) => status.value), [projectStatuses]);
+
   useEffect(() => {
     const statusParam = searchParams.get("status");
-    const nextStatus: StatusFilterValue = statusParam === "all" ? "all" : "active";
+
+    let nextStatus: StatusFilterValue = "active";
+
+    if (!statusParam) {
+      nextStatus = "active";
+    } else if (statusParam === "all" || statusParam === "active") {
+      nextStatus = statusParam;
+    } else if (statusValues.includes(statusParam)) {
+      nextStatus = statusParam as StatusFilterValue;
+    } else {
+      nextStatus = "all";
+    }
+
     setStatusFilter((previous) => (previous === nextStatus ? previous : nextStatus));
-  }, [searchParams]);
+
+    if (
+      statusParam &&
+      nextStatus === "all" &&
+      statusParam !== "all"
+    ) {
+      setSearchParams(
+        (previous) => {
+          const params = new URLSearchParams(previous);
+          params.set("status", "all");
+          return params;
+        },
+        { replace: true },
+      );
+    }
+  }, [searchParams, statusValues, setSearchParams]);
 
   useEffect(() => {
     if (assignedFilter !== "all" && !assignedOptions.includes(assignedFilter)) {
@@ -571,6 +608,8 @@ const Projects = () => {
 
     if (statusFilter === "active") {
       base = base.filter((item) => item.project.status !== "LIVRE");
+    } else if (statusFilter !== "all") {
+      base = base.filter((item) => (item.project.status ?? "") === statusFilter);
     }
 
     if (categoryFilter !== "all") {
@@ -590,15 +629,24 @@ const Projects = () => {
 
   const handleStatusFilterChange = useCallback(
     (value: string) => {
-      const next: StatusFilterValue = value === "all" ? "all" : "active";
+      let next: StatusFilterValue;
+
+      if (value === "all" || value === "active") {
+        next = value;
+      } else {
+        next = value as StatusFilterValue;
+      }
+
       setStatusFilter(next);
       setSearchParams(
         (previous) => {
           const params = new URLSearchParams(previous);
-          if (next === "all") {
+          if (next === "active") {
+            params.delete("status");
+          } else if (next === "all") {
             params.set("status", "all");
           } else {
-            params.delete("status");
+            params.set("status", next);
           }
           return params;
         },
@@ -609,11 +657,9 @@ const Projects = () => {
   );
 
   const handleCategoryFilterChange = useCallback((value: string) => {
-    if (value === "EQ" || value === "EN") {
+    if (value === "all" || value === "EQ" || value === "EN") {
       setCategoryFilter(value);
-      return;
     }
-    setCategoryFilter("all");
   }, []);
 
   const handleViewProject = (projectId: string) => {
@@ -887,44 +933,39 @@ const Projects = () => {
                     ))}
                   </SelectContent>
                 </Select>
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-2 md:w-[220px]">
                   <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Catégorie
                   </span>
-                  <ToggleGroup
-                    type="single"
-                    value={categoryFilter}
-                    onValueChange={handleCategoryFilterChange}
-                    className="flex-wrap justify-start"
-                  >
-                    <ToggleGroupItem value="all" className="px-3 py-1 text-xs font-semibold uppercase">
-                      ALL
-                    </ToggleGroupItem>
-                    <ToggleGroupItem value="EQ" className="px-3 py-1 text-xs font-semibold uppercase">
-                      EQ
-                    </ToggleGroupItem>
-                    <ToggleGroupItem value="EN" className="px-3 py-1 text-xs font-semibold uppercase">
-                      EN
-                    </ToggleGroupItem>
-                  </ToggleGroup>
+                  <Select value={categoryFilter} onValueChange={handleCategoryFilterChange}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Toutes les catégories" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Toutes les catégories</SelectItem>
+                      <SelectItem value="EQ">Éclairage</SelectItem>
+                      <SelectItem value="EN">Isolation</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-2 md:w-[220px]">
                   <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Statut
                   </span>
-                  <ToggleGroup
-                    type="single"
-                    value={statusFilter}
-                    onValueChange={handleStatusFilterChange}
-                    className="flex-wrap justify-start"
-                  >
-                    <ToggleGroupItem value="active" className="px-3 py-1 text-xs font-medium">
-                      Actifs
-                    </ToggleGroupItem>
-                    <ToggleGroupItem value="all" className="px-3 py-1 text-xs font-medium">
-                      Inclure LIVRÉ
-                    </ToggleGroupItem>
-                  </ToggleGroup>
+                  <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Tous les statuts" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tous les statuts</SelectItem>
+                      <SelectItem value="active">Statuts actifs</SelectItem>
+                      {projectStatuses.map((status) => (
+                        <SelectItem key={status.value} value={status.value}>
+                          {status.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </div>
