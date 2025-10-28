@@ -447,6 +447,20 @@ const getInitialDynamicParams = (product?: ProductCatalogEntry | null) => {
   return initialParams;
 };
 
+const computePrimeCeePersistence = (
+  totalPrime: number | null | undefined,
+): { primeCeeEuro: number | undefined; primeCeeCents: number | undefined } => {
+  if (typeof totalPrime !== "number" || !Number.isFinite(totalPrime)) {
+    return { primeCeeEuro: undefined, primeCeeCents: undefined };
+  }
+
+  const cents = Math.round(totalPrime * 100);
+  return {
+    primeCeeEuro: cents / 100,
+    primeCeeCents: cents,
+  };
+};
+
 export const AddProjectDialog = ({
   onProjectAdded,
   trigger,
@@ -1324,7 +1338,9 @@ export const AddProjectDialog = ({
         primeBonification,
         productMap,
       });
-      const sanitizedPrimeCee = primeCeeValue ? primeCeeValue.totalPrime : undefined;
+      const { primeCeeEuro, primeCeeCents } = computePrimeCeePersistence(
+        primeCeeValue?.totalPrime,
+      );
 
       const { data: createdProject, error: projectError } = await supabase
         .from("projects")
@@ -1353,7 +1369,8 @@ export const AddProjectDialog = ({
             siren: normalizedSiren && normalizedSiren.length > 0 ? normalizedSiren : null,
             building_type: data.building_type || undefined,
             usage: data.usage || undefined,
-            prime_cee: sanitizedPrimeCee,
+            prime_cee: primeCeeEuro,
+            prime_cee_total_cents: primeCeeCents,
             delegate_id: data.delegate_id,
             signatory_name: data.signatory_name || undefined,
             signatory_title: data.signatory_title || undefined,

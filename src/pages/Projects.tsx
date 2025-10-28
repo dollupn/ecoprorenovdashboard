@@ -116,6 +116,23 @@ const formatDecimal = (value: number) => decimalFormatter.format(value);
 
 const SURFACE_FACTUREE_TARGETS = ["surface_facturee", "surface facturée"] as const;
 
+const resolvePrimeCeeEuro = (project: Project | null | undefined) => {
+  if (!project) return null;
+
+  if (
+    typeof project.prime_cee_total_cents === "number" &&
+    Number.isFinite(project.prime_cee_total_cents)
+  ) {
+    return project.prime_cee_total_cents / 100;
+  }
+
+  if (typeof project.prime_cee === "number" && Number.isFinite(project.prime_cee)) {
+    return project.prime_cee;
+  }
+
+  return null;
+};
+
 const buildProjectProductDisplayMap = (
   projectProducts?: ProjectProduct[],
 ): PrimeCeeProductDisplayMap => {
@@ -684,8 +701,9 @@ const Projects = () => {
               const badgeStyle = getProjectStatusBadgeStyle(statusConfig?.color);
               const statusLabel = statusConfig?.label ?? project.status ?? "Statut";
               const projectCostValue = project.estimated_value ?? null;
+              const primeCeeEuro = resolvePrimeCeeEuro(project);
 
-            return (
+              return (
               <Card
                 key={project.id}
                 className="shadow-card bg-gradient-card border border-black/10 transition-all duration-300 hover:shadow-elevated dark:border-white/10"
@@ -838,12 +856,12 @@ const Projects = () => {
                         </div>
                       </div>
                     )}
-                    {typeof project.prime_cee === "number" && (
+                    {primeCeeEuro !== null && (
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-muted-foreground">Prime CEE:</span>
                         <div className="flex items-center gap-1 text-sm font-bold text-emerald-600">
                           <HandCoins className="w-4 h-4" />
-                          {formatCurrency(project.prime_cee)}
+                          {formatCurrency(primeCeeEuro)}
                         </div>
                       </div>
                     )}
