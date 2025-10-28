@@ -773,7 +773,7 @@ const Sites = () => {
                     <CheckCircle2 className="w-4 h-4 mr-1" /> Terminer
                   </Button>
                   <Button size="sm" variant="ghost" className="flex-1" disabled>
-                    <Clock className="w-4 h-4 mr-1" /> Planning
+                    <Clock className="w-4 h-4 mr-1" /> Set RDV
                   </Button>
                 </div>
               </CardContent>
