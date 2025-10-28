@@ -295,8 +295,9 @@ const SortableProjectProductRow = ({
 const sirenSchema = z
   .string()
   .optional()
+  .or(z.literal(""))
   .refine((value) => {
-    if (!value) return true;
+    if (!value || value === "") return true;
     const sanitized = value.replace(/\s+/g, "");
     if (sanitized.length === 0) return true;
     return /^\d{9}$/.test(sanitized);
@@ -1349,7 +1350,7 @@ export const AddProjectDialog = ({
             source: data.source || undefined,
             company: data.company || undefined,
             phone: data.phone || undefined,
-            siren: normalizedSiren ? normalizedSiren : undefined,
+            siren: normalizedSiren && normalizedSiren.length > 0 ? normalizedSiren : null,
             building_type: data.building_type || undefined,
             usage: data.usage || undefined,
             prime_cee: sanitizedPrimeCee,
