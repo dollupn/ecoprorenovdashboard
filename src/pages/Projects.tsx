@@ -39,7 +39,6 @@ import {
   Mail,
   UserRound,
   Pencil,
-  Euro,
   HandCoins,
   LayoutGrid,
   List,
@@ -1327,7 +1326,7 @@ const Projects = () => {
                       <TableHead>Produits</TableHead>
                       <TableHead>Localisation</TableHead>
                       <TableHead>Statut</TableHead>
-                      <TableHead>Finances</TableHead>
+                      <TableHead>Prime CEE</TableHead>
                       <TableHead>Assigné</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -1345,8 +1344,7 @@ const Projects = () => {
                         const statusConfig = statusMap[project.status ?? ""];
                         const badgeStyle = getProjectStatusBadgeStyle(statusConfig?.color);
                         const statusLabel = statusConfig?.label ?? project.status ?? "Statut";
-                        const projectCostValue = project.estimated_value ?? null;
-                        const valorisationSummary = displayedValorisationEntries[0];
+                        const primeCeeEuro = resolvePrimeCeeEuro(project);
 
                         return (
                           <TableRow
@@ -1431,35 +1429,14 @@ const Projects = () => {
                                 </div>
                               )}
                             </TableCell>
-                            <TableCell className="align-top space-y-2">
-                              {typeof projectCostValue === "number" && (
-                                <div className="flex items-center gap-1 text-sm font-semibold text-primary">
-                                  <Euro className="h-4 w-4" />
-                                  {formatCurrency(projectCostValue)}
-                                </div>
-                              )}
-                              {typeof project.prime_cee === "number" && (
+                            <TableCell className="align-top">
+                              {typeof primeCeeEuro === "number" ? (
                                 <div className="flex items-center gap-1 text-sm font-semibold text-emerald-600">
                                   <HandCoins className="h-4 w-4" />
-                                  {formatCurrency(project.prime_cee)}
+                                  {formatCurrency(primeCeeEuro)}
                                 </div>
-                              )}
-                              {valorisationSummary && (
-                                <div className="text-xs text-muted-foreground">
-                                  Valorisation :{" "}
-                                  <span className="font-semibold text-amber-600">
-                                    {formatCurrency(
-                                      valorisationSummary.valorisationTotalEur ??
-                                        valorisationSummary.totalPrime ??
-                                        0,
-                                    )}
-                                  </span>
-                                  {valorisationSummary.productCode && (
-                                    <span className="block text-muted-foreground/80">
-                                      {valorisationSummary.productCode}
-                                    </span>
-                                  )}
-                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
                               )}
                             </TableCell>
                             <TableCell className="align-top text-sm font-medium text-foreground">
