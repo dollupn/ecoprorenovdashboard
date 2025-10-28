@@ -91,6 +91,7 @@ const CommercialLeadPOS = () => {
   });
   const photoInputRefs = useRef<(HTMLInputElement | null)[]>([null, null, null]);
   const { toast } = useToast();
+  const [isManualAddress, setIsManualAddress] = useState(false);
 
   const availableProducts = useMemo(
     () =>
@@ -127,6 +128,17 @@ const CommercialLeadPOS = () => {
       }));
     }
   }, [isLedSelected, formState.luminaireCount]);
+
+  useEffect(() => {
+    if (!formState.address) {
+      setIsManualAddress(false);
+      return;
+    }
+
+    if (!formState.city || !formState.postalCode) {
+      setIsManualAddress(true);
+    }
+  }, [formState.address, formState.city, formState.postalCode]);
 
   const handleInputChange = (field: keyof FormState) =>
     (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -207,6 +219,7 @@ const CommercialLeadPOS = () => {
     setTimeout(() => {
       setIsSubmitting(false);
       setFormState(initialFormState);
+      setIsManualAddress(false);
       setPhotoSteps([
         { id: 1, title: "Intérieur", description: "Photos de l'intérieur du bâtiment", maxPhotos: 3, photos: [] },
         { id: 2, title: "Plafond", description: "Photos du plafond", maxPhotos: 3, photos: [] },
@@ -376,43 +389,47 @@ const CommercialLeadPOS = () => {
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="address">Adresse</Label>
-                    <AddressAutocomplete
-                      value={formState.address}
-                      onChange={(address, city, postalCode) => {
-                        setFormState((prev) => ({
-                          ...prev,
-                          address,
-                          city,
-                          postalCode,
-                        }));
-                      }}
-                      disabled={isSubmitting}
-                    />
-                  </div>
+                <Label htmlFor="address">Adresse</Label>
+                <AddressAutocomplete
+                  value={formState.address}
+                  onChange={(address, city, postalCode, options) => {
+                    const isManual = options?.manual ?? false;
+                    setIsManualAddress(isManual);
+                    setFormState((prev) => ({
+                      ...prev,
+                      address,
+                      city,
+                      postalCode,
+                    }));
+                  }}
+                  disabled={isSubmitting}
+                />
+              </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="grid gap-2">
-                      <Label htmlFor="city">Ville</Label>
-                      <Input
-                        id="city"
-                        value={formState.city}
-                        readOnly
-                        placeholder="Sélectionnez une adresse"
-                        className="h-12"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="postalCode">Code postal</Label>
-                      <Input
-                        id="postalCode"
-                        value={formState.postalCode}
-                        readOnly
-                        placeholder="Sélectionnez une adresse"
-                        className="h-12"
-                      />
-                    </div>
-                  </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="city">Ville</Label>
+                  <Input
+                    id="city"
+                    value={formState.city}
+                    readOnly={!isManualAddress}
+                    onChange={handleInputChange("city")}
+                    placeholder="Sélectionnez une adresse"
+                    className="h-12"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="postalCode">Code postal</Label>
+                  <Input
+                    id="postalCode"
+                    value={formState.postalCode}
+                    readOnly={!isManualAddress}
+                    onChange={handleInputChange("postalCode")}
+                    placeholder="Sélectionnez une adresse"
+                    className="h-12"
+                  />
+                </div>
+              </div>
 
                   <div className="grid gap-3">
                     <Label className="text-base font-semibold">Produits intéressés</Label>

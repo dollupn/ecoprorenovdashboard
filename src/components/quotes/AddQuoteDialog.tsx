@@ -330,6 +330,7 @@ export const AddQuoteDialog = ({
   const { currentOrgId } = useOrg();
   const { toast } = useToast();
   const [quoteDriveFile, setQuoteDriveFile] = useState<DriveFileMetadata | null>(null);
+  const [isManualSiteAddress, setIsManualSiteAddress] = useState(false);
   const parsedMetadata = useMemo(
     () => parseQuoteMetadata({ notes: initialValues?.notes ?? "" }),
     [initialValues?.notes],
@@ -479,6 +480,7 @@ export const AddQuoteDialog = ({
     if (!dialogOpen) {
       form.reset(baseDefaultValues);
       setQuoteDriveFile(null);
+      setIsManualSiteAddress(false);
       return;
     }
 
@@ -535,6 +537,9 @@ export const AddQuoteDialog = ({
     }
 
     form.reset(values);
+    setIsManualSiteAddress(
+      Boolean(values.site_address && (!values.site_city || !values.site_postal_code))
+    );
     setQuoteDriveFile(metadataDriveFile);
   }, [
     dialogOpen,
@@ -668,6 +673,7 @@ export const AddQuoteDialog = ({
       setDialogOpen(false);
       form.reset(baseDefaultValues);
       setQuoteDriveFile(null);
+      setIsManualSiteAddress(false);
       await onQuoteAdded?.();
     } catch (error) {
       const message =
@@ -844,10 +850,15 @@ export const AddQuoteDialog = ({
                     <FormControl>
                       <AddressAutocomplete
                         value={field.value ?? ""}
-                        onChange={(address, city, postalCode) => {
+                        onChange={(address, city, postalCode, options) => {
+                          const isManual = options?.manual ?? false;
+                          setIsManualSiteAddress(isManual);
                           field.onChange(address);
-                          form.setValue("site_city", city, { shouldDirty: true, shouldValidate: true });
-                          form.setValue("site_postal_code", postalCode, {
+                          form.setValue("site_city", city ?? "", {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          });
+                          form.setValue("site_postal_code", postalCode ?? "", {
                             shouldDirty: true,
                             shouldValidate: true,
                           });
@@ -870,7 +881,7 @@ export const AddQuoteDialog = ({
                         <Input
                           {...field}
                           value={field.value ?? ""}
-                          readOnly
+                          readOnly={!isManualSiteAddress}
                           disabled={form.formState.isSubmitting}
                         />
                       </FormControl>
@@ -888,7 +899,7 @@ export const AddQuoteDialog = ({
                         <Input
                           {...field}
                           value={field.value ?? ""}
-                          readOnly
+                          readOnly={!isManualSiteAddress}
                           disabled={form.formState.isSubmitting}
                         />
                       </FormControl>
