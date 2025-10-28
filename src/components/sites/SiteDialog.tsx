@@ -59,8 +59,6 @@ import { DriveFileUploader } from "@/components/integrations/DriveFileUploader";
 import type { DriveFileMetadata } from "@/integrations/googleDrive";
 import { GripVertical, Plus, Trash2, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { GripVertical, Plus, Trash2 } from "lucide-react";
-import { useSubcontractorDirectory } from "@/hooks/useSubcontractorDirectory";
 
 const teamMemberSchema = z.object({
   name: z.string().min(1, "Le nom est requis"),

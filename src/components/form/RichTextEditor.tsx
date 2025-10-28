@@ -43,7 +43,7 @@ export function RichTextEditor({
     const current = editor.getHTML();
     const incoming = value && !isRichTextEmpty(value) ? value : "<p></p>";
     if (current !== incoming) {
-      editor.commands.setContent(incoming, false);
+      editor.commands.setContent(incoming, { emitUpdate: false });
     }
   }, [editor, value]);
 

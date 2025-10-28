@@ -662,8 +662,8 @@ const Sites = () => {
     handleOpenCreate,
   ]);
 
-  const filteredSites = useMemo(() => {
-    const filtered = [...sites];
+  const sortedFilteredSites = useMemo(() => {
+    const filtered = [...filteredSites];
 
     if (sortByCee) {
       filtered.sort((a, b) => {
@@ -674,7 +674,7 @@ const Sites = () => {
     }
 
     return filtered;
-  }, [sites, sortByCee]);
+  }, [filteredSites, sortByCee]);
 
   return (
     <Layout>
@@ -785,7 +785,7 @@ const Sites = () => {
         </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredSites.map((site) => (
+          {sortedFilteredSites.map((site) => (
             <Card
               key={site.id}
               className="shadow-card bg-gradient-card border-0 hover:shadow-elevated transition-all duration-300"
