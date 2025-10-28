@@ -1223,9 +1223,11 @@ const ProjectDetails = () => {
     [ceeEntries],
   );
 
-  const statusConfig = projectStatuses.find((status) => status.value === project.status);
+  const statusConfig = project
+    ? projectStatuses.find((status) => status.value === project.status)
+    : undefined;
   const badgeStyle = getProjectStatusBadgeStyle(statusConfig?.color);
-  const statusLabel = statusConfig?.label ?? project.status ?? "Statut";
+  const statusLabel = statusConfig?.label ?? project?.status ?? "Statut";
 
   const handleOpenQuote = () => {
     const displayedProducts = getDisplayedProducts(project.project_products);
