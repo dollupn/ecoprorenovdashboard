@@ -459,6 +459,7 @@ const Sites = () => {
       additional_costs: sanitizedCosts.length > 0 ? sanitizedCosts : [],
       subcontractor_id: values.subcontractor_id ?? null,
       user_id: user.id,
+      created_by: user.id,
       org_id: currentOrgId,
     };
 
