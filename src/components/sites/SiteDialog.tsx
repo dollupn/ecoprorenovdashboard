@@ -80,10 +80,10 @@ const additionalCostSchema = z.object({
     .transform((value) => (value && value.length > 0 ? value : null)),
 });
 
-const siteSchema = z.object({
+const baseSiteSchema = z.object({
   site_ref: z.string().min(3, "Référence requise"),
-  project_ref: z.string().min(3, "Référence projet requise"),
-  client_name: z.string().min(2, "Client requis"),
+  project_ref: z.string(),
+  client_name: z.string(),
   product_name: z.string().optional().nullable(),
   address: z.string().min(3, "Adresse requise"),
   city: z.string().min(2, "Ville requise"),
@@ -119,7 +119,33 @@ const siteSchema = z.object({
   subcontractor_payment_confirmed: z.boolean().default(false),
 });
 
-export type SiteFormValues = z.infer<typeof siteSchema>;
+const createSiteSchema = (requiresProjectAssociation: boolean) =>
+  baseSiteSchema.superRefine((data, ctx) => {
+    const projectRef = data.project_ref?.trim?.() ?? "";
+    const clientName = data.client_name?.trim?.() ?? "";
+
+    if (requiresProjectAssociation || projectRef.length > 0) {
+      if (projectRef.length < 3) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["project_ref"],
+          message: "Référence projet requise",
+        });
+      }
+    }
+
+    if (requiresProjectAssociation || clientName.length > 0) {
+      if (clientName.length < 2) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["client_name"],
+          message: "Client requis",
+        });
+      }
+    }
+  });
+
+export type SiteFormValues = z.infer<typeof baseSiteSchema>;
 
 export type SiteProjectOption = {
   id?: string;
@@ -542,11 +568,6 @@ export const SiteDialog = ({
     return values;
   }, [initialValues, parsedNotes.text]);
 
-  const form = useForm<SiteFormValues>({
-    resolver: zodResolver(siteSchema),
-    defaultValues: mergedDefaults,
-  });
-
   const availableProjects = useMemo<SiteProjectOption[]>(() => {
     const base = [...(projects ?? [])];
     const currentRef = mergedDefaults.project_ref;
@@ -566,6 +587,20 @@ export const SiteDialog = ({
 
     return base;
   }, [projects, mergedDefaults]);
+
+  const hasAvailableProjects = availableProjects.length > 0;
+
+  const schema = useMemo(
+    () => createSiteSchema(hasAvailableProjects),
+    [hasAvailableProjects],
+  );
+
+  const resolver = useMemo(() => zodResolver(schema), [schema]);
+
+  const form = useForm<SiteFormValues>({
+    resolver,
+    defaultValues: mergedDefaults,
+  });
 
   const applyProjectDetails = useCallback(
     (projectRef: string) => {
@@ -734,8 +769,13 @@ export const SiteDialog = ({
 
     const serializedNotes = Object.keys(notesMetadata).length > 0 ? JSON.stringify(notesMetadata) : null;
 
+    const projectRef = values.project_ref?.trim?.() ?? "";
+    const clientName = values.client_name?.trim?.() ?? "";
+
     onSubmit({
       ...values,
+      project_ref: projectRef,
+      client_name: clientName,
       subcontractor_id: values.subcontractor_id ?? null,
       team_members: filteredTeamMembers,
       additional_costs: filteredCosts,
@@ -809,31 +849,39 @@ export const SiteDialog = ({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Projet associé</FormLabel>
-                        <Select
-                          onValueChange={(value) => {
-                            field.onChange(value);
-                            applyProjectDetails(value);
-                          }}
-                          value={field.value ?? ""}
-                        >
+                        {hasAvailableProjects ? (
+                          <Select
+                            onValueChange={(value) => {
+                              field.onChange(value);
+                              applyProjectDetails(value);
+                            }}
+                            value={field.value ?? ""}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Sélectionner un projet" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {availableProjects.map((project) => (
+                                <SelectItem
+                                  key={project.id ?? project.project_ref}
+                                  value={project.project_ref}
+                                >
+                                  {project.project_ref} • {getProjectClientName(project)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
                           <FormControl>
-                            <SelectTrigger disabled={availableProjects.length === 0}>
-                              <SelectValue placeholder="Sélectionner un projet" />
-                            </SelectTrigger>
+                            <Input placeholder="Référence projet" {...field} />
                           </FormControl>
-                          <SelectContent>
-                            {availableProjects.map((project) => (
-                              <SelectItem
-                                key={project.id ?? project.project_ref}
-                                value={project.project_ref}
-                              >
-                              {project.project_ref} • {getProjectClientName(project)}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        )}
                         <p className="text-xs text-muted-foreground">
-                          Le chantier reprend automatiquement les informations du projet sélectionné.
+                          {hasAvailableProjects
+                            ? "Le chantier reprend automatiquement les informations du projet sélectionné."
+                            : "Aucun projet disponible. Renseignez manuellement la référence si nécessaire."}
                         </p>
                         <FormMessage />
                       </FormItem>
@@ -849,12 +897,14 @@ export const SiteDialog = ({
                           <Input
                             placeholder="Nom du client"
                             {...field}
-                            readOnly
-                            className="bg-muted"
+                            readOnly={hasAvailableProjects}
+                            className={hasAvailableProjects ? "bg-muted" : undefined}
                           />
                         </FormControl>
                         <p className="text-xs text-muted-foreground">
-                          Pré-rempli à partir du projet associé.
+                          {hasAvailableProjects
+                            ? "Pré-rempli à partir du projet associé."
+                            : "Saisissez manuellement le nom du client."}
                         </p>
                         <FormMessage />
                       </FormItem>

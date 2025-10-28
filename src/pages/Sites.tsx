@@ -429,10 +429,13 @@ const Sites = () => {
           })
       : [];
 
+    const projectRef = values.project_ref?.trim?.() ?? "";
+    const clientName = values.client_name?.trim?.() ?? "";
+
     const siteData = {
       site_ref: values.site_ref,
-      project_ref: values.project_ref,
-      client_name: values.client_name,
+      project_ref: projectRef,
+      client_name: clientName,
       product_name: values.product_name?.trim() || "",
       address: values.address,
       city: values.city,
