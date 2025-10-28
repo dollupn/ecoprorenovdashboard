@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, useId, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState,useId, type CSSProperties } from "react";
 import {
   useForm,
   useFieldArray,
@@ -7,6 +7,7 @@ import {
 } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { useQuery } from "@tanstack/react-query";
 import {
   DndContext,
   PointerSensor,
@@ -55,6 +56,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { DriveFileUploader } from "@/components/integrations/DriveFileUploader";
 import type { DriveFileMetadata } from "@/integrations/googleDrive";
+import { GripVertical, Plus, Trash2, Upload } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { GripVertical, Plus, Trash2 } from "lucide-react";
 import { useSubcontractorDirectory } from "@/hooks/useSubcontractorDirectory";
 
@@ -100,7 +103,19 @@ const siteSchema = z.object({
   montant_commission: z.coerce.number({ invalid_type_error: "Montant invalide" }).min(0),
   valorisation_cee: z.coerce.number({ invalid_type_error: "Montant invalide" }).min(0),
   notes: z.string().optional(),
-  team_members: z.array(teamMemberSchema).min(1, "Ajoutez au moins un membre"),
+  subcontractor_id: z
+    .string({ invalid_type_error: "Sélection invalide" })
+    .uuid("Sélection invalide")
+    .optional()
+    .nullable(),
+  team_members: z
+    .array(
+      z.object({
+        name: z.string().min(1, "Le nom est requis"),
+      }),
+    )
+    .optional()
+    .default([]),
   additional_costs: z.array(additionalCostSchema).optional().default([]),
 });
 
@@ -115,6 +130,11 @@ export type SiteProjectOption = {
   city: string;
   postal_code: string;
   surface_facturee?: number | null;
+};
+
+type SubcontractorOption = {
+  id: string;
+  name: string;
 };
 
 interface SiteDialogProps {
@@ -149,89 +169,9 @@ const defaultValues: SiteFormValues = {
   montant_commission: 0,
   valorisation_cee: 0,
   notes: "",
-  team_members: [{ name: "" }],
+  subcontractor_id: null,
+  team_members: [],
   additional_costs: [],
-};
-
-interface SortableTeamMemberFieldProps {
-  field: FieldArrayWithId<SiteFormValues, "team_members">;
-  index: number;
-  control: Control<SiteFormValues>;
-  remove: (index: number) => void;
-  canRemove: boolean;
-  suggestions: string[];
-}
-
-const SortableTeamMemberField = ({
-  field,
-  index,
-  control,
-  remove,
-  canRemove,
-  suggestions,
-}: SortableTeamMemberFieldProps) => {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: field.id,
-  });
-
-  const style: CSSProperties = { transform: CSS.Transform.toString(transform), transition };
-  const datalistId = useId();
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`flex items-start gap-2 rounded-md border bg-background/60 p-2 transition ${
-        isDragging ? "ring-2 ring-primary/40" : ""
-      }`}
-    >
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="mt-1 cursor-grab active:cursor-grabbing"
-        aria-label="Réorganiser le membre de l'équipe"
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="h-4 w-4" />
-      </Button>
-      <FormField
-        control={control}
-        name={`team_members.${index}.name`}
-        render={({ field: memberField }) => (
-          <FormItem className="flex-1">
-            <FormControl>
-              <Input
-                placeholder="Nom du sous-traitant ou de l'équipe"
-                list={suggestions.length > 0 ? datalistId : undefined}
-                {...memberField}
-              />
-            </FormControl>
-            <FormMessage />
-            {suggestions.length > 0 ? (
-              <datalist id={datalistId}>
-                {suggestions.map((option) => (
-                  <option key={option} value={option} />
-                ))}
-              </datalist>
-            ) : null}
-          </FormItem>
-        )}
-      />
-      {canRemove ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={() => remove(index)}
-          aria-label="Supprimer le membre"
-        >
-          <Trash2 className="w-4 h-4" />
-        </Button>
-      ) : null}
-    </div>
-  );
 };
 
 interface SortableAdditionalCostRowProps {
@@ -552,7 +492,24 @@ export const SiteDialog = ({
 
   const [siteDriveFile, setSiteDriveFile] = useState<DriveFileMetadata | null>(parsedNotes.driveFile);
   const resolvedOrgId = orgId ?? initialValues?.org_id ?? null;
-  const { subcontractors, saveSubcontractors } = useSubcontractorDirectory(resolvedOrgId);
+  const { data: subcontractors = [], isLoading: subcontractorsLoading } = useQuery({
+    queryKey: ["subcontractors", resolvedOrgId],
+    queryFn: async () => {
+      if (!resolvedOrgId) return [] as SubcontractorOption[];
+
+      const { data, error } = await supabase
+        .from("subcontractors")
+        .select("id, name")
+        .eq("org_id", resolvedOrgId)
+        .eq("is_active", true)
+        .order("name");
+
+      if (error) throw error;
+
+      return (data ?? []) as SubcontractorOption[];
+    },
+    enabled: !!resolvedOrgId,
+  });
 
   const mergedDefaults = useMemo(() => {
     const normalizedAdditionalCosts =
@@ -568,6 +525,10 @@ export const SiteDialog = ({
     const values: SiteFormValues = {
       ...defaultValues,
       ...initialValues,
+      subcontractor_id:
+        typeof initialValues?.subcontractor_id === "string" && initialValues.subcontractor_id.length > 0
+          ? initialValues.subcontractor_id
+          : null,
       team_members:
         initialValues?.team_members && initialValues.team_members.length > 0
           ? initialValues.team_members
@@ -718,13 +679,6 @@ export const SiteDialog = ({
   }, [open, parsedNotes.driveFile]);
 
   const {
-    fields: teamMemberFields,
-    append: appendTeamMember,
-    remove: removeTeamMember,
-    move: moveTeamMember,
-  } = useFieldArray({ control: form.control, name: "team_members" });
-
-  const {
     fields: costFields,
     append: appendCost,
     remove: removeCost,
@@ -734,23 +688,7 @@ export const SiteDialog = ({
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
-
-  const teamMemberIds = useMemo(() => teamMemberFields.map((f) => f.id), [teamMemberFields]);
   const costIds = useMemo(() => costFields.map((f) => f.id), [costFields]);
-
-  const handleTeamMemberDragEnd = useCallback(
-    (event: DragEndEvent) => {
-      const { active, over } = event;
-      if (!over || active.id === over.id) return;
-
-      const activeIndex = teamMemberIds.findIndex((id) => id === active.id);
-      const overIndex = teamMemberIds.findIndex((id) => id === over.id);
-      if (activeIndex === -1 || overIndex === -1 || activeIndex === overIndex) return;
-
-      moveTeamMember(activeIndex, overIndex);
-    },
-    [teamMemberIds, moveTeamMember]
-  );
 
   const handleCostDragEnd = useCallback(
     (event: DragEndEvent) => {
@@ -767,10 +705,9 @@ export const SiteDialog = ({
   );
 
   const handleSubmit = (values: SiteFormValues) => {
-    const filteredTeamMembers = values.team_members.filter((m) => m.name.trim().length > 0);
-    saveSubcontractors(filteredTeamMembers.map((member) => member.name.trim()));
+    const filteredTeamMembers = (values.team_members ?? []).filter((m) => m.name.trim().length > 0);
 
-    const filteredCosts = values.additional_costs
+    const filteredCosts = (values.additional_costs ?? [])
       .filter((c) => c.label.trim().length > 0)
       .map((c) => {
         const attachment = c.attachment ? c.attachment.trim() : "";
@@ -798,6 +735,7 @@ export const SiteDialog = ({
 
     onSubmit({
       ...values,
+      subcontractor_id: values.subcontractor_id ?? null,
       team_members: filteredTeamMembers,
       additional_costs: filteredCosts,
       notes: serializedNotes ?? "",
@@ -995,43 +933,46 @@ export const SiteDialog = ({
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <FormLabel>Équipe chantier</FormLabel>
-                  {teamMemberFields.length > 1 ? (
-                    <p className="text-xs text-muted-foreground">Faites glisser les membres pour définir l&apos;ordre de votre équipe.</p>
-                  ) : null}
-                  {subcontractors.length > 0 ? (
-                    <p className="text-xs text-muted-foreground">
-                      Sélectionnez un sous-traitant habituel dans la liste ou saisissez un nouveau nom pour l&apos;enregistrer.
-                    </p>
-                  ) : null}
-                  <div className="space-y-3">
-                    {teamMemberFields.length === 0 ? (
-                      <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
-                        Ajoutez les membres composant l&apos;équipe chantier.
-                      </div>
-                    ) : (
-                      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTeamMemberDragEnd}>
-                        <SortableContext items={teamMemberIds} strategy={verticalListSortingStrategy}>
-                          {teamMemberFields.map((field, index) => (
-                            <SortableTeamMemberField
-                              key={field.id}
-                              field={field}
-                              index={index}
-                              control={form.control}
-                              remove={removeTeamMember}
-                              canRemove={teamMemberFields.length > 1}
-                              suggestions={subcontractors}
+                <FormField
+                  control={form.control}
+                  name="subcontractor_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Sous-traitant</FormLabel>
+                      <Select
+                        onValueChange={(value) => field.onChange(value === "" ? null : value)}
+                        value={field.value ?? ""}
+                        disabled={subcontractorsLoading}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue
+                              placeholder={
+                                subcontractorsLoading
+                                  ? "Chargement..."
+                                  : subcontractors.length === 0
+                                  ? "Aucun sous-traitant configuré"
+                                  : "Sélectionner un sous-traitant"
+                              }
                             />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="">Aucun sous-traitant</SelectItem>
+                          {subcontractors.map((option) => (
+                            <SelectItem key={option.id} value={option.id}>
+                              {option.name}
+                            </SelectItem>
                           ))}
-                        </SortableContext>
-                      </DndContext>
-                    )}
-                  </div>
-                  <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => appendTeamMember({ name: "" })}>
-                    <Plus className="w-4 h-4 mr-1" /> Ajouter un membre
-                  </Button>
-                </div>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Les sous-traitants actifs sont gérés depuis les paramètres de l&apos;organisation.
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 <FormField
                   control={form.control}
