@@ -45,6 +45,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { getProjectClientName } from "@/lib/projects";
 import {
   Select,
@@ -117,6 +118,7 @@ const siteSchema = z.object({
     .optional()
     .default([]),
   additional_costs: z.array(additionalCostSchema).optional().default([]),
+  subcontractor_payment_confirmed: z.boolean().default(false),
 });
 
 export type SiteFormValues = z.infer<typeof siteSchema>;
@@ -172,6 +174,7 @@ const defaultValues: SiteFormValues = {
   subcontractor_id: null,
   team_members: [],
   additional_costs: [],
+  subcontractor_payment_confirmed: false,
 };
 
 interface SortableAdditionalCostRowProps {
@@ -1016,6 +1019,27 @@ export const SiteDialog = ({
                     )}
                   />
                 </div>
+
+                <FormField
+                  control={form.control}
+                  name="subcontractor_payment_confirmed"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={(checked) => field.onChange(checked === true)}
+                        />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel>Paiement sous-traitant effectué</FormLabel>
+                        <p className="text-sm text-muted-foreground">
+                          Confirme que le sous-traitant a bien été réglé.
+                        </p>
+                      </div>
+                    </FormItem>
+                  )}
+                />
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField

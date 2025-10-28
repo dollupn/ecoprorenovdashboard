@@ -691,6 +691,7 @@ const Projects = () => {
       subcontractor_id: null,
       team_members: [],
       additional_costs: [],
+      subcontractor_payment_confirmed: false,
     });
     setSiteDialogOpen(true);
   };
@@ -756,6 +757,7 @@ const Projects = () => {
       isolation_utilisee_m2: values.isolation_utilisee_m2,
       montant_commission: values.montant_commission,
       valorisation_cee: values.valorisation_cee,
+      subcontractor_payment_confirmed: values.subcontractor_payment_confirmed,
       notes: values.notes?.trim() || null,
       team_members: sanitizedTeam.length > 0 ? sanitizedTeam : null,
       additional_costs: sanitizedCosts.length > 0 ? sanitizedCosts : [],
