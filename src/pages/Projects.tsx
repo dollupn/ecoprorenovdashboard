@@ -250,6 +250,9 @@ const DEFAULT_CATEGORY_METADATA = {
   srLabel: "Catégorie inconnue",
 } as const;
 
+const isUuid = (value: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim());
+
 const Projects = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -293,6 +296,28 @@ const Projects = () => {
 
   const currentMember = members.find((member) => member.user_id === user?.id);
   const isAdmin = currentMember?.role === "admin" || currentMember?.role === "owner";
+
+  const memberNameById = useMemo(() => {
+    return members.reduce<Record<string, string>>((acc, member) => {
+      if (!member?.user_id) {
+        return acc;
+      }
+
+      const fullName = member.profiles?.full_name?.trim();
+      acc[member.user_id] = fullName && fullName.length > 0 ? fullName : "Utilisateur";
+      return acc;
+    }, {});
+  }, [members]);
+
+  const memberIdByName = useMemo(() => {
+    return Object.entries(memberNameById).reduce<Record<string, string>>((acc, [id, name]) => {
+      const normalized = name.trim().toLowerCase();
+      if (normalized.length > 0 && !acc[normalized]) {
+        acc[normalized] = id;
+      }
+      return acc;
+    }, {});
+  }, [memberNameById]);
 
   const { data: projects = [], isLoading, refetch } = useQuery<ProjectWithRelations[]>({
     queryKey: ["projects", user?.id, currentOrgId, isAdmin],
@@ -786,9 +811,30 @@ const Projects = () => {
   const handleSubmitSite = useCallback(async (values: SiteFormValues) => {
     if (!user || !currentOrgId) return;
 
-    const sanitizedTeam = (values.team_members ?? [])
-      .map((member) => member.name.trim())
-      .filter(Boolean);
+    const sanitizedTeam = Array.from(
+      new Set(
+        (values.team_members ?? [])
+          .map((member) => {
+            if (!member) return null;
+
+            const rawId = typeof member.id === "string" ? member.id.trim() : "";
+            if (rawId && (isUuid(rawId) || memberNameById[rawId])) {
+              return rawId;
+            }
+
+            const rawName = typeof member.name === "string" ? member.name.trim() : "";
+            if (rawName.length > 0) {
+              const matchedId = memberIdByName[rawName.toLowerCase()];
+              if (matchedId) {
+                return matchedId;
+              }
+            }
+
+            return null;
+          })
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
     const sanitizedCosts = values.additional_costs
       ? values.additional_costs
           .filter((cost) => cost.label.trim().length > 0)
@@ -855,7 +901,7 @@ const Projects = () => {
         description: "Impossible de créer le chantier.",
       });
     }
-  }, [user, currentOrgId, navigate]);
+  }, [user, currentOrgId, navigate, memberIdByName, memberNameById]);
 
   if (isLoading || membersLoading) {
     return (
