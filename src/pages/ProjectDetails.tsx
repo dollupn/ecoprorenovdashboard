@@ -504,7 +504,7 @@ const ProjectHeader = ({
                   <SelectValue placeholder="Changer le statut" />
                 </SelectTrigger>
                 <SelectContent>
-                  {statusOptions.map((status) => (
+                  {statusOptions.filter(status => status != null).map((status) => (
                     <SelectItem key={status.value} value={status.value}>
                       {status.label}
                     </SelectItem>
