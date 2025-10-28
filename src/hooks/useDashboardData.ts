@@ -35,7 +35,7 @@ const ACTIVE_PROJECT_STATUSES = PROJECT_STATUS_VALUES.filter(
   (status) => !["LIVRE", "ANNULE"].includes(status)
 );
 const PROJECT_SURFACE_STATUSES = PROJECT_STATUS_VALUES.filter((status) =>
-  ["CHANTIER_EN_COURS", "CHANTIER_TERMINE", "LIVRE"].includes(status)
+  ["CHANTIER_EN_COURS", "CHANTIER_TERMINE", "VISITE_TECHNIQUE", "LIVRE"].includes(status)
 );
 
 const ACCEPTED_PROJECT_STATUS =

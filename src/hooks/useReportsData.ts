@@ -35,7 +35,7 @@ const MARGIN_TARGET = 0.35;
 
 const PROJECT_STATUS_VALUES = DEFAULT_PROJECT_STATUSES.map((status) => status.value);
 const PROJECT_SURFACE_STATUSES = PROJECT_STATUS_VALUES.filter((status) =>
-  ["CHANTIER_EN_COURS", "CHANTIER_TERMINE", "LIVRE"].includes(status)
+  ["CHANTIER_EN_COURS", "CHANTIER_TERMINE", "VISITE_TECHNIQUE", "LIVRE"].includes(status)
 );
 
 const isStatusValue = <T extends string>(
