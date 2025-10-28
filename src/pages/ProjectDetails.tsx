@@ -1,3 +1,4 @@
+import { useCallback, useMemo, useState } from "react";
 import { useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -5,7 +6,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout/Layout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,6 +40,9 @@ import {
   Trash2,
   Mail,
   AlertTriangle,
+  Pencil,
+  Users,
+  Plus,
   Loader2,
   Share2,
   FolderOpen,
@@ -49,6 +53,11 @@ import {
   AddQuoteDialog,
   type QuoteFormValues,
 } from "@/components/quotes/AddQuoteDialog";
+import {
+  SiteDialog,
+  type SiteFormValues,
+  type SiteProjectOption,
+} from "@/components/sites/SiteDialog";
 import {
   getDynamicFieldEntries,
   getDynamicFieldNumericValue,
@@ -76,6 +85,7 @@ import {
 } from "@/lib/valorisation-formula";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -136,6 +146,116 @@ const decimalFormatter = new Intl.NumberFormat("fr-FR", {
 
 const formatCurrency = (value: number) => currencyFormatter.format(value);
 const formatDecimal = (value: number) => decimalFormatter.format(value);
+
+const SURFACE_FACTUREE_TARGETS = ["surface_facturee", "surface facturée"] as const;
+
+type SiteStatus =
+  | "PLANIFIE"
+  | "EN_PREPARATION"
+  | "EN_COURS"
+  | "SUSPENDU"
+  | "TERMINE"
+  | "LIVRE";
+
+type CofracStatus = "EN_ATTENTE" | "CONFORME" | "NON_CONFORME" | "A_PLANIFIER";
+
+type ProjectSite = Tables<"sites"> & {
+  subcontractor?: { id: string; name: string } | null;
+};
+
+type SiteAdditionalCostFormValue = SiteFormValues["additional_costs"][number];
+type SiteTeamMemberFormValue = SiteFormValues["team_members"][number];
+
+const isUuid = (value: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim());
+
+const createEmptyAdditionalCost = (): SiteAdditionalCostFormValue => ({
+  label: "",
+  amount_ht: 0,
+  taxes: 0,
+  attachment: null,
+});
+
+const parseNumber = (value: unknown): number | null => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+};
+
+const normalizeAdditionalCosts = (costs: unknown): SiteAdditionalCostFormValue[] => {
+  if (!Array.isArray(costs)) {
+    return [createEmptyAdditionalCost()];
+  }
+
+  const normalized = costs
+    .map((cost) => {
+      if (!cost || typeof cost !== "object") {
+        return null;
+      }
+
+      const raw = cost as Record<string, unknown>;
+      const label = typeof raw.label === "string" ? raw.label : "";
+
+      const amountHTValue =
+        parseNumber(raw.amount_ht) ?? parseNumber(raw.amount) ?? parseNumber(raw.amount_ttc) ?? 0;
+      const taxesValue = parseNumber(raw.taxes) ?? 0;
+      const attachmentValue =
+        typeof raw.attachment === "string" && raw.attachment.trim().length > 0
+          ? raw.attachment.trim()
+          : null;
+
+      return {
+        label,
+        amount_ht: amountHTValue,
+        taxes: taxesValue,
+        attachment: attachmentValue,
+      } as SiteAdditionalCostFormValue;
+    })
+    .filter((cost) => cost !== null) as SiteAdditionalCostFormValue[];
+
+  return normalized.length > 0 ? normalized : [createEmptyAdditionalCost()];
+};
+
+const getStatusLabel = (status: SiteStatus) => {
+  const labels: Record<SiteStatus, string> = {
+    PLANIFIE: "Planifié",
+    EN_PREPARATION: "En préparation",
+    EN_COURS: "En cours",
+    SUSPENDU: "Suspendu",
+    TERMINE: "Terminé",
+    LIVRE: "Livré",
+  };
+  return labels[status];
+};
+
+const getStatusColor = (status: SiteStatus) => {
+  const colors: Record<SiteStatus, string> = {
+    PLANIFIE: "bg-blue-500/10 text-blue-700 border-blue-200",
+    EN_PREPARATION: "bg-orange-500/10 text-orange-700 border-orange-200",
+    EN_COURS: "bg-primary/10 text-primary border-primary/20",
+    SUSPENDU: "bg-red-500/10 text-red-700 border-red-200",
+    TERMINE: "bg-green-500/10 text-green-700 border-green-200",
+    LIVRE: "bg-teal-500/10 text-teal-700 border-teal-200",
+  };
+  return colors[status];
+};
+
+const getCofracStatusLabel = (status: CofracStatus) => {
+  const labels: Record<CofracStatus, string> = {
+    EN_ATTENTE: "En attente",
+    CONFORME: "Conforme",
+    NON_CONFORME: "Non conforme",
+    A_PLANIFIER: "Audit à planifier",
+  };
+  return labels[status];
+};
 
 const resolvePrimeCeeEuro = (project: Project | null | undefined) => {
   if (!project) return null;
@@ -1069,6 +1189,32 @@ const ProjectDetails = () => {
   const [quoteInitialValues, setQuoteInitialValues] = useState<Partial<QuoteFormValues>>({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [siteDialogOpen, setSiteDialogOpen] = useState(false);
+  const [siteDialogMode, setSiteDialogMode] = useState<"create" | "edit">("create");
+  const [siteInitialValues, setSiteInitialValues] = useState<Partial<SiteFormValues>>();
+  const [activeSite, setActiveSite] = useState<ProjectSite | null>(null);
+
+  const memberNameById = useMemo(() => {
+    return members.reduce<Record<string, string>>((acc, member) => {
+      if (!member?.user_id) {
+        return acc;
+      }
+
+      const fullName = member.profiles?.full_name?.trim();
+      acc[member.user_id] = fullName && fullName.length > 0 ? fullName : "Utilisateur";
+      return acc;
+    }, {});
+  }, [members]);
+
+  const memberIdByName = useMemo(() => {
+    return Object.entries(memberNameById).reduce<Record<string, string>>((acc, [id, name]) => {
+      const normalized = name.trim().toLowerCase();
+      if (normalized.length > 0 && !acc[normalized]) {
+        acc[normalized] = id;
+      }
+      return acc;
+    }, {});
+  }, [memberNameById]);
 
   const currentMember = members.find((member) => member.user_id === user?.id);
   const isAdmin = currentMember?.role === "admin" || currentMember?.role === "owner";
@@ -1127,6 +1273,171 @@ const ProjectDetails = () => {
   const projectProducts = useMemo(
     () => getDisplayedProducts(project?.project_products),
     [project?.project_products]
+  );
+
+  const projectSurfaceFacturee = useMemo(() => {
+    if (!project?.project_products) return 0;
+
+    return project.project_products.reduce((sum, projectProduct) => {
+      const product = projectProduct.product;
+      if (!product) {
+        return sum;
+      }
+
+      const surfaceValue = getDynamicFieldNumericValue(
+        product.params_schema,
+        projectProduct.dynamic_params,
+        [...SURFACE_FACTUREE_TARGETS],
+      );
+
+      if (typeof surfaceValue === "number" && surfaceValue > 0) {
+        return sum + surfaceValue;
+      }
+
+      return sum;
+    }, 0);
+  }, [project?.project_products]);
+
+  const projectSiteOptions = useMemo<SiteProjectOption[]>(() => {
+    if (!project) return [];
+
+    const primaryProduct =
+      projectProducts[0]?.product ?? project.project_products?.[0]?.product ?? null;
+    const productLabel =
+      primaryProduct?.code ||
+      (project as Project & { product_name?: string | null }).product_name ||
+      "";
+    const address = (project as Project & { address?: string | null }).address ?? "";
+
+    return [
+      {
+        id: project.id,
+        project_ref: project.project_ref ?? "",
+        client_name: getProjectClientName(project),
+        product_name: productLabel ?? "",
+        address,
+        city: project.city ?? "",
+        postal_code: project.postal_code ?? "",
+        surface_facturee: projectSurfaceFacturee > 0 ? projectSurfaceFacturee : undefined,
+      },
+    ];
+  }, [project, projectProducts, projectSurfaceFacturee]);
+
+  const projectRefFilter = project?.project_ref?.trim() ?? "";
+
+  const {
+    data: projectSites = [],
+    isLoading: projectSitesLoading,
+    refetch: refetchProjectSites,
+  } = useQuery<ProjectSite[]>({
+    queryKey: ["project-sites", project?.id, projectRefFilter, currentOrgId],
+    queryFn: async () => {
+      if (!project?.id || !currentOrgId) return [] as ProjectSite[];
+
+      let query = supabase
+        .from("sites")
+        .select("*, subcontractor:subcontractors(id, name)")
+        .eq("org_id", currentOrgId)
+        .order("created_at", { ascending: false });
+
+      const filters = [`project_id.eq.${project.id}`];
+      if (projectRefFilter) {
+        filters.push(`project_ref.eq.${projectRefFilter}`);
+      }
+
+      if (filters.length > 0) {
+        query = query.or(filters.join(","));
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      return (data ?? []) as ProjectSite[];
+    },
+    enabled: Boolean(project?.id && currentOrgId),
+  });
+
+  const mapTeamMembersToFormValues = useCallback(
+    (teamMembers: string[] | null | undefined): SiteTeamMemberFormValue[] => {
+      if (!Array.isArray(teamMembers)) {
+        return [];
+      }
+
+      const uniqueMembers = new Map<string, SiteTeamMemberFormValue>();
+
+      for (const rawMember of teamMembers) {
+        if (typeof rawMember !== "string") {
+          continue;
+        }
+
+        const trimmed = rawMember.trim();
+        if (trimmed.length === 0) {
+          continue;
+        }
+
+        if (isUuid(trimmed)) {
+          if (!uniqueMembers.has(trimmed)) {
+            uniqueMembers.set(trimmed, {
+              id: trimmed,
+              name: memberNameById[trimmed] ?? trimmed,
+            });
+          }
+          continue;
+        }
+
+        const normalized = trimmed.toLowerCase();
+        const matchedId = memberIdByName[normalized];
+        if (matchedId) {
+          if (!uniqueMembers.has(matchedId)) {
+            uniqueMembers.set(matchedId, {
+              id: matchedId,
+              name: memberNameById[matchedId] ?? trimmed,
+            });
+          }
+          continue;
+        }
+
+        if (!uniqueMembers.has(trimmed)) {
+          uniqueMembers.set(trimmed, { id: trimmed, name: trimmed });
+        }
+      }
+
+      return Array.from(uniqueMembers.values());
+    },
+    [memberIdByName, memberNameById],
+  );
+
+  const formatTeamMembers = useCallback(
+    (teamMembers: string[] | null | undefined) => {
+      if (!Array.isArray(teamMembers) || teamMembers.length === 0) {
+        return null;
+      }
+
+      const names = teamMembers
+        .map((member) => {
+          if (typeof member !== "string") return null;
+          const trimmed = member.trim();
+          if (!trimmed) return null;
+
+          if (isUuid(trimmed)) {
+            return memberNameById[trimmed] ?? trimmed;
+          }
+
+          const normalized = trimmed.toLowerCase();
+          const matchedId = memberIdByName[normalized];
+          if (matchedId) {
+            return memberNameById[matchedId] ?? trimmed;
+          }
+
+          return trimmed;
+        })
+        .filter((value): value is string => Boolean(value));
+
+      const unique = Array.from(new Set(names));
+      return unique.length > 0 ? unique.join(", ") : null;
+    },
+    [memberIdByName, memberNameById],
   );
 
   const { entries: ceeEntries, totals: ceeTotals } = useMemo(() => {
@@ -1227,6 +1538,74 @@ const ProjectDetails = () => {
   const badgeStyle = getProjectStatusBadgeStyle(statusConfig?.color);
   const statusLabel = statusConfig?.label ?? project.status ?? "Statut";
 
+  const handleCreateSite = async () => {
+    if (!project || !currentOrgId) return;
+
+    const displayedProducts = getDisplayedProducts(project.project_products);
+    const firstProduct =
+      displayedProducts[0]?.product ?? project.project_products?.[0]?.product ?? null;
+    const productLabel =
+      firstProduct?.code ||
+      (project as Project & { product_name?: string | null }).product_name ||
+      "";
+    const clientName = getProjectClientName(project);
+    const address = (project as Project & { address?: string | null }).address ?? "";
+
+    const today = new Date();
+    const datePrefix = `SITE-${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(
+      today.getDate(),
+    ).padStart(2, "0")}`;
+
+    const { data: existingSites } = await supabase
+      .from("sites")
+      .select("site_ref")
+      .eq("org_id", currentOrgId)
+      .like("site_ref", `${datePrefix}-%`)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    let nextNumber = 1;
+    if (existingSites && existingSites.length > 0) {
+      const lastRef = existingSites[0].site_ref;
+      const lastNumber = parseInt(lastRef.split("-").pop() || "0", 10);
+      nextNumber = Number.isFinite(lastNumber) ? lastNumber + 1 : 1;
+    }
+
+    const site_ref = `${datePrefix}-${String(nextNumber).padStart(3, "0")}`;
+    const valorisationEur = hasComputedCeeTotals
+      ? ceeTotals.totalValorisationEur
+      : ceeTotals.totalPrime ?? 0;
+
+    setSiteDialogMode("create");
+    setActiveSite(null);
+    setSiteInitialValues({
+      site_ref,
+      project_ref: project.project_ref ?? "",
+      client_name: clientName,
+      product_name: productLabel,
+      address,
+      city: project.city ?? "",
+      postal_code: project.postal_code ?? "",
+      date_debut: new Date().toISOString().slice(0, 10),
+      status: "PLANIFIE",
+      cofrac_status: "EN_ATTENTE",
+      progress_percentage: 0,
+      revenue: 0,
+      profit_margin: 0,
+      surface_facturee: projectSurfaceFacturee > 0 ? projectSurfaceFacturee : 0,
+      cout_main_oeuvre_m2_ht: 0,
+      cout_isolation_m2: 0,
+      isolation_utilisee_m2: 0,
+      montant_commission: 0,
+      valorisation_cee: valorisationEur ?? 0,
+      subcontractor_id: null,
+      team_members: [],
+      additional_costs: [],
+      subcontractor_payment_confirmed: false,
+    });
+    setSiteDialogOpen(true);
+  };
+
   const handleOpenQuote = () => {
     const displayedProducts = getDisplayedProducts(project.project_products);
     const firstProduct =
@@ -1247,6 +1626,165 @@ const ProjectDetails = () => {
     });
     setQuoteDialogOpen(true);
   };
+
+  const handleEditSite = (site: ProjectSite) => {
+      setSiteDialogMode("edit");
+      setActiveSite(site);
+      setSiteInitialValues({
+        site_ref: site.site_ref,
+        project_ref: site.project_ref,
+        client_name: site.client_name,
+        product_name: site.product_name,
+        address: site.address,
+        city: site.city,
+        postal_code: site.postal_code,
+        status: (site.status as SiteStatus) ?? "PLANIFIE",
+        cofrac_status: (site.cofrac_status as CofracStatus) ?? "EN_ATTENTE",
+        date_debut: site.date_debut,
+        date_fin_prevue: site.date_fin_prevue ?? "",
+        progress_percentage: site.progress_percentage ?? 0,
+        revenue: site.revenue ?? 0,
+        profit_margin: site.profit_margin ?? 0,
+        surface_facturee: site.surface_facturee ?? 0,
+        cout_main_oeuvre_m2_ht: site.cout_main_oeuvre_m2_ht ?? 0,
+        cout_isolation_m2: site.cout_isolation_m2 ?? 0,
+        isolation_utilisee_m2: site.isolation_utilisee_m2 ?? 0,
+        montant_commission: site.montant_commission ?? 0,
+        valorisation_cee: site.valorisation_cee ?? 0,
+        notes: site.notes ?? "",
+        subcontractor_payment_confirmed: Boolean(site.subcontractor_payment_confirmed),
+        subcontractor_id: site.subcontractor_id ?? null,
+        team_members: mapTeamMembersToFormValues(site.team_members ?? []),
+        additional_costs: normalizeAdditionalCosts(site.additional_costs ?? []),
+      });
+      setSiteDialogOpen(true);
+    };
+
+  const handleSubmitSite = async (values: SiteFormValues) => {
+      if (!user || !currentOrgId || !project) return;
+
+      const sanitizedTeam = Array.from(
+        new Set(
+          (values.team_members ?? [])
+            .map((member) => {
+              if (!member) return null;
+
+              const rawId = typeof member.id === "string" ? member.id.trim() : "";
+              if (rawId && (isUuid(rawId) || memberNameById[rawId])) {
+                return rawId;
+              }
+
+              const rawName = typeof member.name === "string" ? member.name.trim() : "";
+              if (rawName.length > 0) {
+                const matchedId = memberIdByName[rawName.toLowerCase()];
+                if (matchedId) {
+                  return matchedId;
+                }
+              }
+
+              return null;
+            })
+            .filter((value): value is string => Boolean(value)),
+        ),
+      );
+
+      const sanitizedCosts = values.additional_costs
+        ? values.additional_costs
+            .filter((cost) => cost.label.trim().length > 0)
+            .map((cost) => {
+              const attachment = cost.attachment ? cost.attachment.trim() : "";
+
+              return {
+                label: cost.label.trim(),
+                amount_ht: Number.isFinite(cost.amount_ht) ? cost.amount_ht : 0,
+                taxes: Number.isFinite(cost.taxes) ? cost.taxes : 0,
+                attachment: attachment.length > 0 ? attachment : null,
+              };
+            })
+        : [];
+
+      const projectRef = values.project_ref?.trim?.() ?? "";
+      const clientName = values.client_name?.trim?.() ?? "";
+      const matchedProject = projectSiteOptions.find(
+        (option) => option.project_ref === projectRef,
+      );
+      const resolvedProjectId =
+        typeof matchedProject?.id === "string" && matchedProject.id.length > 0
+          ? matchedProject.id
+          : typeof activeSite?.project_id === "string" && activeSite.project_id.length > 0
+            ? activeSite.project_id
+            : project.id;
+
+      const siteData = {
+        site_ref: values.site_ref,
+        project_ref: projectRef,
+        client_name: clientName,
+        product_name: values.product_name?.trim() || "",
+        address: values.address,
+        city: values.city,
+        postal_code: values.postal_code,
+        status: values.status,
+        cofrac_status: values.cofrac_status,
+        date_debut: values.date_debut,
+        date_fin_prevue: values.date_fin_prevue || null,
+        progress_percentage: values.progress_percentage,
+        revenue: values.revenue,
+        profit_margin: values.profit_margin,
+        surface_facturee: values.surface_facturee,
+        cout_main_oeuvre_m2_ht: values.cout_main_oeuvre_m2_ht,
+        cout_isolation_m2: values.cout_isolation_m2,
+        isolation_utilisee_m2: values.isolation_utilisee_m2,
+        montant_commission: values.montant_commission,
+        valorisation_cee: values.valorisation_cee,
+        subcontractor_payment_confirmed: values.subcontractor_payment_confirmed,
+        notes: values.notes?.trim() || null,
+        team_members: sanitizedTeam.length > 0 ? sanitizedTeam : null,
+        additional_costs: sanitizedCosts.length > 0 ? sanitizedCosts : [],
+        subcontractor_id: values.subcontractor_id ?? null,
+        user_id: user.id,
+        created_by: user.id,
+        org_id: currentOrgId,
+        project_id: resolvedProjectId,
+      };
+
+      try {
+        if (siteDialogMode === "edit" && activeSite) {
+          const { error } = await supabase
+            .from("sites")
+            .update(siteData)
+            .eq("id", activeSite.id);
+
+          if (error) throw error;
+
+          toast({
+            title: "Chantier mis à jour",
+            description: `${values.site_ref} a été mis à jour avec succès.`,
+          });
+        } else {
+          const { error } = await supabase.from("sites").insert([siteData]);
+
+          if (error) throw error;
+
+          toast({
+            title: "Chantier créé",
+            description: `${siteData.site_ref} a été ajouté à la liste des chantiers.`,
+          });
+        }
+
+        await refetchProjectSites();
+        setSiteDialogOpen(false);
+        setSiteInitialValues(undefined);
+        setActiveSite(null);
+        setSiteDialogMode("create");
+      } catch (error) {
+        console.error("Error saving site:", error);
+        toast({
+          title: "Erreur",
+          description: "Impossible de sauvegarder le chantier.",
+          variant: "destructive",
+        });
+      }
+    };
 
   const handleDeleteProject = async () => {
     if (!project) return;
@@ -1302,6 +1840,621 @@ const ProjectDetails = () => {
 
     return null;
   })();
+
+  return (
+    <Layout>
+      <div className="space-y-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="flex items-center gap-3">
+              <Button variant="ghost" onClick={() => navigate(-1)}>
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Retour
+              </Button>
+              <Badge variant="outline" style={badgeStyle}>
+                {statusLabel}
+              </Badge>
+            </div>
+            <h1 className="mt-2 text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+              {project.project_ref}
+            </h1>
+            <p className="text-muted-foreground">
+              {productCodes.length > 0 ? productCodes.join(", ") : "Aucun code produit"} – {project.city} (
+              {project.postal_code})
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={handleOpenQuote}>
+              <FileText className="w-4 h-4 mr-2" />
+              Générer un devis
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                void handleCreateSite();
+              }}
+            >
+              <Hammer className="w-4 h-4 mr-2" />
+              Créer un chantier
+            </Button>
+            {(isAdmin || project.user_id === user?.id) && (
+              <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive">
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Supprimer le projet
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Supprimer le projet ?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Cette action est irréversible. Le projet {project.project_ref || "sélectionné"} sera définitivement supprimé.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={isDeleting}>Annuler</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteProject} disabled={isDeleting}>
+                      {isDeleting ? "Suppression..." : "Confirmer"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
+        </div>
+
+        <Tabs defaultValue="overview" className="space-y-6">
+          <TabsList className="w-full justify-start overflow-x-auto">
+            <TabsTrigger value="overview">Aperçu</TabsTrigger>
+            <TabsTrigger value="chantiers">Chantiers</TabsTrigger>
+          </TabsList>
+          <TabsContent value="overview" className="space-y-6">
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+              <Card className="shadow-card bg-gradient-card border-0 xl:col-span-2">
+                <CardHeader>
+                  <CardTitle>Informations générales</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">Client</p>
+                      <p className="font-medium flex items-center gap-2">
+                        <UserRound className="w-4 h-4 text-primary" />
+                        {getProjectClientName(project)}
+                      </p>
+                      {project.company && (
+                        <p className="text-sm text-muted-foreground">{project.company}</p>
+                      )}
+                      {project.siren && (
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">
+                          SIREN : {project.siren}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">Téléphone</p>
+                      <p className="font-medium flex items-center gap-2">
+                        <Phone className="w-4 h-4 text-primary" />
+                        {project.phone ?? "Non renseigné"}
+                      </p>
+                    </div>
+                    {projectEmail && (
+                      <div className="space-y-2">
+                        <p className="text-sm text-muted-foreground">Email</p>
+                        <p className="font-medium flex items-center gap-2">
+                          <Mail className="w-4 h-4 text-primary" />
+                          {projectEmail}
+                        </p>
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">Adresse</p>
+                      <p className="font-medium flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-primary" />
+                        {(project as Project & { address?: string }).address
+                          ? [
+                              (project as Project & { address?: string }).address,
+                              [project.postal_code, project.city].filter(Boolean).join(" "),
+                            ]
+                              .filter((part) => part && part.toString().trim().length > 0)
+                              .join(", ")
+                          : `${project.city} (${project.postal_code})`}
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">Source</p>
+                      <p className="font-medium flex items-center gap-2">
+                        <UserRound className="w-4 h-4 text-primary" />
+                        {project.source && project.source.trim().length > 0
+                          ? project.source
+                          : "Non renseigné"}
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">Assigné à</p>
+                      <p className="font-medium">{project.assigned_to}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">Type de bâtiment</p>
+                      <p className="font-medium flex items-center gap-2">
+                        <Building2 className="w-4 h-4 text-primary" />
+                        {project.building_type ?? "Non renseigné"}
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">Usage</p>
+                      <p className="font-medium">{project.usage ?? "Non renseigné"}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">Surface bâtiment</p>
+                      <p className="font-medium">
+                        {typeof project.surface_batiment_m2 === "number"
+                          ? `${project.surface_batiment_m2} m²`
+                          : "Non renseigné"}
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">Surface isolée</p>
+                      <p className="font-medium">
+                        {typeof project.surface_isolee_m2 === "number"
+                          ? `${project.surface_isolee_m2} m²`
+                          : "Non renseigné"}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-card bg-gradient-card border-0">
+                <CardHeader>
+                  <CardTitle>Finances & planning</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4 text-sm">
+                  <div className="flex items-center gap-2">
+                    <Euro className="w-4 h-4 text-primary" />
+                    <span className="text-muted-foreground">Coût du chantier:</span>
+                    <span className="font-medium">
+                      {typeof projectCostValue === "number"
+                        ? formatCurrency(projectCostValue)
+                        : "Non défini"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <HandCoins className="w-4 h-4 text-emerald-600" />
+                    <span className="text-muted-foreground">Prime CEE:</span>
+                    <span className="font-medium">
+                      {typeof displayedPrimeValue === "number"
+                        ? formatCurrency(displayedPrimeValue)
+                        : "Non définie"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <HandCoins className="w-4 h-4 text-amber-600" />
+                    <span className="text-muted-foreground">Valorisation totale:</span>
+                    <span className="font-medium text-amber-600">
+                      {hasComputedCeeTotals
+                        ? `${formatCurrency(ceeTotals.totalValorisationEur)} (${formatDecimal(
+                            ceeTotals.totalValorisationMwh,
+                          )} MWh)`
+                        : "Non calculée"}
+                    </span>
+                  </div>
+                  {projectProducts.map((item, index) => {
+                    const entryId = item.id ?? item.product_id ?? `product-${index}`;
+                    const ceeEntry = ceeEntryMap[entryId];
+                    if (!ceeEntry) {
+                      return null;
+                    }
+
+                    const labelBase =
+                      typeof ceeEntry.result?.valorisationTotalEur === "number"
+                        ? formatCurrency(ceeEntry.result.valorisationTotalEur)
+                        : null;
+                    const entryHasWarnings =
+                      Boolean(ceeEntry.warnings.missingDynamicParams) ||
+                      Boolean(ceeEntry.warnings.missingKwh);
+
+                    return (
+                      <div
+                        key={entryId}
+                        className="rounded-lg border border-border/50 bg-background/60 p-3"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-medium text-foreground">
+                              {item.product?.name ?? "Produit"}
+                            </p>
+                            <p className="text-xs text-muted-foreground">{item.product?.code ?? "—"}</p>
+                          </div>
+                          {typeof item.quantity === "number" && (
+                            <Badge variant="outline">x{item.quantity}</Badge>
+                          )}
+                        </div>
+                        <div className="mt-2 grid gap-1 text-xs text-muted-foreground">
+                          <span>
+                            Multiplicateur :{" "}
+                            {ceeEntry.multiplierValue && ceeEntry.multiplierValue > 0
+                              ? `${formatDecimal(ceeEntry.multiplierValue)}${
+                                  ceeEntry.multiplierLabel ? ` (${ceeEntry.multiplierLabel})` : ""
+                                }`
+                              : ceeEntry.warnings.missingDynamicParams
+                                ? "Paramètres manquants"
+                                : "Non calculé"}
+                          </span>
+                          <span>
+                            Valorisation / unité :{" "}
+                            {ceeEntry.result
+                              ? formatCurrency(ceeEntry.result.valorisationPerUnitEur)
+                              : "Non calculée"}
+                          </span>
+                          <span>
+                            Valorisation totale : {labelBase ?? "Non calculée"}
+                          </span>
+                        </div>
+                        {entryHasWarnings ? (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {ceeEntry.warnings.missingKwh ? (
+                              <Badge variant="outline" className="bg-amber-50 text-amber-700">
+                                kWh manquant pour ce bâtiment
+                              </Badge>
+                            ) : null}
+                            {ceeEntry.warnings.missingDynamicParams ? (
+                              <Badge variant="outline" className="bg-amber-50 text-amber-700">
+                                Paramètres dynamiques manquants
+                              </Badge>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                  <div className="grid gap-2">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-primary" />
+                      <span className="text-muted-foreground">Début estimé:</span>
+                      <span className="font-medium">
+                        {project.date_debut_prevue
+                          ? new Date(project.date_debut_prevue).toLocaleDateString("fr-FR")
+                          : "Non défini"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-primary" />
+                      <span className="text-muted-foreground">Fin estimée:</span>
+                      <span className="font-medium">
+                        {project.date_fin_prevue
+                          ? new Date(project.date_fin_prevue).toLocaleDateString("fr-FR")
+                          : "Non définie"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">Créé le:</span>
+                      <span className="font-medium">
+                        {new Date(project.created_at).toLocaleDateString("fr-FR")}
+                      </span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card className="shadow-card bg-gradient-card border-0">
+              <CardHeader>
+                <CardTitle>Produits associés</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {projectProducts.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Aucun produit (hors ECO) n'est associé à ce projet.
+                  </p>
+                ) : (
+                  projectProducts.map((item, index) => {
+                    const dynamicFields = getDynamicFieldEntries(
+                      item.product?.params_schema ?? null,
+                      item.dynamic_params
+                    );
+                    const entryId = item.id ?? item.product_id ?? `product-${index}`;
+                    const ceeEntry = ceeEntryMap[entryId];
+                    const hasWarnings =
+                      Boolean(ceeEntry?.warnings.missingDynamicParams) ||
+                      Boolean(ceeEntry?.warnings.missingKwh);
+
+                    const multiplierDisplay = (() => {
+                      if (!ceeEntry) return "Non renseigné";
+                      if (typeof ceeEntry.multiplierValue === "number" && ceeEntry.multiplierValue > 0) {
+                        const value = formatDecimal(ceeEntry.multiplierValue);
+                        return ceeEntry.multiplierLabel
+                          ? `${value} (${ceeEntry.multiplierLabel})`
+                          : value;
+                      }
+                      if (ceeEntry.warnings.missingDynamicParams) {
+                        return "Paramètres dynamiques manquants";
+                      }
+                      return "Non renseigné";
+                    })();
+
+                    const valorisationTotalDisplay = (() => {
+                      if (!ceeEntry) return "Non calculée";
+                      if (ceeEntry.result) {
+                        return `${formatCurrency(ceeEntry.result.valorisationTotalEur)} · ${formatDecimal(
+                          ceeEntry.result.valorisationTotalMwh,
+                        )} MWh`;
+                      }
+                      if (ceeEntry.warnings.missingDynamicParams) {
+                        return "Paramètres dynamiques manquants";
+                      }
+                      if (ceeEntry.warnings.missingKwh) {
+                        return "Aucune valeur kWh";
+                      }
+                      return "Non calculée";
+                    })();
+
+                    return (
+                      <div
+                        key={item.id ?? entryId}
+                        className="border border-border/60 rounded-lg p-4 space-y-3"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="text-xs font-semibold">
+                              {item.product?.code ?? "Code inconnu"}
+                            </Badge>
+                            <span className="text-sm text-muted-foreground">
+                              {item.product?.name ?? "Produit"}
+                            </span>
+                          </div>
+                          {typeof item.quantity === "number" && (
+                            <span className="text-sm font-medium">Quantité : {item.quantity}</span>
+                          )}
+                        </div>
+                        {hasWarnings ? (
+                          <div className="flex flex-wrap gap-2">
+                            {ceeEntry?.warnings.missingKwh ? (
+                              <Badge className="bg-amber-100 text-amber-700 border-amber-200" variant="outline">
+                                kWh manquant pour ce bâtiment
+                              </Badge>
+                            ) : null}
+                            {ceeEntry?.warnings.missingDynamicParams ? (
+                              <Badge className="bg-amber-100 text-amber-700 border-amber-200" variant="outline">
+                                Paramètres dynamiques manquants
+                              </Badge>
+                            ) : null}
+                          </div>
+                        ) : null}
+                        {dynamicFields.length > 0 && (
+                          <div className="grid gap-2 md:grid-cols-2 text-sm">
+                            {dynamicFields.map((field) => (
+                              <div
+                                key={`${item.id}-${field.label}`}
+                                className="flex items-center justify-between gap-2"
+                              >
+                                <span className="text-muted-foreground">{field.label}</span>
+                                <span className="font-medium">
+                                  {String(formatDynamicFieldValue(field))}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {ceeEntry ? (
+                          <div className="space-y-2 text-sm pt-2 border-t border-border/40">
+                            <div className="flex items-center justify-between">
+                              <span className="text-muted-foreground">Multiplicateur</span>
+                              <span className="font-medium text-right">{multiplierDisplay}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-muted-foreground">Valorisation / unité</span>
+                              <span className="font-medium text-emerald-600 text-right">
+                                {ceeEntry.result
+                                  ? `${formatCurrency(ceeEntry.result.valorisationPerUnitEur)}${
+                                      ceeEntry.multiplierLabel ? ` / ${ceeEntry.multiplierLabel}` : ""
+                                    }`
+                                  : "Non calculée"}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-muted-foreground">Valorisation totale</span>
+                              <span className="font-semibold text-amber-600 text-right">
+                                {valorisationTotalDisplay}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-muted-foreground">Prime calculée</span>
+                              <span className="font-semibold text-emerald-600 text-right">
+                                {ceeEntry.result ? formatCurrency(ceeEntry.result.totalPrime) : "Non calculée"}
+                              </span>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })
+                )}
+              </CardContent>
+            </Card>
+        </TabsContent>
+        <TabsContent value="chantiers" className="space-y-6">
+          <Card className="shadow-card bg-gradient-card border-0">
+            <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="space-y-1">
+                  <CardTitle>Chantiers du projet</CardTitle>
+                  <CardDescription>
+                    Créez, éditez et suivez les chantiers rattachés à {project.project_ref}.
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    void handleCreateSite();
+                  }}
+                  className="inline-flex items-center gap-2"
+                >
+                  <Hammer className="h-4 w-4" />
+                  Nouveau chantier
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {projectSitesLoading ? (
+                  <div className="py-6 text-sm text-muted-foreground">
+                    Chargement des chantiers...
+                  </div>
+                ) : projectSites.length === 0 ? (
+                  <div className="py-10 text-center space-y-4">
+                    <div className="space-y-2">
+                      <CardTitle className="text-lg">Aucun chantier lié</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        Créez un chantier pour suivre l'exécution de ce projet.
+                      </p>
+                    </div>
+                    <Button
+                      onClick={() => {
+                        void handleCreateSite();
+                      }}
+                      size="sm"
+                      className="inline-flex items-center gap-2"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Créer un chantier
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {projectSites.map((site) => {
+                      const status = (site.status ?? "PLANIFIE") as SiteStatus;
+                      const cofracStatus = (site.cofrac_status ?? "EN_ATTENTE") as CofracStatus;
+                      const teamMembersLabel = formatTeamMembers(site.team_members);
+                      const progressValue =
+                        typeof site.progress_percentage === "number"
+                          ? Math.min(Math.max(site.progress_percentage, 0), 100)
+                          : 0;
+
+                      return (
+                        <div
+                          key={site.id}
+                          className="space-y-4 rounded-lg border border-border/60 bg-background/60 p-4"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <h3 className="text-base font-semibold text-foreground">{site.site_ref}</h3>
+                              <p className="text-sm text-muted-foreground">
+                                {site.address
+                                  ? `${site.address} · ${site.postal_code} ${site.city}`
+                                  : `${site.city} (${site.postal_code})`}
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <Badge variant="outline" className={getStatusColor(status)}>
+                                {getStatusLabel(status)}
+                              </Badge>
+                              <Badge variant="outline">{getCofracStatusLabel(cofracStatus)}</Badge>
+                            </div>
+                          </div>
+
+                          <div className="grid gap-3 text-sm text-muted-foreground md:grid-cols-2 xl:grid-cols-4">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-4 w-4 text-primary" />
+                              <span>
+                                Début :{" "}
+                                <span className="font-medium text-foreground">
+                                  {new Date(site.date_debut).toLocaleDateString("fr-FR")}
+                                </span>
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-4 w-4 text-primary" />
+                              <span>
+                                Fin prévue :{" "}
+                                <span className="font-medium text-foreground">
+                                  {site.date_fin_prevue
+                                    ? new Date(site.date_fin_prevue).toLocaleDateString("fr-FR")
+                                    : "—"}
+                                </span>
+                              </span>
+                            </div>
+                            <div>
+                              <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
+                                <span>Avancement</span>
+                                <span className="font-medium text-foreground">{progressValue}%</span>
+                              </div>
+                              <Progress value={progressValue} />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Euro className="h-4 w-4 text-emerald-600" />
+                              <span>
+                                CA :{" "}
+                                <span className="font-medium text-foreground">
+                                  {typeof site.revenue === "number"
+                                    ? formatCurrency(site.revenue)
+                                    : "—"}
+                                </span>
+                              </span>
+                            </div>
+                            {typeof site.valorisation_cee === "number" && (
+                              <div className="flex items-center gap-2">
+                                <HandCoins className="h-4 w-4 text-amber-600" />
+                                <span>
+                                  Valorisation :{" "}
+                                  <span className="font-medium text-foreground">
+                                    {formatCurrency(site.valorisation_cee)}
+                                  </span>
+                                </span>
+                              </div>
+                            )}
+                            {site.subcontractor && (
+                              <div className="flex items-center gap-2">
+                                <Building2 className="h-4 w-4 text-primary" />
+                                <span>
+                                  Sous-traitant :{" "}
+                                  <span className="font-medium text-foreground">{site.subcontractor.name}</span>
+                                </span>
+                              </div>
+                            )}
+                            {teamMembersLabel && (
+                              <div className="flex items-center gap-2">
+                                <Users className="h-4 w-4 text-primary" />
+                                <span>
+                                  Équipe :{" "}
+                                  <span className="font-medium text-foreground">{teamMembersLabel}</span>
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {site.notes && (
+                            <p className="border-t border-border/40 pt-3 text-sm text-muted-foreground">
+                              {site.notes}
+                            </p>
+                          )}
+
+                          <div className="flex flex-wrap justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                handleEditSite(site);
+                              }}
+                              className="inline-flex items-center gap-2"
+                            >
+                              <Pencil className="h-4 w-4" />
+                              Modifier
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      </div>
 
   const [activeTab, setActiveTab] = useState("informations");
 
@@ -1567,6 +2720,22 @@ const ProjectDetails = () => {
           }
         }}
         initialValues={quoteInitialValues}
+      />
+      <SiteDialog
+        open={siteDialogOpen}
+        mode={siteDialogMode}
+        onOpenChange={(open) => {
+          setSiteDialogOpen(open);
+          if (!open) {
+            setSiteInitialValues(undefined);
+            setActiveSite(null);
+            setSiteDialogMode("create");
+          }
+        }}
+        onSubmit={handleSubmitSite}
+        initialValues={siteInitialValues}
+        orgId={currentOrgId}
+        projects={projectSiteOptions}
       />
     </Layout>
   );
