@@ -383,8 +383,12 @@ export type ProjectFormValues = z.infer<ProjectFormSchema>;
 
 interface AddProjectDialogProps {
   onProjectAdded?: () => void | Promise<void>;
+  onProjectUpdated?: () => void | Promise<void>;
   trigger?: ReactNode;
   initialValues?: Partial<ProjectFormValues>;
+  mode?: "create" | "edit";
+  projectId?: string;
+  projectRef?: string | null;
 }
 
 const baseDefaultValues: Partial<ProjectFormValues> = {
@@ -463,11 +467,16 @@ const computePrimeCeePersistence = (
 
 export const AddProjectDialog = ({
   onProjectAdded,
+  onProjectUpdated,
   trigger,
   initialValues,
+  mode = "create",
+  projectId,
+  projectRef,
 }: AddProjectDialogProps) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const isEditMode = mode === "edit";
   const { user } = useAuth();
   const { currentOrgId } = useOrg();
   const { toast } = useToast();
@@ -1276,36 +1285,17 @@ export const AddProjectDialog = ({
       return;
     }
 
+    if (isEditMode && !projectId) {
+      toast({
+        title: "Erreur",
+        description: "Projet introuvable pour la mise à jour",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
     try {
-      // Générer la référence automatiquement format ECOP-Date-Number
-      const today = new Date();
-      const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
-
-      // Récupérer le dernier projet du jour pour incrémenter le numéro
-      const { data: existingProjects } = await supabase
-        .from("projects")
-        .select("project_ref")
-        .eq("org_id", currentOrgId)
-        .like("project_ref", `ECOP-${dateStr}-%`)
-        .order("created_at", { ascending: false })
-        .limit(1);
-
-      let nextNumber = 1;
-      if (existingProjects && existingProjects.length > 0) {
-        const lastRef = existingProjects[0].project_ref as string;
-        const parts = lastRef.split("-");
-        const lastNumber = parseInt(parts[2] || "0", 10);
-        nextNumber = (Number.isFinite(lastNumber) ? lastNumber : 0) + 1;
-      }
-
-      const project_ref = `ECOP-${dateStr}-${nextNumber.toString().padStart(3, "0")}`;
-
-      // Récupérer le nom du premier produit pour product_name (legacy)
-      const firstProduct = productsData?.find((p) => p.id === data.products[0]?.product_id);
-      const product_name = firstProduct?.name || "";
-
-      // Créer le projet
       const normalizedSiren = (data.siren ?? "").replace(/\s+/g, "").trim();
       const clientFirstName = data.client_first_name.trim();
       const clientLastName = data.client_last_name.trim();
@@ -1314,7 +1304,10 @@ export const AddProjectDialog = ({
       const normalizedAddress = data.address?.trim();
       const normalizedHqAddress = data.hq_address?.trim();
       const normalizedExternalRef = data.external_reference?.trim();
-      const projectCost = data.estimated_value ?? undefined;
+      const projectCost =
+        typeof data.estimated_value === "number" && Number.isFinite(data.estimated_value)
+          ? data.estimated_value
+          : undefined;
       const delegateRecord = data.delegate_id
         ? delegatesById[data.delegate_id] ?? delegatesData?.find((delegate) => delegate.id === data.delegate_id)
         : undefined;
@@ -1341,6 +1334,119 @@ export const AddProjectDialog = ({
       const { primeCeeEuro, primeCeeCents } = computePrimeCeePersistence(
         primeCeeValue?.totalPrime,
       );
+
+      const firstProduct = productsData?.find((p) => p.id === data.products[0]?.product_id);
+      const product_name = firstProduct?.name || "";
+
+      const basePayload = {
+        client_name,
+        client_first_name: clientFirstName,
+        client_last_name: clientLastName,
+        product_name,
+        hq_address: normalizedHqAddress ? normalizedHqAddress : undefined,
+        hq_city: data.hq_city || undefined,
+        hq_postal_code: data.hq_postal_code || undefined,
+        same_address: data.same_address || false,
+        address: normalizedAddress ? normalizedAddress : undefined,
+        external_reference: normalizedExternalRef ? normalizedExternalRef : undefined,
+        city: data.city,
+        postal_code: data.postal_code,
+        status: data.status,
+        assigned_to: data.assigned_to,
+        source: data.source || undefined,
+        company: data.company || undefined,
+        phone: data.phone || undefined,
+        siren: normalizedSiren && normalizedSiren.length > 0 ? normalizedSiren : null,
+        building_type: data.building_type || undefined,
+        usage: data.usage || undefined,
+        prime_cee: sanitizedPrimeCee,
+        delegate_id: data.delegate_id,
+        signatory_name: data.signatory_name || undefined,
+        signatory_title: data.signatory_title || undefined,
+        surface_batiment_m2: data.surface_batiment_m2 || undefined,
+        date_debut_prevue: data.date_debut_prevue || undefined,
+        date_fin_prevue: data.date_fin_prevue || undefined,
+        estimated_value: projectCost,
+        lead_id: data.lead_id || undefined,
+      };
+
+      if (isEditMode) {
+        const { data: updatedProject, error: updateError } = await supabase
+          .from("projects")
+          .update(basePayload)
+          .eq("id", projectId!)
+          .eq("org_id", currentOrgId)
+          .select()
+          .maybeSingle();
+
+        if (updateError) throw updateError;
+
+        const targetProjectId = projectId!;
+        const { error: deleteError } = await supabase
+          .from("project_products")
+          .delete()
+          .eq("project_id", targetProjectId);
+
+        if (deleteError) throw deleteError;
+
+        const productPayload = data.products
+          .filter((p) => Boolean(p.product_id))
+          .map((p) => ({
+            project_id: targetProjectId,
+            product_id: p.product_id,
+            quantity:
+              typeof p.quantity === "number"
+                ? p.quantity
+                : Number.isFinite(Number(p.quantity))
+                  ? Number(p.quantity)
+                  : 1,
+            dynamic_params: p.dynamic_params ?? {},
+          }));
+
+        if (productPayload.length > 0) {
+          const { error: insertError } = await supabase
+            .from("project_products")
+            .insert(productPayload);
+
+          if (insertError) throw insertError;
+        }
+
+        const resolvedProjectRef = projectRef ?? updatedProject?.project_ref ?? undefined;
+
+        toast({
+          title: "Projet mis à jour",
+          description: resolvedProjectRef
+            ? `Le projet ${resolvedProjectRef} a été modifié avec succès`
+            : "Le projet a été modifié avec succès",
+        });
+
+        setOpen(false);
+        await onProjectUpdated?.();
+        return;
+      }
+
+      // Générer la référence automatiquement format ECOP-Date-Number
+      const today = new Date();
+      const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
+
+      // Récupérer le dernier projet du jour pour incrémenter le numéro
+      const { data: existingProjects } = await supabase
+        .from("projects")
+        .select("project_ref")
+        .eq("org_id", currentOrgId)
+        .like("project_ref", `ECOP-${dateStr}-%`)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      let nextNumber = 1;
+      if (existingProjects && existingProjects.length > 0) {
+        const lastRef = existingProjects[0].project_ref as string;
+        const parts = lastRef.split("-");
+        const lastNumber = parseInt(parts[2] || "0", 10);
+        nextNumber = (Number.isFinite(lastNumber) ? lastNumber : 0) + 1;
+      }
+
+      const generatedProjectRef = `ECOP-${dateStr}-${nextNumber.toString().padStart(3, "0")}`;
 
       const { data: createdProject, error: projectError } = await supabase
         .from("projects")
@@ -1379,6 +1485,8 @@ export const AddProjectDialog = ({
             date_fin_prevue: data.date_fin_prevue || undefined,
             estimated_value: projectCost,
             lead_id: data.lead_id || undefined,
+            project_ref: generatedProjectRef,
+            ...basePayload,
           },
         ])
         .select()
@@ -1386,7 +1494,6 @@ export const AddProjectDialog = ({
 
       if (projectError) throw projectError;
 
-      // Ajouter les produits au projet
       const projectProducts = data.products.map((p) => ({
         project_id: createdProject.id,
         product_id: p.product_id,
@@ -1402,7 +1509,7 @@ export const AddProjectDialog = ({
 
       toast({
         title: "Projet créé",
-        description: `Le projet ${project_ref} avec ${data.products.length} produit(s) a été ajouté avec succès`,
+        description: `Le projet ${generatedProjectRef} avec ${data.products.length} produit(s) a été ajouté avec succès`,
       });
 
       const defaultEcoIds = ecoProducts
@@ -1448,9 +1555,13 @@ export const AddProjectDialog = ({
       </DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Ajouter un nouveau projet</DialogTitle>
+          <DialogTitle>
+            {isEditMode ? "Modifier le projet" : "Ajouter un nouveau projet"}
+          </DialogTitle>
           <DialogDescription>
-            Remplissez les informations du projet
+            {isEditMode
+              ? "Mettez à jour les informations du projet"
+              : "Remplissez les informations du projet"}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -2216,7 +2327,13 @@ export const AddProjectDialog = ({
                 Annuler
               </Button>
               <Button type="submit" disabled={loading}>
-                {loading ? "Création..." : "Créer le projet"}
+                {loading
+                  ? isEditMode
+                    ? "Mise à jour..."
+                    : "Création..."
+                  : isEditMode
+                  ? "Mettre à jour le projet"
+                  : "Créer le projet"}
               </Button>
             </div>
           </form>
