@@ -32,14 +32,14 @@ const PROJECT_STATUS_LABELS = DEFAULT_PROJECT_STATUSES.reduce<Record<string, str
 );
 
 const ACTIVE_PROJECT_STATUSES = PROJECT_STATUS_VALUES.filter(
-  (status) => !["LIVRE", "CLOTURE"].includes(status)
+  (status) => !["LIVRE", "ANNULE"].includes(status)
 );
 const PROJECT_SURFACE_STATUSES = PROJECT_STATUS_VALUES.filter((status) =>
-  ["EN_COURS", "LIVRE"].includes(status)
+  ["CHANTIER_EN_COURS", "CHANTIER_TERMINE", "LIVRE"].includes(status)
 );
 
 const ACCEPTED_PROJECT_STATUS =
-  DEFAULT_PROJECT_STATUSES.find((status) => status.value === "ACCEPTE")?.value ?? "ACCEPTE";
+  DEFAULT_PROJECT_STATUSES.find((status) => status.value === "DEVIS_SIGNE")?.value ?? "DEVIS_SIGNE";
 
 const QUOTE_STATUS_LABELS = {
   SENT: "Envoyé",
