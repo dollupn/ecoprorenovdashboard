@@ -1,21 +1,9 @@
-import type { Request, Response, NextFunction } from "express";
+import type { Request, Response } from "express";
 import { Router } from "express";
 
 import { quotesPdfService } from "../quotesPdfService";
 import { QuotePdfConfigurationError, QuotePdfError, QuotePdfNotFoundError } from "../errors";
-
-const ensureAuthenticated = (req: Request, res: Response, next: NextFunction) => {
-  const authHeader = req.headers.authorization;
-  const orgId = req.headers["x-organization-id"];
-
-  if (!authHeader || !orgId) {
-    return res.status(401).json({
-      message: "Authentification requise pour télécharger le devis",
-    });
-  }
-
-  return next();
-};
+import { ensureAuthenticated } from "./authentication";
 
 const router = Router();
 

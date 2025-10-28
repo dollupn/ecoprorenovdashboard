@@ -25,3 +25,31 @@ export class QuotePdfValidationError extends QuotePdfError {
     this.name = "QuotePdfValidationError";
   }
 }
+
+export class ApiError extends Error {
+  constructor(message: string, public readonly statusCode: number, public readonly cause?: unknown) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+export class ValidationError extends ApiError {
+  constructor(message: string, cause?: unknown) {
+    super(message, 400, cause);
+    this.name = "ValidationError";
+  }
+}
+
+export class NotFoundError extends ApiError {
+  constructor(message: string) {
+    super(message, 404);
+    this.name = "NotFoundError";
+  }
+}
+
+export class ForbiddenError extends ApiError {
+  constructor(message: string) {
+    super(message, 403);
+    this.name = "ForbiddenError";
+  }
+}
