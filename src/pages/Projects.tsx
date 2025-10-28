@@ -1331,49 +1331,7 @@ const Projects = () => {
                               <span className="font-medium">Réf. ext:</span> {externalReference}
                             </span>
                           )}
-                          {delegateName && (
-                            <span className="flex items-center gap-1">
-                              <UserRound className="h-3 w-3" />
-                              {delegateName}
-                              {formattedDelegatePrice && (
-                                <span className="text-[10px]">({formattedDelegatePrice}/MWh)</span>
-                              )}
-                            </span>
-                          )}
                         </div>
-
-                        {/* Valorisation Details (if any) */}
-                        {displayedValorisationEntries.length > 0 && (
-                          <div className="space-y-2">
-                            {displayedValorisationEntries.map((entry) => {
-                              const valorisationLabel = (entry.valorisationLabel || "Valorisation m²/LED").trim();
-                              return (
-                                <div
-                                  key={`${project.id}-valorisation-${entry.projectProductId}`}
-                                  className="rounded-md border bg-muted/20 p-2.5 space-y-1.5"
-                                >
-                                  <div className="flex items-start justify-between gap-2">
-                                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                      {valorisationLabel}
-                                      {entry.productCode && ` (${entry.productCode})`}
-                                    </span>
-                                    <span className="text-xs font-semibold text-amber-600">
-                                      {formatCurrency(entry.valorisationTotalEur ?? entry.totalPrime ?? 0)}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                                    <span>
-                                      {formatDecimal(entry.valorisationPerUnitMwh)} MWh × {entry.multiplierLabel}
-                                    </span>
-                                    <span className="font-semibold text-emerald-600">
-                                      {formatCurrency(entry.valorisationPerUnitEur ?? 0)} / {entry.multiplierLabel}
-                                    </span>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
 
                         {/* Action Buttons */}
                         <div className="flex gap-2 pt-2">
