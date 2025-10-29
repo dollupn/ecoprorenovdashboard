@@ -1,14 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, CSSProperties } from "react";
-import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { CSSProperties } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import {
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout/Layout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -61,12 +70,6 @@ import {
   CheckCircle2,
   Archive,
 } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useMembers } from "@/features/members/api";
 import {
@@ -107,7 +110,11 @@ import {
   FORMULA_QUANTITY_KEY,
   type ValorisationFormulaConfig,
 } from "@/lib/valorisation-formula";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -117,7 +124,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
@@ -152,7 +166,10 @@ type ProductSummary = Pick<
   | "cee_config"
 > & {
   cee_config: ProductCeeConfig;
-  kwh_cumac_values?: Pick<Tables<"product_kwh_cumac">, "id" | "building_type" | "kwh_cumac">[];
+  kwh_cumac_values?: Pick<
+    Tables<"product_kwh_cumac">,
+    "id" | "building_type" | "kwh_cumac"
+  >[];
 };
 
 type ProjectProduct = Pick<
@@ -166,7 +183,10 @@ type ProjectAppointment = Tables<"project_appointments"> & {
   appointment_type?: Pick<Tables<"appointment_types">, "id" | "name"> | null;
 };
 
-type DelegateSummary = Pick<Tables<"delegates">, "id" | "name" | "price_eur_per_mwh">;
+type DelegateSummary = Pick<
+  Tables<"delegates">,
+  "id" | "name" | "price_eur_per_mwh"
+>;
 
 type ProjectWithRelations = Project & {
   project_products: ProjectProduct[];
@@ -181,7 +201,10 @@ const getDisplayedProducts = (projectProducts?: ProjectProduct[]) =>
     return !code.startsWith("ECO");
   });
 
-const currencyFormatter = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" });
+const currencyFormatter = new Intl.NumberFormat("fr-FR", {
+  style: "currency",
+  currency: "EUR",
+});
 const decimalFormatter = new Intl.NumberFormat("fr-FR", {
   minimumFractionDigits: 0,
   maximumFractionDigits: 2,
@@ -190,7 +213,10 @@ const decimalFormatter = new Intl.NumberFormat("fr-FR", {
 const formatCurrency = (value: number) => currencyFormatter.format(value);
 const formatDecimal = (value: number) => decimalFormatter.format(value);
 
-const SURFACE_FACTUREE_TARGETS = ["surface_facturee", "surface facturée"] as const;
+const SURFACE_FACTUREE_TARGETS = [
+  "surface_facturee",
+  "surface facturée",
+] as const;
 
 const ARCHIVED_STATUS_VALUES = new Set(["ARCHIVE", "ARCHIVED"]);
 const ARCHIVED_STATUS_VALUE = "ARCHIVED";
@@ -212,7 +238,8 @@ type ProjectSite = Tables<"sites"> & {
 type SiteAdditionalCostFormValue = SiteFormValues["additional_costs"][number];
 type SiteTeamMemberFormValue = SiteFormValues["team_members"][number];
 
-type ProjectMediaCategory = Database["public"]["Enums"]["project_media_category"];
+type ProjectMediaCategory =
+  Database["public"]["Enums"]["project_media_category"];
 type ProjectMediaItem = Tables<"project_media">;
 type ProjectStatusEvent = Tables<"project_status_events">;
 type ProjectNote = Tables<"project_notes">;
@@ -225,13 +252,14 @@ const MEDIA_CATEGORIES: { value: ProjectMediaCategory; label: string }[] = [
   { value: "PRODUITS", label: "Produits" },
 ];
 
-const MEDIA_CATEGORY_LABELS: Record<ProjectMediaCategory, string> = MEDIA_CATEGORIES.reduce(
-  (acc, item) => {
-    acc[item.value] = item.label;
-    return acc;
-  },
-  {} as Record<ProjectMediaCategory, string>,
-);
+const MEDIA_CATEGORY_LABELS: Record<ProjectMediaCategory, string> =
+  MEDIA_CATEGORIES.reduce(
+    (acc, item) => {
+      acc[item.value] = item.label;
+      return acc;
+    },
+    {} as Record<ProjectMediaCategory, string>,
+  );
 
 type JournalEntryType = "status" | "rdv" | "note" | "docs" | "chantier";
 
@@ -272,11 +300,18 @@ type ProjectTabValue = "details" | "chantiers" | "media" | "journal";
 
 const DEFAULT_PROJECT_TAB: ProjectTabValue = "details";
 
-const isValidProjectTab = (value: string | null | undefined): value is ProjectTabValue =>
-  value === "details" || value === "chantiers" || value === "media" || value === "journal";
+const isValidProjectTab = (
+  value: string | null | undefined,
+): value is ProjectTabValue =>
+  value === "details" ||
+  value === "chantiers" ||
+  value === "media" ||
+  value === "journal";
 
 const isUuid = (value: string) =>
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim());
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value.trim(),
+  );
 
 const createEmptyAdditionalCost = (): SiteAdditionalCostFormValue => ({
   label: "",
@@ -310,25 +345,27 @@ const normalizeImageEntry = (value: unknown): ProductImage | null => {
     return null;
   }
 
-  const rawUrl = typeof value.url === "string"
-    ? value.url
-    : typeof value.src === "string"
-      ? value.src
-      : typeof value.href === "string"
-        ? value.href
-        : null;
+  const rawUrl =
+    typeof value.url === "string"
+      ? value.url
+      : typeof value.src === "string"
+        ? value.src
+        : typeof value.href === "string"
+          ? value.href
+          : null;
 
   if (!rawUrl) {
     return null;
   }
 
-  const alt = typeof value.alt === "string"
-    ? value.alt
-    : typeof value.label === "string"
-      ? value.label
-      : typeof value.name === "string"
-        ? value.name
-        : null;
+  const alt =
+    typeof value.alt === "string"
+      ? value.alt
+      : typeof value.label === "string"
+        ? value.label
+        : typeof value.name === "string"
+          ? value.name
+          : null;
 
   return { url: rawUrl, alt };
 };
@@ -365,7 +402,11 @@ const extractImagesFromValue = (value: unknown, depth = 0): ProductImage[] => {
 
     const nested: ProductImage[] = [];
     for (const nestedValue of Object.values(value)) {
-      if (typeof nestedValue === "string" || Array.isArray(nestedValue) || isRecord(nestedValue)) {
+      if (
+        typeof nestedValue === "string" ||
+        Array.isArray(nestedValue) ||
+        isRecord(nestedValue)
+      ) {
         nested.push(...extractImagesFromValue(nestedValue, depth + 1));
       }
     }
@@ -375,7 +416,9 @@ const extractImagesFromValue = (value: unknown, depth = 0): ProductImage[] => {
   return [];
 };
 
-const getProductImages = (product: ProductSummary | null | undefined): ProductImage[] => {
+const getProductImages = (
+  product: ProductSummary | null | undefined,
+): ProductImage[] => {
   if (!product) {
     return [];
   }
@@ -427,8 +470,11 @@ const getProductValorisationFormula = (
     ? (product.default_params as Record<string, unknown>)
     : undefined;
 
-  const ceeDefaults = isRecord((product.cee_config as unknown as Record<string, unknown>)?.defaults)
-    ? ((product.cee_config as unknown as Record<string, unknown>).defaults as Record<string, unknown>)
+  const ceeDefaults = isRecord(
+    (product.cee_config as unknown as Record<string, unknown>)?.defaults,
+  )
+    ? ((product.cee_config as unknown as Record<string, unknown>)
+        .defaults as Record<string, unknown>)
     : undefined;
 
   const candidates: unknown[] = [];
@@ -455,7 +501,9 @@ const getProductValorisationFormula = (
   return null;
 };
 
-const normalizeAdditionalCosts = (costs: unknown): SiteAdditionalCostFormValue[] => {
+const normalizeAdditionalCosts = (
+  costs: unknown,
+): SiteAdditionalCostFormValue[] => {
   if (!Array.isArray(costs)) {
     return [createEmptyAdditionalCost()];
   }
@@ -470,7 +518,10 @@ const normalizeAdditionalCosts = (costs: unknown): SiteAdditionalCostFormValue[]
       const label = typeof raw.label === "string" ? raw.label : "";
 
       const amountHTValue =
-        parseNumber(raw.amount_ht) ?? parseNumber(raw.amount) ?? parseNumber(raw.amount_ttc) ?? 0;
+        parseNumber(raw.amount_ht) ??
+        parseNumber(raw.amount) ??
+        parseNumber(raw.amount_ttc) ??
+        0;
       const taxesValue = parseNumber(raw.taxes) ?? 0;
       const attachmentValue =
         typeof raw.attachment === "string" && raw.attachment.trim().length > 0
@@ -625,7 +676,10 @@ const resolvePrimeCeeEuro = (project: Project | null | undefined) => {
     return project.prime_cee_total_cents / 100;
   }
 
-  if (typeof project.prime_cee === "number" && Number.isFinite(project.prime_cee)) {
+  if (
+    typeof project.prime_cee === "number" &&
+    Number.isFinite(project.prime_cee)
+  ) {
     return project.prime_cee;
   }
 
@@ -696,7 +750,9 @@ const getSchemaFieldLabel = (
 
   for (const field of fields as Array<Record<string, unknown>>) {
     if (!isRecord(field)) continue;
-    const fieldName = normalizeKey(typeof field.name === "string" ? field.name : null);
+    const fieldName = normalizeKey(
+      typeof field.name === "string" ? field.name : null,
+    );
     if (!fieldName) continue;
 
     if (fieldName === normalizedKey) {
@@ -723,42 +779,65 @@ const findKwhEntry = (
   if (!normalized) return null;
 
   return (
-    product.kwh_cumac_values.find((entry) => normalizeKey(entry.building_type) === normalized) ??
-    null
+    product.kwh_cumac_values.find(
+      (entry) => normalizeKey(entry.building_type) === normalized,
+    ) ?? null
   );
 };
 
 const resolveBonificationValue = (
   primeBonification: number | null | undefined,
-) =>
-  toPositiveNumber(primeBonification) ?? 2;
+) => toPositiveNumber(primeBonification) ?? 2;
 
 const resolveCoefficientValue = () => 1;
 
 const resolveMultiplierDetails = (
   product: ProductSummary,
   projectProduct: ProjectProduct,
-): { value: number | null; label: string | null; missingDynamicParams: boolean } => {
+): {
+  value: number | null;
+  label: string | null;
+  missingDynamicParams: boolean;
+} => {
   const rawMultiplierParam = product.cee_config.primeMultiplierParam;
   const multiplierCoefficient = product.cee_config.primeMultiplierCoefficient;
   const ceeCategory = product.cee_config.category ?? product.category ?? null;
   const defaultMultiplierKey =
-    getCategoryDefaultMultiplierKey(ceeCategory) ?? getCategoryDefaultMultiplierKey(product.category) ?? null;
+    getCategoryDefaultMultiplierKey(ceeCategory) ??
+    getCategoryDefaultMultiplierKey(product.category) ??
+    null;
 
-  const multiplierParam = resolveMultiplierKeyForCategory(rawMultiplierParam, ceeCategory);
+  const multiplierParam = resolveMultiplierKeyForCategory(
+    rawMultiplierParam,
+    ceeCategory,
+  );
   const effectiveMultiplierKey =
-    multiplierParam === LEGACY_QUANTITY_KEY && defaultMultiplierKey ? defaultMultiplierKey : multiplierParam;
+    multiplierParam === LEGACY_QUANTITY_KEY && defaultMultiplierKey
+      ? defaultMultiplierKey
+      : multiplierParam;
 
-  const formatLabelWithCoefficient = (label: string | null | undefined, coefficient: number) => {
-    const normalized = typeof label === "string" && label.trim().length > 0 ? label.trim() : null;
+  const formatLabelWithCoefficient = (
+    label: string | null | undefined,
+    coefficient: number,
+  ) => {
+    const normalized =
+      typeof label === "string" && label.trim().length > 0
+        ? label.trim()
+        : null;
     if (!Number.isFinite(coefficient) || coefficient === 1) {
       return normalized ?? null;
     }
     return `${normalized ?? "Multiplicateur"} × ${formatFormulaCoefficient(coefficient)}`;
   };
 
-  if (effectiveMultiplierKey && effectiveMultiplierKey !== LEGACY_QUANTITY_KEY) {
-    const schemaLabel = getSchemaFieldLabel(product.params_schema, effectiveMultiplierKey);
+  if (
+    effectiveMultiplierKey &&
+    effectiveMultiplierKey !== LEGACY_QUANTITY_KEY
+  ) {
+    const schemaLabel = getSchemaFieldLabel(
+      product.params_schema,
+      effectiveMultiplierKey,
+    );
     const coefficient = toPositiveNumber(multiplierCoefficient) ?? 1;
     const targets = schemaLabel
       ? [effectiveMultiplierKey, schemaLabel]
@@ -771,7 +850,8 @@ const resolveMultiplierDetails = (
 
     if (dynamicValue !== null && dynamicValue > 0) {
       const labelBase = schemaLabel ?? multiplierParam;
-      const label = formatLabelWithCoefficient(labelBase, coefficient) ?? labelBase;
+      const label =
+        formatLabelWithCoefficient(labelBase, coefficient) ?? labelBase;
 
       return {
         value: dynamicValue * coefficient,
@@ -782,8 +862,13 @@ const resolveMultiplierDetails = (
 
     return {
       value: null,
-      label: formatLabelWithCoefficient(schemaLabel ?? effectiveMultiplierKey, coefficient) ??
-        (schemaLabel ?? effectiveMultiplierKey),
+      label:
+        formatLabelWithCoefficient(
+          schemaLabel ?? effectiveMultiplierKey,
+          coefficient,
+        ) ??
+        schemaLabel ??
+        effectiveMultiplierKey,
       missingDynamicParams: true,
     };
   }
@@ -793,7 +878,8 @@ const resolveMultiplierDetails = (
     const coefficient = Number.isFinite(formulaConfig.coefficient ?? null)
       ? (formulaConfig.coefficient as number)
       : 1;
-    const baseLabel = formulaConfig.variableLabel ?? formulaConfig.variableKey ?? null;
+    const baseLabel =
+      formulaConfig.variableLabel ?? formulaConfig.variableKey ?? null;
     const formattedLabel = formatLabelWithCoefficient(baseLabel, coefficient);
 
     if (formulaConfig.variableKey === FORMULA_QUANTITY_KEY) {
@@ -832,7 +918,10 @@ const resolveMultiplierDetails = (
       };
     }
 
-    if (typeof formulaConfig.variableValue === "number" && formulaConfig.variableValue > 0) {
+    if (
+      typeof formulaConfig.variableValue === "number" &&
+      formulaConfig.variableValue > 0
+    ) {
       return {
         value: formulaConfig.variableValue * (coefficient || 1),
         label: formattedLabel ?? formulaConfig.variableKey ?? null,
@@ -849,7 +938,11 @@ const resolveMultiplierDetails = (
 
   const quantityValue = toPositiveNumber(projectProduct.quantity);
   if (quantityValue !== null) {
-    return { value: quantityValue, label: "Quantité", missingDynamicParams: false };
+    return {
+      value: quantityValue,
+      label: "Quantité",
+      missingDynamicParams: false,
+    };
   }
 
   return { value: null, label: null, missingDynamicParams: false };
@@ -916,7 +1009,11 @@ const ProjectHeader = ({
                 <ArrowLeft className="w-4 h-4 mr-1" />
                 Retour
               </Button>
-              <Badge variant="outline" style={badgeStyle} className="font-semibold">
+              <Badge
+                variant="outline"
+                style={badgeStyle}
+                className="font-semibold"
+              >
                 {statusLabel}
               </Badge>
               <Select
@@ -928,11 +1025,13 @@ const ProjectHeader = ({
                   <SelectValue placeholder="Changer le statut" />
                 </SelectTrigger>
                 <SelectContent>
-                  {statusOptions.filter(status => status != null).map((status) => (
-                    <SelectItem key={status.value} value={status.value}>
-                      {status.label}
-                    </SelectItem>
-                  ))}
+                  {statusOptions
+                    .filter((status) => status != null)
+                    .map((status) => (
+                      <SelectItem key={status.value} value={status.value}>
+                        {status.label}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
@@ -946,8 +1045,10 @@ const ProjectHeader = ({
                   {project.project_ref}
                 </h1>
                 <p className="text-muted-foreground text-sm sm:text-base">
-                  {productCodes.length > 0 ? productCodes.join(", ") : "Aucun code produit"} · {project.city} (
-                  {project.postal_code})
+                  {productCodes.length > 0
+                    ? productCodes.join(", ")
+                    : "Aucun code produit"}{" "}
+                  · {project.city} ({project.postal_code})
                 </p>
               </div>
             </div>
@@ -962,15 +1063,27 @@ const ProjectHeader = ({
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-            <Button variant="outline" onClick={onOpenQuote} className="justify-start sm:justify-center">
+            <Button
+              variant="outline"
+              onClick={onOpenQuote}
+              className="justify-start sm:justify-center"
+            >
               <FileText className="w-4 h-4 mr-2" />
               Générer un devis
             </Button>
-            <Button variant="secondary" className="justify-start sm:justify-center" onClick={onShare}>
+            <Button
+              variant="secondary"
+              className="justify-start sm:justify-center"
+              onClick={onShare}
+            >
               <Share2 className="w-4 h-4 mr-2" />
               Partager le projet
             </Button>
-            <Button variant="outline" className="justify-start sm:justify-center" onClick={onOpenDocuments}>
+            <Button
+              variant="outline"
+              className="justify-start sm:justify-center"
+              onClick={onOpenDocuments}
+            >
               <FolderOpen className="w-4 h-4 mr-2" />
               Voir les documents
             </Button>
@@ -981,7 +1094,11 @@ const ProjectHeader = ({
                 disabled={isDeleting}
                 className="justify-start sm:justify-center"
               >
-                {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
+                {isDeleting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="w-4 h-4 mr-2" />
+                )}
                 {isDeleting ? "Suppression..." : "Supprimer"}
               </Button>
             ) : null}
@@ -998,7 +1115,11 @@ type AvantChantierFormProps = {
   isSubmitting: boolean;
 };
 
-const AvantChantierForm = ({ project, onSubmit, isSubmitting }: AvantChantierFormProps) => {
+const AvantChantierForm = ({
+  project,
+  onSubmit,
+  isSubmitting,
+}: AvantChantierFormProps) => {
   const form = useForm<AvantChantierFormValues>({
     resolver: zodResolver(avantChantierSchema),
     defaultValues: {
@@ -1083,7 +1204,11 @@ const AvantChantierForm = ({ project, onSubmit, isSubmitting }: AvantChantierFor
             <FormItem>
               <FormLabel>Instructions & notes</FormLabel>
               <FormControl>
-                <Textarea rows={4} placeholder="Décrivez les points importants avant le démarrage..." {...field} />
+                <Textarea
+                  rows={4}
+                  placeholder="Décrivez les points importants avant le démarrage..."
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -1091,7 +1216,11 @@ const AvantChantierForm = ({ project, onSubmit, isSubmitting }: AvantChantierFor
         />
         <div className="flex justify-end">
           <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Hammer className="mr-2 h-4 w-4" />}
+            {isSubmitting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Hammer className="mr-2 h-4 w-4" />
+            )}
             {isSubmitting ? "Initialisation..." : "Démarrer le chantier"}
           </Button>
         </div>
@@ -1105,7 +1234,9 @@ type InformationsGeneralesTabProps = {
   projectEmail: string | null;
   projectCostValue: number | null;
   displayedPrimeValue: number | null;
-  onSubmitAvantChantier: (values: AvantChantierFormValues) => Promise<void> | void;
+  onSubmitAvantChantier: (
+    values: AvantChantierFormValues,
+  ) => Promise<void> | void;
   isStartingChantier: boolean;
 };
 
@@ -1131,9 +1262,15 @@ const InformationsGeneralesTab = ({
                 <UserRound className="w-4 h-4 text-primary" />
                 {getProjectClientName(project)}
               </p>
-              {project.company && <p className="text-sm text-muted-foreground">{project.company}</p>}
+              {project.company && (
+                <p className="text-sm text-muted-foreground">
+                  {project.company}
+                </p>
+              )}
               {project.siren && (
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">SIREN : {project.siren}</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">
+                  SIREN : {project.siren}
+                </p>
               )}
             </div>
             <div className="space-y-2">
@@ -1159,9 +1296,13 @@ const InformationsGeneralesTab = ({
                 {(project as Project & { address?: string }).address
                   ? [
                       (project as Project & { address?: string }).address,
-                      [project.postal_code, project.city].filter(Boolean).join(" "),
+                      [project.postal_code, project.city]
+                        .filter(Boolean)
+                        .join(" "),
                     ]
-                      .filter((part) => part && part.toString().trim().length > 0)
+                      .filter(
+                        (part) => part && part.toString().trim().length > 0,
+                      )
                       .join(", ")
                   : `${project.city} (${project.postal_code})`}
               </p>
@@ -1170,7 +1311,9 @@ const InformationsGeneralesTab = ({
               <p className="text-sm text-muted-foreground">Source</p>
               <p className="font-medium flex items-center gap-2">
                 <UserRound className="w-4 h-4 text-primary" />
-                {project.source && project.source.trim().length > 0 ? project.source : "Non renseigné"}
+                {project.source && project.source.trim().length > 0
+                  ? project.source
+                  : "Non renseigné"}
               </p>
             </div>
             <div className="space-y-2">
@@ -1194,13 +1337,17 @@ const InformationsGeneralesTab = ({
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">Surface bâtiment</p>
               <p className="font-medium">
-                {typeof project.surface_batiment_m2 === "number" ? `${project.surface_batiment_m2} m²` : "Non renseigné"}
+                {typeof project.surface_batiment_m2 === "number"
+                  ? `${project.surface_batiment_m2} m²`
+                  : "Non renseigné"}
               </p>
             </div>
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">Surface isolée</p>
               <p className="font-medium">
-                {typeof project.surface_isolee_m2 === "number" ? `${project.surface_isolee_m2} m²` : "Non renseigné"}
+                {typeof project.surface_isolee_m2 === "number"
+                  ? `${project.surface_isolee_m2} m²`
+                  : "Non renseigné"}
               </p>
             </div>
           </div>
@@ -1213,10 +1360,15 @@ const InformationsGeneralesTab = ({
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground mb-6">
-            Initialisez le chantier directement depuis le projet. Les informations du projet seront synchronisées avec le
-            suivi opérationnel.
+            Initialisez le chantier directement depuis le projet. Les
+            informations du projet seront synchronisées avec le suivi
+            opérationnel.
           </p>
-          <AvantChantierForm project={project} onSubmit={onSubmitAvantChantier} isSubmitting={isStartingChantier} />
+          <AvantChantierForm
+            project={project}
+            onSubmit={onSubmitAvantChantier}
+            isSubmitting={isStartingChantier}
+          />
         </CardContent>
       </Card>
 
@@ -1229,14 +1381,18 @@ const InformationsGeneralesTab = ({
             <Euro className="w-4 h-4 text-primary" />
             <span className="text-muted-foreground">Coût du chantier:</span>
             <span className="font-medium">
-              {typeof projectCostValue === "number" ? formatCurrency(projectCostValue) : "Non défini"}
+              {typeof projectCostValue === "number"
+                ? formatCurrency(projectCostValue)
+                : "Non défini"}
             </span>
           </div>
           <div className="flex items-center gap-2">
             <HandCoins className="w-4 h-4 text-emerald-600" />
             <span className="text-muted-foreground">Prime CEE:</span>
             <span className="font-medium">
-              {typeof displayedPrimeValue === "number" ? formatCurrency(displayedPrimeValue) : "Non définie"}
+              {typeof displayedPrimeValue === "number"
+                ? formatCurrency(displayedPrimeValue)
+                : "Non définie"}
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -1248,7 +1404,8 @@ const InformationsGeneralesTab = ({
                   {project.delegate.name}
                   {typeof project.delegate.price_eur_per_mwh === "number" ? (
                     <span className="text-xs text-muted-foreground">
-                      ({formatCurrency(project.delegate.price_eur_per_mwh)} / MWh)
+                      ({formatCurrency(project.delegate.price_eur_per_mwh)} /
+                      MWh)
                     </span>
                   ) : null}
                 </>
@@ -1261,19 +1418,27 @@ const InformationsGeneralesTab = ({
             <Calendar className="w-4 h-4 text-primary" />
             <span className="text-muted-foreground">Début prévu:</span>
             <span className="font-medium">
-              {project.date_debut_prevue ? new Date(project.date_debut_prevue).toLocaleDateString("fr-FR") : "Non défini"}
+              {project.date_debut_prevue
+                ? new Date(project.date_debut_prevue).toLocaleDateString(
+                    "fr-FR",
+                  )
+                : "Non défini"}
             </span>
           </div>
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-primary" />
             <span className="text-muted-foreground">Fin prévue:</span>
             <span className="font-medium">
-              {project.date_fin_prevue ? new Date(project.date_fin_prevue).toLocaleDateString("fr-FR") : "Non définie"}
+              {project.date_fin_prevue
+                ? new Date(project.date_fin_prevue).toLocaleDateString("fr-FR")
+                : "Non définie"}
             </span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground">Créé le:</span>
-            <span className="font-medium">{new Date(project.created_at).toLocaleDateString("fr-FR")}</span>
+            <span className="font-medium">
+              {new Date(project.created_at).toLocaleDateString("fr-FR")}
+            </span>
           </div>
         </CardContent>
       </Card>
@@ -1303,7 +1468,9 @@ const ProjectMediaTab = ({
   driveFolderUrl,
 }: ProjectMediaTabProps) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [lightboxItem, setLightboxItem] = useState<ProjectMediaItem | null>(null);
+  const [lightboxItem, setLightboxItem] = useState<ProjectMediaItem | null>(
+    null,
+  );
 
   const filteredItems = useMemo(
     () => mediaItems.filter((item) => item.category === selectedCategory),
@@ -1316,7 +1483,8 @@ const ProjectMediaTab = ({
 
     filteredItems.forEach((item) => {
       const mime = item.mime_type?.toLowerCase() ?? "";
-      const looksLikeImage = mime.startsWith("image/") || Boolean(item.thumbnail_url);
+      const looksLikeImage =
+        mime.startsWith("image/") || Boolean(item.thumbnail_url);
       if (looksLikeImage) {
         images.push(item);
       } else {
@@ -1344,14 +1512,17 @@ const ProjectMediaTab = ({
         <div>
           <CardTitle>Media du projet</CardTitle>
           <CardDescription>
-            Gérez les documents et images rattachés à {project.project_ref} par catégorie.
+            Gérez les documents et images rattachés à {project.project_ref} par
+            catégorie.
           </CardDescription>
         </div>
         <div className="flex flex-wrap gap-2">
           {MEDIA_CATEGORIES.map((category) => (
             <Button
               key={category.value}
-              variant={category.value === selectedCategory ? "secondary" : "outline"}
+              variant={
+                category.value === selectedCategory ? "secondary" : "outline"
+              }
               size="sm"
               onClick={() => {
                 onCategoryChange(category.value);
@@ -1399,7 +1570,8 @@ const ProjectMediaTab = ({
           </div>
         ) : filteredItems.length === 0 ? (
           <div className="py-10 text-center text-sm text-muted-foreground">
-            Aucun fichier dans la catégorie {MEDIA_CATEGORY_LABELS[selectedCategory]}.
+            Aucun fichier dans la catégorie{" "}
+            {MEDIA_CATEGORY_LABELS[selectedCategory]}.
           </div>
         ) : (
           <div className="space-y-6">
@@ -1410,7 +1582,11 @@ const ProjectMediaTab = ({
                 </h3>
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                   {imageItems.map((item) => {
-                    const previewUrl = item.thumbnail_url ?? item.preview_url ?? item.file_url ?? item.drive_url;
+                    const previewUrl =
+                      item.thumbnail_url ??
+                      item.preview_url ??
+                      item.file_url ??
+                      item.drive_url;
                     if (!previewUrl) {
                       return null;
                     }
@@ -1429,7 +1605,8 @@ const ProjectMediaTab = ({
                         />
                         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2 text-left">
                           <p className="text-xs font-medium text-white line-clamp-1">
-                            {item.file_name ?? MEDIA_CATEGORY_LABELS[item.category]}
+                            {item.file_name ??
+                              MEDIA_CATEGORY_LABELS[item.category]}
                           </p>
                           <p className="text-[10px] text-white/70">
                             {new Date(item.created_at).toLocaleString("fr-FR", {
@@ -1461,16 +1638,20 @@ const ProjectMediaTab = ({
                         <FileText className="h-5 w-5 text-primary" />
                         <div>
                           <p className="text-sm font-medium text-foreground">
-                            {item.file_name ?? `Document ${MEDIA_CATEGORY_LABELS[item.category]}`}
+                            {item.file_name ??
+                              `Document ${MEDIA_CATEGORY_LABELS[item.category]}`}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Ajouté le {new Date(item.created_at).toLocaleString("fr-FR", {
+                            Ajouté le{" "}
+                            {new Date(item.created_at).toLocaleString("fr-FR", {
                               dateStyle: "short",
                               timeStyle: "short",
                             })}
                           </p>
                           {item.drive_url && !item.file_url ? (
-                            <p className="text-xs text-muted-foreground">Stocké dans Google Drive</p>
+                            <p className="text-xs text-muted-foreground">
+                              Stocké dans Google Drive
+                            </p>
                           ) : null}
                         </div>
                       </div>
@@ -1489,7 +1670,10 @@ const ProjectMediaTab = ({
           </div>
         )}
 
-        <Dialog open={Boolean(lightboxItem)} onOpenChange={(open) => setLightboxItem(open ? lightboxItem : null)}>
+        <Dialog
+          open={Boolean(lightboxItem)}
+          onOpenChange={(open) => setLightboxItem(open ? lightboxItem : null)}
+        >
           <DialogContent className="max-w-3xl">
             <DialogHeader>
               <DialogTitle>{lightboxItem?.file_name ?? "Aperçu"}</DialogTitle>
@@ -1575,7 +1759,9 @@ const ProjectJournalTab = ({
     const items: JournalEntry[] = [];
 
     statusEvents.forEach((event) => {
-      const actor = event.changed_by ? memberNameById[event.changed_by] ?? null : null;
+      const actor = event.changed_by
+        ? (memberNameById[event.changed_by] ?? null)
+        : null;
       items.push({
         id: `status-${event.id}`,
         type: "status",
@@ -1591,7 +1777,9 @@ const ProjectJournalTab = ({
       if (!appointment.appointment_date || !appointment.appointment_time) {
         return;
       }
-      const date = new Date(`${appointment.appointment_date}T${appointment.appointment_time}`);
+      const date = new Date(
+        `${appointment.appointment_date}T${appointment.appointment_time}`,
+      );
       if (Number.isNaN(date.getTime())) {
         return;
       }
@@ -1599,9 +1787,14 @@ const ProjectJournalTab = ({
         id: `rdv-${appointment.id}`,
         type: "rdv",
         title: appointment.appointment_type?.name ?? "RDV planifié",
-        description: date.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }),
+        description: date.toLocaleString("fr-FR", {
+          dateStyle: "short",
+          timeStyle: "short",
+        }),
         metadata: appointment.notes,
-        actor: appointment.assignee_id ? memberNameById[appointment.assignee_id] ?? null : null,
+        actor: appointment.assignee_id
+          ? (memberNameById[appointment.assignee_id] ?? null)
+          : null,
         date: date.toISOString(),
       });
     });
@@ -1612,7 +1805,9 @@ const ProjectJournalTab = ({
         type: "note",
         title: "Note interne",
         description: note.content,
-        actor: note.created_by ? memberNameById[note.created_by] ?? null : null,
+        actor: note.created_by
+          ? (memberNameById[note.created_by] ?? null)
+          : null,
         date: note.created_at,
       });
     });
@@ -1623,8 +1818,13 @@ const ProjectJournalTab = ({
         type: "docs",
         title: `Document ${MEDIA_CATEGORY_LABELS[media.category]}`,
         description: media.file_name ?? MEDIA_CATEGORY_LABELS[media.category],
-        actor: media.created_by ? memberNameById[media.created_by] ?? null : null,
-        metadata: media.drive_url && !media.file_url ? "Stocké dans Google Drive" : null,
+        actor: media.created_by
+          ? (memberNameById[media.created_by] ?? null)
+          : null,
+        metadata:
+          media.drive_url && !media.file_url
+            ? "Stocké dans Google Drive"
+            : null,
         date: media.created_at,
         linkUrl: media.file_url ?? media.drive_url ?? null,
       });
@@ -1639,7 +1839,7 @@ const ProjectJournalTab = ({
         title: `Chantier ${site.site_ref}`,
         description: getStatusLabel(status),
         metadata: site.notes,
-        actor: site.user_id ? memberNameById[site.user_id] ?? null : null,
+        actor: site.user_id ? (memberNameById[site.user_id] ?? null) : null,
         date: eventDate,
       });
     });
@@ -1651,7 +1851,15 @@ const ProjectJournalTab = ({
         const timeB = new Date(b.date).getTime();
         return timeB - timeA;
       });
-  }, [appointments, memberNameById, mediaItems, notes, sites, statusEvents, statusLabelByValue]);
+  }, [
+    appointments,
+    memberNameById,
+    mediaItems,
+    notes,
+    sites,
+    statusEvents,
+    statusLabelByValue,
+  ]);
 
   const filterToTypes: Record<JournalFilter, JournalEntryType[]> = {
     all: ["status", "rdv", "note", "docs", "chantier"],
@@ -1662,7 +1870,9 @@ const ProjectJournalTab = ({
     chantiers: ["chantier"],
   };
 
-  const filteredEntries = entries.filter((entry) => filterToTypes[filter].includes(entry.type));
+  const filteredEntries = entries.filter((entry) =>
+    filterToTypes[filter].includes(entry.type),
+  );
 
   const iconByType: Record<JournalEntryType, JSX.Element> = {
     status: <CircleDot className="h-4 w-4 text-primary" />,
@@ -1685,118 +1895,136 @@ const ProjectJournalTab = ({
             <div>
               <CardTitle>Journal d'activité</CardTitle>
               <CardDescription>
-              Historique complet des interactions et documents pour {project.project_ref}.
-            </CardDescription>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
-                { value: "all" as JournalFilter, label: "Tout" },
-                { value: "status" as JournalFilter, label: "Statut" },
-                { value: "rdv" as JournalFilter, label: "RDV" },
-                { value: "notes" as JournalFilter, label: "Notes" },
-                { value: "docs" as JournalFilter, label: "Docs" },
-                { value: "chantiers" as JournalFilter, label: "Chantiers" },
-              ] satisfies { value: JournalFilter; label: string }[]
-            ).map((item) => (
-              <Button
-                key={item.value}
-                variant={filter === item.value ? "secondary" : "outline"}
-                size="sm"
-                onClick={() => onFilterChange(item.value)}
-              >
-                {item.label}
-              </Button>
-            ))}
-          </div>
-        </div>
-
-        <Form {...noteForm}>
-          <form onSubmit={onSubmitNote} className="space-y-3">
-            <FormField
-              control={noteForm.control}
-              name="content"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Ajouter une note</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      {...field}
-                      placeholder="Consignez une information importante pour l'équipe"
-                      rows={3}
-                      disabled={isAddingNote}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div className="flex justify-end">
-              <Button type="submit" size="sm" disabled={isAddingNote} className="inline-flex items-center gap-2">
-                {isAddingNote ? <Loader2 className="h-4 w-4 animate-spin" /> : <StickyNote className="h-4 w-4" />}
-                {isAddingNote ? "Enregistrement..." : "Ajouter la note"}
-              </Button>
+                Historique complet des interactions et documents pour{" "}
+                {project.project_ref}.
+              </CardDescription>
             </div>
-          </form>
-        </Form>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="py-10 text-center text-sm text-muted-foreground">
-            Chargement de l'historique...
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  { value: "all" as JournalFilter, label: "Tout" },
+                  { value: "status" as JournalFilter, label: "Statut" },
+                  { value: "rdv" as JournalFilter, label: "RDV" },
+                  { value: "notes" as JournalFilter, label: "Notes" },
+                  { value: "docs" as JournalFilter, label: "Docs" },
+                  { value: "chantiers" as JournalFilter, label: "Chantiers" },
+                ] satisfies { value: JournalFilter; label: string }[]
+              ).map((item) => (
+                <Button
+                  key={item.value}
+                  variant={filter === item.value ? "secondary" : "outline"}
+                  size="sm"
+                  onClick={() => onFilterChange(item.value)}
+                >
+                  {item.label}
+                </Button>
+              ))}
+            </div>
           </div>
-        ) : filteredEntries.length === 0 ? (
-          <div className="py-10 text-center text-sm text-muted-foreground">
-            Aucun événement correspondant au filtre sélectionné.
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {filteredEntries.map((entry) => (
-              <div
-                key={entry.id}
-                className="rounded-lg border border-border/50 bg-background/60 p-4"
-              >
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="flex items-start gap-3">
-                    <div className="mt-1">{iconByType[entry.type]}</div>
-                    <div className="space-y-1">
-                      <p className="text-sm font-semibold text-foreground">{entry.title}</p>
-                      {entry.description ? (
-                        <p className="text-sm text-muted-foreground whitespace-pre-line">
-                          {entry.description}
+
+          <Form {...noteForm}>
+            <form onSubmit={onSubmitNote} className="space-y-3">
+              <FormField
+                control={noteForm.control}
+                name="content"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Ajouter une note</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        {...field}
+                        placeholder="Consignez une information importante pour l'équipe"
+                        rows={3}
+                        disabled={isAddingNote}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="flex justify-end">
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={isAddingNote}
+                  className="inline-flex items-center gap-2"
+                >
+                  {isAddingNote ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <StickyNote className="h-4 w-4" />
+                  )}
+                  {isAddingNote ? "Enregistrement..." : "Ajouter la note"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="py-10 text-center text-sm text-muted-foreground">
+              Chargement de l'historique...
+            </div>
+          ) : filteredEntries.length === 0 ? (
+            <div className="py-10 text-center text-sm text-muted-foreground">
+              Aucun événement correspondant au filtre sélectionné.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filteredEntries.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="rounded-lg border border-border/50 bg-background/60 p-4"
+                >
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className="mt-1">{iconByType[entry.type]}</div>
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-foreground">
+                          {entry.title}
                         </p>
-                      ) : null}
-                      {entry.metadata ? (
-                        <p className="text-xs text-muted-foreground whitespace-pre-line">
-                          {entry.metadata}
-                        </p>
-                      ) : null}
-                      {entry.actor ? (
-                        <p className="text-xs text-muted-foreground">Par {entry.actor}</p>
+                        {entry.description ? (
+                          <p className="text-sm text-muted-foreground whitespace-pre-line">
+                            {entry.description}
+                          </p>
+                        ) : null}
+                        {entry.metadata ? (
+                          <p className="text-xs text-muted-foreground whitespace-pre-line">
+                            {entry.metadata}
+                          </p>
+                        ) : null}
+                        {entry.actor ? (
+                          <p className="text-xs text-muted-foreground">
+                            Par {entry.actor}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-start gap-2 sm:items-end">
+                      <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                        {new Date(entry.date).toLocaleString("fr-FR", {
+                          dateStyle: "short",
+                          timeStyle: "short",
+                        })}
+                      </span>
+                      {entry.linkUrl ? (
+                        <Button asChild size="sm" variant="outline">
+                          <a
+                            href={entry.linkUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Ouvrir
+                          </a>
+                        </Button>
                       ) : null}
                     </div>
                   </div>
-                  <div className="flex flex-col items-start gap-2 sm:items-end">
-                    <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                      {new Date(entry.date).toLocaleString("fr-FR", {
-                        dateStyle: "short",
-                        timeStyle: "short",
-                      })}
-                    </span>
-                    {entry.linkUrl ? (
-                      <Button asChild size="sm" variant="outline">
-                        <a href={entry.linkUrl} target="_blank" rel="noreferrer">
-                          Ouvrir
-                        </a>
-                      </Button>
-                    ) : null}
-                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
+              ))}
+            </div>
+          )}
+        </CardContent>
       </Card>
     </div>
   );
@@ -1815,11 +2043,13 @@ const DocumentsTab = ({ project }: DocumentsTabProps) => {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Centralisez les documents administratifs, techniques et financiers liés au chantier {project.project_ref}. Les
-            fichiers déposés sont accessibles à toute l'équipe depuis l'espace Documents.
+            Centralisez les documents administratifs, techniques et financiers
+            liés au chantier {project.project_ref}. Les fichiers déposés sont
+            accessibles à toute l'équipe depuis l'espace Documents.
           </p>
           <div className="rounded-lg border border-dashed border-primary/30 bg-background/60 p-6 text-sm text-muted-foreground">
-            Connectez Google Drive dans les paramètres pour activer le dépôt automatique des documents chantier.
+            Connectez Google Drive dans les paramètres pour activer le dépôt
+            automatique des documents chantier.
           </div>
         </CardContent>
       </Card>
@@ -1866,16 +2096,24 @@ const ApresChantierTab = ({
             }
 
             const labelBase =
-              ceeEntry.multiplierLabel && ceeEntry.multiplierLabel.trim().length > 0
+              ceeEntry.multiplierLabel &&
+              ceeEntry.multiplierLabel.trim().length > 0
                 ? ceeEntry.multiplierLabel
                 : "Valorisation CEE";
-            const summaryLabel = item.product?.code ? `${labelBase} (${item.product.code})` : labelBase;
+            const summaryLabel = item.product?.code
+              ? `${labelBase} (${item.product.code})`
+              : labelBase;
 
-            const productCategory = (item.product?.category ?? "").toLowerCase();
+            const productCategory = (
+              item.product?.category ?? ""
+            ).toLowerCase();
             const isLightingProduct = productCategory === "lighting";
-            const lightingDetails = (
-              (ceeEntry.result as (PrimeCeeResult & { lighting?: PrimeCeeLightingDetails }) | null)?.lighting ?? null
-            );
+            const lightingDetails =
+              (
+                ceeEntry.result as
+                  | (PrimeCeeResult & { lighting?: PrimeCeeLightingDetails })
+                  | null
+              )?.lighting ?? null;
             const lightingPerLedEur = toNumber(lightingDetails?.per_led_eur);
             const lightingPerLedMwh = toNumber(lightingDetails?.per_led_mwh);
             const lightingTotalMwh = toNumber(lightingDetails?.total_mwh);
@@ -1883,7 +2121,11 @@ const ApresChantierTab = ({
             const lightingMissingBase = Boolean(lightingDetails?.missing_base);
 
             let summaryDetails: string;
-            if (ceeEntry.result && typeof ceeEntry.multiplierValue === "number" && ceeEntry.multiplierValue > 0) {
+            if (
+              ceeEntry.result &&
+              typeof ceeEntry.multiplierValue === "number" &&
+              ceeEntry.multiplierValue > 0
+            ) {
               summaryDetails = `${formatDecimal(ceeEntry.result.valorisationPerUnitMwh)} MWh × ${formatDecimal(
                 ceeEntry.multiplierValue,
               )} = ${formatDecimal(ceeEntry.result.valorisationTotalMwh)} MWh`;
@@ -1914,7 +2156,9 @@ const ApresChantierTab = ({
             })();
 
             const lightingCalculationLine =
-              isLightingProduct && lightingPerLedMwh !== null && lightingTotalMwh !== null
+              isLightingProduct &&
+              lightingPerLedMwh !== null &&
+              lightingTotalMwh !== null
                 ? `Soit ${formatDecimal(lightingPerLedMwh)} MWh × Nombre Led = ${formatDecimal(lightingTotalMwh)} MWh`
                 : null;
 
@@ -1929,7 +2173,10 @@ const ApresChantierTab = ({
             })();
 
             return (
-              <div key={`valorisation-summary-${entryId}`} className="flex items-start gap-3 border rounded-lg p-4">
+              <div
+                key={`valorisation-summary-${entryId}`}
+                className="flex items-start gap-3 border rounded-lg p-4"
+              >
                 <HandCoins className="w-4 h-4 text-amber-600 mt-0.5" />
                 <div className="flex flex-col gap-1 text-xs sm:text-sm">
                   <div className="flex items-center gap-1 text-muted-foreground">
@@ -1941,19 +2188,31 @@ const ApresChantierTab = ({
                             <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
                           </span>
                         </TooltipTrigger>
-                        <TooltipContent side="top" align="center" className="text-xs">
+                        <TooltipContent
+                          side="top"
+                          align="center"
+                          className="text-xs"
+                        >
                           kWh cumac manquant pour cette typologie
                         </TooltipContent>
                       </Tooltip>
                     ) : null}
                   </div>
-                  <span className="font-medium text-emerald-600 text-sm">{valorisationLine}</span>
+                  <span className="font-medium text-emerald-600 text-sm">
+                    {valorisationLine}
+                  </span>
                   {lightingCalculationLine ? (
-                    <span className="text-xs text-muted-foreground">{lightingCalculationLine}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {lightingCalculationLine}
+                    </span>
                   ) : null}
-                  <span className="text-xs text-muted-foreground">{summaryDetails}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {summaryDetails}
+                  </span>
                   <span className="text-xs font-semibold text-amber-600">
-                    {primeValue !== null ? `Prime calculée : ${formatCurrency(primeValue)}` : "Prime non calculée"}
+                    {primeValue !== null
+                      ? `Prime calculée : ${formatCurrency(primeValue)}`
+                      : "Prime non calculée"}
                   </span>
                 </div>
               </div>
@@ -1961,7 +2220,9 @@ const ApresChantierTab = ({
           })}
 
           {projectProducts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Aucun produit n'est associé à ce projet pour le moment.</p>
+            <p className="text-sm text-muted-foreground">
+              Aucun produit n'est associé à ce projet pour le moment.
+            </p>
           ) : null}
         </CardContent>
       </Card>
@@ -1984,8 +2245,9 @@ const ApresChantierTab = ({
         </CardHeader>
         <CardContent className="space-y-4 text-sm text-muted-foreground">
           <p>
-            Renseignez les informations finales (PV de réception, photos, levée des réserves) directement depuis le chantier
-            pour compléter le dossier du projet {project.project_ref}.
+            Renseignez les informations finales (PV de réception, photos, levée
+            des réserves) directement depuis le chantier pour compléter le
+            dossier du projet {project.project_ref}.
           </p>
         </CardContent>
       </Card>
@@ -1993,7 +2255,10 @@ const ApresChantierTab = ({
   );
 };
 
-const computeStatusProgress = (statusValue: string | null | undefined, statuses: ProjectStatusSetting[]) => {
+const computeStatusProgress = (
+  statusValue: string | null | undefined,
+  statuses: ProjectStatusSetting[],
+) => {
   if (!statusValue || statuses.length === 0) {
     return 0;
   }
@@ -2017,7 +2282,8 @@ const ProjectDetails = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const { currentOrgId } = useOrg();
-  const { data: members = [], isLoading: membersLoading } = useMembers(currentOrgId);
+  const { data: members = [], isLoading: membersLoading } =
+    useMembers(currentOrgId);
   const projectStatuses = useProjectStatuses();
   const { primeBonification } = useOrganizationPrimeSettings();
 
@@ -2027,33 +2293,38 @@ const ProjectDetails = () => {
     return isValidProjectTab(currentTab) ? currentTab : DEFAULT_PROJECT_TAB;
   });
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
-  const [quoteInitialValues, setQuoteInitialValues] = useState<Partial<QuoteFormValues>>({});
+  const [quoteInitialValues, setQuoteInitialValues] = useState<
+    Partial<QuoteFormValues>
+  >({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
   const [siteDialogOpen, setSiteDialogOpen] = useState(false);
-  const [siteDialogMode, setSiteDialogMode] = useState<"create" | "edit">("create");
-  const [siteInitialValues, setSiteInitialValues] = useState<Partial<SiteFormValues>>();
+  const [siteDialogMode, setSiteDialogMode] = useState<"create" | "edit">(
+    "create",
+  );
+  const [siteInitialValues, setSiteInitialValues] =
+    useState<Partial<SiteFormValues>>();
   const [activeSite, setActiveSite] = useState<ProjectSite | null>(null);
   const location = useLocation();
-  const [searchParams] = useSearchParams();
   const journalFeedRef = useRef<HTMLDivElement | null>(null);
-  const [activeTab, setActiveTab] = useState<"overview" | "media" | "journal" | "chantiers">("overview");
-  const [selectedMediaCategory, setSelectedMediaCategory] = useState<ProjectMediaCategory>(
-    MEDIA_CATEGORIES[0]?.value ?? "PHOTOS",
-  );
+  const [selectedMediaCategory, setSelectedMediaCategory] =
+    useState<ProjectMediaCategory>(MEDIA_CATEGORIES[0]?.value ?? "PHOTOS");
   const [journalFilter, setJournalFilter] = useState<JournalFilter>("all");
-
-  const handleTabChange = useCallback((value: string) => {
-    if (value === "overview" || value === "media" || value === "journal" || value === "chantiers") {
-      setActiveTab(value);
-    }
-  }, []);
+  const [quickUpdateText, setQuickUpdateText] = useState("");
+  const [siteDialogDefaultTab, setSiteDialogDefaultTab] = useState<
+    "avant-chantier" | "apres-chantier"
+  >("avant-chantier");
+  const [siteDialogReadOnly, setSiteDialogReadOnly] = useState(false);
+  const [lightboxImage, setLightboxImage] = useState<ProductImage | null>(null);
 
   const focusJournalFeed = useCallback(() => {
     setTimeout(() => {
-      journalFeedRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      journalFeedRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
       journalFeedRef.current?.focus({ preventScroll: true });
     }, 150);
   }, []);
@@ -2068,13 +2339,6 @@ const ProjectDetails = () => {
     setJournalFilter("all");
     focusJournalFeed();
   }, [focusJournalFeed]);
-  const [activeTab, setActiveTab] = useState("overview");
-  const [quickUpdateText, setQuickUpdateText] = useState("");
-  const [siteDialogDefaultTab, setSiteDialogDefaultTab] = useState<"avant-chantier" | "apres-chantier">(
-    "avant-chantier",
-  );
-  const [siteDialogReadOnly, setSiteDialogReadOnly] = useState(false);
-  const [lightboxImage, setLightboxImage] = useState<ProductImage | null>(null);
 
   useEffect(() => {
     const currentTab = searchParams.get("tab");
@@ -2103,7 +2367,7 @@ const ProjectDetails = () => {
       newParams.set("tab", value);
       setSearchParams(newParams, { replace: true });
     },
-    [activeTab, searchParams, setSearchParams]
+    [activeTab, searchParams, setSearchParams],
   );
 
   const memberNameById = useMemo(() => {
@@ -2114,7 +2378,8 @@ const ProjectDetails = () => {
       }
 
       const fullName = member.profiles?.full_name?.trim();
-      result[member.user_id] = fullName && fullName.length > 0 ? fullName : "Utilisateur";
+      result[member.user_id] =
+        fullName && fullName.length > 0 ? fullName : "Utilisateur";
     });
     return result;
   }, [members]);
@@ -2131,7 +2396,8 @@ const ProjectDetails = () => {
   }, [memberNameById]);
 
   const currentMember = members.find((member) => member.user_id === user?.id);
-  const isAdmin = currentMember?.role === "admin" || currentMember?.role === "owner";
+  const isAdmin =
+    currentMember?.role === "admin" || currentMember?.role === "owner";
 
   const {
     data: project,
@@ -2146,7 +2412,7 @@ const ProjectDetails = () => {
       let query = supabase
         .from("projects")
         .select(
-          "*, delegate:delegates(id, name, price_eur_per_mwh), project_products(id, product_id, quantity, dynamic_params, product:product_catalog(id, code, name, category, params_schema, cee_config, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac))), project_appointments(id, project_id, org_id, appointment_date, appointment_time, appointment_type_id, assignee_id, notes, created_at, updated_at, appointment_type:appointment_types(id, name))"
+          "*, delegate:delegates(id, name, price_eur_per_mwh), project_products(id, product_id, quantity, dynamic_params, product:product_catalog(id, code, name, category, params_schema, cee_config, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac))), project_appointments(id, project_id, org_id, appointment_date, appointment_time, appointment_type_id, assignee_id, notes, created_at, updated_at, appointment_type:appointment_types(id, name))",
         )
         .eq("id", id);
 
@@ -2172,7 +2438,8 @@ const ProjectDetails = () => {
           ...pp,
           product: pp.product ? withDefaultProductCeeConfig(pp.product) : null,
         })),
-        project_appointments: (data.project_appointments ?? []) as ProjectAppointment[],
+        project_appointments: (data.project_appointments ??
+          []) as ProjectAppointment[],
       } as ProjectWithRelations;
     },
     enabled: !!id && !!user?.id && (!currentOrgId || !membersLoading),
@@ -2187,7 +2454,7 @@ const ProjectDetails = () => {
 
   const projectProducts = useMemo(
     () => getDisplayedProducts(project?.project_products),
-    [project?.project_products]
+    [project?.project_products],
   );
 
   const {
@@ -2199,24 +2466,41 @@ const ProjectDetails = () => {
     enabled: !!id && !!user?.id,
     queryFn: async () => {
       if (!id || !user?.id) {
-        return { updates: [], tableAvailable: false, error: null } satisfies ProjectUpdatesQueryResult;
+        return {
+          updates: [],
+          tableAvailable: false,
+          error: null,
+        } satisfies ProjectUpdatesQueryResult;
       }
 
       try {
         const { data, error } = await supabase
           .from("project_updates" as any)
-          .select("id, project_id, content, status, next_step, created_at, author_id, org_id")
+          .select(
+            "id, project_id, content, status, next_step, created_at, author_id, org_id",
+          )
           .eq("project_id", id)
           .order("created_at", { ascending: false })
           .limit(50);
 
         if (error) {
           if (isTableUnavailableError(error)) {
-            return { updates: [], tableAvailable: false, error } satisfies ProjectUpdatesQueryResult;
+            return {
+              updates: [],
+              tableAvailable: false,
+              error,
+            } satisfies ProjectUpdatesQueryResult;
           }
 
-          console.error("Erreur lors du chargement des mises à jour projet", error);
-          return { updates: [], tableAvailable: false, error } satisfies ProjectUpdatesQueryResult;
+          console.error(
+            "Erreur lors du chargement des mises à jour projet",
+            error,
+          );
+          return {
+            updates: [],
+            tableAvailable: false,
+            error,
+          } satisfies ProjectUpdatesQueryResult;
         }
 
         return {
@@ -2227,21 +2511,39 @@ const ProjectDetails = () => {
       } catch (unknownError) {
         const postgrestError = (unknownError as PostgrestError) ?? null;
         if (isTableUnavailableError(postgrestError)) {
-          return { updates: [], tableAvailable: false, error: postgrestError } satisfies ProjectUpdatesQueryResult;
+          return {
+            updates: [],
+            tableAvailable: false,
+            error: postgrestError,
+          } satisfies ProjectUpdatesQueryResult;
         }
 
-        console.error("Erreur inattendue lors du chargement des mises à jour projet", unknownError);
-        return { updates: [], tableAvailable: false, error: postgrestError } satisfies ProjectUpdatesQueryResult;
+        console.error(
+          "Erreur inattendue lors du chargement des mises à jour projet",
+          unknownError,
+        );
+        return {
+          updates: [],
+          tableAvailable: false,
+          error: postgrestError,
+        } satisfies ProjectUpdatesQueryResult;
       }
     },
   });
 
   const projectUpdates = projectUpdatesState?.updates ?? [];
-  const projectUpdatesTableAvailable = projectUpdatesState?.tableAvailable ?? false;
+  const projectUpdatesTableAvailable =
+    projectUpdatesState?.tableAvailable ?? false;
   const projectUpdatesError = projectUpdatesState?.error ?? null;
 
-  const nextAppointment = useMemo<{ appointment: ProjectAppointment; dateTime: Date } | null>(() => {
-    if (!project?.project_appointments || project.project_appointments.length === 0) {
+  const nextAppointment = useMemo<{
+    appointment: ProjectAppointment;
+    dateTime: Date;
+  } | null>(() => {
+    if (
+      !project?.project_appointments ||
+      project.project_appointments.length === 0
+    ) {
       return null;
     }
 
@@ -2251,7 +2553,9 @@ const ProjectDetails = () => {
           return null;
         }
 
-        const dateTime = new Date(`${appointment.appointment_date}T${appointment.appointment_time}`);
+        const dateTime = new Date(
+          `${appointment.appointment_date}T${appointment.appointment_time}`,
+        );
         if (Number.isNaN(dateTime.getTime())) {
           return null;
         }
@@ -2259,7 +2563,8 @@ const ProjectDetails = () => {
         return { appointment, dateTime };
       })
       .filter(
-        (value): value is { appointment: ProjectAppointment; dateTime: Date } => Boolean(value),
+        (value): value is { appointment: ProjectAppointment; dateTime: Date } =>
+          Boolean(value),
       );
 
     if (withDates.length === 0) {
@@ -2268,9 +2573,11 @@ const ProjectDetails = () => {
 
     withDates.sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime());
     const now = new Date();
-    const upcoming = withDates.find((item) => item.dateTime.getTime() >= now.getTime());
+    const upcoming = withDates.find(
+      (item) => item.dateTime.getTime() >= now.getTime(),
+    );
 
-    return (upcoming ?? withDates[withDates.length - 1]) ?? null;
+    return upcoming ?? withDates[withDates.length - 1] ?? null;
   }, [project?.project_appointments]);
 
   const nextAppointmentDetails = useMemo(() => {
@@ -2284,10 +2591,11 @@ const ProjectDetails = () => {
     });
 
     const assigneeName = nextAppointment.appointment.assignee_id
-      ? memberNameById[nextAppointment.appointment.assignee_id] ?? null
+      ? (memberNameById[nextAppointment.appointment.assignee_id] ?? null)
       : null;
 
-    const typeLabel = nextAppointment.appointment.appointment_type?.name ?? null;
+    const typeLabel =
+      nextAppointment.appointment.appointment_type?.name ?? null;
     const rawNotes = nextAppointment.appointment.notes?.trim() ?? "";
 
     const metadataParts = [
@@ -2329,12 +2637,15 @@ const ProjectDetails = () => {
     if (!project) return [];
 
     const primaryProduct =
-      projectProducts[0]?.product ?? project.project_products?.[0]?.product ?? null;
+      projectProducts[0]?.product ??
+      project.project_products?.[0]?.product ??
+      null;
     const productLabel =
       primaryProduct?.code ||
       (project as Project & { product_name?: string | null }).product_name ||
       "";
-    const address = (project as Project & { address?: string | null }).address ?? "";
+    const address =
+      (project as Project & { address?: string | null }).address ?? "";
 
     return [
       {
@@ -2345,7 +2656,8 @@ const ProjectDetails = () => {
         address,
         city: project.city ?? "",
         postal_code: project.postal_code ?? "",
-        surface_facturee: projectSurfaceFacturee > 0 ? projectSurfaceFacturee : undefined,
+        surface_facturee:
+          projectSurfaceFacturee > 0 ? projectSurfaceFacturee : undefined,
       },
     ];
   }, [project, projectProducts, projectSurfaceFacturee]);
@@ -2483,18 +2795,20 @@ const ProjectDetails = () => {
       const { data: publicUrlData } = bucket.getPublicUrl(storagePath);
       const fileUrl = publicUrlData?.publicUrl ?? null;
 
-      const { error: insertError } = await supabase.from("project_media").insert({
-        project_id: project.id,
-        org_id: currentOrgId,
-        category: selectedMediaCategory,
-        file_name: file.name,
-        file_url: fileUrl,
-        preview_url: fileUrl,
-        thumbnail_url: fileUrl,
-        storage_path,
-        mime_type: file.type || null,
-        created_by: user.id,
-      });
+      const { error: insertError } = await supabase
+        .from("project_media")
+        .insert({
+          project_id: project.id,
+          org_id: currentOrgId,
+          category: selectedMediaCategory,
+          file_name: file.name,
+          file_url: fileUrl,
+          preview_url: fileUrl,
+          thumbnail_url: fileUrl,
+          storage_path,
+          mime_type: file.type || null,
+          created_by: user.id,
+        });
 
       if (insertError) {
         throw insertError;
@@ -2509,7 +2823,9 @@ const ProjectDetails = () => {
     },
     onError: (error) => {
       const message =
-        error instanceof Error ? error.message : "Impossible de téléverser le fichier.";
+        error instanceof Error
+          ? error.message
+          : "Impossible de téléverser le fichier.";
       toast({
         title: "Téléversement échoué",
         description: message,
@@ -2530,12 +2846,14 @@ const ProjectDetails = () => {
         throw new Error("Le contenu de la note est vide.");
       }
 
-      const { error: insertError } = await supabase.from("project_notes").insert({
-        project_id: project.id,
-        org_id: currentOrgId,
-        content: trimmed,
-        created_by: user.id,
-      });
+      const { error: insertError } = await supabase
+        .from("project_notes")
+        .insert({
+          project_id: project.id,
+          org_id: currentOrgId,
+          content: trimmed,
+          created_by: user.id,
+        });
 
       if (insertError) {
         throw insertError;
@@ -2550,7 +2868,9 @@ const ProjectDetails = () => {
     },
     onError: (error) => {
       const message =
-        error instanceof Error ? error.message : "Impossible d'ajouter la note.";
+        error instanceof Error
+          ? error.message
+          : "Impossible d'ajouter la note.";
       toast({
         title: "Erreur lors de l'ajout",
         description: message,
@@ -2584,9 +2904,10 @@ const ProjectDetails = () => {
   }, [searchParams, activeTab, handleTabChange]);
 
   useEffect(() => {
-    const state = location.state as
-      | { openTab?: "overview" | "media" | "journal" | "chantiers"; focus?: string | null }
-      | null;
+    const state = location.state as {
+      openTab?: ProjectTabValue;
+      focus?: string | null;
+    } | null;
 
     if (!state?.openTab) {
       return;
@@ -2695,7 +3016,9 @@ const ProjectDetails = () => {
     }
 
     const buildingType =
-      typeof project.building_type === "string" ? project.building_type.trim() : "";
+      typeof project.building_type === "string"
+        ? project.building_type.trim()
+        : "";
     const delegatePrice = resolveDelegatePrice(project.delegate);
 
     const entries = projectProducts.map((item, index) => {
@@ -2741,7 +3064,8 @@ const ProjectDetails = () => {
           typeof product.cee_config?.formulaExpression === "string"
             ? product.cee_config.formulaExpression.trim()
             : "";
-        const valorisationFormula = rawFormulaExpression.length > 0 ? rawFormulaExpression : null;
+        const valorisationFormula =
+          rawFormulaExpression.length > 0 ? rawFormulaExpression : null;
         const ledWattConstant =
           typeof product.cee_config?.ledWattConstant === "number" &&
           Number.isFinite(product.cee_config.ledWattConstant)
@@ -2776,18 +3100,23 @@ const ProjectDetails = () => {
       } satisfies ProjectProductCeeEntry;
     });
 
-    const totals = computeProjectCeeTotals(entries.map((entry) => entry.result));
+    const totals = computeProjectCeeTotals(
+      entries.map((entry) => entry.result),
+    );
 
     return { entries, totals };
   }, [project, projectProducts, primeBonification]);
 
   const ceeEntryMap = useMemo(() => {
-    return ceeEntries.reduce<Record<string, ProjectProductCeeEntry>>((acc, entry) => {
-      if (entry.projectProductId) {
-        acc[entry.projectProductId] = entry;
-      }
-      return acc;
-    }, {});
+    return ceeEntries.reduce<Record<string, ProjectProductCeeEntry>>(
+      (acc, entry) => {
+        if (entry.projectProductId) {
+          acc[entry.projectProductId] = entry;
+        }
+        return acc;
+      },
+      {},
+    );
   }, [ceeEntries]);
 
   const hasComputedCeeTotals = useMemo(
@@ -2796,13 +3125,18 @@ const ProjectDetails = () => {
   );
 
   const projectRecord = (project ?? {}) as Project & Record<string, unknown>;
-  const statusValue = typeof project?.status === "string" && project.status.length > 0 ? project.status : null;
+  const statusValue =
+    typeof project?.status === "string" && project.status.length > 0
+      ? project.status
+      : null;
   const statusConfig = statusValue
     ? projectStatuses.find((status) => status?.value === statusValue)
     : undefined;
   const badgeStyle = getProjectStatusBadgeStyle(statusConfig?.color);
   const statusLabel = statusConfig?.label ?? statusValue ?? "Statut";
-  const statusProgress = statusValue ? computeStatusProgress(statusValue, projectStatuses) : 0;
+  const statusProgress = statusValue
+    ? computeStatusProgress(statusValue, projectStatuses)
+    : 0;
 
   const fallbackLatestUpdateText = (() => {
     const candidates = [
@@ -2869,7 +3203,11 @@ const ProjectDetails = () => {
   })();
 
   const latestUpdateTimestamp = (() => {
-    const candidates = [latestUpdate?.created_at, fallbackLatestUpdateAt, project?.updated_at];
+    const candidates = [
+      latestUpdate?.created_at,
+      fallbackLatestUpdateAt,
+      project?.updated_at,
+    ];
     for (const candidate of candidates) {
       if (typeof candidate === "string" && candidate.trim().length > 0) {
         const date = new Date(candidate);
@@ -2919,11 +3257,13 @@ const ProjectDetails = () => {
     }
 
     const remainingSlots = 3 - updateEntries.length;
-    const fallbackEntries = fallbackHistoryEntries.slice(0, remainingSlots).map((entry, index) => ({
-      id: `fallback-${index}`,
-      text: entry.text,
-      createdAt: entry.createdAt ?? null,
-    }));
+    const fallbackEntries = fallbackHistoryEntries
+      .slice(0, remainingSlots)
+      .map((entry, index) => ({
+        id: `fallback-${index}`,
+        text: entry.text,
+        createdAt: entry.createdAt ?? null,
+      }));
 
     return [...updateEntries, ...fallbackEntries];
   })();
@@ -2947,119 +3287,146 @@ const ProjectDetails = () => {
         nextStep: null,
       }));
 
-  const historyTextsForFallback = fallbackHistoryEntries.map((entry) => entry.text).filter((text) => text.length > 0);
+  const historyTextsForFallback = fallbackHistoryEntries
+    .map((entry) => entry.text)
+    .filter((text) => text.length > 0);
 
-  const { mutateAsync: saveQuickUpdate, isPending: isSavingQuickUpdate } = useMutation({
-    mutationFn: async ({ content }: { content: string }) => {
-      if (!project) {
-        throw new Error("Le projet n'est plus disponible.");
-      }
-
-      const trimmed = content.trim();
-      if (trimmed.length === 0) {
-        throw new Error("Veuillez saisir une mise à jour avant de l'enregistrer.");
-      }
-
-      const nowIso = new Date().toISOString();
-
-      if (projectUpdatesTableAvailable) {
-        const payload: Record<string, unknown> = {
-          project_id: project.id,
-          content: trimmed,
-          status: project.status ?? null,
-          next_step: fallbackNextStep ?? null,
-          created_at: nowIso,
-        };
-
-        if (currentOrgId) {
-          payload.org_id = currentOrgId;
+  const { mutateAsync: saveQuickUpdate, isPending: isSavingQuickUpdate } =
+    useMutation({
+      mutationFn: async ({ content }: { content: string }) => {
+        if (!project) {
+          throw new Error("Le projet n'est plus disponible.");
         }
 
-        if (user?.id) {
-          payload.author_id = user.id;
+        const trimmed = content.trim();
+        if (trimmed.length === 0) {
+          throw new Error(
+            "Veuillez saisir une mise à jour avant de l'enregistrer.",
+          );
         }
 
-        const { error } = await supabase.from("project_updates" as any).insert([payload]);
-        if (!error) {
-          return { usedFallback: false };
-        }
+        const nowIso = new Date().toISOString();
 
-        if (!isTableUnavailableError(error)) {
-          throw error;
-        }
-      }
+        if (projectUpdatesTableAvailable) {
+          const payload: Record<string, unknown> = {
+            project_id: project.id,
+            content: trimmed,
+            status: project.status ?? null,
+            next_step: fallbackNextStep ?? null,
+            created_at: nowIso,
+          };
 
-      const fallbackPayload: Record<string, unknown> = {};
-      const textFieldCandidates = ["latest_update_text", "last_update_text", "status_update_text"];
-      const timestampFieldCandidates = ["latest_update_at", "last_update_at", "status_update_at"];
-      const historyFieldCandidates = ["history_short", "update_history", "status_history", "history"];
-
-      for (const field of textFieldCandidates) {
-        if (Object.prototype.hasOwnProperty.call(projectRecord, field)) {
-          fallbackPayload[field] = trimmed;
-          break;
-        }
-      }
-
-      for (const field of timestampFieldCandidates) {
-        if (Object.prototype.hasOwnProperty.call(projectRecord, field)) {
-          fallbackPayload[field] = nowIso;
-          break;
-        }
-      }
-
-      const newHistoryItems = [trimmed, ...historyTextsForFallback].filter((value) => value.length > 0).slice(0, 3);
-      for (const field of historyFieldCandidates) {
-        if (Object.prototype.hasOwnProperty.call(projectRecord, field)) {
-          const currentValue = projectRecord[field];
-          if (Array.isArray(currentValue)) {
-            fallbackPayload[field] = newHistoryItems;
-          } else if (typeof currentValue === "string") {
-            fallbackPayload[field] = JSON.stringify(newHistoryItems);
-          } else {
-            fallbackPayload[field] = newHistoryItems;
+          if (currentOrgId) {
+            payload.org_id = currentOrgId;
           }
-          break;
+
+          if (user?.id) {
+            payload.author_id = user.id;
+          }
+
+          const { error } = await supabase
+            .from("project_updates" as any)
+            .insert([payload]);
+          if (!error) {
+            return { usedFallback: false };
+          }
+
+          if (!isTableUnavailableError(error)) {
+            throw error;
+          }
         }
-      }
 
-      if (Object.keys(fallbackPayload).length === 0) {
-        throw new Error(
-          "Impossible d'enregistrer la mise à jour : aucun champ de sauvegarde n'est disponible sur le projet.",
-        );
-      }
+        const fallbackPayload: Record<string, unknown> = {};
+        const textFieldCandidates = [
+          "latest_update_text",
+          "last_update_text",
+          "status_update_text",
+        ];
+        const timestampFieldCandidates = [
+          "latest_update_at",
+          "last_update_at",
+          "status_update_at",
+        ];
+        const historyFieldCandidates = [
+          "history_short",
+          "update_history",
+          "status_history",
+          "history",
+        ];
 
-      const { error: projectError } = await supabase
-        .from("projects" as any)
-        .update(fallbackPayload)
-        .eq("id", project.id)
-        .select("id");
+        for (const field of textFieldCandidates) {
+          if (Object.prototype.hasOwnProperty.call(projectRecord, field)) {
+            fallbackPayload[field] = trimmed;
+            break;
+          }
+        }
 
-      if (projectError) {
-        throw projectError;
-      }
+        for (const field of timestampFieldCandidates) {
+          if (Object.prototype.hasOwnProperty.call(projectRecord, field)) {
+            fallbackPayload[field] = nowIso;
+            break;
+          }
+        }
 
-      return { usedFallback: true };
-    },
-    onSuccess: async () => {
-      setQuickUpdateText("");
-      await Promise.all([refetch(), refetchProjectUpdates()]);
-      toast({ title: "Mise à jour enregistrée" });
-    },
-    onError: (mutationError) => {
-      const message =
-        mutationError instanceof Error
-          ? mutationError.message
-          : "Impossible d'enregistrer la mise à jour pour le moment.";
-      toast({ title: "Erreur", description: message, variant: "destructive" });
-    },
-  });
+        const newHistoryItems = [trimmed, ...historyTextsForFallback]
+          .filter((value) => value.length > 0)
+          .slice(0, 3);
+        for (const field of historyFieldCandidates) {
+          if (Object.prototype.hasOwnProperty.call(projectRecord, field)) {
+            const currentValue = projectRecord[field];
+            if (Array.isArray(currentValue)) {
+              fallbackPayload[field] = newHistoryItems;
+            } else if (typeof currentValue === "string") {
+              fallbackPayload[field] = JSON.stringify(newHistoryItems);
+            } else {
+              fallbackPayload[field] = newHistoryItems;
+            }
+            break;
+          }
+        }
+
+        if (Object.keys(fallbackPayload).length === 0) {
+          throw new Error(
+            "Impossible d'enregistrer la mise à jour : aucun champ de sauvegarde n'est disponible sur le projet.",
+          );
+        }
+
+        const { error: projectError } = await supabase
+          .from("projects" as any)
+          .update(fallbackPayload)
+          .eq("id", project.id)
+          .select("id");
+
+        if (projectError) {
+          throw projectError;
+        }
+
+        return { usedFallback: true };
+      },
+      onSuccess: async () => {
+        setQuickUpdateText("");
+        await Promise.all([refetch(), refetchProjectUpdates()]);
+        toast({ title: "Mise à jour enregistrée" });
+      },
+      onError: (mutationError) => {
+        const message =
+          mutationError instanceof Error
+            ? mutationError.message
+            : "Impossible d'enregistrer la mise à jour pour le moment.";
+        toast({
+          title: "Erreur",
+          description: message,
+          variant: "destructive",
+        });
+      },
+    });
 
   const handleQuickUpdateSubmit = useCallback(async () => {
     await saveQuickUpdate({ content: quickUpdateText });
   }, [quickUpdateText, saveQuickUpdate]);
 
-  const isQuickUpdateDisabled = !project || quickUpdateText.trim().length === 0 || isSavingQuickUpdate;
+  const isQuickUpdateDisabled =
+    !project || quickUpdateText.trim().length === 0 || isSavingQuickUpdate;
   const renderProductsTable = useCallback(
     (products: ProjectProduct[], emptyMessage: string) => {
       if (products.length === 0) {
@@ -3085,7 +3452,8 @@ const ProjectDetails = () => {
                   item.product?.params_schema ?? null,
                   item.dynamic_params,
                 );
-                const entryId = item.id ?? item.product_id ?? `product-${index}`;
+                const entryId =
+                  item.id ?? item.product_id ?? `product-${index}`;
                 const ceeEntry = ceeEntryMap[entryId];
                 const hasWarnings =
                   Boolean(ceeEntry?.warnings.missingDynamicParams) ||
@@ -3096,9 +3464,14 @@ const ProjectDetails = () => {
 
                 const multiplierDisplay = (() => {
                   if (!ceeEntry) return "Non renseigné";
-                  if (typeof ceeEntry.multiplierValue === "number" && ceeEntry.multiplierValue > 0) {
+                  if (
+                    typeof ceeEntry.multiplierValue === "number" &&
+                    ceeEntry.multiplierValue > 0
+                  ) {
                     const value = formatDecimal(ceeEntry.multiplierValue);
-                    return ceeEntry.multiplierLabel ? `${value} (${ceeEntry.multiplierLabel})` : value;
+                    return ceeEntry.multiplierLabel
+                      ? `${value} (${ceeEntry.multiplierLabel})`
+                      : value;
                   }
                   if (ceeEntry.warnings.missingDynamicParams) {
                     return "Paramètres dynamiques manquants";
@@ -3109,8 +3482,12 @@ const ProjectDetails = () => {
                 const valorisationPerUnitDisplay = (() => {
                   if (!ceeEntry) return "Non calculée";
                   if (ceeEntry.result) {
-                    const perUnit = formatCurrency(ceeEntry.result.valorisationPerUnitEur);
-                    const perUnitMwh = formatDecimal(ceeEntry.result.valorisationPerUnitMwh);
+                    const perUnit = formatCurrency(
+                      ceeEntry.result.valorisationPerUnitEur,
+                    );
+                    const perUnitMwh = formatDecimal(
+                      ceeEntry.result.valorisationPerUnitMwh,
+                    );
                     const label = ceeEntry.multiplierLabel ?? "unité";
                     return {
                       primary: `${perUnit}`,
@@ -3130,7 +3507,9 @@ const ProjectDetails = () => {
                   if (!ceeEntry) return "Non calculée";
                   if (ceeEntry.result) {
                     return {
-                      primary: formatCurrency(ceeEntry.result.valorisationTotalEur),
+                      primary: formatCurrency(
+                        ceeEntry.result.valorisationTotalEur,
+                      ),
                       secondary: `${formatDecimal(ceeEntry.result.valorisationTotalMwh)} MWh`,
                     };
                   }
@@ -3162,7 +3541,10 @@ const ProjectDetails = () => {
                     <TableCell>
                       <div className="flex flex-col gap-2 text-sm">
                         <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="secondary" className="text-xs font-semibold">
+                          <Badge
+                            variant="secondary"
+                            className="text-xs font-semibold"
+                          >
                             {item.product?.code ?? "Code inconnu"}
                           </Badge>
                           <span className="font-medium text-foreground">
@@ -3177,12 +3559,18 @@ const ProjectDetails = () => {
                         {hasWarnings ? (
                           <div className="flex flex-wrap gap-2">
                             {ceeEntry?.warnings.missingKwh ? (
-                              <Badge className="bg-amber-100 text-amber-700 border-amber-200" variant="outline">
+                              <Badge
+                                className="bg-amber-100 text-amber-700 border-amber-200"
+                                variant="outline"
+                              >
                                 kWh manquant pour ce bâtiment
                               </Badge>
                             ) : null}
                             {ceeEntry?.warnings.missingDynamicParams ? (
-                              <Badge className="bg-amber-100 text-amber-700 border-amber-200" variant="outline">
+                              <Badge
+                                className="bg-amber-100 text-amber-700 border-amber-200"
+                                variant="outline"
+                              >
                                 Paramètres dynamiques manquants
                               </Badge>
                             ) : null}
@@ -3191,8 +3579,13 @@ const ProjectDetails = () => {
                         {dynamicFields.length > 0 ? (
                           <div className="grid gap-2 text-xs md:grid-cols-2">
                             {dynamicFields.map((field) => (
-                              <div key={`${item.id}-${field.label}`} className="flex items-center justify-between gap-2">
-                                <span className="text-muted-foreground">{field.label}</span>
+                              <div
+                                key={`${item.id}-${field.label}`}
+                                className="flex items-center justify-between gap-2"
+                              >
+                                <span className="text-muted-foreground">
+                                  {field.label}
+                                </span>
                                 <span className="font-medium text-foreground">
                                   {String(formatDynamicFieldValue(field))}
                                 </span>
@@ -3204,7 +3597,9 @@ const ProjectDetails = () => {
                     </TableCell>
                     <TableCell>
                       {visibleImages.length === 0 ? (
-                        <span className="text-xs text-muted-foreground">Aucune image</span>
+                        <span className="text-xs text-muted-foreground">
+                          Aucune image
+                        </span>
                       ) : (
                         <div className="flex flex-wrap items-center gap-2">
                           {visibleImages.map((image, imageIndex) => (
@@ -3214,14 +3609,22 @@ const ProjectDetails = () => {
                               onClick={() =>
                                 setLightboxImage({
                                   url: image.url,
-                                  alt: image.alt ?? item.product?.name ?? item.product?.code ?? "Visuel produit",
+                                  alt:
+                                    image.alt ??
+                                    item.product?.name ??
+                                    item.product?.code ??
+                                    "Visuel produit",
                                 })
                               }
                               className="h-14 w-14 overflow-hidden rounded-md border border-border/60 bg-muted/30 transition hover:ring-2 hover:ring-primary focus:outline-none focus:ring-2 focus:ring-primary"
                             >
                               <img
                                 src={image.url}
-                                alt={image.alt ?? item.product?.name ?? "Visuel produit"}
+                                alt={
+                                  image.alt ??
+                                  item.product?.name ??
+                                  "Visuel produit"
+                                }
                                 className="h-full w-full object-cover"
                               />
                             </button>
@@ -3234,29 +3637,45 @@ const ProjectDetails = () => {
                         </div>
                       )}
                     </TableCell>
-                    <TableCell className="text-sm font-medium text-foreground">{multiplierDisplay}</TableCell>
+                    <TableCell className="text-sm font-medium text-foreground">
+                      {multiplierDisplay}
+                    </TableCell>
                     <TableCell>
                       {typeof valorisationPerUnitDisplay === "string" ? (
-                        <span className="text-sm text-muted-foreground">{valorisationPerUnitDisplay}</span>
+                        <span className="text-sm text-muted-foreground">
+                          {valorisationPerUnitDisplay}
+                        </span>
                       ) : (
                         <div className="flex flex-col text-sm">
-                          <span className="font-semibold text-emerald-600">{valorisationPerUnitDisplay.primary}</span>
-                          <span className="text-xs text-muted-foreground">{valorisationPerUnitDisplay.secondary}</span>
+                          <span className="font-semibold text-emerald-600">
+                            {valorisationPerUnitDisplay.primary}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {valorisationPerUnitDisplay.secondary}
+                          </span>
                         </div>
                       )}
                     </TableCell>
                     <TableCell>
                       {typeof valorisationTotalDisplay === "string" ? (
-                        <span className="text-sm text-muted-foreground">{valorisationTotalDisplay}</span>
+                        <span className="text-sm text-muted-foreground">
+                          {valorisationTotalDisplay}
+                        </span>
                       ) : (
                         <div className="flex flex-col text-sm">
-                          <span className="font-semibold text-amber-600">{valorisationTotalDisplay.primary}</span>
-                          <span className="text-xs text-muted-foreground">{valorisationTotalDisplay.secondary}</span>
+                          <span className="font-semibold text-amber-600">
+                            {valorisationTotalDisplay.primary}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {valorisationTotalDisplay.secondary}
+                          </span>
                         </div>
                       )}
                     </TableCell>
                     <TableCell>
-                      <span className="text-sm font-semibold text-emerald-600">{primeDisplay}</span>
+                      <span className="text-sm font-semibold text-emerald-600">
+                        {primeDisplay}
+                      </span>
                     </TableCell>
                   </TableRow>
                 );
@@ -3270,7 +3689,7 @@ const ProjectDetails = () => {
   );
 
   const isInitialLoading = isLoading || membersLoading;
-  const canManageSites = isAdmin || (project?.user_id === user?.id);
+  const canManageSites = isAdmin || project?.user_id === user?.id;
 
   if (isInitialLoading) {
     return (
@@ -3284,14 +3703,18 @@ const ProjectDetails = () => {
 
   if (error) {
     const errorMessage =
-      error instanceof Error ? error.message : "Une erreur inattendue est survenue.";
+      error instanceof Error
+        ? error.message
+        : "Une erreur inattendue est survenue.";
 
     return (
       <Layout>
         <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
           <AlertTriangle className="h-10 w-10 text-destructive" />
           <div className="space-y-2">
-            <h1 className="text-xl font-semibold">Impossible de charger le projet</h1>
+            <h1 className="text-xl font-semibold">
+              Impossible de charger le projet
+            </h1>
             <p className="text-sm text-muted-foreground">{errorMessage}</p>
           </div>
           <div className="flex flex-wrap justify-center gap-2">
@@ -3316,7 +3739,9 @@ const ProjectDetails = () => {
               Le projet demandé n'existe plus ou vous n'y avez pas accès.
             </p>
           </div>
-          <Button onClick={() => navigate("/projects")}>Retour aux projets</Button>
+          <Button onClick={() => navigate("/projects")}>
+            Retour aux projets
+          </Button>
         </div>
       </Layout>
     );
@@ -3327,13 +3752,16 @@ const ProjectDetails = () => {
 
     const displayedProducts = getDisplayedProducts(project.project_products);
     const firstProduct =
-      displayedProducts[0]?.product ?? project.project_products?.[0]?.product ?? null;
+      displayedProducts[0]?.product ??
+      project.project_products?.[0]?.product ??
+      null;
     const productLabel =
       firstProduct?.code ||
       (project as Project & { product_name?: string | null }).product_name ||
       "";
     const clientName = getProjectClientName(project);
-    const address = (project as Project & { address?: string | null }).address ?? "";
+    const address =
+      (project as Project & { address?: string | null }).address ?? "";
 
     const today = new Date();
     const datePrefix = `SITE-${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(
@@ -3358,7 +3786,7 @@ const ProjectDetails = () => {
     const site_ref = `${datePrefix}-${String(nextNumber).padStart(3, "0")}`;
     const valorisationEur = hasComputedCeeTotals
       ? ceeTotals.totalValorisationEur
-      : ceeTotals.totalPrime ?? 0;
+      : (ceeTotals.totalPrime ?? 0);
 
     setSiteDialogMode("create");
     setActiveSite(null);
@@ -3415,7 +3843,10 @@ const ProjectDetails = () => {
 
   const handleEditSite = (
     site: ProjectSite,
-    options?: { readOnly?: boolean; defaultTab?: "avant-chantier" | "apres-chantier" },
+    options?: {
+      readOnly?: boolean;
+      defaultTab?: "avant-chantier" | "apres-chantier";
+    },
   ) => {
     const { readOnly = false, defaultTab = "avant-chantier" } = options ?? {};
 
@@ -3445,7 +3876,9 @@ const ProjectDetails = () => {
       montant_commission: site.montant_commission ?? 0,
       valorisation_cee: site.valorisation_cee ?? 0,
       notes: site.notes ?? "",
-      subcontractor_payment_confirmed: Boolean(site.subcontractor_payment_confirmed),
+      subcontractor_payment_confirmed: Boolean(
+        site.subcontractor_payment_confirmed,
+      ),
       subcontractor_id: site.subcontractor_id ?? null,
       team_members: mapTeamMembersToFormValues(site.team_members ?? []),
       additional_costs: normalizeAdditionalCosts(site.additional_costs ?? []),
@@ -3456,89 +3889,91 @@ const ProjectDetails = () => {
   const handleSubmitSite = async (values: SiteFormValues) => {
     if (!user || !currentOrgId || !project) return;
 
-      const sanitizedTeam = Array.from(
-        new Set(
-          (values.team_members ?? [])
-            .map((member) => {
-              if (!member) return null;
+    const sanitizedTeam = Array.from(
+      new Set(
+        (values.team_members ?? [])
+          .map((member) => {
+            if (!member) return null;
 
-              const rawId = typeof member.id === "string" ? member.id.trim() : "";
-              if (rawId && (isUuid(rawId) || memberNameById[rawId])) {
-                return rawId;
+            const rawId = typeof member.id === "string" ? member.id.trim() : "";
+            if (rawId && (isUuid(rawId) || memberNameById[rawId])) {
+              return rawId;
+            }
+
+            const rawName =
+              typeof member.name === "string" ? member.name.trim() : "";
+            if (rawName.length > 0) {
+              const matchedId = memberIdByName[rawName.toLowerCase()];
+              if (matchedId) {
+                return matchedId;
               }
+            }
 
-              const rawName = typeof member.name === "string" ? member.name.trim() : "";
-              if (rawName.length > 0) {
-                const matchedId = memberIdByName[rawName.toLowerCase()];
-                if (matchedId) {
-                  return matchedId;
-                }
-              }
+            return null;
+          })
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
 
-              return null;
-            })
-            .filter((value): value is string => Boolean(value)),
-        ),
-      );
+    const sanitizedCosts = values.additional_costs
+      ? values.additional_costs
+          .filter((cost) => cost.label.trim().length > 0)
+          .map((cost) => {
+            const attachment = cost.attachment ? cost.attachment.trim() : "";
 
-      const sanitizedCosts = values.additional_costs
-        ? values.additional_costs
-            .filter((cost) => cost.label.trim().length > 0)
-            .map((cost) => {
-              const attachment = cost.attachment ? cost.attachment.trim() : "";
+            return {
+              label: cost.label.trim(),
+              amount_ht: Number.isFinite(cost.amount_ht) ? cost.amount_ht : 0,
+              taxes: Number.isFinite(cost.taxes) ? cost.taxes : 0,
+              attachment: attachment.length > 0 ? attachment : null,
+            };
+          })
+      : [];
 
-              return {
-                label: cost.label.trim(),
-                amount_ht: Number.isFinite(cost.amount_ht) ? cost.amount_ht : 0,
-                taxes: Number.isFinite(cost.taxes) ? cost.taxes : 0,
-                attachment: attachment.length > 0 ? attachment : null,
-              };
-            })
-        : [];
+    const projectRef = values.project_ref?.trim?.() ?? "";
+    const clientName = values.client_name?.trim?.() ?? "";
+    const matchedProject = projectSiteOptions.find(
+      (option) => option.project_ref === projectRef,
+    );
+    const resolvedProjectId =
+      typeof matchedProject?.id === "string" && matchedProject.id.length > 0
+        ? matchedProject.id
+        : typeof activeSite?.project_id === "string" &&
+            activeSite.project_id.length > 0
+          ? activeSite.project_id
+          : project.id;
 
-      const projectRef = values.project_ref?.trim?.() ?? "";
-      const clientName = values.client_name?.trim?.() ?? "";
-      const matchedProject = projectSiteOptions.find(
-        (option) => option.project_ref === projectRef,
-      );
-      const resolvedProjectId =
-        typeof matchedProject?.id === "string" && matchedProject.id.length > 0
-          ? matchedProject.id
-          : typeof activeSite?.project_id === "string" && activeSite.project_id.length > 0
-            ? activeSite.project_id
-            : project.id;
-
-      const siteData = {
-        site_ref: values.site_ref,
-        project_ref: projectRef,
-        client_name: clientName,
-        product_name: values.product_name?.trim() || "",
-        address: values.address,
-        city: values.city,
-        postal_code: values.postal_code,
-        status: values.status,
-        cofrac_status: values.cofrac_status,
-        date_debut: values.date_debut,
-        date_fin_prevue: values.date_fin_prevue || null,
-        progress_percentage: values.progress_percentage,
-        revenue: values.revenue,
-        profit_margin: values.profit_margin,
-        surface_facturee: values.surface_facturee,
-        cout_main_oeuvre_m2_ht: values.cout_main_oeuvre_m2_ht,
-        cout_isolation_m2: values.cout_isolation_m2,
-        isolation_utilisee_m2: values.isolation_utilisee_m2,
-        montant_commission: values.montant_commission,
-        valorisation_cee: values.valorisation_cee,
-        subcontractor_payment_confirmed: values.subcontractor_payment_confirmed,
-        notes: values.notes?.trim() || null,
-        team_members: sanitizedTeam.length > 0 ? sanitizedTeam : null,
-        additional_costs: sanitizedCosts.length > 0 ? sanitizedCosts : [],
-        subcontractor_id: values.subcontractor_id ?? null,
-        user_id: user.id,
-        created_by: user.id,
-        org_id: currentOrgId,
-        project_id: resolvedProjectId,
-      };
+    const siteData = {
+      site_ref: values.site_ref,
+      project_ref: projectRef,
+      client_name: clientName,
+      product_name: values.product_name?.trim() || "",
+      address: values.address,
+      city: values.city,
+      postal_code: values.postal_code,
+      status: values.status,
+      cofrac_status: values.cofrac_status,
+      date_debut: values.date_debut,
+      date_fin_prevue: values.date_fin_prevue || null,
+      progress_percentage: values.progress_percentage,
+      revenue: values.revenue,
+      profit_margin: values.profit_margin,
+      surface_facturee: values.surface_facturee,
+      cout_main_oeuvre_m2_ht: values.cout_main_oeuvre_m2_ht,
+      cout_isolation_m2: values.cout_isolation_m2,
+      isolation_utilisee_m2: values.isolation_utilisee_m2,
+      montant_commission: values.montant_commission,
+      valorisation_cee: values.valorisation_cee,
+      subcontractor_payment_confirmed: values.subcontractor_payment_confirmed,
+      notes: values.notes?.trim() || null,
+      team_members: sanitizedTeam.length > 0 ? sanitizedTeam : null,
+      additional_costs: sanitizedCosts.length > 0 ? sanitizedCosts : [],
+      subcontractor_id: values.subcontractor_id ?? null,
+      user_id: user.id,
+      created_by: user.id,
+      org_id: currentOrgId,
+      project_id: resolvedProjectId,
+    };
 
     try {
       if (siteDialogMode === "edit" && activeSite) {
@@ -3651,7 +4086,10 @@ const ProjectDetails = () => {
       console.error(error);
       toast({
         title: "Erreur lors de l'archivage",
-        description: error instanceof Error ? error.message : "Impossible d'archiver le projet.",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Impossible d'archiver le projet.",
         variant: "destructive",
       });
     } finally {
@@ -3662,11 +4100,15 @@ const ProjectDetails = () => {
   const projectCostValue = project?.estimated_value ?? null;
   const projectEmail = (project as Project & { email?: string })?.email ?? null;
   const driveFolderUrl = project
-    ? ((project as Project & { drive_folder_url?: string | null }).drive_folder_url ?? null)
+    ? ((project as Project & { drive_folder_url?: string | null })
+        .drive_folder_url ?? null)
     : null;
   const projectAppointments = project?.project_appointments ?? [];
   const journalLoading =
-    projectMediaLoading || projectNotesLoading || statusEventsLoading || projectSitesLoading;
+    projectMediaLoading ||
+    projectNotesLoading ||
+    statusEventsLoading ||
+    projectSitesLoading;
 
   const displayedPrimeValue = (() => {
     const storedPrime = resolvePrimeCeeEuro(project);
@@ -3681,7 +4123,9 @@ const ProjectDetails = () => {
     return null;
   })();
 
-  const isProjectArchived = project ? ARCHIVED_STATUS_VALUES.has(project.status ?? "") : false;
+  const isProjectArchived = project
+    ? ARCHIVED_STATUS_VALUES.has(project.status ?? "")
+    : false;
 
   return (
     <Layout>
@@ -3701,8 +4145,10 @@ const ProjectDetails = () => {
               {project.project_ref}
             </h1>
             <p className="text-muted-foreground">
-              {productCodes.length > 0 ? productCodes.join(", ") : "Aucun code produit"} – {project.city} (
-              {project.postal_code})
+              {productCodes.length > 0
+                ? productCodes.join(", ")
+                : "Aucun code produit"}{" "}
+              – {project.city} ({project.postal_code})
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -3731,32 +4177,44 @@ const ProjectDetails = () => {
               <FolderOpen className="w-4 h-4 mr-2" />
               Voir les media
             </Button>
-            {(isAdmin || project.user_id === user?.id) && !isProjectArchived && (
-              <AlertDialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline">
-                    <Archive className="w-4 h-4 mr-2" />
-                    Archiver
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Archiver le projet ?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Êtes-vous sûr de vouloir archiver ce projet ?
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel disabled={isArchiving}>Annuler</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleArchiveProject} disabled={isArchiving}>
-                      {isArchiving ? "Archivage..." : "Confirmer"}
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            )}
+            {(isAdmin || project.user_id === user?.id) &&
+              !isProjectArchived && (
+                <AlertDialog
+                  open={archiveDialogOpen}
+                  onOpenChange={setArchiveDialogOpen}
+                >
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline">
+                      <Archive className="w-4 h-4 mr-2" />
+                      Archiver
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Archiver le projet ?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Êtes-vous sûr de vouloir archiver ce projet ?
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel disabled={isArchiving}>
+                        Annuler
+                      </AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handleArchiveProject}
+                        disabled={isArchiving}
+                      >
+                        {isArchiving ? "Archivage..." : "Confirmer"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
             {(isAdmin || project.user_id === user?.id) && (
-              <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+              <AlertDialog
+                open={deleteDialogOpen}
+                onOpenChange={setDeleteDialogOpen}
+              >
                 <AlertDialogTrigger asChild>
                   <Button variant="destructive">
                     <Trash2 className="w-4 h-4 mr-2" />
@@ -3767,12 +4225,19 @@ const ProjectDetails = () => {
                   <AlertDialogHeader>
                     <AlertDialogTitle>Supprimer le projet ?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Cette action est irréversible. Le projet {project.project_ref || "sélectionné"} sera définitivement supprimé.
+                      Cette action est irréversible. Le projet{" "}
+                      {project.project_ref || "sélectionné"} sera définitivement
+                      supprimé.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel disabled={isDeleting}>Annuler</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDeleteProject} disabled={isDeleting}>
+                    <AlertDialogCancel disabled={isDeleting}>
+                      Annuler
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleDeleteProject}
+                      disabled={isDeleting}
+                    >
                       {isDeleting ? "Suppression..." : "Confirmer"}
                     </AlertDialogAction>
                   </AlertDialogFooter>
@@ -3782,16 +4247,11 @@ const ProjectDetails = () => {
           </div>
         </div>
 
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-          <TabsList className="w-full justify-start overflow-x-auto">
-            <TabsTrigger value="overview">Aperçu</TabsTrigger>
-            <TabsTrigger value="media">Media</TabsTrigger>
-            <TabsTrigger value="journal">Journal</TabsTrigger>
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="w-full justify-start overflow-x-auto">
-            <TabsTrigger value="overview">Aperçu</TabsTrigger>
-            <TabsTrigger value="journal">Journal</TabsTrigger>
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
+        <Tabs
+          value={activeTab}
+          onValueChange={handleTabChange}
+          className="space-y-6"
+        >
           <TabsList className="w-full justify-start overflow-x-auto">
             <TabsTrigger value="details">Détails</TabsTrigger>
             <TabsTrigger value="chantiers">Chantiers</TabsTrigger>
@@ -3813,7 +4273,9 @@ const ProjectDetails = () => {
                         {getProjectClientName(project)}
                       </p>
                       {project.company && (
-                        <p className="text-sm text-muted-foreground">{project.company}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {project.company}
+                        </p>
                       )}
                       {project.siren && (
                         <p className="text-xs text-muted-foreground uppercase tracking-wide">
@@ -3843,10 +4305,16 @@ const ProjectDetails = () => {
                         <MapPin className="w-4 h-4 text-primary" />
                         {(project as Project & { address?: string }).address
                           ? [
-                              (project as Project & { address?: string }).address,
-                              [project.postal_code, project.city].filter(Boolean).join(" "),
+                              (project as Project & { address?: string })
+                                .address,
+                              [project.postal_code, project.city]
+                                .filter(Boolean)
+                                .join(" "),
                             ]
-                              .filter((part) => part && part.toString().trim().length > 0)
+                              .filter(
+                                (part) =>
+                                  part && part.toString().trim().length > 0,
+                              )
                               .join(", ")
                           : `${project.city} (${project.postal_code})`}
                       </p>
@@ -3868,7 +4336,9 @@ const ProjectDetails = () => {
 
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">Type de bâtiment</p>
+                      <p className="text-sm text-muted-foreground">
+                        Type de bâtiment
+                      </p>
                       <p className="font-medium flex items-center gap-2">
                         <Building2 className="w-4 h-4 text-primary" />
                         {project.building_type ?? "Non renseigné"}
@@ -3876,10 +4346,14 @@ const ProjectDetails = () => {
                     </div>
                     <div className="space-y-2">
                       <p className="text-sm text-muted-foreground">Usage</p>
-                      <p className="font-medium">{project.usage ?? "Non renseigné"}</p>
+                      <p className="font-medium">
+                        {project.usage ?? "Non renseigné"}
+                      </p>
                     </div>
                     <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">Surface bâtiment</p>
+                      <p className="text-sm text-muted-foreground">
+                        Surface bâtiment
+                      </p>
                       <p className="font-medium">
                         {typeof project.surface_batiment_m2 === "number"
                           ? `${project.surface_batiment_m2} m²`
@@ -3887,7 +4361,9 @@ const ProjectDetails = () => {
                       </p>
                     </div>
                     <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">Surface isolée</p>
+                      <p className="text-sm text-muted-foreground">
+                        Surface isolée
+                      </p>
                       <p className="font-medium">
                         {typeof project.surface_isolee_m2 === "number"
                           ? `${project.surface_isolee_m2} m²`
@@ -3906,15 +4382,22 @@ const ProjectDetails = () => {
                       Progression & Mises à jour
                     </CardTitle>
                     <CardDescription>
-                      Suivez l'avancement du dossier et consignez les dernières informations partagées avec le client.
+                      Suivez l'avancement du dossier et consignez les dernières
+                      informations partagées avec le client.
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
                     <div className="space-y-3">
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm text-muted-foreground">Statut</span>
-                          <Badge variant="outline" style={badgeStyle} className="text-xs font-medium">
+                          <span className="text-sm text-muted-foreground">
+                            Statut
+                          </span>
+                          <Badge
+                            variant="outline"
+                            style={badgeStyle}
+                            className="text-xs font-medium"
+                          >
                             {statusLabel}
                           </Badge>
                         </div>
@@ -3931,7 +4414,8 @@ const ProjectDetails = () => {
                         Dernière mise à jour
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        {latestUpdateDisplay ?? "Aucune mise à jour enregistrée"}
+                        {latestUpdateDisplay ??
+                          "Aucune mise à jour enregistrée"}
                       </p>
                       {latestUpdateText ? (
                         <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
@@ -3941,14 +4425,18 @@ const ProjectDetails = () => {
                     </div>
 
                     <div className="space-y-2">
-                      <div className="text-sm font-medium text-muted-foreground">Prochaine étape</div>
+                      <div className="text-sm font-medium text-muted-foreground">
+                        Prochaine étape
+                      </div>
                       <p className="text-sm font-medium">
                         {nextStepDescription ?? "Aucune étape planifiée"}
                       </p>
                     </div>
 
                     <div className="space-y-3">
-                      <div className="text-sm font-medium text-muted-foreground">Historique récent</div>
+                      <div className="text-sm font-medium text-muted-foreground">
+                        Historique récent
+                      </div>
                       {projectUpdatesLoading ? (
                         <div className="flex items-center justify-center py-4">
                           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -3956,12 +4444,18 @@ const ProjectDetails = () => {
                       ) : shortHistoryItems.length > 0 ? (
                         <ul className="space-y-3">
                           {shortHistoryItems.map((item) => {
-                            const displayDate = formatDateTimeLabel(item.createdAt, {
-                              dateStyle: "short",
-                              timeStyle: "short",
-                            });
+                            const displayDate = formatDateTimeLabel(
+                              item.createdAt,
+                              {
+                                dateStyle: "short",
+                                timeStyle: "short",
+                              },
+                            );
                             return (
-                              <li key={item.id} className="rounded-lg border border-border/60 bg-muted/20 p-3">
+                              <li
+                                key={item.id}
+                                className="rounded-lg border border-border/60 bg-muted/20 p-3"
+                              >
                                 <div className="flex items-center justify-between gap-3">
                                   <span className="text-sm font-medium leading-tight">
                                     {item.text}
@@ -3984,13 +4478,18 @@ const ProjectDetails = () => {
                     </div>
 
                     <div className="space-y-3">
-                      <label className="text-sm font-medium text-muted-foreground" htmlFor="quick-update-textarea">
+                      <label
+                        className="text-sm font-medium text-muted-foreground"
+                        htmlFor="quick-update-textarea"
+                      >
                         Ajouter une mise à jour rapide
                       </label>
                       <Textarea
                         id="quick-update-textarea"
                         value={quickUpdateText}
-                        onChange={(event) => setQuickUpdateText(event.target.value)}
+                        onChange={(event) =>
+                          setQuickUpdateText(event.target.value)
+                        }
                         rows={3}
                         placeholder="Note interne, suivi client, information de planning..."
                         className="resize-none"
@@ -4018,7 +4517,8 @@ const ProjectDetails = () => {
                     <div className="flex items-center justify-between gap-2">
                       {!projectUpdatesTableAvailable && projectUpdatesError ? (
                         <span className="text-xs text-muted-foreground italic">
-                          Les mises à jour sont sauvegardées directement sur la fiche projet.
+                          Les mises à jour sont sauvegardées directement sur la
+                          fiche projet.
                         </span>
                       ) : (
                         <span className="text-xs text-muted-foreground">
@@ -4048,7 +4548,9 @@ const ProjectDetails = () => {
                   <CardContent className="space-y-4 text-sm">
                     <div className="flex items-center gap-2">
                       <Euro className="w-4 h-4 text-primary" />
-                      <span className="text-muted-foreground">Coût du chantier:</span>
+                      <span className="text-muted-foreground">
+                        Coût du chantier:
+                      </span>
                       <span className="font-medium">
                         {typeof projectCostValue === "number"
                           ? formatCurrency(projectCostValue)
@@ -4066,7 +4568,9 @@ const ProjectDetails = () => {
                     </div>
                     <div className="flex items-center gap-2">
                       <HandCoins className="w-4 h-4 text-amber-600" />
-                      <span className="text-muted-foreground">Valorisation totale:</span>
+                      <span className="text-muted-foreground">
+                        Valorisation totale:
+                      </span>
                       <span className="font-medium text-amber-600">
                         {hasComputedCeeTotals
                           ? `${formatCurrency(ceeTotals.totalValorisationEur)} (${formatDecimal(
@@ -4075,71 +4579,24 @@ const ProjectDetails = () => {
                           : "Non calculée"}
                       </span>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
 
-              <Card className="shadow-card border border-dashed border-primary/20">
-                <CardHeader>
-                  <CardTitle>Détails & actions</CardTitle>
-                  <CardDescription>
-                    Accédez rapidement aux documents et à l'historique du projet.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4 text-sm">
-                  {nextAppointmentDetails ? (
-                    <div className="flex items-start gap-3 rounded-lg border border-border/40 bg-background/60 p-3">
-                      <Calendar className="w-4 h-4 text-primary mt-1" />
-                      <div className="space-y-1">
-                        <p className="font-medium">Prochain RDV</p>
-                        <p className="text-muted-foreground leading-tight">
-                          {nextAppointmentDetails.formattedDate}
-                        </p>
-                        {nextAppointmentDetails.metadata ? (
-                          <p className="text-xs text-muted-foreground leading-tight">
-                            {nextAppointmentDetails.metadata}
-                          </p>
-                        ) : null}
-                        {nextAppointmentDetails.notes ? (
-                          <p className="text-xs text-muted-foreground italic leading-tight">
-                            {nextAppointmentDetails.notes}
-                          </p>
-                        ) : null}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 rounded-lg border border-border/40 bg-background/60 p-3 text-muted-foreground">
-                      <Calendar className="w-4 h-4" />
-                      <span>Aucun RDV planifié</span>
-                    </div>
-                  )}
-
-                  <div className="space-y-2">
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start"
-                      onClick={handleOpenDocuments}
-                    >
-                      <ImageIcon className="h-4 w-4 mr-2" />
-                      Media du projet
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      className="w-full justify-start"
-                      onClick={handleViewFullHistory}
-                    >
-                      <CircleDot className="h-4 w-4 mr-2" />
-                      Voir tout l'historique
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+                <Card className="shadow-card border border-dashed border-primary/20">
+                  <CardHeader>
+                    <CardTitle>Détails & actions</CardTitle>
+                    <CardDescription>
+                      Accédez rapidement aux documents et à l'historique du
+                      projet.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4 text-sm">
                     {nextAppointmentDetails ? (
-                      <div className="flex items-start gap-2">
+                      <div className="flex items-start gap-3 rounded-lg border border-border/40 bg-background/60 p-3">
                         <Calendar className="w-4 h-4 text-primary mt-1" />
                         <div className="space-y-1">
-                          <span className="text-sm text-muted-foreground">Prochain RDV:</span>
-                          <p className="text-sm font-medium leading-tight">
+                          <p className="font-medium">Prochain RDV</p>
+                          <p className="text-muted-foreground leading-tight">
                             {nextAppointmentDetails.formattedDate}
                           </p>
                           {nextAppointmentDetails.metadata ? (
@@ -4148,112 +4605,36 @@ const ProjectDetails = () => {
                             </p>
                           ) : null}
                           {nextAppointmentDetails.notes ? (
-                            <p className="text-xs text-muted-foreground italic whitespace-pre-line leading-tight">
+                            <p className="text-xs text-muted-foreground italic leading-tight">
                               {nextAppointmentDetails.notes}
                             </p>
                           ) : null}
                         </div>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-primary" />
-                        <span className="text-sm text-muted-foreground">Aucun RDV programmé</span>
+                      <div className="flex items-center gap-2 rounded-lg border border-border/40 bg-background/60 p-3 text-muted-foreground">
+                        <Calendar className="w-4 h-4" />
+                        <span>Aucun RDV planifié</span>
                       </div>
                     )}
-                    {projectProducts.map((item, index) => {
-                      const entryId = item.id ?? item.product_id ?? `product-${index}`;
-                      const ceeEntry = ceeEntryMap[entryId];
-                      if (!ceeEntry) {
-                        return null;
-                      }
 
-                      const labelBase =
-                        typeof ceeEntry.result?.valorisationTotalEur === "number"
-                          ? formatCurrency(ceeEntry.result.valorisationTotalEur)
-                          : null;
-                      const entryHasWarnings =
-                        Boolean(ceeEntry.warnings.missingDynamicParams) ||
-                        Boolean(ceeEntry.warnings.missingKwh);
-
-                      return (
-                        <div
-                          key={entryId}
-                          className="rounded-lg border border-border/50 bg-background/60 p-3"
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <p className="text-sm font-medium text-foreground">
-                                {item.product?.name ?? "Produit"}
-                              </p>
-                              <p className="text-xs text-muted-foreground">{item.product?.code ?? "—"}</p>
-                            </div>
-                            {typeof item.quantity === "number" && (
-                              <Badge variant="outline">x{item.quantity}</Badge>
-                            )}
-                          </div>
-                          <div className="mt-2 grid gap-1 text-xs text-muted-foreground">
-                            <span>
-                              Multiplicateur :{" "}
-                              {ceeEntry.multiplierValue && ceeEntry.multiplierValue > 0
-                                ? `${formatDecimal(ceeEntry.multiplierValue)}${
-                                    ceeEntry.multiplierLabel ? ` (${ceeEntry.multiplierLabel})` : ""
-                                  }`
-                                : ceeEntry.warnings.missingDynamicParams
-                                  ? "Paramètres manquants"
-                                  : "Non calculé"}
-                            </span>
-                            <span>
-                              Valorisation / unité :{" "}
-                              {ceeEntry.result
-                                ? formatCurrency(ceeEntry.result.valorisationPerUnitEur)
-                                : "Non calculée"}
-                            </span>
-                            <span>
-                              Valorisation totale : {labelBase ?? "Non calculée"}
-                            </span>
-                          </div>
-                          {entryHasWarnings ? (
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              {ceeEntry.warnings.missingKwh ? (
-                                <Badge variant="outline" className="bg-amber-50 text-amber-700">
-                                  kWh manquant pour ce bâtiment
-                                </Badge>
-                              ) : null}
-                              {ceeEntry.warnings.missingDynamicParams ? (
-                                <Badge variant="outline" className="bg-amber-50 text-amber-700">
-                                  Paramètres dynamiques manquants
-                                </Badge>
-                              ) : null}
-                            </div>
-                          ) : null}
-                        </div>
-                      );
-                    })}
-                    <div className="grid gap-2">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-primary" />
-                        <span className="text-muted-foreground">Début estimé:</span>
-                        <span className="font-medium">
-                          {project.date_debut_prevue
-                            ? new Date(project.date_debut_prevue).toLocaleDateString("fr-FR")
-                            : "Non défini"}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-primary" />
-                        <span className="text-muted-foreground">Fin estimée:</span>
-                        <span className="font-medium">
-                          {project.date_fin_prevue
-                            ? new Date(project.date_fin_prevue).toLocaleDateString("fr-FR")
-                            : "Non définie"}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">Créé le:</span>
-                        <span className="font-medium">
-                          {new Date(project.created_at).toLocaleDateString("fr-FR")}
-                        </span>
-                      </div>
+                    <div className="space-y-2">
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start"
+                        onClick={handleOpenDocuments}
+                      >
+                        <ImageIcon className="h-4 w-4 mr-2" />
+                        Media du projet
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        className="w-full justify-start"
+                        onClick={handleViewFullHistory}
+                      >
+                        <CircleDot className="h-4 w-4 mr-2" />
+                        Voir tout l'historique
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -4268,62 +4649,6 @@ const ProjectDetails = () => {
                 {renderProductsTable(
                   projectProducts,
                   "Aucun produit (hors ECO) n'est associé à ce projet.",
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-          <TabsContent value="journal" className="space-y-6">
-            <Card className="shadow-card border border-dashed border-primary/20">
-              <CardHeader>
-                <CardTitle>Journal des mises à jour</CardTitle>
-                <CardDescription>
-                  Retrouver l'ensemble des échanges, décisions et points de suivi enregistrés pour ce projet.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {projectUpdatesLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                  </div>
-                ) : fullHistoryItems.length > 0 ? (
-                  <ol className="space-y-4">
-                    {fullHistoryItems.map((entry) => {
-                      const formattedDate = formatDateTimeLabel(entry.createdAt);
-                      return (
-                        <li
-                          key={entry.id}
-                          className="rounded-xl border border-border/60 bg-background/80 p-4 shadow-sm"
-                        >
-                          <div className="flex flex-col gap-2">
-                            <div className="flex items-start justify-between gap-3">
-                              <p className="text-sm font-medium leading-relaxed whitespace-pre-line text-foreground">
-                                {entry.text}
-                              </p>
-                              {formattedDate ? (
-                                <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                  {formattedDate}
-                                </span>
-                              ) : null}
-                            </div>
-                            {entry.status ? (
-                              <Badge variant="outline" className="w-fit bg-primary/10 text-primary">
-                                Statut : {entry.status}
-                              </Badge>
-                            ) : null}
-                            {entry.nextStep ? (
-                              <p className="text-xs text-muted-foreground">
-                                Prochaine étape : {entry.nextStep}
-                              </p>
-                            ) : null}
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ol>
-                ) : (
-                  <div className="rounded-lg border border-dashed border-border/60 bg-muted/20 p-6 text-center text-sm text-muted-foreground">
-                    Aucune mise à jour n'a encore été consignée pour ce projet.
-                  </div>
                 )}
               </CardContent>
             </Card>
@@ -4359,12 +4684,13 @@ const ProjectDetails = () => {
             />
           </TabsContent>
           <TabsContent value="chantiers" className="space-y-6">
-          <Card className="shadow-card bg-gradient-card border-0">
-            <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <Card className="shadow-card bg-gradient-card border-0">
+              <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="space-y-1">
                   <CardTitle>Chantiers du projet</CardTitle>
                   <CardDescription>
-                    Créez, éditez et suivez les chantiers rattachés à {project.project_ref}.
+                    Créez, éditez et suivez les chantiers rattachés à{" "}
+                    {project.project_ref}.
                   </CardDescription>
                 </div>
                 <Button
@@ -4385,9 +4711,11 @@ const ProjectDetails = () => {
                     Chargement des chantiers...
                   </div>
                 ) : projectSites.length === 0 ? (
-                  <div className="py-10 text-center space-y-4">
+                  <div className="space-y-4 py-10 text-center">
                     <div className="space-y-2">
-                      <CardTitle className="text-lg">Aucun chantier lié</CardTitle>
+                      <CardTitle className="text-lg">
+                        Aucun chantier lié
+                      </CardTitle>
                       <p className="text-sm text-muted-foreground">
                         Créez un chantier pour suivre l'exécution de ce projet.
                       </p>
@@ -4405,30 +4733,37 @@ const ProjectDetails = () => {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                  {projectSites.map((site) => {
-                    const status = (site.status ?? "PLANIFIE") as SiteStatus;
-                    const cofracStatus = (site.cofrac_status ?? "EN_ATTENTE") as CofracStatus;
-                    const teamMembersLabel = formatTeamMembers(site.team_members);
-                    const progressValue =
-                      typeof site.progress_percentage === "number"
-                        ? Math.min(Math.max(site.progress_percentage, 0), 100)
+                    {projectSites.map((site) => {
+                      const status = (site.status ?? "PLANIFIE") as SiteStatus;
+                      const cofracStatus = (site.cofrac_status ??
+                        "EN_ATTENTE") as CofracStatus;
+                      const teamMembersLabel = formatTeamMembers(
+                        site.team_members,
+                      );
+                      const progressValue =
+                        typeof site.progress_percentage === "number"
+                          ? Math.min(Math.max(site.progress_percentage, 0), 100)
+                          : 0;
+                      const parsedSiteNotes = parseSiteNotes(site.notes);
+                      const internalNotes = parsedSiteNotes.text?.trim() ?? "";
+                      const hasInternalNotes = internalNotes.length > 0;
+                      const driveFile = parsedSiteNotes.driveFile;
+                      const driveLink = driveFile?.webViewLink ?? null;
+                      const driveLabel = driveFile?.name ?? "Document chantier";
+                      const hasDriveFile = Boolean(driveLink);
+                      const additionalCostCount = Array.isArray(
+                        site.additional_costs,
+                      )
+                        ? site.additional_costs.length
                         : 0;
-                    const parsedSiteNotes = parseSiteNotes(site.notes);
-                    const internalNotes = parsedSiteNotes.text?.trim() ?? "";
-                    const hasInternalNotes = internalNotes.length > 0;
-                    const driveFile = parsedSiteNotes.driveFile;
-                    const driveLink = driveFile?.webViewLink ?? null;
-                    const driveLabel = driveFile?.name ?? "Document chantier";
-                    const hasDriveFile = Boolean(driveLink);
-                    const additionalCostCount = Array.isArray(site.additional_costs)
-                      ? site.additional_costs.length
-                      : 0;
-                    const revenueDisplay =
-                      typeof site.revenue === "number" ? formatCurrency(site.revenue) : "—";
-                    const primeDisplay =
-                      typeof site.valorisation_cee === "number"
-                        ? formatCurrency(site.valorisation_cee)
-                        : "—";
+                      const revenueDisplay =
+                        typeof site.revenue === "number"
+                          ? formatCurrency(site.revenue)
+                          : "—";
+                      const primeDisplay =
+                        typeof site.valorisation_cee === "number"
+                          ? formatCurrency(site.valorisation_cee)
+                          : "—";
 
                       return (
                         <div
@@ -4437,7 +4772,9 @@ const ProjectDetails = () => {
                         >
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div>
-                              <h3 className="text-base font-semibold text-foreground">{site.site_ref}</h3>
+                              <h3 className="text-base font-semibold text-foreground">
+                                {site.site_ref}
+                              </h3>
                               <p className="text-sm text-muted-foreground">
                                 {site.address
                                   ? `${site.address} · ${site.postal_code} ${site.city}`
@@ -4445,10 +4782,15 @@ const ProjectDetails = () => {
                               </p>
                             </div>
                             <div className="flex flex-wrap gap-2">
-                              <Badge variant="outline" className={getStatusColor(status)}>
+                              <Badge
+                                variant="outline"
+                                className={getStatusColor(status)}
+                              >
                                 {getStatusLabel(status)}
                               </Badge>
-                              <Badge variant="outline">{getCofracStatusLabel(cofracStatus)}</Badge>
+                              <Badge variant="outline">
+                                {getCofracStatusLabel(cofracStatus)}
+                              </Badge>
                             </div>
                           </div>
 
@@ -4458,7 +4800,9 @@ const ProjectDetails = () => {
                               <span>
                                 Début :{" "}
                                 <span className="font-medium text-foreground">
-                                  {new Date(site.date_debut).toLocaleDateString("fr-FR")}
+                                  {new Date(site.date_debut).toLocaleDateString(
+                                    "fr-FR",
+                                  )}
                                 </span>
                               </span>
                             </div>
@@ -4468,7 +4812,9 @@ const ProjectDetails = () => {
                                 Fin prévue :{" "}
                                 <span className="font-medium text-foreground">
                                   {site.date_fin_prevue
-                                    ? new Date(site.date_fin_prevue).toLocaleDateString("fr-FR")
+                                    ? new Date(
+                                        site.date_fin_prevue,
+                                      ).toLocaleDateString("fr-FR")
                                     : "—"}
                                 </span>
                               </span>
@@ -4476,7 +4822,9 @@ const ProjectDetails = () => {
                             <div>
                               <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
                                 <span>Avancement</span>
-                                <span className="font-medium text-foreground">{progressValue}%</span>
+                                <span className="font-medium text-foreground">
+                                  {progressValue}%
+                                </span>
                               </div>
                               <Progress value={progressValue} />
                             </div>
@@ -4491,7 +4839,7 @@ const ProjectDetails = () => {
                                 </span>
                               </span>
                             </div>
-                            {typeof site.valorisation_cee === "number" && (
+                            {typeof site.valorisation_cee === "number" ? (
                               <div className="flex items-center gap-2">
                                 <HandCoins className="h-4 w-4 text-amber-600" />
                                 <span>
@@ -4501,174 +4849,228 @@ const ProjectDetails = () => {
                                   </span>
                                 </span>
                               </div>
-                            )}
-                            {site.subcontractor && (
+                            ) : null}
+                            {site.subcontractor ? (
                               <div className="flex items-center gap-2">
                                 <Building2 className="h-4 w-4 text-primary" />
                                 <span>
                                   Sous-traitant :{" "}
-                                  <span className="font-medium text-foreground">{site.subcontractor.name}</span>
+                                  <span className="font-medium text-foreground">
+                                    {site.subcontractor.name}
+                                  </span>
                                 </span>
                               </div>
-                            )}
-                          {teamMembersLabel && (
-                            <div className="flex items-center gap-2">
-                              <Users className="h-4 w-4 text-primary" />
-                              <span>
-                                Équipe :{" "}
-                                <span className="font-medium text-foreground">{teamMembersLabel}</span>
-                              </span>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="grid gap-4 lg:grid-cols-2">
-                          <Card className="border border-border/60 bg-background/60">
-                            <CardHeader className="pb-2">
-                              <CardTitle className="flex items-center gap-2 text-base">
-                                <ClipboardList className="h-4 w-4 text-primary" />
-                                Avant Chantier
-                              </CardTitle>
-                              <CardDescription>Préparation et équipe</CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-3 text-sm">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-muted-foreground">Statut</span>
-                                <Badge variant="outline" className={getStatusColor(status)}>
-                                  {getStatusLabel(status)}
-                                </Badge>
-                              </div>
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-muted-foreground">Début chantier</span>
-                                <span className="font-medium text-foreground">
-                                  {new Date(site.date_debut).toLocaleDateString("fr-FR")}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-muted-foreground">Fin prévue</span>
-                                <span className="font-medium text-foreground">
-                                  {site.date_fin_prevue
-                                    ? new Date(site.date_fin_prevue).toLocaleDateString("fr-FR")
-                                    : "—"}
-                                </span>
-                              </div>
-                              {teamMembersLabel ? (
-                                <div className="flex items-start justify-between gap-2">
-                                  <span className="text-muted-foreground">Équipe dédiée</span>
-                                  <span className="font-medium text-right text-foreground">
+                            ) : null}
+                            {teamMembersLabel ? (
+                              <div className="flex items-center gap-2">
+                                <Users className="h-4 w-4 text-primary" />
+                                <span>
+                                  Équipe :{" "}
+                                  <span className="font-medium text-foreground">
                                     {teamMembersLabel}
                                   </span>
-                                </div>
-                              ) : null}
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="flex items-center gap-2 text-muted-foreground">
-                                  <Camera className="h-4 w-4" /> Docs & photos
                                 </span>
-                                {hasDriveFile && driveLink ? (
-                                  <a
-                                    href={driveLink}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                              </div>
+                            ) : null}
+                          </div>
+
+                          <div className="grid gap-4 lg:grid-cols-2">
+                            <Card className="border border-border/60 bg-background/60">
+                              <CardHeader className="pb-2">
+                                <CardTitle className="flex items-center gap-2 text-base">
+                                  <ClipboardList className="h-4 w-4 text-primary" />
+                                  Avant Chantier
+                                </CardTitle>
+                                <CardDescription>
+                                  Préparation et équipe
+                                </CardDescription>
+                              </CardHeader>
+                              <CardContent className="space-y-3 text-sm">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Statut
+                                  </span>
+                                  <Badge
+                                    variant="outline"
+                                    className={getStatusColor(status)}
                                   >
-                                    <FolderOpen className="h-4 w-4" />
-                                    <span className="font-medium">{driveLabel}</span>
-                                  </a>
-                                ) : (
-                                  <span className="font-medium text-muted-foreground">Aucun</span>
-                                )}
-                              </div>
-                            </CardContent>
-                            <CardFooter className="flex justify-end">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() =>
-                                  handleEditSite(site, {
-                                    readOnly: !canManageSites,
-                                    defaultTab: "avant-chantier",
-                                  })
-                                }
-                              >
-                                Voir détails
-                              </Button>
-                            </CardFooter>
-                          </Card>
-
-                          <Card className="border border-border/60 bg-background/60">
-                            <CardHeader className="pb-2">
-                              <CardTitle className="flex items-center gap-2 text-base">
-                                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                                Après Chantier
-                              </CardTitle>
-                              <CardDescription>Suivi qualité & financier</CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-3 text-sm">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-muted-foreground">Statut COFRAC</span>
-                                <Badge variant="outline">{getCofracStatusLabel(cofracStatus)}</Badge>
-                              </div>
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-muted-foreground">Avancement</span>
-                                <span className="font-medium text-foreground">{progressValue}%</span>
-                              </div>
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-muted-foreground">Chiffre d'affaires</span>
-                                <span className="font-medium text-foreground">{revenueDisplay}</span>
-                              </div>
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-muted-foreground">Prime CEE</span>
-                                <span className="font-medium text-foreground">{primeDisplay}</span>
-                              </div>
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-muted-foreground">Coûts supplémentaires</span>
-                                <span className="font-medium text-foreground">{additionalCostCount}</span>
-                              </div>
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-muted-foreground">Paiement sous-traitant</span>
-                                <span
-                                  className={`font-medium ${
-                                    site.subcontractor_payment_confirmed
-                                      ? "text-emerald-600"
-                                      : "text-muted-foreground"
-                                  }`}
+                                    {getStatusLabel(status)}
+                                  </Badge>
+                                </div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Début chantier
+                                  </span>
+                                  <span className="font-medium text-foreground">
+                                    {new Date(
+                                      site.date_debut,
+                                    ).toLocaleDateString("fr-FR")}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Fin prévue
+                                  </span>
+                                  <span className="font-medium text-foreground">
+                                    {site.date_fin_prevue
+                                      ? new Date(
+                                          site.date_fin_prevue,
+                                        ).toLocaleDateString("fr-FR")
+                                      : "—"}
+                                  </span>
+                                </div>
+                                {teamMembersLabel ? (
+                                  <div className="flex items-start justify-between gap-2">
+                                    <span className="text-muted-foreground">
+                                      Équipe dédiée
+                                    </span>
+                                    <span className="text-right font-medium text-foreground">
+                                      {teamMembersLabel}
+                                    </span>
+                                  </div>
+                                ) : null}
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="flex items-center gap-2 text-muted-foreground">
+                                    <Camera className="h-4 w-4" /> Docs & photos
+                                  </span>
+                                  {hasDriveFile && driveLink ? (
+                                    <a
+                                      href={driveLink}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                                    >
+                                      <FolderOpen className="h-4 w-4" />
+                                      <span className="font-medium">
+                                        {driveLabel}
+                                      </span>
+                                    </a>
+                                  ) : (
+                                    <span className="font-medium text-muted-foreground">
+                                      Aucun
+                                    </span>
+                                  )}
+                                </div>
+                              </CardContent>
+                              <CardFooter className="flex justify-end">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() =>
+                                    handleEditSite(site, {
+                                      readOnly: !canManageSites,
+                                      defaultTab: "avant-chantier",
+                                    })
+                                  }
                                 >
-                                  {site.subcontractor_payment_confirmed ? "Confirmé" : "En attente"}
-                                </span>
-                              </div>
-                            </CardContent>
-                            <CardFooter className="flex justify-end">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() =>
-                                  handleEditSite(site, {
-                                    readOnly: !canManageSites,
-                                    defaultTab: "apres-chantier",
-                                  })
-                                }
-                              >
-                                Voir détails
-                              </Button>
-                            </CardFooter>
-                          </Card>
-                        </div>
+                                  Voir détails
+                                </Button>
+                              </CardFooter>
+                            </Card>
 
-                          {hasInternalNotes && (
+                            <Card className="border border-border/60 bg-background/60">
+                              <CardHeader className="pb-2">
+                                <CardTitle className="flex items-center gap-2 text-base">
+                                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                                  Après Chantier
+                                </CardTitle>
+                                <CardDescription>
+                                  Suivi qualité & financier
+                                </CardDescription>
+                              </CardHeader>
+                              <CardContent className="space-y-3 text-sm">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Statut COFRAC
+                                  </span>
+                                  <Badge variant="outline">
+                                    {getCofracStatusLabel(cofracStatus)}
+                                  </Badge>
+                                </div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Avancement
+                                  </span>
+                                  <span className="font-medium text-foreground">
+                                    {progressValue}%
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Chiffre d'affaires
+                                  </span>
+                                  <span className="font-medium text-foreground">
+                                    {revenueDisplay}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Prime CEE
+                                  </span>
+                                  <span className="font-medium text-foreground">
+                                    {primeDisplay}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Coûts supplémentaires
+                                  </span>
+                                  <span className="font-medium text-foreground">
+                                    {additionalCostCount}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Paiement sous-traitant
+                                  </span>
+                                  <span
+                                    className={`font-medium ${
+                                      site.subcontractor_payment_confirmed
+                                        ? "text-emerald-600"
+                                        : "text-muted-foreground"
+                                    }`}
+                                  >
+                                    {site.subcontractor_payment_confirmed
+                                      ? "Confirmé"
+                                      : "En attente"}
+                                  </span>
+                                </div>
+                              </CardContent>
+                              <CardFooter className="flex justify-end">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() =>
+                                    handleEditSite(site, {
+                                      readOnly: !canManageSites,
+                                      defaultTab: "apres-chantier",
+                                    })
+                                  }
+                                >
+                                  Voir détails
+                                </Button>
+                              </CardFooter>
+                            </Card>
+                          </div>
+
+                          {hasInternalNotes ? (
                             <p className="border-t border-border/40 pt-3 text-sm text-muted-foreground">
                               {internalNotes}
                             </p>
-                          )}
+                          ) : null}
 
                           <div className="flex flex-wrap justify-end gap-2">
                             {canManageSites ? (
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => {
-                                  handleEditSite(site, { readOnly: false, defaultTab: "avant-chantier" });
-                                }}
                                 className="inline-flex items-center gap-2"
+                                onClick={() => {
+                                  handleEditSite(site, {
+                                    readOnly: false,
+                                    defaultTab: "avant-chantier",
+                                  });
+                                }}
                               >
                                 <Pencil className="h-4 w-4" />
                                 Modifier
@@ -4680,86 +5082,72 @@ const ProjectDetails = () => {
                     })}
                   </div>
                 )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="media" className="space-y-6">
-          <Card>
-            <CardContent className="py-10 text-center text-sm text-muted-foreground">
-              Les contenus média seront bientôt disponibles.
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="journal" className="space-y-6">
-          <Card>
-            <CardContent className="py-10 text-center text-sm text-muted-foreground">
-              Le journal du projet sera bientôt disponible.
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
 
-      <AddQuoteDialog
-        open={quoteDialogOpen}
-        onOpenChange={(open) => {
-          setQuoteDialogOpen(open);
-          if (!open) {
-            setQuoteInitialValues({});
-          }
-        }}
-        initialValues={quoteInitialValues}
-      />
-      <SiteDialog
-        open={siteDialogOpen}
-        mode={siteDialogMode}
-        onOpenChange={(open) => {
-          setSiteDialogOpen(open);
-          if (!open) {
-            setSiteInitialValues(undefined);
-            setActiveSite(null);
-            setSiteDialogMode("create");
-            setSiteDialogDefaultTab("avant-chantier");
-            setSiteDialogReadOnly(false);
-          }
-        }}
-        onSubmit={handleSubmitSite}
-        initialValues={siteInitialValues}
-        orgId={currentOrgId}
-        projects={projectSiteOptions}
-        defaultTab={siteDialogDefaultTab}
-        readOnly={siteDialogReadOnly}
-      />
+        <AddQuoteDialog
+          open={quoteDialogOpen}
+          onOpenChange={(open) => {
+            setQuoteDialogOpen(open);
+            if (!open) {
+              setQuoteInitialValues({});
+            }
+          }}
+          initialValues={quoteInitialValues}
+        />
+        <SiteDialog
+          open={siteDialogOpen}
+          mode={siteDialogMode}
+          onOpenChange={(open) => {
+            setSiteDialogOpen(open);
+            if (!open) {
+              setSiteInitialValues(undefined);
+              setActiveSite(null);
+              setSiteDialogMode("create");
+              setSiteDialogDefaultTab("avant-chantier");
+              setSiteDialogReadOnly(false);
+            }
+          }}
+          onSubmit={handleSubmitSite}
+          initialValues={siteInitialValues}
+          orgId={currentOrgId}
+          projects={projectSiteOptions}
+          defaultTab={siteDialogDefaultTab}
+          readOnly={siteDialogReadOnly}
+        />
 
-      <Dialog
-        open={Boolean(lightboxImage)}
-        onOpenChange={(open) => {
-          if (!open) {
-            setLightboxImage(null);
-          }
-        }}
-      >
-        <DialogContent className="max-w-3xl">
-          {lightboxImage ? (
-            <>
-              <DialogHeader>
-                <DialogTitle>{lightboxImage.alt ?? "Visuel produit"}</DialogTitle>
-              </DialogHeader>
-              <div className="flex justify-center">
-                <img
-                  src={lightboxImage.url}
-                  alt={lightboxImage.alt ?? "Visuel produit"}
-                  className="max-h-[70vh] w-full object-contain"
-                />
-              </div>
-            </>
-          ) : null}
-        </DialogContent>
-      </Dialog>
-
+        <Dialog
+          open={Boolean(lightboxImage)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setLightboxImage(null);
+            }
+          }}
+        >
+          <DialogContent className="max-w-3xl">
+            {lightboxImage ? (
+              <>
+                <DialogHeader>
+                  <DialogTitle>
+                    {lightboxImage.alt ?? "Visuel produit"}
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="flex justify-center">
+                  <img
+                    src={lightboxImage.url}
+                    alt={lightboxImage.alt ?? "Visuel produit"}
+                    className="max-h-[70vh] w-full object-contain"
+                  />
+                </div>
+              </>
+            ) : null}
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
-
 };
 
 export default ProjectDetails;
