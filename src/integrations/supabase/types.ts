@@ -6,6 +6,24 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
+export type ProjectStatus =
+  | "NOUVEAU"
+  | "ETUDE"
+  | "DEVIS_ENVOYE"
+  | "DEVIS_SIGNE"
+  | "ACCEPTE"
+  | "A_PLANIFIER"
+  | "CHANTIER_PLANIFIE"
+  | "EN_COURS"
+  | "CHANTIER_EN_COURS"
+  | "CHANTIER_TERMINE"
+  | "VISITE_TECHNIQUE"
+  | "LIVRE"
+  | "CLOTURE"
+  | "ANNULE"
+  | "ARCHIVE"
+  | "ARCHIVED"
+
 export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
@@ -824,7 +842,7 @@ export type Database = {
           notes: string | null
           org_id: string
           project_id: string
-          status: string
+          status: ProjectStatus
         }
         Insert: {
           changed_at?: string
@@ -833,7 +851,7 @@ export type Database = {
           notes?: string | null
           org_id: string
           project_id: string
-          status: string
+          status: ProjectStatus
         }
         Update: {
           changed_at?: string
@@ -842,7 +860,7 @@ export type Database = {
           notes?: string | null
           org_id?: string
           project_id?: string
-          status?: string
+          status?: ProjectStatus
         }
         Relationships: [
           {
@@ -933,7 +951,7 @@ export type Database = {
           signatory_title: string | null
           siren: string | null
           source: string | null
-          status: string
+          status: ProjectStatus
           surface_batiment_m2: number | null
           surface_isolee_m2: number | null
           unit_price: number | null
@@ -975,7 +993,7 @@ export type Database = {
           signatory_title?: string | null
           siren?: string | null
           source?: string | null
-          status?: string
+          status?: ProjectStatus
           surface_batiment_m2?: number | null
           surface_isolee_m2?: number | null
           unit_price?: number | null
@@ -1017,7 +1035,7 @@ export type Database = {
           signatory_title?: string | null
           siren?: string | null
           source?: string | null
-          status?: string
+          status?: ProjectStatus
           surface_batiment_m2?: number | null
           surface_isolee_m2?: number | null
           unit_price?: number | null
