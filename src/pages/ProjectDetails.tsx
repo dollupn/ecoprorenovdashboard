@@ -1681,40 +1681,40 @@ const ProjectDetails = () => {
   };
 
   const handleEditSite = (site: ProjectSite) => {
-      setSiteDialogMode("edit");
-      setActiveSite(site);
-      setSiteInitialValues({
-        site_ref: site.site_ref,
-        project_ref: site.project_ref,
-        client_name: site.client_name,
-        product_name: site.product_name,
-        address: site.address,
-        city: site.city,
-        postal_code: site.postal_code,
-        status: (site.status as SiteStatus) ?? "PLANIFIE",
-        cofrac_status: (site.cofrac_status as CofracStatus) ?? "EN_ATTENTE",
-        date_debut: site.date_debut,
-        date_fin_prevue: site.date_fin_prevue ?? "",
-        progress_percentage: site.progress_percentage ?? 0,
-        revenue: site.revenue ?? 0,
-        profit_margin: site.profit_margin ?? 0,
-        surface_facturee: site.surface_facturee ?? 0,
-        cout_main_oeuvre_m2_ht: site.cout_main_oeuvre_m2_ht ?? 0,
-        cout_isolation_m2: site.cout_isolation_m2 ?? 0,
-        isolation_utilisee_m2: site.isolation_utilisee_m2 ?? 0,
-        montant_commission: site.montant_commission ?? 0,
-        valorisation_cee: site.valorisation_cee ?? 0,
-        notes: site.notes ?? "",
-        subcontractor_payment_confirmed: Boolean(site.subcontractor_payment_confirmed),
-        subcontractor_id: site.subcontractor_id ?? null,
-        team_members: mapTeamMembersToFormValues(site.team_members ?? []),
-        additional_costs: normalizeAdditionalCosts(site.additional_costs ?? []),
-      });
-      setSiteDialogOpen(true);
-    };
+    setSiteDialogMode("edit");
+    setActiveSite(site);
+    setSiteInitialValues({
+      site_ref: site.site_ref,
+      project_ref: site.project_ref,
+      client_name: site.client_name,
+      product_name: site.product_name,
+      address: site.address,
+      city: site.city,
+      postal_code: site.postal_code,
+      status: (site.status as SiteStatus) ?? "PLANIFIE",
+      cofrac_status: (site.cofrac_status as CofracStatus) ?? "EN_ATTENTE",
+      date_debut: site.date_debut,
+      date_fin_prevue: site.date_fin_prevue ?? "",
+      progress_percentage: site.progress_percentage ?? 0,
+      revenue: site.revenue ?? 0,
+      profit_margin: site.profit_margin ?? 0,
+      surface_facturee: site.surface_facturee ?? 0,
+      cout_main_oeuvre_m2_ht: site.cout_main_oeuvre_m2_ht ?? 0,
+      cout_isolation_m2: site.cout_isolation_m2 ?? 0,
+      isolation_utilisee_m2: site.isolation_utilisee_m2 ?? 0,
+      montant_commission: site.montant_commission ?? 0,
+      valorisation_cee: site.valorisation_cee ?? 0,
+      notes: site.notes ?? "",
+      subcontractor_payment_confirmed: Boolean(site.subcontractor_payment_confirmed),
+      subcontractor_id: site.subcontractor_id ?? null,
+      team_members: mapTeamMembersToFormValues(site.team_members ?? []),
+      additional_costs: normalizeAdditionalCosts(site.additional_costs ?? []),
+    });
+    setSiteDialogOpen(true);
+  };
 
   const handleSubmitSite = async (values: SiteFormValues) => {
-      if (!user || !currentOrgId || !project) return;
+    if (!user || !currentOrgId || !project) return;
 
       const sanitizedTeam = Array.from(
         new Set(
@@ -1800,44 +1800,44 @@ const ProjectDetails = () => {
         project_id: resolvedProjectId,
       };
 
-      try {
-        if (siteDialogMode === "edit" && activeSite) {
-          const { error } = await supabase
-            .from("sites")
-            .update(siteData)
-            .eq("id", activeSite.id);
+    try {
+      if (siteDialogMode === "edit" && activeSite) {
+        const { error } = await supabase
+          .from("sites")
+          .update(siteData)
+          .eq("id", activeSite.id);
 
-          if (error) throw error;
+        if (error) throw error;
 
-          toast({
-            title: "Chantier mis à jour",
-            description: `${values.site_ref} a été mis à jour avec succès.`,
-          });
-        } else {
-          const { error } = await supabase.from("sites").insert([siteData]);
-
-          if (error) throw error;
-
-          toast({
-            title: "Chantier créé",
-            description: `${siteData.site_ref} a été ajouté à la liste des chantiers.`,
-          });
-        }
-
-        await refetchProjectSites();
-        setSiteDialogOpen(false);
-        setSiteInitialValues(undefined);
-        setActiveSite(null);
-        setSiteDialogMode("create");
-      } catch (error) {
-        console.error("Error saving site:", error);
         toast({
-          title: "Erreur",
-          description: "Impossible de sauvegarder le chantier.",
-          variant: "destructive",
+          title: "Chantier mis à jour",
+          description: `${values.site_ref} a été mis à jour avec succès.`,
+        });
+      } else {
+        const { error } = await supabase.from("sites").insert([siteData]);
+
+        if (error) throw error;
+
+        toast({
+          title: "Chantier créé",
+          description: `${siteData.site_ref} a été ajouté à la liste des chantiers.`,
         });
       }
-    };
+
+      await refetchProjectSites();
+      setSiteDialogOpen(false);
+      setSiteInitialValues(undefined);
+      setActiveSite(null);
+      setSiteDialogMode("create");
+    } catch (error) {
+      console.error("Error saving site:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de sauvegarder le chantier.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleDeleteProject = async () => {
     if (!project) return;
@@ -2506,6 +2506,33 @@ const ProjectDetails = () => {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <AddQuoteDialog
+        open={quoteDialogOpen}
+        onOpenChange={(open) => {
+          setQuoteDialogOpen(open);
+          if (!open) {
+            setQuoteInitialValues({});
+          }
+        }}
+        initialValues={quoteInitialValues}
+      />
+      <SiteDialog
+        open={siteDialogOpen}
+        mode={siteDialogMode}
+        onOpenChange={(open) => {
+          setSiteDialogOpen(open);
+          if (!open) {
+            setSiteInitialValues(undefined);
+            setActiveSite(null);
+            setSiteDialogMode("create");
+          }
+        }}
+        onSubmit={handleSubmitSite}
+        initialValues={siteInitialValues}
+        orgId={currentOrgId}
+        projects={projectSiteOptions}
+      />
 
       </div>
     </Layout>
