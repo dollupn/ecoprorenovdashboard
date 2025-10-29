@@ -69,6 +69,7 @@ import {
   Camera,
   CheckCircle2,
   Archive,
+  Zap,
 } from "lucide-react";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useMembers } from "@/features/members/api";
@@ -4029,7 +4030,6 @@ const ProjectDetails = () => {
       additional_costs: sanitizedCosts.length > 0 ? sanitizedCosts : [],
       subcontractor_id: values.subcontractor_id ?? null,
       user_id: user.id,
-      created_by: user.id,
       org_id: currentOrgId,
       project_id: resolvedProjectId,
     };
@@ -4434,6 +4434,54 @@ const ProjectDetails = () => {
               </Card>
 
               <div className="flex flex-col gap-6">
+                <Card className="shadow-card bg-gradient-card border-0">
+                  <CardHeader>
+                    <CardTitle>Finances & planning</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4 text-sm">
+                    <div className="flex items-center gap-2">
+                      <Euro className="w-4 h-4 text-primary" />
+                      <span className="text-muted-foreground">
+                        Coût du chantier:
+                      </span>
+                      <span className="font-medium">
+                        {typeof projectCostValue === "number"
+                          ? formatCurrency(projectCostValue)
+                          : "Non défini"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <HandCoins className="w-4 h-4 text-emerald-600" />
+                      <span className="text-muted-foreground">Prime CEE:</span>
+                      <span className="font-medium">
+                        {typeof displayedPrimeValue === "number"
+                          ? formatCurrency(displayedPrimeValue)
+                          : "Non définie"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Zap className="w-4 h-4 text-blue-600" />
+                      <span className="text-muted-foreground">MWh générés:</span>
+                      <span className="font-medium text-blue-600">
+                        {hasComputedCeeTotals
+                          ? `${formatDecimal(ceeTotals.totalValorisationMwh)} MWh`
+                          : "Non calculés"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <HandCoins className="w-4 h-4 text-amber-600" />
+                      <span className="text-muted-foreground">
+                        Valorisation totale:
+                      </span>
+                      <span className="font-medium text-amber-600">
+                        {hasComputedCeeTotals
+                          ? formatCurrency(ceeTotals.totalValorisationEur)
+                          : "Non calculée"}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+
                 <Card className="shadow-card border-0">
                   <CardHeader className="space-y-2">
                     <CardTitle className="flex items-center gap-2 text-base font-semibold">
@@ -4593,50 +4641,9 @@ const ProjectDetails = () => {
                         onClick={() => setActiveTab("journal")}
                         className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
                       >
-                        Voir tout l’historique
+                        Voir tout l'historique
                         <ChevronRight className="h-4 w-4" />
                       </button>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="shadow-card bg-gradient-card border-0">
-                  <CardHeader>
-                    <CardTitle>Finances & planning</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4 text-sm">
-                    <div className="flex items-center gap-2">
-                      <Euro className="w-4 h-4 text-primary" />
-                      <span className="text-muted-foreground">
-                        Coût du chantier:
-                      </span>
-                      <span className="font-medium">
-                        {typeof projectCostValue === "number"
-                          ? formatCurrency(projectCostValue)
-                          : "Non défini"}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <HandCoins className="w-4 h-4 text-emerald-600" />
-                      <span className="text-muted-foreground">Prime CEE:</span>
-                      <span className="font-medium">
-                        {typeof displayedPrimeValue === "number"
-                          ? formatCurrency(displayedPrimeValue)
-                          : "Non définie"}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <HandCoins className="w-4 h-4 text-amber-600" />
-                      <span className="text-muted-foreground">
-                        Valorisation totale:
-                      </span>
-                      <span className="font-medium text-amber-600">
-                        {hasComputedCeeTotals
-                          ? `${formatCurrency(ceeTotals.totalValorisationEur)} (${formatDecimal(
-                              ceeTotals.totalValorisationMwh,
-                            )} MWh)`
-                          : "Non calculée"}
-                      </span>
                     </div>
                   </CardContent>
                 </Card>
