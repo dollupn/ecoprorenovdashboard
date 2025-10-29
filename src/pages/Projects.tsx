@@ -74,6 +74,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   buildPrimeCeeEntries,
   computePrimeCee,
   withDefaultProductCeeConfig,
@@ -424,6 +430,48 @@ const Projects = () => {
       return acc;
     }, {});
   }, [projectStatuses]);
+
+  const [statusUpdating, setStatusUpdating] = useState<Record<string, boolean>>({});
+
+  const handleProjectStatusChange = useCallback(
+    async (projectId: string, status: ProjectStatusSetting["value"]) => {
+      if (!currentOrgId) {
+        showToast("Organisation introuvable", {
+          description: "Impossible de mettre à jour le statut du projet.",
+        });
+        return;
+      }
+
+      setStatusUpdating((previous) => ({ ...previous, [projectId]: true }));
+
+      try {
+        const { error } = await supabase
+          .from("projects")
+          .update({ status })
+          .eq("id", projectId)
+          .eq("org_id", currentOrgId);
+
+        if (error) {
+          throw error;
+        }
+
+        const statusLabel = statusMap[status]?.label ?? status;
+        showToast("Statut mis à jour", {
+          description: statusLabel,
+        });
+
+        await refetch();
+      } catch (error) {
+        console.error(error);
+        showToast("Erreur lors de la mise à jour du statut", {
+          description: error instanceof Error ? error.message : undefined,
+        });
+      } finally {
+        setStatusUpdating((previous) => ({ ...previous, [projectId]: false }));
+      }
+    },
+    [currentOrgId, refetch, statusMap],
+  );
 
   type ProjectValorisationSummary = {
     computation: PrimeCeeComputation | null;
@@ -1061,13 +1109,14 @@ const Projects = () => {
                   surfaceFacturee,
                   shouldHideSurfaceFactureeRow,
                   category,
-                }) => {
-                  const statusConfig = statusMap[project.status ?? ""];
-                  const badgeStyle = getProjectStatusBadgeStyle(statusConfig?.color);
-                  const statusLabel = statusConfig?.label ?? project.status ?? "Statut";
-                  const categoryMetadata =
-                    (category ? CATEGORY_METADATA[category] : null) ?? DEFAULT_CATEGORY_METADATA;
-                  const CategoryIcon = categoryMetadata.icon;
+                  }) => {
+                    const statusConfig = statusMap[project.status ?? ""];
+                    const badgeStyle = getProjectStatusBadgeStyle(statusConfig?.color);
+                    const statusLabel = statusConfig?.label ?? project.status ?? "Statut";
+                    const categoryMetadata =
+                      (category ? CATEGORY_METADATA[category] : null) ?? DEFAULT_CATEGORY_METADATA;
+                    const CategoryIcon = categoryMetadata.icon;
+                    const isStatusUpdating = statusUpdating[project.id] ?? false;
                   const totalPrime =
                     projectValorisationSummaries[project.id]?.totalPrime ?? project.prime_cee ?? 0;
                   const totalValorisationMwh =
@@ -1407,33 +1456,90 @@ const Projects = () => {
                           )}
                         </div>
 
-                        {/* Action Buttons */}
-                        <div className="flex gap-2 pt-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="flex-1 h-8 text-xs"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleCreateQuote(project);
-                            }}
-                          >
-                            <FileText className="mr-1.5 h-3.5 w-3.5" />
-                            Devis
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            className="flex-1 h-8 text-xs"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleCreateSite(project);
-                            }}
-                          >
-                            <HardHat className="mr-1.5 h-3.5 w-3.5" />
-                            Chantier
-                          </Button>
-                        </div>
+                          {/* Action Buttons */}
+                          <div className="flex gap-2 pt-2">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="flex-1 h-8 justify-between gap-2 text-xs"
+                                  disabled={isStatusUpdating}
+                                  onClick={(event) => event.stopPropagation()}
+                                  onPointerDown={(event) => event.stopPropagation()}
+                                  onKeyDown={(event) => event.stopPropagation()}
+                                >
+                                  <span className="flex items-center gap-1">
+                                    Statut
+                                    <Badge
+                                      variant="outline"
+                                      style={badgeStyle}
+                                      className="border-none text-[10px] font-medium"
+                                    >
+                                      {statusLabel}
+                                    </Badge>
+                                  </span>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent
+                                align="start"
+                                className="w-48"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                {projectStatuses.map((statusOption) => {
+                                  const optionBadgeStyle = getProjectStatusBadgeStyle(statusOption.color);
+                                  const isCurrentStatus = statusOption.value === project.status;
+
+                                  return (
+                                    <DropdownMenuItem
+                                      key={statusOption.value}
+                                      disabled={isStatusUpdating || isCurrentStatus}
+                                      className="flex items-center justify-between gap-2 text-xs"
+                                      onClick={(event) => event.stopPropagation()}
+                                      onSelect={() => {
+                                        if (!isCurrentStatus) {
+                                          void handleProjectStatusChange(project.id, statusOption.value);
+                                        }
+                                      }}
+                                    >
+                                      <span className="truncate">{statusOption.label}</span>
+                                      <Badge
+                                        variant="outline"
+                                        style={optionBadgeStyle}
+                                        className="border-none text-[10px] font-medium"
+                                      >
+                                        {statusOption.label}
+                                      </Badge>
+                                    </DropdownMenuItem>
+                                  );
+                                })}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex-1 h-8 text-xs"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleCreateQuote(project);
+                              }}
+                            >
+                              <FileText className="mr-1.5 h-3.5 w-3.5" />
+                              Devis
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="flex-1 h-8 text-xs"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleCreateSite(project);
+                              }}
+                            >
+                              <HardHat className="mr-1.5 h-3.5 w-3.5" />
+                              Chantier
+                            </Button>
+                          </div>
                       </CardContent>
                     </Card>
                   );
