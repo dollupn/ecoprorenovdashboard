@@ -35,7 +35,12 @@ import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useOrg } from "@/features/organizations/OrgContext";
-import { useLeadProductTypes, useLeadsList, useUpdateLead } from "@/features/leads/api";
+import {
+  useAppointmentTypes,
+  useLeadProductTypes,
+  useLeadsList,
+  useUpdateLead,
+} from "@/features/leads/api";
 import { useMembers, type MemberRole } from "@/features/members/api";
 import {
   DropdownMenu,
@@ -844,6 +849,19 @@ const Leads = () => {
     isLoading: productTypesLoading,
   } = useLeadProductTypes(orgId);
 
+  const {
+    data: appointmentTypes = [],
+    isLoading: appointmentTypesLoading,
+  } = useAppointmentTypes(orgId);
+
+  const appointmentTypeMap = useMemo(() => {
+    const map = new Map<string, { name: string; isDefault: boolean }>();
+    appointmentTypes.forEach((type) => {
+      map.set(type.id, { name: type.name, isDefault: type.is_default });
+    });
+    return map;
+  }, [appointmentTypes]);
+
   const selectedImportProductType = useMemo(() => {
     if (!selectedImportProductTypeId) return null;
     return productTypeOptions.find((type) => type.id === selectedImportProductTypeId) ?? null;
@@ -1483,6 +1501,9 @@ const Leads = () => {
                 {filteredLeads.map((lead) => {
                   const leadWithExtras = lead as LeadWithExtras;
                   const nameParts = getLeadNameParts(leadWithExtras);
+                  const appointmentTypeInfo = lead.appointment_type_id
+                    ? appointmentTypeMap.get(lead.appointment_type_id)
+                    : null;
 
                   return (
                     <div
@@ -1513,12 +1534,14 @@ const Leads = () => {
                           )}
                         </div>
                       </div>
-                      <Badge
-                        className="border px-2 py-1 font-medium"
-                        style={getLeadStatusBadgeStyles(lead.status)}
-                      >
-                        {getLeadStatusLabel(lead.status)}
-                      </Badge>
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <Badge
+                          className="border px-2 py-1 font-medium"
+                          style={getLeadStatusBadgeStyles(lead.status)}
+                        >
+                          {getLeadStatusLabel(lead.status)}
+                        </Badge>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
@@ -1558,6 +1581,11 @@ const Leads = () => {
                               {new Date(lead.date_rdv).toLocaleDateString("fr-FR")} à {lead.heure_rdv}
                             </span>
                           </div>
+                        )}
+                        {appointmentTypeInfo && (
+                          <Badge className="w-fit border px-2 py-1 font-medium bg-primary/10 text-primary border-primary/20">
+                            {appointmentTypeInfo.name}
+                          </Badge>
                         )}
                         {lead.utm_source && (
                           <div className="text-sm text-muted-foreground">
@@ -1631,6 +1659,7 @@ const Leads = () => {
                       <TableHead>Localisation</TableHead>
                       <TableHead>Produit</TableHead>
                       <TableHead>Statut</TableHead>
+                      <TableHead>Type de RDV</TableHead>
                       <TableHead>RDV</TableHead>
                       <TableHead>Source</TableHead>
                       <TableHead>Assigné</TableHead>
@@ -1641,6 +1670,9 @@ const Leads = () => {
                   <TableBody>
                     {filteredLeads.map((lead) => {
                       const leadWithExtras = lead as LeadWithExtras;
+                      const appointmentTypeInfo = lead.appointment_type_id
+                        ? appointmentTypeMap.get(lead.appointment_type_id)
+                        : null;
                       const nameParts = getLeadNameParts(leadWithExtras);
 
                       return (
@@ -1700,6 +1732,17 @@ const Leads = () => {
                             >
                               {getLeadStatusLabel(lead.status)}
                             </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {appointmentTypeInfo ? (
+                              <Badge className="border px-2 py-1 font-medium bg-primary/10 text-primary border-primary/20">
+                                {appointmentTypeInfo.name}
+                              </Badge>
+                            ) : appointmentTypesLoading ? (
+                              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
                           </TableCell>
                           <TableCell className="text-sm">
                             {lead.date_rdv && lead.heure_rdv ? (
