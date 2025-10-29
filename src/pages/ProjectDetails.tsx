@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout/Layout";
 import { Badge } from "@/components/ui/badge";
@@ -170,6 +170,13 @@ type ProjectSite = Tables<"sites"> & {
 
 type SiteAdditionalCostFormValue = SiteFormValues["additional_costs"][number];
 type SiteTeamMemberFormValue = SiteFormValues["team_members"][number];
+
+type ProjectTabValue = "details" | "chantiers" | "media" | "journal";
+
+const DEFAULT_PROJECT_TAB: ProjectTabValue = "details";
+
+const isValidProjectTab = (value: string | null | undefined): value is ProjectTabValue =>
+  value === "details" || value === "chantiers" || value === "media" || value === "journal";
 
 const isUuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim());
@@ -1190,6 +1197,11 @@ const ProjectDetails = () => {
   const projectStatuses = useProjectStatuses();
   const { primeBonification } = useOrganizationPrimeSettings();
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<ProjectTabValue>(() => {
+    const currentTab = searchParams.get("tab");
+    return isValidProjectTab(currentTab) ? currentTab : DEFAULT_PROJECT_TAB;
+  });
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
   const [quoteInitialValues, setQuoteInitialValues] = useState<Partial<QuoteFormValues>>({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -1198,6 +1210,36 @@ const ProjectDetails = () => {
   const [siteDialogMode, setSiteDialogMode] = useState<"create" | "edit">("create");
   const [siteInitialValues, setSiteInitialValues] = useState<Partial<SiteFormValues>>();
   const [activeSite, setActiveSite] = useState<ProjectSite | null>(null);
+
+  useEffect(() => {
+    const currentTab = searchParams.get("tab");
+    if (isValidProjectTab(currentTab)) {
+      if (currentTab !== activeTab) {
+        setActiveTab(currentTab);
+      }
+      return;
+    }
+
+    if (currentTab !== activeTab) {
+      const newParams = new URLSearchParams(searchParams);
+      newParams.set("tab", activeTab);
+      setSearchParams(newParams, { replace: true });
+    }
+  }, [searchParams, activeTab, setSearchParams]);
+
+  const handleTabChange = useCallback(
+    (value: string) => {
+      if (!isValidProjectTab(value) || value === activeTab) {
+        return;
+      }
+
+      setActiveTab(value);
+      const newParams = new URLSearchParams(searchParams);
+      newParams.set("tab", value);
+      setSearchParams(newParams, { replace: true });
+    },
+    [activeTab, searchParams, setSearchParams]
+  );
 
   const memberNameById = useMemo(() => {
     const result: Record<string, string> = {};
@@ -2034,12 +2076,14 @@ const ProjectDetails = () => {
           </div>
         </div>
 
-        <Tabs defaultValue="overview" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
           <TabsList className="w-full justify-start overflow-x-auto">
-            <TabsTrigger value="overview">Aperçu</TabsTrigger>
+            <TabsTrigger value="details">Détails</TabsTrigger>
             <TabsTrigger value="chantiers">Chantiers</TabsTrigger>
+            <TabsTrigger value="media">Media</TabsTrigger>
+            <TabsTrigger value="journal">Journal</TabsTrigger>
           </TabsList>
-          <TabsContent value="overview" className="space-y-6">
+          <TabsContent value="details" className="space-y-6">
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
               <Card className="shadow-card bg-gradient-card border-0 xl:col-span-2">
                 <CardHeader>
@@ -2605,6 +2649,20 @@ const ProjectDetails = () => {
                     })}
                   </div>
                 )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="media" className="space-y-6">
+          <Card>
+            <CardContent className="py-10 text-center text-sm text-muted-foreground">
+              Les contenus média seront bientôt disponibles.
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="journal" className="space-y-6">
+          <Card>
+            <CardContent className="py-10 text-center text-sm text-muted-foreground">
+              Le journal du projet sera bientôt disponible.
             </CardContent>
           </Card>
         </TabsContent>
