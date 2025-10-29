@@ -48,6 +48,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { getProjectClientName } from "@/lib/projects";
+import { parseSiteNotes, serializeSiteNotes } from "@/lib/sites";
 import {
   Select,
   SelectContent,
@@ -223,6 +224,8 @@ interface SiteDialogProps {
   initialValues?: (Partial<SiteFormValues> & { org_id?: string | null }) | undefined;
   orgId?: string | null;
   projects?: SiteProjectOption[];
+  defaultTab?: "avant-chantier" | "apres-chantier";
+  readOnly?: boolean;
 }
 
 const defaultValues: SiteFormValues = {
@@ -261,6 +264,7 @@ interface SortableAdditionalCostRowProps {
   canRemove: boolean;
   orgId?: string | null;
   siteRef?: string;
+  disabled?: boolean;
 }
 
 interface AdditionalCostAttachmentInputProps {
@@ -270,6 +274,7 @@ interface AdditionalCostAttachmentInputProps {
   orgId?: string | null;
   siteRef?: string;
   title: string;
+  disabled?: boolean;
 }
 
 const AdditionalCostAttachmentInput = ({
@@ -279,6 +284,7 @@ const AdditionalCostAttachmentInput = ({
   orgId,
   siteRef,
   title,
+  disabled,
 }: AdditionalCostAttachmentInputProps) => {
   const [driveFile, setDriveFile] = useState<DriveFileMetadata | null>(null);
 
@@ -332,6 +338,7 @@ const AdditionalCostAttachmentInput = ({
         }}
         onBlur={onBlur}
         placeholder="Lien Drive ou identifiant"
+        disabled={disabled}
       />
       <DriveFileUploader
         orgId={orgId}
@@ -344,6 +351,7 @@ const AdditionalCostAttachmentInput = ({
         helperText="Le document sera stocké dans Google Drive."
         emptyLabel="Déposer ou sélectionner un fichier"
         className="border border-dashed border-muted-foreground/40 bg-muted/30"
+        disabled={disabled}
       />
     </div>
   );
@@ -357,9 +365,11 @@ const SortableAdditionalCostRow = ({
   canRemove,
   orgId,
   siteRef,
+  disabled,
 }: SortableAdditionalCostRowProps) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: field.id,
+    disabled: disabled ?? false,
   });
 
   const style: CSSProperties = { transform: CSS.Transform.toString(transform), transition };
@@ -370,7 +380,7 @@ const SortableAdditionalCostRow = ({
       ref={setNodeRef}
       style={style}
       className={`rounded-xl border border-border/60 bg-card/70 p-4 shadow-sm transition-all ${
-        isDragging ? "ring-2 ring-primary/40 shadow-md" : "hover:border-border"
+        isDragging ? "ring-2 ring-primary/40 shadow-md" : disabled ? "" : "hover:border-border"
       }`}
     >
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-dashed border-border/60 pb-3">
@@ -379,8 +389,13 @@ const SortableAdditionalCostRow = ({
             type="button"
             variant="ghost"
             size="icon"
-            className="cursor-grab rounded-full border border-border/50 bg-background/80 hover:bg-background active:cursor-grabbing"
+            className={`rounded-full border border-border/50 bg-background/80 ${
+              disabled
+                ? "cursor-default opacity-70"
+                : "cursor-grab hover:bg-background active:cursor-grabbing"
+            }`}
             aria-label="Réorganiser le coût supplémentaire"
+            disabled={disabled}
             {...attributes}
             {...listeners}
           >
@@ -400,6 +415,7 @@ const SortableAdditionalCostRow = ({
             size="icon"
             onClick={() => remove(index)}
             aria-label="Supprimer le coût"
+            disabled={disabled}
           >
             <Trash2 className="w-4 h-4" />
           </Button>
@@ -418,6 +434,7 @@ const SortableAdditionalCostRow = ({
                   placeholder="Intitulé du coût"
                   title={typeof labelField.value === "string" ? labelField.value : undefined}
                   {...labelField}
+                  disabled={disabled}
                 />
               </FormControl>
               <FormMessage />
@@ -449,6 +466,7 @@ const SortableAdditionalCostRow = ({
                     amountHTField.onChange(newValue === "" ? "" : Number(newValue));
                   }}
                   onBlur={amountHTField.onBlur}
+                  disabled={disabled}
                 />
               </FormControl>
               <FormMessage />
@@ -478,6 +496,7 @@ const SortableAdditionalCostRow = ({
                     taxesField.onChange(newValue === "" ? "" : Number(newValue));
                   }}
                   onBlur={taxesField.onBlur}
+                  disabled={disabled}
                 />
               </FormControl>
               <FormMessage />
@@ -498,6 +517,7 @@ const SortableAdditionalCostRow = ({
                   orgId={orgId}
                   siteRef={siteRef}
                   title={costTitle}
+                  disabled={disabled}
                 />
               </FormControl>
               <FormMessage />
@@ -533,43 +553,14 @@ export const SiteDialog = ({
   initialValues,
   orgId,
   projects,
+  defaultTab = "avant-chantier",
+  readOnly = false,
 }: SiteDialogProps) => {
-  const parsedNotes = useMemo(() => {
-    if (!initialValues?.notes) {
-      return { text: initialValues?.notes ?? "", driveFile: null } as {
-        text: string;
-        driveFile: DriveFileMetadata | null;
-      };
-    }
-
-    try {
-      const raw = JSON.parse(initialValues.notes);
-      if (raw && typeof raw === "object") {
-        const record = raw as Record<string, unknown>;
-        const text = typeof record.internalNotes === "string" ? record.internalNotes : "";
-        const driveUrl = typeof record.driveFileUrl === "string" ? record.driveFileUrl : undefined;
-        const driveId = typeof record.driveFileId === "string" ? record.driveFileId : undefined;
-        const driveName = typeof record.driveFileName === "string" ? record.driveFileName : undefined;
-        const driveFile: DriveFileMetadata | null = driveUrl
-          ? {
-              id: driveId && String(driveId).trim() ? String(driveId) : driveUrl,
-              name: driveName && String(driveName).trim() ? String(driveName) : "Document chantier",
-              webViewLink: driveUrl,
-            }
-          : null;
-        return { text, driveFile };
-      }
-    } catch (error) {
-      console.warn("Unable to parse site notes metadata", error);
-    }
-
-    return { text: initialValues.notes ?? "", driveFile: null } as {
-      text: string;
-      driveFile: DriveFileMetadata | null;
-    };
-  }, [initialValues?.notes]);
+  const parsedNotes = useMemo(() => parseSiteNotes(initialValues?.notes), [initialValues?.notes]);
 
   const [siteDriveFile, setSiteDriveFile] = useState<DriveFileMetadata | null>(parsedNotes.driveFile);
+  const [activeTab, setActiveTab] = useState<"avant-chantier" | "apres-chantier">(defaultTab);
+  const isReadOnly = Boolean(readOnly);
   const resolvedOrgId = orgId ?? initialValues?.org_id ?? null;
   const { data: members = [], isLoading: membersLoading } = useMembers(resolvedOrgId);
   const memberNameById = useMemo(() => {
@@ -590,6 +581,12 @@ export const SiteDialog = ({
       })),
     [members, memberNameById],
   );
+  useEffect(() => {
+    if (open) {
+      setActiveTab(defaultTab);
+    }
+  }, [defaultTab, open]);
+
   const { data: subcontractors = [], isLoading: subcontractorsLoading } = useQuery({
     queryKey: ["subcontractors", resolvedOrgId],
     queryFn: async () => {
@@ -811,6 +808,10 @@ export const SiteDialog = ({
   );
 
   const handleSubmit = (values: SiteFormValues) => {
+    if (isReadOnly) {
+      return;
+    }
+
     const seenMemberIds = new Set<string>();
     const filteredTeamMembers = (values.team_members ?? []).reduce<TeamMemberFormValue[]>((acc, member) => {
       if (!member || typeof member.id !== "string") {
@@ -840,19 +841,7 @@ export const SiteDialog = ({
         };
       });
 
-    const driveFileUrl = siteDriveFile?.webViewLink ?? (siteDriveFile as any)?.webContentLink ?? undefined;
-    const notesMetadata: Record<string, unknown> = {};
-
-    if (driveFileUrl) {
-      notesMetadata.driveFileUrl = driveFileUrl;
-      notesMetadata.driveFileId = siteDriveFile?.id;
-      notesMetadata.driveFileName = siteDriveFile?.name;
-    }
-    if (values.notes && values.notes.trim()) {
-      notesMetadata.internalNotes = values.notes.trim();
-    }
-
-    const serializedNotes = Object.keys(notesMetadata).length > 0 ? JSON.stringify(notesMetadata) : null;
+    const serializedNotes = serializeSiteNotes(values.notes, siteDriveFile);
 
     const projectRef = values.project_ref?.trim?.() ?? "";
     const clientName = values.client_name?.trim?.() ?? "";
@@ -864,7 +853,7 @@ export const SiteDialog = ({
       subcontractor_id: values.subcontractor_id ?? null,
       team_members: filteredTeamMembers,
       additional_costs: filteredCosts,
-      notes: serializedNotes ?? "",
+      notes: serializedNotes,
     });
   };
 
@@ -872,21 +861,36 @@ export const SiteDialog = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl w-[95vw] sm:w-full max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{mode === "create" ? "Nouveau chantier" : "Modifier le chantier"}</DialogTitle>
+          <DialogTitle>
+            {isReadOnly
+              ? "Détails du chantier"
+              : mode === "create"
+                ? "Nouveau chantier"
+                : "Modifier le chantier"}
+          </DialogTitle>
           <DialogDescription>
-            Renseignez les informations financières et opérationnelles du chantier.
+            {isReadOnly
+              ? "Consultez les informations opérationnelles et financières du chantier."
+              : "Renseignez les informations financières et opérationnelles du chantier."}
           </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-            <Tabs defaultValue="avant-chantier" className="w-full">
+            <Tabs
+              value={activeTab}
+              onValueChange={(value) =>
+                setActiveTab((value as "avant-chantier" | "apres-chantier") ?? "avant-chantier")
+              }
+              className="w-full"
+            >
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="avant-chantier">Avant Chantier</TabsTrigger>
                 <TabsTrigger value="apres-chantier">Après Chantier</TabsTrigger>
               </TabsList>
 
               <TabsContent value="avant-chantier" className="space-y-6 mt-6">
+                <fieldset disabled={isReadOnly} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -894,7 +898,7 @@ export const SiteDialog = ({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Statut</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value} disabled={isReadOnly}>
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Sélectionner un statut" />
@@ -922,7 +926,7 @@ export const SiteDialog = ({
                       <FormItem>
                         <FormLabel>Référence chantier</FormLabel>
                         <FormControl>
-                          <Input placeholder="SITE-2024-0001" {...field} />
+                          <Input placeholder="SITE-2024-0001" {...field} disabled={isReadOnly} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -941,6 +945,7 @@ export const SiteDialog = ({
                               applyProjectDetails(value);
                             }}
                             value={field.value ?? ""}
+                            disabled={isReadOnly}
                           >
                             <FormControl>
                               <SelectTrigger>
@@ -960,7 +965,7 @@ export const SiteDialog = ({
                           </Select>
                         ) : (
                           <FormControl>
-                            <Input placeholder="Référence projet" {...field} />
+                            <Input placeholder="Référence projet" {...field} disabled={isReadOnly} />
                           </FormControl>
                         )}
                         <p className="text-xs text-muted-foreground">
@@ -982,8 +987,9 @@ export const SiteDialog = ({
                           <Input
                             placeholder="Nom du client"
                             {...field}
-                            readOnly={hasAvailableProjects}
-                            className={hasAvailableProjects ? "bg-muted" : undefined}
+                            readOnly={hasAvailableProjects || isReadOnly}
+                            disabled={isReadOnly}
+                            className={hasAvailableProjects || isReadOnly ? "bg-muted" : undefined}
                           />
                         </FormControl>
                         <p className="text-xs text-muted-foreground">
@@ -1005,7 +1011,7 @@ export const SiteDialog = ({
                       <FormItem>
                         <FormLabel>Date de début</FormLabel>
                         <FormControl>
-                          <Input type="date" {...field} />
+                          <Input type="date" {...field} disabled={isReadOnly} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1018,7 +1024,7 @@ export const SiteDialog = ({
                       <FormItem>
                         <FormLabel>Date de fin prévue</FormLabel>
                         <FormControl>
-                          <Input type="date" {...field} />
+                          <Input type="date" {...field} disabled={isReadOnly} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1039,6 +1045,7 @@ export const SiteDialog = ({
                             {...field}
                             readOnly
                             className="bg-muted"
+                            disabled={isReadOnly}
                           />
                         </FormControl>
                         <p className="text-xs text-muted-foreground">
@@ -1055,7 +1062,7 @@ export const SiteDialog = ({
                       <FormItem>
                         <FormLabel>Surface facturée (m²)</FormLabel>
                         <FormControl>
-                          <Input type="number" min={0} step={0.1} {...field} />
+                          <Input type="number" min={0} step={0.1} {...field} disabled={isReadOnly} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1072,7 +1079,7 @@ export const SiteDialog = ({
                       <Select
                         onValueChange={(value) => field.onChange(value === "" ? null : value)}
                         value={field.value ?? ""}
-                        disabled={subcontractorsLoading}
+                        disabled={subcontractorsLoading || isReadOnly}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -1113,6 +1120,8 @@ export const SiteDialog = ({
                     const selectedIds = new Set(selectedMembers.map((member) => member.id));
 
                     const handleToggleMember = (memberId: string, memberName: string, checked: boolean) => {
+                      if (isReadOnly) return;
+
                       const nextMembers = [...selectedMembers];
 
                       if (checked) {
@@ -1130,6 +1139,8 @@ export const SiteDialog = ({
                     };
 
                     const handleRemoveMember = (memberId: string) => {
+                      if (isReadOnly) return;
+
                       const nextMembers = selectedMembers.filter((member) => member.id !== memberId);
                       field.onChange(nextMembers);
                     };
@@ -1149,9 +1160,14 @@ export const SiteDialog = ({
                                   <span>{member.name ?? member.id}</span>
                                   <button
                                     type="button"
-                                    className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-transparent text-muted-foreground transition hover:border-muted-foreground hover:text-foreground"
+                                    className={`inline-flex h-4 w-4 items-center justify-center rounded-full border border-transparent text-muted-foreground transition ${
+                                      isReadOnly
+                                        ? "opacity-60 cursor-not-allowed"
+                                        : "hover:border-muted-foreground hover:text-foreground"
+                                    }`}
                                     onClick={() => handleRemoveMember(member.id)}
                                     aria-label={`Retirer ${member.name ?? member.id} de l'équipe`}
+                                    disabled={isReadOnly}
                                   >
                                     <X className="h-3 w-3" />
                                   </button>
@@ -1174,13 +1190,16 @@ export const SiteDialog = ({
                                   return (
                                     <label
                                       key={member.id}
-                                      className="flex items-center gap-2 p-2 text-sm hover:bg-muted"
+                                      className={`flex items-center gap-2 p-2 text-sm ${
+                                        isReadOnly ? "opacity-80" : "hover:bg-muted"
+                                      }`}
                                     >
                                       <Checkbox
                                         checked={isSelected}
                                         onCheckedChange={(checked) =>
                                           handleToggleMember(member.id, member.name ?? member.id, checked === true)
                                         }
+                                        disabled={isReadOnly}
                                       />
                                       <span>{member.name ?? member.id}</span>
                                     </label>
@@ -1203,15 +1222,22 @@ export const SiteDialog = ({
                     <FormItem>
                       <FormLabel>Notes internes</FormLabel>
                       <FormControl>
-                        <Textarea placeholder="Informations complémentaires" {...field} />
+                        <Textarea
+                          placeholder="Informations complémentaires"
+                          {...field}
+                          readOnly={isReadOnly}
+                          disabled={isReadOnly}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+                </fieldset>
               </TabsContent>
 
               <TabsContent value="apres-chantier" className="space-y-6 mt-6">
+                <fieldset disabled={isReadOnly} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -1219,7 +1245,7 @@ export const SiteDialog = ({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Statut COFRAC</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value} disabled={isReadOnly}>
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Sélectionner un statut" />
@@ -1248,6 +1274,7 @@ export const SiteDialog = ({
                         <Checkbox
                           checked={field.value}
                           onCheckedChange={(checked) => field.onChange(checked === true)}
+                          disabled={isReadOnly}
                         />
                       </FormControl>
                       <div className="space-y-1 leading-none">
@@ -1268,7 +1295,7 @@ export const SiteDialog = ({
                       <FormItem>
                         <FormLabel>Chiffre d'affaires (€)</FormLabel>
                         <FormControl>
-                          <Input type="number" min={0} step={100} {...field} />
+                          <Input type="number" min={0} step={100} {...field} disabled={isReadOnly} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1281,7 +1308,7 @@ export const SiteDialog = ({
                       <FormItem>
                         <FormLabel>Marge (%)</FormLabel>
                         <FormControl>
-                          <Input type="number" step={0.1} {...field} />
+                          <Input type="number" step={0.1} {...field} disabled={isReadOnly} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1294,7 +1321,7 @@ export const SiteDialog = ({
                       <FormItem>
                         <FormLabel>Coût main d'œuvre HT (€/m²)</FormLabel>
                         <FormControl>
-                          <Input type="number" min={0} step={0.1} {...field} />
+                          <Input type="number" min={0} step={0.1} {...field} disabled={isReadOnly} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1307,7 +1334,7 @@ export const SiteDialog = ({
                       <FormItem>
                         <FormLabel>Coût isolation (€/m²)</FormLabel>
                         <FormControl>
-                          <Input type="number" min={0} step={0.1} {...field} />
+                          <Input type="number" min={0} step={0.1} {...field} disabled={isReadOnly} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1320,7 +1347,7 @@ export const SiteDialog = ({
                       <FormItem>
                         <FormLabel>Isolation utilisée (m²)</FormLabel>
                         <FormControl>
-                          <Input type="number" min={0} step={0.1} {...field} />
+                          <Input type="number" min={0} step={0.1} {...field} disabled={isReadOnly} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1333,7 +1360,7 @@ export const SiteDialog = ({
                       <FormItem>
                         <FormLabel>Prime CEE (€)</FormLabel>
                         <FormControl>
-                          <Input type="number" min={0} step={50} {...field} />
+                          <Input type="number" min={0} step={50} {...field} disabled={isReadOnly} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1360,6 +1387,7 @@ export const SiteDialog = ({
                               canRemove={costFields.length > 0}
                               orgId={resolvedOrgId}
                               siteRef={watchedSiteRef}
+                              disabled={isReadOnly}
                             />
                           ))}
                         </SortableContext>
@@ -1379,6 +1407,7 @@ export const SiteDialog = ({
                         attachment: null,
                       })
                     }
+                    disabled={isReadOnly}
                   >
                     <Plus className="w-4 h-4 mr-1" /> Ajouter un coût
                   </Button>
@@ -1396,16 +1425,20 @@ export const SiteDialog = ({
                     entityId={initialValues?.site_ref}
                     description="Documents liés au chantier"
                     helperText="Ajoutez des photos ou des fichiers stockés sur Google Drive."
+                    disabled={isReadOnly}
                   />
                 </div>
+                </fieldset>
               </TabsContent>
             </Tabs>
 
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Annuler
+                {isReadOnly ? "Fermer" : "Annuler"}
               </Button>
-              <Button type="submit">{mode === "create" ? "Créer le chantier" : "Enregistrer"}</Button>
+              {isReadOnly ? null : (
+                <Button type="submit">{mode === "create" ? "Créer le chantier" : "Enregistrer"}</Button>
+              )}
             </div>
           </form>
         </Form>

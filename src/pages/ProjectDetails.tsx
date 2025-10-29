@@ -5,7 +5,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout/Layout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -46,6 +46,9 @@ import {
   Loader2,
   Share2,
   FolderOpen,
+  ClipboardList,
+  Camera,
+  CheckCircle2,
   Archive,
 } from "lucide-react";
 import { useOrg } from "@/features/organizations/OrgContext";
@@ -65,6 +68,7 @@ import {
   getDynamicFieldNumericValue,
   formatDynamicFieldValue,
 } from "@/lib/product-params";
+import { parseSiteNotes } from "@/lib/sites";
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 import { useOrganizationPrimeSettings } from "@/features/organizations/useOrganizationPrimeSettings";
 import {
@@ -1346,6 +1350,10 @@ const ProjectDetails = () => {
   const [siteDialogMode, setSiteDialogMode] = useState<"create" | "edit">("create");
   const [siteInitialValues, setSiteInitialValues] = useState<Partial<SiteFormValues>>();
   const [activeSite, setActiveSite] = useState<ProjectSite | null>(null);
+  const [siteDialogDefaultTab, setSiteDialogDefaultTab] = useState<"avant-chantier" | "apres-chantier">(
+    "avant-chantier",
+  );
+  const [siteDialogReadOnly, setSiteDialogReadOnly] = useState(false);
   const [lightboxImage, setLightboxImage] = useState<ProductImage | null>(null);
 
   useEffect(() => {
@@ -2008,6 +2016,7 @@ const ProjectDetails = () => {
   );
 
   const isInitialLoading = isLoading || membersLoading;
+  const canManageSites = isAdmin || (project?.user_id === user?.id);
 
   if (isInitialLoading) {
     return (
@@ -2103,6 +2112,8 @@ const ProjectDetails = () => {
 
     setSiteDialogMode("create");
     setActiveSite(null);
+    setSiteDialogDefaultTab("avant-chantier");
+    setSiteDialogReadOnly(false);
     setSiteInitialValues({
       site_ref,
       project_ref: project.project_ref ?? "",
@@ -2152,8 +2163,15 @@ const ProjectDetails = () => {
     setQuoteDialogOpen(true);
   };
 
-  const handleEditSite = (site: ProjectSite) => {
+  const handleEditSite = (
+    site: ProjectSite,
+    options?: { readOnly?: boolean; defaultTab?: "avant-chantier" | "apres-chantier" },
+  ) => {
+    const { readOnly = false, defaultTab = "avant-chantier" } = options ?? {};
+
     setSiteDialogMode("edit");
+    setSiteDialogReadOnly(readOnly);
+    setSiteDialogDefaultTab(defaultTab);
     setActiveSite(site);
     setSiteInitialValues({
       site_ref: site.site_ref,
@@ -2829,14 +2847,30 @@ const ProjectDetails = () => {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {projectSites.map((site) => {
-                      const status = (site.status ?? "PLANIFIE") as SiteStatus;
-                      const cofracStatus = (site.cofrac_status ?? "EN_ATTENTE") as CofracStatus;
-                      const teamMembersLabel = formatTeamMembers(site.team_members);
-                      const progressValue =
-                        typeof site.progress_percentage === "number"
-                          ? Math.min(Math.max(site.progress_percentage, 0), 100)
-                          : 0;
+                  {projectSites.map((site) => {
+                    const status = (site.status ?? "PLANIFIE") as SiteStatus;
+                    const cofracStatus = (site.cofrac_status ?? "EN_ATTENTE") as CofracStatus;
+                    const teamMembersLabel = formatTeamMembers(site.team_members);
+                    const progressValue =
+                      typeof site.progress_percentage === "number"
+                        ? Math.min(Math.max(site.progress_percentage, 0), 100)
+                        : 0;
+                    const parsedSiteNotes = parseSiteNotes(site.notes);
+                    const internalNotes = parsedSiteNotes.text?.trim() ?? "";
+                    const hasInternalNotes = internalNotes.length > 0;
+                    const driveFile = parsedSiteNotes.driveFile;
+                    const driveLink = driveFile?.webViewLink ?? null;
+                    const driveLabel = driveFile?.name ?? "Document chantier";
+                    const hasDriveFile = Boolean(driveLink);
+                    const additionalCostCount = Array.isArray(site.additional_costs)
+                      ? site.additional_costs.length
+                      : 0;
+                    const revenueDisplay =
+                      typeof site.revenue === "number" ? formatCurrency(site.revenue) : "—";
+                    const primeDisplay =
+                      typeof site.valorisation_cee === "number"
+                        ? formatCurrency(site.valorisation_cee)
+                        : "—";
 
                       return (
                         <div
@@ -2919,35 +2953,169 @@ const ProjectDetails = () => {
                                 </span>
                               </div>
                             )}
-                            {teamMembersLabel && (
-                              <div className="flex items-center gap-2">
-                                <Users className="h-4 w-4 text-primary" />
-                                <span>
-                                  Équipe :{" "}
-                                  <span className="font-medium text-foreground">{teamMembersLabel}</span>
+                          {teamMembersLabel && (
+                            <div className="flex items-center gap-2">
+                              <Users className="h-4 w-4 text-primary" />
+                              <span>
+                                Équipe :{" "}
+                                <span className="font-medium text-foreground">{teamMembersLabel}</span>
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="grid gap-4 lg:grid-cols-2">
+                          <Card className="border border-border/60 bg-background/60">
+                            <CardHeader className="pb-2">
+                              <CardTitle className="flex items-center gap-2 text-base">
+                                <ClipboardList className="h-4 w-4 text-primary" />
+                                Avant Chantier
+                              </CardTitle>
+                              <CardDescription>Préparation et équipe</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-3 text-sm">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-muted-foreground">Statut</span>
+                                <Badge variant="outline" className={getStatusColor(status)}>
+                                  {getStatusLabel(status)}
+                                </Badge>
+                              </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-muted-foreground">Début chantier</span>
+                                <span className="font-medium text-foreground">
+                                  {new Date(site.date_debut).toLocaleDateString("fr-FR")}
                                 </span>
                               </div>
-                            )}
-                          </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-muted-foreground">Fin prévue</span>
+                                <span className="font-medium text-foreground">
+                                  {site.date_fin_prevue
+                                    ? new Date(site.date_fin_prevue).toLocaleDateString("fr-FR")
+                                    : "—"}
+                                </span>
+                              </div>
+                              {teamMembersLabel ? (
+                                <div className="flex items-start justify-between gap-2">
+                                  <span className="text-muted-foreground">Équipe dédiée</span>
+                                  <span className="font-medium text-right text-foreground">
+                                    {teamMembersLabel}
+                                  </span>
+                                </div>
+                              ) : null}
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="flex items-center gap-2 text-muted-foreground">
+                                  <Camera className="h-4 w-4" /> Docs & photos
+                                </span>
+                                {hasDriveFile && driveLink ? (
+                                  <a
+                                    href={driveLink}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                                  >
+                                    <FolderOpen className="h-4 w-4" />
+                                    <span className="font-medium">{driveLabel}</span>
+                                  </a>
+                                ) : (
+                                  <span className="font-medium text-muted-foreground">Aucun</span>
+                                )}
+                              </div>
+                            </CardContent>
+                            <CardFooter className="flex justify-end">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  handleEditSite(site, {
+                                    readOnly: !canManageSites,
+                                    defaultTab: "avant-chantier",
+                                  })
+                                }
+                              >
+                                Voir détails
+                              </Button>
+                            </CardFooter>
+                          </Card>
 
-                          {site.notes && (
+                          <Card className="border border-border/60 bg-background/60">
+                            <CardHeader className="pb-2">
+                              <CardTitle className="flex items-center gap-2 text-base">
+                                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                                Après Chantier
+                              </CardTitle>
+                              <CardDescription>Suivi qualité & financier</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-3 text-sm">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-muted-foreground">Statut COFRAC</span>
+                                <Badge variant="outline">{getCofracStatusLabel(cofracStatus)}</Badge>
+                              </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-muted-foreground">Avancement</span>
+                                <span className="font-medium text-foreground">{progressValue}%</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-muted-foreground">Chiffre d'affaires</span>
+                                <span className="font-medium text-foreground">{revenueDisplay}</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-muted-foreground">Prime CEE</span>
+                                <span className="font-medium text-foreground">{primeDisplay}</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-muted-foreground">Coûts supplémentaires</span>
+                                <span className="font-medium text-foreground">{additionalCostCount}</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-muted-foreground">Paiement sous-traitant</span>
+                                <span
+                                  className={`font-medium ${
+                                    site.subcontractor_payment_confirmed
+                                      ? "text-emerald-600"
+                                      : "text-muted-foreground"
+                                  }`}
+                                >
+                                  {site.subcontractor_payment_confirmed ? "Confirmé" : "En attente"}
+                                </span>
+                              </div>
+                            </CardContent>
+                            <CardFooter className="flex justify-end">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  handleEditSite(site, {
+                                    readOnly: !canManageSites,
+                                    defaultTab: "apres-chantier",
+                                  })
+                                }
+                              >
+                                Voir détails
+                              </Button>
+                            </CardFooter>
+                          </Card>
+                        </div>
+
+                          {hasInternalNotes && (
                             <p className="border-t border-border/40 pt-3 text-sm text-muted-foreground">
-                              {site.notes}
+                              {internalNotes}
                             </p>
                           )}
 
                           <div className="flex flex-wrap justify-end gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                handleEditSite(site);
-                              }}
-                              className="inline-flex items-center gap-2"
-                            >
-                              <Pencil className="h-4 w-4" />
-                              Modifier
-                            </Button>
+                            {canManageSites ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  handleEditSite(site, { readOnly: false, defaultTab: "avant-chantier" });
+                                }}
+                                className="inline-flex items-center gap-2"
+                              >
+                                <Pencil className="h-4 w-4" />
+                                Modifier
+                              </Button>
+                            ) : null}
                           </div>
                         </div>
                       );
@@ -2992,12 +3160,16 @@ const ProjectDetails = () => {
             setSiteInitialValues(undefined);
             setActiveSite(null);
             setSiteDialogMode("create");
+            setSiteDialogDefaultTab("avant-chantier");
+            setSiteDialogReadOnly(false);
           }
         }}
         onSubmit={handleSubmitSite}
         initialValues={siteInitialValues}
         orgId={currentOrgId}
         projects={projectSiteOptions}
+        defaultTab={siteDialogDefaultTab}
+        readOnly={siteDialogReadOnly}
       />
 
       <Dialog
