@@ -46,6 +46,7 @@ import {
   Loader2,
   Share2,
   FolderOpen,
+  Archive,
 } from "lucide-react";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useMembers } from "@/features/members/api";
@@ -153,6 +154,9 @@ const formatCurrency = (value: number) => currencyFormatter.format(value);
 const formatDecimal = (value: number) => decimalFormatter.format(value);
 
 const SURFACE_FACTUREE_TARGETS = ["surface_facturee", "surface facturée"] as const;
+
+const ARCHIVED_STATUS_VALUES = new Set(["ARCHIVE", "ARCHIVED"]);
+const ARCHIVED_STATUS_VALUE = "ARCHIVED";
 
 type SiteStatus =
   | "PLANIFIE"
@@ -1194,6 +1198,8 @@ const ProjectDetails = () => {
   const [quoteInitialValues, setQuoteInitialValues] = useState<Partial<QuoteFormValues>>({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
   const [siteDialogOpen, setSiteDialogOpen] = useState(false);
   const [siteDialogMode, setSiteDialogMode] = useState<"create" | "edit">("create");
   const [siteInitialValues, setSiteInitialValues] = useState<Partial<SiteFormValues>>();
@@ -1947,6 +1953,47 @@ const ProjectDetails = () => {
     }
   };
 
+  const handleArchiveProject = async () => {
+    if (!project) return;
+
+    try {
+      setIsArchiving(true);
+      const projectLabel = project.project_ref || "ce projet";
+      const archivedAt = new Date().toISOString();
+
+      let query = supabase
+        .from("projects")
+        .update({ status: ARCHIVED_STATUS_VALUE, archived_at: archivedAt })
+        .eq("id", project.id);
+
+      if (currentOrgId) {
+        query = query.eq("org_id", currentOrgId);
+      }
+
+      const { error } = await query;
+
+      if (error) {
+        throw error;
+      }
+
+      setArchiveDialogOpen(false);
+      toast({
+        title: "Projet archivé",
+        description: `${projectLabel} a été archivé avec succès.`,
+      });
+      navigate({ pathname: "/projects", search: "?status=active" });
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "Erreur lors de l'archivage",
+        description: error instanceof Error ? error.message : "Impossible d'archiver le projet.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsArchiving(false);
+    }
+  };
+
   const projectCostValue = project?.estimated_value ?? null;
   const projectEmail = (project as Project & { email?: string })?.email ?? null;
 
@@ -1962,6 +2009,8 @@ const ProjectDetails = () => {
 
     return null;
   })();
+
+  const isProjectArchived = project ? ARCHIVED_STATUS_VALUES.has(project.status ?? "") : false;
 
   return (
     <Layout>
@@ -2007,6 +2056,30 @@ const ProjectDetails = () => {
               <Hammer className="w-4 h-4 mr-2" />
               Créer un chantier
             </Button>
+            {(isAdmin || project.user_id === user?.id) && !isProjectArchived && (
+              <AlertDialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline">
+                    <Archive className="w-4 h-4 mr-2" />
+                    Archiver
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Archiver le projet ?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Êtes-vous sûr de vouloir archiver ce projet ?
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={isArchiving}>Annuler</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleArchiveProject} disabled={isArchiving}>
+                      {isArchiving ? "Archivage..." : "Confirmer"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
             {(isAdmin || project.user_id === user?.id) && (
               <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
                 <AlertDialogTrigger asChild>
