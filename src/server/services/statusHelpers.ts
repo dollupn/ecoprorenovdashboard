@@ -16,7 +16,9 @@ export type ProjectStatus =
   | "CHANTIER_TERMINE"
   | "LIVRE"
   | "CLOTURE"
-  | "ANNULE";
+  | "ANNULE"
+  | "ARCHIVE"
+  | "ARCHIVED";
 
 export type ChantierStatus =
   | "PLANIFIE"
@@ -41,6 +43,8 @@ const PROJECT_STATUS_ORDER: ProjectStatus[] = [
   "LIVRE",
   "CLOTURE",
   "ANNULE",
+  "ARCHIVE",
+  "ARCHIVED",
 ];
 
 const CHANTIER_STATUS_FLOW: Record<ChantierStatus, ChantierStatus[]> = {
