@@ -1493,7 +1493,6 @@ export const AddProjectDialog = ({
             building_type: data.building_type || undefined,
             usage: data.usage || undefined,
             prime_cee: primeCeeEuro,
-            prime_cee_total_cents: primeCeeCents,
             delegate_id: data.delegate_id,
             signatory_name: data.signatory_name || undefined,
             signatory_title: data.signatory_title || undefined,
@@ -1503,7 +1502,6 @@ export const AddProjectDialog = ({
             estimated_value: projectCost,
             lead_id: data.lead_id || undefined,
             project_ref: generatedProjectRef,
-            ...basePayload,
           },
         ])
         .select()
