@@ -49,6 +49,7 @@ const mainItems = [
     title: "Projets",
     url: "/projects",
     icon: FolderOpen,
+    clickable: true,
     subItems: [
       { title: "Liste des projets", url: "/projects", icon: FolderOpen },
       { title: "Chantiers", url: "/projects/chantiers", icon: HardHat },
@@ -154,18 +155,17 @@ export function AppSidebar() {
                 <SidebarMenuItem key={item.title}>
                   {item.subItems ? (
                     <>
-                      <SidebarMenuButton 
-                        className="h-11"
-                        onClick={() => !isCollapsed && toggleGroup(item.title)}
-                      >
-                        <item.icon className="w-5 h-5 flex-shrink-0" />
-                        {!isCollapsed && (
-                          <>
-                            <span className="ml-3 flex-1 text-left">{item.title}</span>
-                            <ChevronDown className={`w-4 h-4 transition-transform ${openGroups[item.title] || isActive(item.url, item.subItems) ? 'rotate-180' : ''}`} />
-                          </>
-                        )}
-                      </SidebarMenuButton>
+                      <NavLink to={item.url} className={({ isActive: linkActive }) => getNavClassName(linkActive)}>
+                        <SidebarMenuButton className="h-11">
+                          <item.icon className="w-5 h-5 flex-shrink-0" />
+                          {!isCollapsed && <span className="ml-3 flex-1 text-left">{item.title}</span>}
+                        </SidebarMenuButton>
+                      </NavLink>
+                      {!isCollapsed && (
+                        <button onClick={() => toggleGroup(item.title)} className="p-2">
+                          <ChevronDown className={`w-4 h-4 transition-transform ${openGroups[item.title] ? 'rotate-180' : ''}`} />
+                        </button>
+                      )}
                       {!isCollapsed && (openGroups[item.title] || isActive(item.url, item.subItems)) && (
                         <SidebarMenu className="ml-4 mt-1 space-y-1">
                           {item.subItems.map((subItem) => (

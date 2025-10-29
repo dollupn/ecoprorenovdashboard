@@ -581,7 +581,7 @@ const normalizeHistoryEntries = (raw: unknown): HistoryEntry[] => {
 
         return null;
       })
-      .filter((entry): entry is HistoryEntry => Boolean(entry));
+      .filter((entry): entry is HistoryEntry => entry !== null && typeof entry === 'object');
   }
 
   if (typeof raw === "string") {
@@ -2232,9 +2232,60 @@ const ApresChantierTab = ({
           <CardTitle>Produits associés</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {renderProductsTable(
-            projectProducts,
-            "Aucun produit (hors ECO) n'est associé à ce projet.",
+          {projectProducts.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Aucun produit (hors ECO) n'est associé à ce projet.
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Produit</TableHead>
+                    <TableHead>Images</TableHead>
+                    <TableHead>Multiplicateur</TableHead>
+                    <TableHead>Valorisation / unité (€)</TableHead>
+                    <TableHead>Valorisation totale (€)</TableHead>
+                    <TableHead>Prime calculée (€)</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {projectProducts.map((item, index) => {
+                    const dynamicParams = item.dynamic_params || {};
+                    const productCode = item.product?.code ?? "–";
+                    const productName = item.product?.name ?? "Produit inconnu";
+
+                    return (
+                      <TableRow key={item.id ?? index}>
+                        <TableCell className="font-medium">
+                          <div className="space-y-1">
+                            <div className="text-sm">{productCode}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {productName}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            {Object.keys(dynamicParams)
+                              .filter((k) => k.startsWith("image_"))
+                              .length || 0}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {typeof item.quantity === "number"
+                            ? formatDecimal(item.quantity)
+                            : "–"}
+                        </TableCell>
+                        <TableCell>–</TableCell>
+                        <TableCell>–</TableCell>
+                        <TableCell>–</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -2503,11 +2554,17 @@ const ProjectDetails = () => {
           } satisfies ProjectUpdatesQueryResult;
         }
 
+        const validData = Array.isArray(data) 
+          ? data.filter((item): item is ProjectUpdateRecord => 
+              item !== null && typeof item === 'object' && 'id' in item && 'project_id' in item
+            ) 
+          : [];
+        
         return {
-          updates: (data ?? []) as ProjectUpdateRecord[],
+          updates: validData,
           tableAvailable: true,
           error: null,
-        } satisfies ProjectUpdatesQueryResult;
+        } as ProjectUpdatesQueryResult;
       } catch (unknownError) {
         const postgrestError = (unknownError as PostgrestError) ?? null;
         if (isTableUnavailableError(postgrestError)) {
@@ -2805,7 +2862,7 @@ const ProjectDetails = () => {
           file_url: fileUrl,
           preview_url: fileUrl,
           thumbnail_url: fileUrl,
-          storage_path,
+          storagePath,
           mime_type: file.type || null,
           created_by: user.id,
         });

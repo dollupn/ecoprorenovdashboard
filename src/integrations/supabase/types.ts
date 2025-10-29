@@ -679,9 +679,8 @@ export type Database = {
           category: Database["public"]["Enums"]["project_media_category"]
           created_at: string
           created_by: string | null
-          drive_file_id: string | null
           drive_url: string | null
-          file_name: string | null
+          file_name: string
           file_url: string | null
           id: string
           mime_type: string | null
@@ -690,14 +689,14 @@ export type Database = {
           project_id: string
           storage_path: string | null
           thumbnail_url: string | null
+          updated_at: string
         }
         Insert: {
-          category: Database["public"]["Enums"]["project_media_category"]
+          category?: Database["public"]["Enums"]["project_media_category"]
           created_at?: string
           created_by?: string | null
-          drive_file_id?: string | null
           drive_url?: string | null
-          file_name?: string | null
+          file_name: string
           file_url?: string | null
           id?: string
           mime_type?: string | null
@@ -706,14 +705,14 @@ export type Database = {
           project_id: string
           storage_path?: string | null
           thumbnail_url?: string | null
+          updated_at?: string
         }
         Update: {
           category?: Database["public"]["Enums"]["project_media_category"]
           created_at?: string
           created_by?: string | null
-          drive_file_id?: string | null
           drive_url?: string | null
-          file_name?: string | null
+          file_name?: string
           file_url?: string | null
           id?: string
           mime_type?: string | null
@@ -722,15 +721,9 @@ export type Database = {
           project_id?: string
           storage_path?: string | null
           thumbnail_url?: string | null
+          updated_at?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "project_media_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "project_media_project_id_fkey"
             columns: ["project_id"]
@@ -748,6 +741,7 @@ export type Database = {
           id: string
           org_id: string
           project_id: string
+          updated_at: string
         }
         Insert: {
           content: string
@@ -756,6 +750,7 @@ export type Database = {
           id?: string
           org_id: string
           project_id: string
+          updated_at?: string
         }
         Update: {
           content?: string
@@ -764,65 +759,11 @@ export type Database = {
           id?: string
           org_id?: string
           project_id?: string
+          updated_at?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "project_notes_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "project_notes_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      project_status_events: {
-        Row: {
-          changed_at: string
-          changed_by: string | null
-          id: string
-          notes: string | null
-          org_id: string
-          previous_status: string | null
-          project_id: string
-          status: string
-        }
-        Insert: {
-          changed_at?: string
-          changed_by?: string | null
-          id?: string
-          notes?: string | null
-          org_id: string
-          previous_status?: string | null
-          project_id: string
-          status: string
-        }
-        Update: {
-          changed_at?: string
-          changed_by?: string | null
-          id?: string
-          notes?: string | null
-          org_id?: string
-          previous_status?: string | null
-          project_id?: string
-          status?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "project_status_events_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_status_events_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -875,9 +816,90 @@ export type Database = {
           },
         ]
       }
+      project_status_events: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          id: string
+          notes: string | null
+          org_id: string
+          project_id: string
+          status: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: string
+          notes?: string | null
+          org_id: string
+          project_id: string
+          status: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: string
+          notes?: string | null
+          org_id?: string
+          project_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_status_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_updates: {
+        Row: {
+          author_id: string | null
+          content: string | null
+          created_at: string
+          id: string
+          next_step: string | null
+          org_id: string
+          project_id: string
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          author_id?: string | null
+          content?: string | null
+          created_at?: string
+          id?: string
+          next_step?: string | null
+          org_id: string
+          project_id: string
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string | null
+          content?: string | null
+          created_at?: string
+          id?: string
+          next_step?: string | null
+          org_id?: string
+          project_id?: string
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_updates_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
-          archived_at: string | null
           address: string | null
           assigned_to: string
           building_type: string | null
@@ -919,7 +941,6 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          archived_at?: string | null
           address?: string | null
           assigned_to: string
           building_type?: string | null
@@ -961,7 +982,6 @@ export type Database = {
           user_id: string
         }
         Update: {
-          archived_at?: string | null
           address?: string | null
           assigned_to?: string
           building_type?: string | null
@@ -1331,10 +1351,12 @@ export type Database = {
         | "mayotte"
       org_role: "owner" | "admin" | "member" | "commercial"
       project_media_category:
-        | "DEVIS"
         | "PHOTOS"
+        | "DEVIS"
         | "FACTURES"
         | "CONTRATS"
+        | "TECHNIQUES"
+        | "AUTRES"
         | "PRODUITS"
     }
     CompositeTypes: {
@@ -1473,6 +1495,15 @@ export const Constants = {
         "mayotte",
       ],
       org_role: ["owner", "admin", "member", "commercial"],
+      project_media_category: [
+        "PHOTOS",
+        "DEVIS",
+        "FACTURES",
+        "CONTRATS",
+        "TECHNIQUES",
+        "AUTRES",
+        "PRODUITS",
+      ],
     },
   },
 } as const
