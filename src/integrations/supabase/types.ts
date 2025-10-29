@@ -600,6 +600,70 @@ export type Database = {
         }
         Relationships: []
       }
+      project_appointments: {
+        Row: {
+          appointment_date: string
+          appointment_time: string
+          appointment_type_id: string | null
+          assignee_id: string | null
+          created_at: string
+          created_by: string
+          id: string
+          notes: string | null
+          org_id: string
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          appointment_date: string
+          appointment_time: string
+          appointment_type_id?: string | null
+          assignee_id?: string | null
+          created_at?: string
+          created_by: string
+          id?: string
+          notes?: string | null
+          org_id: string
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          appointment_date?: string
+          appointment_time?: string
+          appointment_type_id?: string | null
+          assignee_id?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          notes?: string | null
+          org_id?: string
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_appointments_appointment_type_id_fkey"
+            columns: ["appointment_type_id"]
+            isOneToOne: false
+            referencedRelation: "appointment_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_appointments_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_appointments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_products: {
         Row: {
           created_at: string

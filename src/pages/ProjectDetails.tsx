@@ -53,6 +53,7 @@ import {
   AddQuoteDialog,
   type QuoteFormValues,
 } from "@/components/quotes/AddQuoteDialog";
+import { ProjectScheduleDialog } from "@/components/projects/ProjectScheduleDialog";
 import {
   SiteDialog,
   type SiteFormValues,
@@ -123,11 +124,16 @@ type ProjectProduct = Pick<
   product: ProductSummary | null;
 };
 
+type ProjectAppointment = Tables<"project_appointments"> & {
+  appointment_type?: Pick<Tables<"appointment_types">, "id" | "name"> | null;
+};
+
 type DelegateSummary = Pick<Tables<"delegates">, "id" | "name" | "price_eur_per_mwh">;
 
 type ProjectWithRelations = Project & {
   project_products: ProjectProduct[];
   delegate?: DelegateSummary | null;
+  project_appointments: ProjectAppointment[];
 };
 
 const getDisplayedProducts = (projectProducts?: ProjectProduct[]) =>
@@ -1233,7 +1239,7 @@ const ProjectDetails = () => {
       let query = supabase
         .from("projects")
         .select(
-          "*, delegate:delegates(id, name, price_eur_per_mwh), project_products(id, product_id, quantity, dynamic_params, product:product_catalog(id, code, name, category, params_schema, cee_config, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))"
+          "*, delegate:delegates(id, name, price_eur_per_mwh), project_products(id, product_id, quantity, dynamic_params, product:product_catalog(id, code, name, category, params_schema, cee_config, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac))), project_appointments(id, project_id, org_id, appointment_date, appointment_time, appointment_type_id, assignee_id, notes, created_at, updated_at, appointment_type:appointment_types(id, name))"
         )
         .eq("id", id);
 
@@ -1259,6 +1265,7 @@ const ProjectDetails = () => {
           ...pp,
           product: pp.product ? withDefaultProductCeeConfig(pp.product) : null,
         })),
+        project_appointments: (data.project_appointments ?? []) as ProjectAppointment[],
       } as ProjectWithRelations;
     },
     enabled: !!id && !!user?.id && (!currentOrgId || !membersLoading),
@@ -1275,6 +1282,68 @@ const ProjectDetails = () => {
     () => getDisplayedProducts(project?.project_products),
     [project?.project_products]
   );
+
+  const nextAppointment = useMemo<{ appointment: ProjectAppointment; dateTime: Date } | null>(() => {
+    if (!project?.project_appointments || project.project_appointments.length === 0) {
+      return null;
+    }
+
+    const withDates = project.project_appointments
+      .map((appointment) => {
+        if (!appointment.appointment_date || !appointment.appointment_time) {
+          return null;
+        }
+
+        const dateTime = new Date(`${appointment.appointment_date}T${appointment.appointment_time}`);
+        if (Number.isNaN(dateTime.getTime())) {
+          return null;
+        }
+
+        return { appointment, dateTime };
+      })
+      .filter(
+        (value): value is { appointment: ProjectAppointment; dateTime: Date } => Boolean(value),
+      );
+
+    if (withDates.length === 0) {
+      return null;
+    }
+
+    withDates.sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime());
+    const now = new Date();
+    const upcoming = withDates.find((item) => item.dateTime.getTime() >= now.getTime());
+
+    return (upcoming ?? withDates[withDates.length - 1]) ?? null;
+  }, [project?.project_appointments]);
+
+  const nextAppointmentDetails = useMemo(() => {
+    if (!nextAppointment) {
+      return null;
+    }
+
+    const formattedDate = nextAppointment.dateTime.toLocaleString("fr-FR", {
+      dateStyle: "long",
+      timeStyle: "short",
+    });
+
+    const assigneeName = nextAppointment.appointment.assignee_id
+      ? memberNameById[nextAppointment.appointment.assignee_id] ?? null
+      : null;
+
+    const typeLabel = nextAppointment.appointment.appointment_type?.name ?? null;
+    const rawNotes = nextAppointment.appointment.notes?.trim() ?? "";
+
+    const metadataParts = [
+      typeLabel ?? undefined,
+      assigneeName ? `Assigné à ${assigneeName}` : undefined,
+    ].filter((value): value is string => Boolean(value));
+
+    return {
+      formattedDate,
+      metadata: metadataParts.length > 0 ? metadataParts.join(" • ") : null,
+      notes: rawNotes.length > 0 ? rawNotes : null,
+    };
+  }, [nextAppointment, memberNameById]);
 
   const projectSurfaceFacturee = useMemo(() => {
     if (!project?.project_products) return 0;
@@ -1917,6 +1986,14 @@ const ProjectDetails = () => {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <ProjectScheduleDialog
+              projectId={project.id}
+              members={members}
+              isLoadingMembers={membersLoading}
+              onScheduled={async () => {
+                await refetch();
+              }}
+            />
             <Button variant="outline" onClick={handleOpenQuote}>
               <FileText className="w-4 h-4 mr-2" />
               Générer un devis
@@ -2096,6 +2173,32 @@ const ProjectDetails = () => {
                         : "Non calculée"}
                     </span>
                   </div>
+                  {nextAppointmentDetails ? (
+                    <div className="flex items-start gap-2">
+                      <Calendar className="w-4 h-4 text-primary mt-1" />
+                      <div className="space-y-1">
+                        <span className="text-sm text-muted-foreground">Prochain RDV:</span>
+                        <p className="text-sm font-medium leading-tight">
+                          {nextAppointmentDetails.formattedDate}
+                        </p>
+                        {nextAppointmentDetails.metadata ? (
+                          <p className="text-xs text-muted-foreground leading-tight">
+                            {nextAppointmentDetails.metadata}
+                          </p>
+                        ) : null}
+                        {nextAppointmentDetails.notes ? (
+                          <p className="text-xs text-muted-foreground italic whitespace-pre-line leading-tight">
+                            {nextAppointmentDetails.notes}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-primary" />
+                      <span className="text-sm text-muted-foreground">Aucun RDV programmé</span>
+                    </div>
+                  )}
                   {projectProducts.map((item, index) => {
                     const entryId = item.id ?? item.product_id ?? `product-${index}`;
                     const ceeEntry = ceeEntryMap[entryId];
