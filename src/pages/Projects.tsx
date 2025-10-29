@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { KeyboardEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -1155,28 +1154,13 @@ const Projects = () => {
                     lead_id: project.lead_id ?? undefined,
                   };
 
-                  const handleCardActivation = () => {
-                    handleViewProject(project.id);
-                  };
-
-                  const handleCardKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      handleCardActivation();
-                    }
-                  };
-
                   return (
                     <Card
                       key={project.id}
                       className={cn(
                         "group relative overflow-hidden border bg-card shadow-sm transition-all duration-300",
-                        "hover:shadow-md hover:border-primary/20 cursor-pointer",
+                        "hover:shadow-md hover:border-primary/20",
                       )}
-                      role="button"
-                      tabIndex={0}
-                      onClick={handleCardActivation}
-                      onKeyDown={handleCardKeyDown}
                     >
                       {/* Top accent bar */}
                       <div
@@ -1201,9 +1185,18 @@ const Projects = () => {
                               <span className="sr-only">{categoryMetadata.srLabel}</span>
                             </div>
                             <div className="flex-1 min-w-0">
-                              <h3 className="text-base font-semibold text-foreground truncate">
-                                {project.project_ref || "Sans référence"}
-                              </h3>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleViewProject(project.id);
+                                }}
+                                className="text-left w-full"
+                              >
+                                <h3 className="text-base font-semibold text-foreground truncate">
+                                  {project.project_ref || "Sans référence"}
+                                </h3>
+                              </button>
                               <div className="flex items-center gap-2 mt-1">
                                 <Badge variant="outline" style={badgeStyle} className="text-xs">
                                   {statusLabel}
@@ -1212,25 +1205,40 @@ const Projects = () => {
                             </div>
                           </div>
                           
-                          <AddProjectDialog
-                            mode="edit"
-                            projectId={project.id}
-                            projectRef={project.project_ref}
-                            initialValues={editInitialValues}
-                            onProjectUpdated={() => void refetch()}
-                            trigger={
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="shrink-0 h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                                <span className="sr-only">Modifier</span>
-                              </Button>
-                            }
-                          />
+                          <div className="flex items-center gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="shrink-0 h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleViewProject(project.id);
+                              }}
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                              <span className="sr-only">Voir</span>
+                            </Button>
+                            <AddProjectDialog
+                              mode="edit"
+                              projectId={project.id}
+                              projectRef={project.project_ref}
+                              initialValues={editInitialValues}
+                              onProjectUpdated={() => void refetch()}
+                              trigger={
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="shrink-0 h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                                  onClick={(event) => event.stopPropagation()}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                  <span className="sr-only">Modifier</span>
+                                </Button>
+                              }
+                            />
+                          </div>
                         </div>
 
                         {/* Contact Info */}
