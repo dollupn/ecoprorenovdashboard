@@ -17,6 +17,7 @@ import {
   Calculator,
   Settings2,
   ChevronDown,
+  HardHat,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -44,7 +45,15 @@ const mainItems = [
       { title: "Paramètres Lead", url: "/settings?section=lead", icon: Settings2 },
     ]
   },
-  { title: "Projets", url: "/projects", icon: FolderOpen },
+  {
+    title: "Projets",
+    url: "/projects",
+    icon: FolderOpen,
+    subItems: [
+      { title: "Liste des projets", url: "/projects", icon: FolderOpen },
+      { title: "Chantiers", url: "/projects/chantiers", icon: HardHat },
+    ]
+  },
   { title: "Devis", url: "/quotes", icon: FileText },
   { title: "Clients", url: "/clients", icon: UserCircle },
   { title: "Comptabilité", url: "/accounting", icon: Calculator },
