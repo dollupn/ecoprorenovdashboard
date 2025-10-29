@@ -154,13 +154,13 @@ const mapAppointmentsToEvents = (
       const titleSegments = [typeLabel, record.fullName].filter(Boolean);
       const title = titleSegments.length > 0 ? titleSegments.join(" – ") : record.fullName ?? "Rendez-vous";
 
+      const fallbackAddress = [record.address, record.postalCode, record.city]
+        .map((value) => value?.trim())
+        .filter((value): value is string => Boolean(value))
+        .join(" ");
+
       const location =
-        record.location ??
-        [record.address, record.postalCode, record.city]
-          .map((value) => value?.trim())
-          .filter((value): value is string => Boolean(value))
-          .join(" ") ||
-        "Adresse à confirmer";
+        record.location ?? (fallbackAddress || undefined) ?? "Adresse à confirmer";
 
       const assignedTo = record.assignedTo ?? record.project?.assignedTo ?? "Non attribué";
 
