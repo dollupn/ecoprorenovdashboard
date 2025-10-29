@@ -46,6 +46,9 @@ import {
   Loader2,
   Share2,
   FolderOpen,
+  Clock,
+  ChevronRight,
+  NotebookPen,
   ClipboardList,
   Camera,
   CheckCircle2,
@@ -107,6 +110,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import type { PostgrestError } from "@supabase/supabase-js";
 import {
   Table,
   TableBody,
@@ -195,6 +199,27 @@ type ProjectSite = Tables<"sites"> & {
 type SiteAdditionalCostFormValue = SiteFormValues["additional_costs"][number];
 type SiteTeamMemberFormValue = SiteFormValues["team_members"][number];
 
+type ProjectUpdateRecord = {
+  id: string;
+  project_id: string;
+  content?: string | null;
+  status?: string | null;
+  next_step?: string | null;
+  created_at: string;
+  author_id?: string | null;
+  org_id?: string | null;
+};
+
+type ProjectUpdatesQueryResult = {
+  updates: ProjectUpdateRecord[];
+  tableAvailable: boolean;
+  error?: PostgrestError | null;
+};
+
+type HistoryEntry = {
+  text: string;
+  createdAt?: string | null;
+};
 type ProjectTabValue = "details" | "chantiers" | "media" | "journal";
 
 const DEFAULT_PROJECT_TAB: ProjectTabValue = "details";
@@ -414,6 +439,98 @@ const normalizeAdditionalCosts = (costs: unknown): SiteAdditionalCostFormValue[]
     .filter((cost) => cost !== null) as SiteAdditionalCostFormValue[];
 
   return normalized.length > 0 ? normalized : [createEmptyAdditionalCost()];
+};
+
+const isTableUnavailableError = (error: PostgrestError | null | undefined) => {
+  if (!error) return false;
+  return error.code === "42P01" || error.code === "42501";
+};
+
+const normalizeHistoryEntries = (raw: unknown): HistoryEntry[] => {
+  if (!raw) return [];
+
+  if (Array.isArray(raw)) {
+    return raw
+      .map((entry) => {
+        if (typeof entry === "string") {
+          const text = entry.trim();
+          return text.length > 0 ? { text } : null;
+        }
+
+        if (entry && typeof entry === "object") {
+          const value = entry as Record<string, unknown>;
+          const candidate =
+            typeof value.text === "string"
+              ? value.text
+              : typeof value.message === "string"
+                ? value.message
+                : null;
+
+          if (!candidate) {
+            return null;
+          }
+
+          const createdAt =
+            typeof value.created_at === "string"
+              ? value.created_at
+              : typeof value.date === "string"
+                ? value.date
+                : undefined;
+
+          return { text: candidate.trim(), createdAt } satisfies HistoryEntry;
+        }
+
+        return null;
+      })
+      .filter((entry): entry is HistoryEntry => Boolean(entry));
+  }
+
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (trimmed.length === 0) return [];
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      return normalizeHistoryEntries(parsed);
+    } catch (error) {
+      const segments = trimmed
+        .split(/\r?\n|•|·|\|/)
+        .map((segment) => segment.trim())
+        .filter((segment) => segment.length > 0);
+      return segments.map((segment) => ({ text: segment }));
+    }
+  }
+
+  if (raw && typeof raw === "object") {
+    const record = raw as Record<string, unknown>;
+    if (Array.isArray(record.entries)) {
+      return normalizeHistoryEntries(record.entries);
+    }
+    if (Array.isArray(record.items)) {
+      return normalizeHistoryEntries(record.items);
+    }
+  }
+
+  return [];
+};
+
+const formatDateTimeLabel = (
+  value: string | null | undefined,
+  options?: Intl.DateTimeFormatOptions,
+): string | null => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date.toLocaleString(
+    "fr-FR",
+    options ?? {
+      dateStyle: "long",
+      timeStyle: "short",
+    },
+  );
 };
 
 const getStatusLabel = (status: SiteStatus) => {
@@ -1350,6 +1467,8 @@ const ProjectDetails = () => {
   const [siteDialogMode, setSiteDialogMode] = useState<"create" | "edit">("create");
   const [siteInitialValues, setSiteInitialValues] = useState<Partial<SiteFormValues>>();
   const [activeSite, setActiveSite] = useState<ProjectSite | null>(null);
+  const [activeTab, setActiveTab] = useState("overview");
+  const [quickUpdateText, setQuickUpdateText] = useState("");
   const [siteDialogDefaultTab, setSiteDialogDefaultTab] = useState<"avant-chantier" | "apres-chantier">(
     "avant-chantier",
   );
@@ -1469,6 +1588,56 @@ const ProjectDetails = () => {
     () => getDisplayedProducts(project?.project_products),
     [project?.project_products]
   );
+
+  const {
+    data: projectUpdatesState,
+    isLoading: projectUpdatesLoading,
+    refetch: refetchProjectUpdates,
+  } = useQuery<ProjectUpdatesQueryResult>({
+    queryKey: ["project-updates", id, currentOrgId],
+    enabled: !!id && !!user?.id,
+    queryFn: async () => {
+      if (!id || !user?.id) {
+        return { updates: [], tableAvailable: false, error: null } satisfies ProjectUpdatesQueryResult;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from("project_updates" as any)
+          .select("id, project_id, content, status, next_step, created_at, author_id, org_id")
+          .eq("project_id", id)
+          .order("created_at", { ascending: false })
+          .limit(50);
+
+        if (error) {
+          if (isTableUnavailableError(error)) {
+            return { updates: [], tableAvailable: false, error } satisfies ProjectUpdatesQueryResult;
+          }
+
+          console.error("Erreur lors du chargement des mises à jour projet", error);
+          return { updates: [], tableAvailable: false, error } satisfies ProjectUpdatesQueryResult;
+        }
+
+        return {
+          updates: (data ?? []) as ProjectUpdateRecord[],
+          tableAvailable: true,
+          error: null,
+        } satisfies ProjectUpdatesQueryResult;
+      } catch (unknownError) {
+        const postgrestError = (unknownError as PostgrestError) ?? null;
+        if (isTableUnavailableError(postgrestError)) {
+          return { updates: [], tableAvailable: false, error: postgrestError } satisfies ProjectUpdatesQueryResult;
+        }
+
+        console.error("Erreur inattendue lors du chargement des mises à jour projet", unknownError);
+        return { updates: [], tableAvailable: false, error: postgrestError } satisfies ProjectUpdatesQueryResult;
+      }
+    },
+  });
+
+  const projectUpdates = projectUpdatesState?.updates ?? [];
+  const projectUpdatesTableAvailable = projectUpdatesState?.tableAvailable ?? false;
+  const projectUpdatesError = projectUpdatesState?.error ?? null;
 
   const nextAppointment = useMemo<{ appointment: ProjectAppointment; dateTime: Date } | null>(() => {
     if (!project?.project_appointments || project.project_appointments.length === 0) {
@@ -1806,6 +1975,271 @@ const ProjectDetails = () => {
     [ceeEntries],
   );
 
+  const projectRecord = (project ?? {}) as Project & Record<string, unknown>;
+  const statusValue = typeof project?.status === "string" && project.status.length > 0 ? project.status : null;
+  const statusConfig = statusValue
+    ? projectStatuses.find((status) => status?.value === statusValue)
+    : undefined;
+  const badgeStyle = getProjectStatusBadgeStyle(statusConfig?.color);
+  const statusLabel = statusConfig?.label ?? statusValue ?? "Statut";
+  const statusProgress = statusValue ? computeStatusProgress(statusValue, projectStatuses) : 0;
+
+  const fallbackLatestUpdateText = (() => {
+    const candidates = [
+      projectRecord["latest_update_text"],
+      projectRecord["last_update_text"],
+      projectRecord["status_update_text"],
+    ];
+    for (const candidate of candidates) {
+      if (typeof candidate === "string" && candidate.trim().length > 0) {
+        return candidate.trim();
+      }
+    }
+    return null;
+  })();
+
+  const fallbackLatestUpdateAt = (() => {
+    const candidates = [
+      projectRecord["latest_update_at"],
+      projectRecord["last_update_at"],
+      projectRecord["status_update_at"],
+    ];
+    for (const candidate of candidates) {
+      if (typeof candidate === "string" && candidate.trim().length > 0) {
+        return candidate;
+      }
+    }
+    return null;
+  })();
+
+  const fallbackNextStep = (() => {
+    const candidates = [
+      projectRecord["next_step"],
+      projectRecord["prochaine_etape"],
+      projectRecord["upcoming_step"],
+    ];
+    for (const candidate of candidates) {
+      if (typeof candidate === "string" && candidate.trim().length > 0) {
+        return candidate.trim();
+      }
+    }
+    return null;
+  })();
+
+  const fallbackHistoryRaw =
+    projectRecord["history_short"] ??
+    projectRecord["update_history"] ??
+    projectRecord["status_history"] ??
+    projectRecord["history"] ??
+    null;
+  const fallbackHistoryEntries = normalizeHistoryEntries(fallbackHistoryRaw);
+
+  const latestUpdate = projectUpdates[0] ?? null;
+  const latestUpdateText = (() => {
+    const candidates = [latestUpdate?.content, fallbackLatestUpdateText];
+    for (const candidate of candidates) {
+      if (typeof candidate === "string") {
+        const trimmed = candidate.trim();
+        if (trimmed.length > 0) {
+          return trimmed;
+        }
+      }
+    }
+    return null;
+  })();
+
+  const latestUpdateTimestamp = (() => {
+    const candidates = [latestUpdate?.created_at, fallbackLatestUpdateAt, project?.updated_at];
+    for (const candidate of candidates) {
+      if (typeof candidate === "string" && candidate.trim().length > 0) {
+        const date = new Date(candidate);
+        if (!Number.isNaN(date.getTime())) {
+          return date.toISOString();
+        }
+      }
+    }
+    return null;
+  })();
+
+  const latestUpdateDisplay = formatDateTimeLabel(latestUpdateTimestamp);
+
+  const nextStepDescription = (() => {
+    const candidates = [latestUpdate?.next_step, fallbackNextStep];
+    for (const candidate of candidates) {
+      if (typeof candidate === "string" && candidate.trim().length > 0) {
+        return candidate.trim();
+      }
+    }
+
+    if (nextAppointmentDetails) {
+      const parts = [
+        `Prochain rendez-vous le ${nextAppointmentDetails.formattedDate}`,
+        nextAppointmentDetails.metadata ?? undefined,
+      ].filter((part): part is string => Boolean(part));
+      if (parts.length > 0) {
+        return parts.join(" • ");
+      }
+    }
+
+    return null;
+  })();
+
+  const shortHistoryItems = (() => {
+    const updateEntries = projectUpdates.slice(0, 3).map((update) => ({
+      id: update.id,
+      text:
+        typeof update.content === "string" && update.content.trim().length > 0
+          ? update.content.trim()
+          : "Mise à jour enregistrée",
+      createdAt: update.created_at,
+    }));
+
+    if (updateEntries.length >= 3) {
+      return updateEntries;
+    }
+
+    const remainingSlots = 3 - updateEntries.length;
+    const fallbackEntries = fallbackHistoryEntries.slice(0, remainingSlots).map((entry, index) => ({
+      id: `fallback-${index}`,
+      text: entry.text,
+      createdAt: entry.createdAt ?? null,
+    }));
+
+    return [...updateEntries, ...fallbackEntries];
+  })();
+
+  const fullHistoryItems = projectUpdates.length
+    ? projectUpdates.map((update) => ({
+        id: update.id,
+        text:
+          typeof update.content === "string" && update.content.trim().length > 0
+            ? update.content.trim()
+            : "Mise à jour enregistrée",
+        createdAt: update.created_at,
+        status: update.status ?? null,
+        nextStep: update.next_step ?? null,
+      }))
+    : fallbackHistoryEntries.map((entry, index) => ({
+        id: `fallback-full-${index}`,
+        text: entry.text,
+        createdAt: entry.createdAt ?? null,
+        status: null,
+        nextStep: null,
+      }));
+
+  const historyTextsForFallback = fallbackHistoryEntries.map((entry) => entry.text).filter((text) => text.length > 0);
+
+  const { mutateAsync: saveQuickUpdate, isPending: isSavingQuickUpdate } = useMutation({
+    mutationFn: async ({ content }: { content: string }) => {
+      if (!project) {
+        throw new Error("Le projet n'est plus disponible.");
+      }
+
+      const trimmed = content.trim();
+      if (trimmed.length === 0) {
+        throw new Error("Veuillez saisir une mise à jour avant de l'enregistrer.");
+      }
+
+      const nowIso = new Date().toISOString();
+
+      if (projectUpdatesTableAvailable) {
+        const payload: Record<string, unknown> = {
+          project_id: project.id,
+          content: trimmed,
+          status: project.status ?? null,
+          next_step: fallbackNextStep ?? null,
+          created_at: nowIso,
+        };
+
+        if (currentOrgId) {
+          payload.org_id = currentOrgId;
+        }
+
+        if (user?.id) {
+          payload.author_id = user.id;
+        }
+
+        const { error } = await supabase.from("project_updates" as any).insert([payload]);
+        if (!error) {
+          return { usedFallback: false };
+        }
+
+        if (!isTableUnavailableError(error)) {
+          throw error;
+        }
+      }
+
+      const fallbackPayload: Record<string, unknown> = {};
+      const textFieldCandidates = ["latest_update_text", "last_update_text", "status_update_text"];
+      const timestampFieldCandidates = ["latest_update_at", "last_update_at", "status_update_at"];
+      const historyFieldCandidates = ["history_short", "update_history", "status_history", "history"];
+
+      for (const field of textFieldCandidates) {
+        if (Object.prototype.hasOwnProperty.call(projectRecord, field)) {
+          fallbackPayload[field] = trimmed;
+          break;
+        }
+      }
+
+      for (const field of timestampFieldCandidates) {
+        if (Object.prototype.hasOwnProperty.call(projectRecord, field)) {
+          fallbackPayload[field] = nowIso;
+          break;
+        }
+      }
+
+      const newHistoryItems = [trimmed, ...historyTextsForFallback].filter((value) => value.length > 0).slice(0, 3);
+      for (const field of historyFieldCandidates) {
+        if (Object.prototype.hasOwnProperty.call(projectRecord, field)) {
+          const currentValue = projectRecord[field];
+          if (Array.isArray(currentValue)) {
+            fallbackPayload[field] = newHistoryItems;
+          } else if (typeof currentValue === "string") {
+            fallbackPayload[field] = JSON.stringify(newHistoryItems);
+          } else {
+            fallbackPayload[field] = newHistoryItems;
+          }
+          break;
+        }
+      }
+
+      if (Object.keys(fallbackPayload).length === 0) {
+        throw new Error(
+          "Impossible d'enregistrer la mise à jour : aucun champ de sauvegarde n'est disponible sur le projet.",
+        );
+      }
+
+      const { error: projectError } = await supabase
+        .from("projects" as any)
+        .update(fallbackPayload)
+        .eq("id", project.id)
+        .select("id");
+
+      if (projectError) {
+        throw projectError;
+      }
+
+      return { usedFallback: true };
+    },
+    onSuccess: async () => {
+      setQuickUpdateText("");
+      await Promise.all([refetch(), refetchProjectUpdates()]);
+      toast({ title: "Mise à jour enregistrée" });
+    },
+    onError: (mutationError) => {
+      const message =
+        mutationError instanceof Error
+          ? mutationError.message
+          : "Impossible d'enregistrer la mise à jour pour le moment.";
+      toast({ title: "Erreur", description: message, variant: "destructive" });
+    },
+  });
+
+  const handleQuickUpdateSubmit = useCallback(async () => {
+    await saveQuickUpdate({ content: quickUpdateText });
+  }, [quickUpdateText, saveQuickUpdate]);
+
+  const isQuickUpdateDisabled = !project || quickUpdateText.trim().length === 0 || isSavingQuickUpdate;
   const renderProductsTable = useCallback(
     (products: ProjectProduct[], emptyMessage: string) => {
       if (products.length === 0) {
@@ -2067,10 +2501,6 @@ const ProjectDetails = () => {
       </Layout>
     );
   }
-
-  const statusConfig = projectStatuses.find((status) => status?.value === project.status);
-  const badgeStyle = getProjectStatusBadgeStyle(statusConfig?.color);
-  const statusLabel = statusConfig?.label ?? project.status ?? "Statut";
 
   const handleCreateSite = async () => {
     if (!project || !currentOrgId) return;
@@ -2522,6 +2952,10 @@ const ProjectDetails = () => {
           </div>
         </div>
 
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="w-full justify-start overflow-x-auto">
+            <TabsTrigger value="overview">Aperçu</TabsTrigger>
+            <TabsTrigger value="journal">Journal</TabsTrigger>
         <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
           <TabsList className="w-full justify-start overflow-x-auto">
             <TabsTrigger value="details">Détails</TabsTrigger>
@@ -2629,163 +3063,307 @@ const ProjectDetails = () => {
                 </CardContent>
               </Card>
 
-              <Card className="shadow-card bg-gradient-card border-0">
-                <CardHeader>
-                  <CardTitle>Finances & planning</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4 text-sm">
-                  <div className="flex items-center gap-2">
-                    <Euro className="w-4 h-4 text-primary" />
-                    <span className="text-muted-foreground">Coût du chantier:</span>
-                    <span className="font-medium">
-                      {typeof projectCostValue === "number"
-                        ? formatCurrency(projectCostValue)
-                        : "Non défini"}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <HandCoins className="w-4 h-4 text-emerald-600" />
-                    <span className="text-muted-foreground">Prime CEE:</span>
-                    <span className="font-medium">
-                      {typeof displayedPrimeValue === "number"
-                        ? formatCurrency(displayedPrimeValue)
-                        : "Non définie"}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <HandCoins className="w-4 h-4 text-amber-600" />
-                    <span className="text-muted-foreground">Valorisation totale:</span>
-                    <span className="font-medium text-amber-600">
-                      {hasComputedCeeTotals
-                        ? `${formatCurrency(ceeTotals.totalValorisationEur)} (${formatDecimal(
-                            ceeTotals.totalValorisationMwh,
-                          )} MWh)`
-                        : "Non calculée"}
-                    </span>
-                  </div>
-                  {nextAppointmentDetails ? (
-                    <div className="flex items-start gap-2">
-                      <Calendar className="w-4 h-4 text-primary mt-1" />
-                      <div className="space-y-1">
-                        <span className="text-sm text-muted-foreground">Prochain RDV:</span>
-                        <p className="text-sm font-medium leading-tight">
-                          {nextAppointmentDetails.formattedDate}
+              <div className="flex flex-col gap-6">
+                <Card className="shadow-card border-0">
+                  <CardHeader className="space-y-2">
+                    <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                      <NotebookPen className="w-4 h-4 text-primary" />
+                      Progression & Mises à jour
+                    </CardTitle>
+                    <CardDescription>
+                      Suivez l'avancement du dossier et consignez les dernières informations partagées avec le client.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground">Statut</span>
+                          <Badge variant="outline" style={badgeStyle} className="text-xs font-medium">
+                            {statusLabel}
+                          </Badge>
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {statusProgress > 0 ? `${statusProgress}%` : "0%"}
+                        </span>
+                      </div>
+                      <Progress value={statusProgress} className="h-2" />
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <Clock className="w-4 h-4 text-primary" />
+                        Dernière mise à jour
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {latestUpdateDisplay ?? "Aucune mise à jour enregistrée"}
+                      </p>
+                      {latestUpdateText ? (
+                        <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
+                          {latestUpdateText}
                         </p>
-                        {nextAppointmentDetails.metadata ? (
-                          <p className="text-xs text-muted-foreground leading-tight">
-                            {nextAppointmentDetails.metadata}
-                          </p>
-                        ) : null}
-                        {nextAppointmentDetails.notes ? (
-                          <p className="text-xs text-muted-foreground italic whitespace-pre-line leading-tight">
-                            {nextAppointmentDetails.notes}
-                          </p>
-                        ) : null}
-                      </div>
+                      ) : null}
                     </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-primary" />
-                      <span className="text-sm text-muted-foreground">Aucun RDV programmé</span>
+
+                    <div className="space-y-2">
+                      <div className="text-sm font-medium text-muted-foreground">Prochaine étape</div>
+                      <p className="text-sm font-medium">
+                        {nextStepDescription ?? "Aucune étape planifiée"}
+                      </p>
                     </div>
-                  )}
-                  {projectProducts.map((item, index) => {
-                    const entryId = item.id ?? item.product_id ?? `product-${index}`;
-                    const ceeEntry = ceeEntryMap[entryId];
-                    if (!ceeEntry) {
-                      return null;
-                    }
 
-                    const labelBase =
-                      typeof ceeEntry.result?.valorisationTotalEur === "number"
-                        ? formatCurrency(ceeEntry.result.valorisationTotalEur)
-                        : null;
-                    const entryHasWarnings =
-                      Boolean(ceeEntry.warnings.missingDynamicParams) ||
-                      Boolean(ceeEntry.warnings.missingKwh);
+                    <div className="space-y-3">
+                      <div className="text-sm font-medium text-muted-foreground">Historique récent</div>
+                      {projectUpdatesLoading ? (
+                        <div className="flex items-center justify-center py-4">
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : shortHistoryItems.length > 0 ? (
+                        <ul className="space-y-3">
+                          {shortHistoryItems.map((item) => {
+                            const displayDate = formatDateTimeLabel(item.createdAt, {
+                              dateStyle: "short",
+                              timeStyle: "short",
+                            });
+                            return (
+                              <li key={item.id} className="rounded-lg border border-border/60 bg-muted/20 p-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="text-sm font-medium leading-tight">
+                                    {item.text}
+                                  </span>
+                                  {displayDate ? (
+                                    <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                                      {displayDate}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          Aucune note historique pour le moment.
+                        </p>
+                      )}
+                    </div>
 
-                    return (
-                      <div
-                        key={entryId}
-                        className="rounded-lg border border-border/50 bg-background/60 p-3"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <p className="text-sm font-medium text-foreground">
-                              {item.product?.name ?? "Produit"}
-                            </p>
-                            <p className="text-xs text-muted-foreground">{item.product?.code ?? "—"}</p>
-                          </div>
-                          {typeof item.quantity === "number" && (
-                            <Badge variant="outline">x{item.quantity}</Badge>
+                    <div className="space-y-3">
+                      <label className="text-sm font-medium text-muted-foreground" htmlFor="quick-update-textarea">
+                        Ajouter une mise à jour rapide
+                      </label>
+                      <Textarea
+                        id="quick-update-textarea"
+                        value={quickUpdateText}
+                        onChange={(event) => setQuickUpdateText(event.target.value)}
+                        rows={3}
+                        placeholder="Note interne, suivi client, information de planning..."
+                        className="resize-none"
+                      />
+                      <div className="flex items-center justify-end">
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            void handleQuickUpdateSubmit();
+                          }}
+                          disabled={isQuickUpdateDisabled}
+                        >
+                          {isSavingQuickUpdate ? (
+                            <>
+                              <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                              Enregistrement...
+                            </>
+                          ) : (
+                            "Enregistrer"
                           )}
-                        </div>
-                        <div className="mt-2 grid gap-1 text-xs text-muted-foreground">
-                          <span>
-                            Multiplicateur :{" "}
-                            {ceeEntry.multiplierValue && ceeEntry.multiplierValue > 0
-                              ? `${formatDecimal(ceeEntry.multiplierValue)}${
-                                  ceeEntry.multiplierLabel ? ` (${ceeEntry.multiplierLabel})` : ""
-                                }`
-                              : ceeEntry.warnings.missingDynamicParams
-                                ? "Paramètres manquants"
-                                : "Non calculé"}
-                          </span>
-                          <span>
-                            Valorisation / unité :{" "}
-                            {ceeEntry.result
-                              ? formatCurrency(ceeEntry.result.valorisationPerUnitEur)
-                              : "Non calculée"}
-                          </span>
-                          <span>
-                            Valorisation totale : {labelBase ?? "Non calculée"}
-                          </span>
-                        </div>
-                        {entryHasWarnings ? (
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {ceeEntry.warnings.missingKwh ? (
-                              <Badge variant="outline" className="bg-amber-50 text-amber-700">
-                                kWh manquant pour ce bâtiment
-                              </Badge>
-                            ) : null}
-                            {ceeEntry.warnings.missingDynamicParams ? (
-                              <Badge variant="outline" className="bg-amber-50 text-amber-700">
-                                Paramètres dynamiques manquants
-                              </Badge>
-                            ) : null}
-                          </div>
-                        ) : null}
+                        </Button>
                       </div>
-                    );
-                  })}
-                  <div className="grid gap-2">
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2">
+                      {!projectUpdatesTableAvailable && projectUpdatesError ? (
+                        <span className="text-xs text-muted-foreground italic">
+                          Les mises à jour sont sauvegardées directement sur la fiche projet.
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          {projectUpdates.length > 0
+                            ? `${projectUpdates.length} mise${projectUpdates.length > 1 ? "s" : ""} enregistrée${
+                                projectUpdates.length > 1 ? "s" : ""
+                              }`
+                            : "Aucune mise à jour enregistrée"}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("journal")}
+                        className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                      >
+                        Voir tout l’historique
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-card bg-gradient-card border-0">
+                  <CardHeader>
+                    <CardTitle>Finances & planning</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4 text-sm">
                     <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-primary" />
-                      <span className="text-muted-foreground">Début estimé:</span>
+                      <Euro className="w-4 h-4 text-primary" />
+                      <span className="text-muted-foreground">Coût du chantier:</span>
                       <span className="font-medium">
-                        {project.date_debut_prevue
-                          ? new Date(project.date_debut_prevue).toLocaleDateString("fr-FR")
+                        {typeof projectCostValue === "number"
+                          ? formatCurrency(projectCostValue)
                           : "Non défini"}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-primary" />
-                      <span className="text-muted-foreground">Fin estimée:</span>
+                      <HandCoins className="w-4 h-4 text-emerald-600" />
+                      <span className="text-muted-foreground">Prime CEE:</span>
                       <span className="font-medium">
-                        {project.date_fin_prevue
-                          ? new Date(project.date_fin_prevue).toLocaleDateString("fr-FR")
+                        {typeof displayedPrimeValue === "number"
+                          ? formatCurrency(displayedPrimeValue)
                           : "Non définie"}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground">Créé le:</span>
-                      <span className="font-medium">
-                        {new Date(project.created_at).toLocaleDateString("fr-FR")}
+                      <HandCoins className="w-4 h-4 text-amber-600" />
+                      <span className="text-muted-foreground">Valorisation totale:</span>
+                      <span className="font-medium text-amber-600">
+                        {hasComputedCeeTotals
+                          ? `${formatCurrency(ceeTotals.totalValorisationEur)} (${formatDecimal(
+                              ceeTotals.totalValorisationMwh,
+                            )} MWh)`
+                          : "Non calculée"}
                       </span>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
+                    {nextAppointmentDetails ? (
+                      <div className="flex items-start gap-2">
+                        <Calendar className="w-4 h-4 text-primary mt-1" />
+                        <div className="space-y-1">
+                          <span className="text-sm text-muted-foreground">Prochain RDV:</span>
+                          <p className="text-sm font-medium leading-tight">
+                            {nextAppointmentDetails.formattedDate}
+                          </p>
+                          {nextAppointmentDetails.metadata ? (
+                            <p className="text-xs text-muted-foreground leading-tight">
+                              {nextAppointmentDetails.metadata}
+                            </p>
+                          ) : null}
+                          {nextAppointmentDetails.notes ? (
+                            <p className="text-xs text-muted-foreground italic whitespace-pre-line leading-tight">
+                              {nextAppointmentDetails.notes}
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-primary" />
+                        <span className="text-sm text-muted-foreground">Aucun RDV programmé</span>
+                      </div>
+                    )}
+                    {projectProducts.map((item, index) => {
+                      const entryId = item.id ?? item.product_id ?? `product-${index}`;
+                      const ceeEntry = ceeEntryMap[entryId];
+                      if (!ceeEntry) {
+                        return null;
+                      }
+
+                      const labelBase =
+                        typeof ceeEntry.result?.valorisationTotalEur === "number"
+                          ? formatCurrency(ceeEntry.result.valorisationTotalEur)
+                          : null;
+                      const entryHasWarnings =
+                        Boolean(ceeEntry.warnings.missingDynamicParams) ||
+                        Boolean(ceeEntry.warnings.missingKwh);
+
+                      return (
+                        <div
+                          key={entryId}
+                          className="rounded-lg border border-border/50 bg-background/60 p-3"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="text-sm font-medium text-foreground">
+                                {item.product?.name ?? "Produit"}
+                              </p>
+                              <p className="text-xs text-muted-foreground">{item.product?.code ?? "—"}</p>
+                            </div>
+                            {typeof item.quantity === "number" && (
+                              <Badge variant="outline">x{item.quantity}</Badge>
+                            )}
+                          </div>
+                          <div className="mt-2 grid gap-1 text-xs text-muted-foreground">
+                            <span>
+                              Multiplicateur :{" "}
+                              {ceeEntry.multiplierValue && ceeEntry.multiplierValue > 0
+                                ? `${formatDecimal(ceeEntry.multiplierValue)}${
+                                    ceeEntry.multiplierLabel ? ` (${ceeEntry.multiplierLabel})` : ""
+                                  }`
+                                : ceeEntry.warnings.missingDynamicParams
+                                  ? "Paramètres manquants"
+                                  : "Non calculé"}
+                            </span>
+                            <span>
+                              Valorisation / unité :{" "}
+                              {ceeEntry.result
+                                ? formatCurrency(ceeEntry.result.valorisationPerUnitEur)
+                                : "Non calculée"}
+                            </span>
+                            <span>
+                              Valorisation totale : {labelBase ?? "Non calculée"}
+                            </span>
+                          </div>
+                          {entryHasWarnings ? (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {ceeEntry.warnings.missingKwh ? (
+                                <Badge variant="outline" className="bg-amber-50 text-amber-700">
+                                  kWh manquant pour ce bâtiment
+                                </Badge>
+                              ) : null}
+                              {ceeEntry.warnings.missingDynamicParams ? (
+                                <Badge variant="outline" className="bg-amber-50 text-amber-700">
+                                  Paramètres dynamiques manquants
+                                </Badge>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                    <div className="grid gap-2">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-primary" />
+                        <span className="text-muted-foreground">Début estimé:</span>
+                        <span className="font-medium">
+                          {project.date_debut_prevue
+                            ? new Date(project.date_debut_prevue).toLocaleDateString("fr-FR")
+                            : "Non défini"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-primary" />
+                        <span className="text-muted-foreground">Fin estimée:</span>
+                        <span className="font-medium">
+                          {project.date_fin_prevue
+                            ? new Date(project.date_fin_prevue).toLocaleDateString("fr-FR")
+                            : "Non définie"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">Créé le:</span>
+                        <span className="font-medium">
+                          {new Date(project.created_at).toLocaleDateString("fr-FR")}
+                        </span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
 
             <Card className="shadow-card bg-gradient-card border-0">
@@ -2799,8 +3377,64 @@ const ProjectDetails = () => {
                 )}
               </CardContent>
             </Card>
-        </TabsContent>
-        <TabsContent value="chantiers" className="space-y-6">
+          </TabsContent>
+          <TabsContent value="journal" className="space-y-6">
+            <Card className="shadow-card border border-dashed border-primary/20">
+              <CardHeader>
+                <CardTitle>Journal des mises à jour</CardTitle>
+                <CardDescription>
+                  Retrouver l'ensemble des échanges, décisions et points de suivi enregistrés pour ce projet.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {projectUpdatesLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : fullHistoryItems.length > 0 ? (
+                  <ol className="space-y-4">
+                    {fullHistoryItems.map((entry) => {
+                      const formattedDate = formatDateTimeLabel(entry.createdAt);
+                      return (
+                        <li
+                          key={entry.id}
+                          className="rounded-xl border border-border/60 bg-background/80 p-4 shadow-sm"
+                        >
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-start justify-between gap-3">
+                              <p className="text-sm font-medium leading-relaxed whitespace-pre-line text-foreground">
+                                {entry.text}
+                              </p>
+                              {formattedDate ? (
+                                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                  {formattedDate}
+                                </span>
+                              ) : null}
+                            </div>
+                            {entry.status ? (
+                              <Badge variant="outline" className="w-fit bg-primary/10 text-primary">
+                                Statut : {entry.status}
+                              </Badge>
+                            ) : null}
+                            {entry.nextStep ? (
+                              <p className="text-xs text-muted-foreground">
+                                Prochaine étape : {entry.nextStep}
+                              </p>
+                            ) : null}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-border/60 bg-muted/20 p-6 text-center text-sm text-muted-foreground">
+                    Aucune mise à jour n'a encore été consignée pour ce projet.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+          <TabsContent value="chantiers" className="space-y-6">
           <Card className="shadow-card bg-gradient-card border-0">
             <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="space-y-1">
