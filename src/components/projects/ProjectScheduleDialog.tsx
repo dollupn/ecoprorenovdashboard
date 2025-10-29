@@ -159,7 +159,7 @@ export const ProjectScheduleDialog = ({ projectId, members, isLoadingMembers = f
         assignee_id: values.assigneeId || null,
         notes: values.notes?.trim() ? values.notes.trim() : null,
         created_by: user.id,
-      } satisfies Tables<"project_appointments">["Insert"];
+      };
 
       const { error } = await supabase.from("project_appointments").insert(payload);
       if (error) throw error;

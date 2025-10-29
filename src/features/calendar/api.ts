@@ -38,7 +38,7 @@ export type ScheduledAppointmentRecord = {
   source: "crm" | "google";
 };
 
-const isRecord = (value: LeadRow["extra_fields"]): value is ExtraFieldsRecord =>
+const isRecord = (value: unknown): value is ExtraFieldsRecord =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
 const getString = (value: unknown): string | null => {
@@ -115,7 +115,7 @@ const deriveAppointmentType = (
 };
 
 const deriveLocation = (
-  lead: LeadRow,
+  lead: { address: string; postal_code: string; city: string },
   extra: ExtraFieldsRecord | null,
 ): string | null => {
   const extraLocation = getString(
@@ -181,7 +181,7 @@ export const fetchScheduledAppointments = async (
     await Promise.all([
       supabase
         .from("appointment_types")
-        .select("id, name, is_default")
+        .select("*")
         .eq("org_id", orgId)
         .eq("is_active", true),
       leadIds.length > 0

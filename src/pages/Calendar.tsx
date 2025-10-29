@@ -156,11 +156,11 @@ const mapAppointmentsToEvents = (
 
       const location =
         record.location ??
-        [record.address, record.postalCode, record.city]
+        ([record.address, record.postalCode, record.city]
           .map((value) => value?.trim())
           .filter((value): value is string => Boolean(value))
           .join(" ") ||
-        "Adresse à confirmer";
+        "Adresse à confirmer");
 
       const assignedTo = record.assignedTo ?? record.project?.assignedTo ?? "Non attribué";
 
@@ -184,7 +184,7 @@ const mapAppointmentsToEvents = (
         notes,
       } satisfies CalendarEvent;
     })
-    .filter((event): event is CalendarEvent => event !== null);
+    .filter((event) => event !== null) as CalendarEvent[];
 
 const sourceLabels: Record<EventSource, { label: string; className: string }> = {
   crm: { label: "CRM", className: "bg-primary/10 text-primary border-primary/20" },
