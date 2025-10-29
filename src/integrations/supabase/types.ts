@@ -721,6 +721,7 @@ export type Database = {
       }
       projects: {
         Row: {
+          archived_at: string | null
           address: string | null
           assigned_to: string
           building_type: string | null
@@ -762,6 +763,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          archived_at?: string | null
           address?: string | null
           assigned_to: string
           building_type?: string | null
@@ -803,6 +805,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          archived_at?: string | null
           address?: string | null
           assigned_to?: string
           building_type?: string | null
