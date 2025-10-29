@@ -24,9 +24,13 @@ const ProjectChantiers = () => {
     queryFn: async () => {
       if (!user) return [] as string[];
 
+      const selectColumns = isAdmin
+        ? "project_id"
+        : "project_id, projects!inner(user_id)";
+
       let query = supabase
         .from("sites")
-        .select("project_id")
+        .select(selectColumns)
         .in("status", CHANTIER_STATUSES);
 
       if (currentOrgId) {
@@ -34,7 +38,7 @@ const ProjectChantiers = () => {
       }
 
       if (!isAdmin) {
-        query = query.eq("user_id", user.id);
+        query = query.eq("projects.user_id", user.id);
       }
 
       const { data, error } = await query;
