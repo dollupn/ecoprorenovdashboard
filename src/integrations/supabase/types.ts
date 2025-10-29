@@ -226,6 +226,7 @@ export type Database = {
       leads: {
         Row: {
           address: string
+          appointment_type_id: string | null
           assigned_to: string | null
           city: string
           commentaire: string | null
@@ -254,6 +255,7 @@ export type Database = {
         }
         Insert: {
           address?: string
+          appointment_type_id?: string | null
           assigned_to?: string | null
           city: string
           commentaire?: string | null
@@ -282,6 +284,7 @@ export type Database = {
         }
         Update: {
           address?: string
+          appointment_type_id?: string | null
           assigned_to?: string | null
           city?: string
           commentaire?: string | null
@@ -309,6 +312,13 @@ export type Database = {
           utm_source?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "leads_appointment_type_id_fkey"
+            columns: ["appointment_type_id"]
+            isOneToOne: false
+            referencedRelation: "appointment_types"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "leads_org_id_fkey"
             columns: ["org_id"]
@@ -735,6 +745,7 @@ export type Database = {
           phone: string | null
           postal_code: string
           prime_cee: number | null
+          prime_cee_total_cents: number | null
           product_name: string
           project_ref: string
           same_address: boolean | null
@@ -775,6 +786,7 @@ export type Database = {
           phone?: string | null
           postal_code: string
           prime_cee?: number | null
+          prime_cee_total_cents?: number | null
           product_name: string
           project_ref: string
           same_address?: boolean | null
@@ -815,6 +827,7 @@ export type Database = {
           phone?: string | null
           postal_code?: string
           prime_cee?: number | null
+          prime_cee_total_cents?: number | null
           product_name?: string
           project_ref?: string
           same_address?: boolean | null
@@ -951,6 +964,8 @@ export type Database = {
           revenue: number | null
           site_ref: string
           status: string
+          subcontractor_id: string | null
+          subcontractor_payment_confirmed: boolean
           surface_facturee: number | null
           team_members: string[] | null
           updated_at: string
@@ -984,6 +999,8 @@ export type Database = {
           revenue?: number | null
           site_ref: string
           status?: string
+          subcontractor_id?: string | null
+          subcontractor_payment_confirmed?: boolean
           surface_facturee?: number | null
           team_members?: string[] | null
           updated_at?: string
@@ -1017,6 +1034,8 @@ export type Database = {
           revenue?: number | null
           site_ref?: string
           status?: string
+          subcontractor_id?: string | null
+          subcontractor_payment_confirmed?: boolean
           surface_facturee?: number | null
           team_members?: string[] | null
           updated_at?: string
@@ -1038,6 +1057,13 @@ export type Database = {
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "sites_subcontractor_id_fkey"
+            columns: ["subcontractor_id"]
+            isOneToOne: false
+            referencedRelation: "subcontractors"
+            referencedColumns: ["id"]
+          },
         ]
       }
       subcontractors: {
@@ -1046,8 +1072,10 @@ export type Database = {
           description: string | null
           id: string
           is_active: boolean
+          is_default: boolean
           name: string
           org_id: string
+          pricing_details: string | null
           updated_at: string
         }
         Insert: {
@@ -1055,8 +1083,10 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean
+          is_default?: boolean
           name: string
           org_id: string
+          pricing_details?: string | null
           updated_at?: string
         }
         Update: {
@@ -1064,8 +1094,10 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean
+          is_default?: boolean
           name?: string
           org_id?: string
+          pricing_details?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -1127,6 +1159,7 @@ export type Database = {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
       }
+      lookup_user_id_by_email: { Args: { email: string }; Returns: string }
     }
     Enums: {
       app_role: "admin" | "commercial" | "user"
