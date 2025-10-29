@@ -225,6 +225,7 @@ export type Database = {
       }
       leads: {
         Row: {
+          appointment_type_id: string | null
           address: string
           assigned_to: string | null
           city: string
@@ -253,6 +254,7 @@ export type Database = {
           utm_source: string | null
         }
         Insert: {
+          appointment_type_id?: string | null
           address?: string
           assigned_to?: string | null
           city: string
@@ -281,6 +283,7 @@ export type Database = {
           utm_source?: string | null
         }
         Update: {
+          appointment_type_id?: string | null
           address?: string
           assigned_to?: string | null
           city?: string
@@ -309,6 +312,13 @@ export type Database = {
           utm_source?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "leads_appointment_type_id_fkey"
+            columns: ["appointment_type_id"]
+            isOneToOne: false
+            referencedRelation: "appointment_types"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "leads_org_id_fkey"
             columns: ["org_id"]

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,14 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { supabase } from "@/integrations/supabase/client";
+import { useAppointmentTypes } from "@/features/leads/api";
+import type { Tables } from "@/integrations/supabase/types";
 import { Plus, Trash2, Calendar, Check, Mail } from "lucide-react";
 
-interface AppointmentType {
-  id: string;
-  name: string;
-  is_default: boolean;
-  email_template_id: string | null;
-}
+type AppointmentType = Tables<"appointment_types">;
 
 const EMAIL_TEMPLATES = [
   { id: "confirmation", label: "Email de confirmation" },
@@ -41,22 +38,7 @@ export function AppointmentSettingsPanel() {
   const [newTypeEmailTemplate, setNewTypeEmailTemplate] = useState<string>("");
   const [isInitializing, setIsInitializing] = useState(false);
 
-  const { data: appointmentTypes = [], isLoading } = useQuery({
-    queryKey: ["appointmentTypes", currentOrgId],
-    queryFn: async () => {
-      if (!currentOrgId) return [];
-      const { data, error } = await supabase
-        .from("appointment_types")
-        .select("*")
-        .eq("org_id", currentOrgId)
-        .eq("is_active", true)
-        .order("is_default", { ascending: false })
-        .order("name");
-      if (error) throw error;
-      return data as AppointmentType[];
-    },
-    enabled: !!currentOrgId,
-  });
+  const { data: appointmentTypes = [], isLoading } = useAppointmentTypes(currentOrgId);
 
   useEffect(() => {
     const initializeDefaults = async () => {

@@ -28,6 +28,33 @@ const sanitizeSearch = (value: string) => value.replace(/[%_]/g, (match) => `\\$
 
 export type LeadProductTypeRecord = Tables<"lead_product_types">;
 
+export type AppointmentTypeRecord = Tables<"appointment_types">;
+
+export const fetchAppointmentTypes = async (orgId: string) => {
+  const { data, error } = await supabase
+    .from("appointment_types")
+    .select("*")
+    .eq("org_id", orgId)
+    .eq("is_active", true)
+    .order("is_default", { ascending: false })
+    .order("name", { ascending: true });
+
+  if (error) throw error;
+
+  return (data ?? []) as AppointmentTypeRecord[];
+};
+
+export const useAppointmentTypes = (orgId: string | null) =>
+  useQuery<AppointmentTypeRecord[], Error>({
+    queryKey: ["appointmentTypes", orgId],
+    enabled: Boolean(orgId),
+    queryFn: async () => {
+      if (!orgId) return [];
+      return fetchAppointmentTypes(orgId);
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
 export const getLeadProductTypes = async (orgId: string) => {
   const { data, error } = await supabase
     .from("lead_product_types")
