@@ -1276,58 +1276,6 @@ const ProjectDetails = () => {
     [project?.project_products]
   );
 
-  const isInitialLoading = isLoading || membersLoading;
-
-  if (isInitialLoading) {
-    return (
-      <Layout>
-        <div className="flex min-h-[60vh] items-center justify-center">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-      </Layout>
-    );
-  }
-
-  if (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : "Une erreur inattendue est survenue.";
-
-    return (
-      <Layout>
-        <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
-          <AlertTriangle className="h-10 w-10 text-destructive" />
-          <div className="space-y-2">
-            <h1 className="text-xl font-semibold">Impossible de charger le projet</h1>
-            <p className="text-sm text-muted-foreground">{errorMessage}</p>
-          </div>
-          <div className="flex flex-wrap justify-center gap-2">
-            <Button variant="outline" onClick={() => navigate(-1)}>
-              Retour
-            </Button>
-            <Button onClick={() => refetch()}>Réessayer</Button>
-          </div>
-        </div>
-      </Layout>
-    );
-  }
-
-  if (!project) {
-    return (
-      <Layout>
-        <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
-          <FolderOpen className="h-10 w-10 text-muted-foreground" />
-          <div className="space-y-2">
-            <h1 className="text-xl font-semibold">Projet introuvable</h1>
-            <p className="text-sm text-muted-foreground">
-              Le projet demandé n'existe plus ou vous n'y avez pas accès.
-            </p>
-          </div>
-          <Button onClick={() => navigate("/projects")}>Retour aux projets</Button>
-        </div>
-      </Layout>
-    );
-  }
-
   const projectSurfaceFacturee = useMemo(() => {
     if (!project?.project_products) return 0;
 
@@ -1586,6 +1534,58 @@ const ProjectDetails = () => {
     () => ceeEntries.some((entry) => entry.result !== null),
     [ceeEntries],
   );
+
+  const isInitialLoading = isLoading || membersLoading;
+
+  if (isInitialLoading) {
+    return (
+      <Layout>
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      </Layout>
+    );
+  }
+
+  if (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Une erreur inattendue est survenue.";
+
+    return (
+      <Layout>
+        <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
+          <AlertTriangle className="h-10 w-10 text-destructive" />
+          <div className="space-y-2">
+            <h1 className="text-xl font-semibold">Impossible de charger le projet</h1>
+            <p className="text-sm text-muted-foreground">{errorMessage}</p>
+          </div>
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button variant="outline" onClick={() => navigate(-1)}>
+              Retour
+            </Button>
+            <Button onClick={() => refetch()}>Réessayer</Button>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (!project) {
+    return (
+      <Layout>
+        <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
+          <FolderOpen className="h-10 w-10 text-muted-foreground" />
+          <div className="space-y-2">
+            <h1 className="text-xl font-semibold">Projet introuvable</h1>
+            <p className="text-sm text-muted-foreground">
+              Le projet demandé n'existe plus ou vous n'y avez pas accès.
+            </p>
+          </div>
+          <Button onClick={() => navigate("/projects")}>Retour aux projets</Button>
+        </div>
+      </Layout>
+    );
+  }
 
   const statusConfig = projectStatuses.find((status) => status?.value === project.status);
   const badgeStyle = getProjectStatusBadgeStyle(statusConfig?.color);
