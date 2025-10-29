@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Card,
   CardContent,
@@ -12,6 +12,7 @@ import { Calendar as DayPicker } from "@/components/ui/calendar";
 import { Layout } from "@/components/layout/Layout";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertTriangle,
   CalendarCheck,
@@ -25,18 +26,19 @@ import {
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import {
   addDays,
   format,
   formatDistanceToNow,
   isSameDay,
   isWithinInterval,
-  setHours,
-  setMinutes,
   startOfDay,
   subMinutes,
 } from "date-fns";
 import { fr } from "date-fns/locale";
+import { fetchScheduledAppointments, type ScheduledAppointmentRecord } from "@/features/calendar/api";
+import { useOrg } from "@/features/organizations/OrgContext";
 
 type EventStatus = "confirmed" | "pending" | "reschedule";
 type EventSource = "crm" | "google";
@@ -45,6 +47,7 @@ type CalendarEvent = {
   id: string;
   title: string;
   type: string;
+  typeColor: string;
   start: Date;
   end: Date;
   location: string;
@@ -53,135 +56,135 @@ type CalendarEvent = {
   source: EventSource;
   notes?: string;
 };
+const DEFAULT_APPOINTMENT_TYPE_COLOR = "bg-slate-500/10 text-slate-600 border-slate-200";
 
-const baseDate = startOfDay(new Date());
-
-const createDate = (daysFromToday: number, hour: number, minute = 0) =>
-  setMinutes(setHours(addDays(baseDate, daysFromToday), hour), minute);
-
-const calendarEvents: CalendarEvent[] = [
-  {
-    id: "evt-1",
-    title: "Visite technique – Maison Dupont",
-    type: "Visite technique",
-    start: createDate(0, 9),
-    end: createDate(0, 10, 30),
-    location: "Lyon 3ᵉ",
-    assignedTo: "Marc Technicien",
-    status: "confirmed",
-    source: "crm",
-    notes: "Vérifier l'éligibilité des combles et prendre des photos." 
-  },
-  {
-    id: "evt-2",
-    title: "Présentation devis – Société Martin",
-    type: "Présentation devis",
-    start: createDate(0, 14),
-    end: createDate(0, 15),
-    location: "Visio Google Meet",
-    assignedTo: "Sophie Commerciale",
-    status: "confirmed",
-    source: "google",
-    notes: "Envoyer le PDF finalisé au client après la réunion."
-  },
-  {
-    id: "evt-3",
-    title: "Chantier PAC – Famille Lopez",
-    type: "Installation",
-    start: createDate(1, 8, 30),
-    end: createDate(1, 12),
-    location: "Bordeaux",
-    assignedTo: "Équipe technique",
-    status: "pending",
-    source: "crm",
-    notes: "Prévoir un complément de matériel pour la mise en service."
-  },
-  {
-    id: "evt-4",
-    title: "Relance administrative – Dossier PrimeRénov",
-    type: "Relance",
-    start: createDate(1, 16),
-    end: createDate(1, 16, 30),
-    location: "Téléphone",
-    assignedTo: "Julie Back-office",
-    status: "confirmed",
-    source: "google",
-    notes: "Vérifier les justificatifs manquants dans le portail client."
-  },
-  {
-    id: "evt-5",
-    title: "Réunion équipe commerciale",
-    type: "Interne",
-    start: createDate(2, 11),
-    end: createDate(2, 12),
-    location: "Siège – Salle 2",
-    assignedTo: "Équipe commerciale",
-    status: "confirmed",
-    source: "google",
-    notes: "Focus sur la performance du mois et préparation des campagnes."
-  },
-  {
-    id: "evt-6",
-    title: "Visite de contrôle – Chantier Durand",
-    type: "Visite technique",
-    start: createDate(3, 15, 30),
-    end: createDate(3, 16, 30),
-    location: "Grenoble",
-    assignedTo: "Claire Conductrice",
-    status: "confirmed",
-    source: "crm",
-    notes: "S'assurer de la conformité de l'isolation extérieure."
-  },
-  {
-    id: "evt-7",
-    title: "Pose panneaux solaires – Site Lambert",
-    type: "Installation",
-    start: createDate(4, 8),
-    end: createDate(4, 17),
-    location: "Valence",
-    assignedTo: "Équipe solaire",
-    status: "pending",
-    source: "crm",
-    notes: "Coordonner avec le gestionnaire de réseau pour la mise en service."
-  },
-  {
-    id: "evt-8",
-    title: "Visio suivi chantier – Résidence Bellevue",
-    type: "Suivi projet",
-    start: createDate(5, 9, 30),
-    end: createDate(5, 10, 15),
-    location: "Microsoft Teams",
-    assignedTo: "Sophie Commerciale",
-    status: "confirmed",
-    source: "google",
-    notes: "Valider l'avancement du planning et les points bloquants."
-  },
-  {
-    id: "evt-9",
-    title: "RDV à replanifier – Isolation combles Rossi",
-    type: "Visite technique",
-    start: createDate(-1, 10),
-    end: createDate(-1, 11),
-    location: "Annecy",
-    assignedTo: "Nicolas Commercial",
-    status: "reschedule",
-    source: "crm",
-    notes: "Client absent. Proposer un créneau avant la fin de semaine."
-  },
-];
-
-const eventDates = Array.from(
-  new Set(calendarEvents.map((event) => startOfDay(event.start).getTime())),
-).map((timestamp) => new Date(timestamp));
-
-const typeStyles: Record<string, string> = {
+const APPOINTMENT_TYPE_COLORS: Record<string, string> = {
   "Visite technique": "bg-blue-500/10 text-blue-600 border-blue-200",
   Installation: "bg-emerald-500/10 text-emerald-600 border-emerald-200",
   Relance: "bg-amber-500/10 text-amber-600 border-amber-200",
   "Présentation devis": "bg-purple-500/10 text-purple-600 border-purple-200",
-  Interne: "bg-slate-500/10 text-slate-600 border-slate-200",
+  Interne: DEFAULT_APPOINTMENT_TYPE_COLOR,
   "Suivi projet": "bg-cyan-500/10 text-cyan-600 border-cyan-200",
+  "Pré-visite": "bg-indigo-500/10 text-indigo-600 border-indigo-200",
+  "Signature devis": "bg-pink-500/10 text-pink-600 border-pink-200",
+  "Signature AH": "bg-rose-500/10 text-rose-600 border-rose-200",
+  Travaux: "bg-orange-500/10 text-orange-600 border-orange-200",
 };
+
+const DEFAULT_EVENT_DURATION_MINUTES = 60;
+
+const parseDateTime = (dateStr: string | null, timeStr: string | null): Date | null => {
+  if (!dateStr) return null;
+
+  const [yearStr, monthStr, dayStr] = dateStr.split("-");
+  const year = Number.parseInt(yearStr ?? "", 10);
+  const month = Number.parseInt(monthStr ?? "", 10) - 1;
+  const day = Number.parseInt(dayStr ?? "", 10);
+
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return null;
+  }
+
+  let hours = 0;
+  let minutes = 0;
+
+  if (timeStr) {
+    const [hoursStr, minutesStr] = timeStr.split(":");
+    const parsedHours = Number.parseInt(hoursStr ?? "", 10);
+    const parsedMinutes = Number.parseInt(minutesStr ?? "", 10);
+
+    if (Number.isFinite(parsedHours)) {
+      hours = parsedHours;
+    }
+
+    if (Number.isFinite(parsedMinutes)) {
+      minutes = parsedMinutes;
+    }
+  }
+
+  const result = new Date(year, month, day, hours, minutes, 0, 0);
+
+  return Number.isNaN(result.getTime()) ? null : result;
+};
+
+const getAppointmentTypeColor = (label: string | null | undefined) => {
+  if (!label) return DEFAULT_APPOINTMENT_TYPE_COLOR;
+  return APPOINTMENT_TYPE_COLORS[label] ?? DEFAULT_APPOINTMENT_TYPE_COLOR;
+};
+
+const determineEventStatus = (leadStatus: string | null | undefined): EventStatus => {
+  if (!leadStatus) return "confirmed";
+
+  const normalized = leadStatus.toLowerCase();
+
+  if (normalized.includes("replan") || normalized.includes("report") || normalized.includes("annul")) {
+    return "reschedule";
+  }
+
+  if (
+    normalized.includes("program") ||
+    normalized.includes("planifier") ||
+    normalized.includes("rappel") ||
+    normalized.includes("attente") ||
+    normalized.includes("relance") ||
+    normalized.includes("contact")
+  ) {
+    return "pending";
+  }
+
+  return "confirmed";
+};
+
+const mapAppointmentsToEvents = (
+  records: ScheduledAppointmentRecord[],
+): CalendarEvent[] =>
+  records
+    .map((record) => {
+      const start = parseDateTime(record.date, record.time);
+      if (!start) return null;
+
+      const durationMinutes = record.durationMinutes && record.durationMinutes > 0
+        ? record.durationMinutes
+        : DEFAULT_EVENT_DURATION_MINUTES;
+      const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
+
+      const typeLabel = record.appointmentType?.name ?? "Rendez-vous";
+      const typeColor = getAppointmentTypeColor(typeLabel);
+
+      const titleSegments = [typeLabel, record.fullName].filter(Boolean);
+      const title = titleSegments.length > 0 ? titleSegments.join(" – ") : record.fullName ?? "Rendez-vous";
+
+      const location =
+        record.location ??
+        [record.address, record.postalCode, record.city]
+          .map((value) => value?.trim())
+          .filter((value): value is string => Boolean(value))
+          .join(" ") ||
+        "Adresse à confirmer";
+
+      const assignedTo = record.assignedTo ?? record.project?.assignedTo ?? "Non attribué";
+
+      const notesParts: string[] = [];
+      if (record.productName) notesParts.push(`Produit: ${record.productName}`);
+      if (record.project?.projectRef) notesParts.push(`Projet ${record.project.projectRef}`);
+      if (record.commentaire) notesParts.push(record.commentaire);
+      const notes = notesParts.length > 0 ? notesParts.join(" · ") : undefined;
+
+      return {
+        id: record.id,
+        title,
+        type: typeLabel,
+        typeColor,
+        start,
+        end,
+        location,
+        assignedTo,
+        status: determineEventStatus(record.status),
+        source: record.source,
+        notes,
+      } satisfies CalendarEvent;
+    })
+    .filter((event): event is CalendarEvent => event !== null);
 
 const sourceLabels: Record<EventSource, { label: string; className: string }> = {
   crm: { label: "CRM", className: "bg-primary/10 text-primary border-primary/20" },
@@ -219,18 +222,59 @@ const googleIntegration = {
 const capitalize = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
 
 const CalendarPage = () => {
-  const sortedEvents = useMemo(
-    () => [...calendarEvents].sort((a, b) => a.start.getTime() - b.start.getTime()),
-    [],
+  const { currentOrgId } = useOrg();
+
+  const {
+    data: appointments = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery<ScheduledAppointmentRecord[], Error>({
+    queryKey: ["calendar-events", currentOrgId],
+    enabled: Boolean(currentOrgId),
+    queryFn: async () => {
+      if (!currentOrgId) return [];
+      return fetchScheduledAppointments(currentOrgId);
+    },
+    staleTime: 60 * 1000,
+  });
+
+  const events = useMemo(
+    () => mapAppointmentsToEvents(appointments),
+    [appointments],
   );
 
-  const [selectedDate, setSelectedDate] = useState<Date>(sortedEvents[0]?.start ?? new Date());
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [hasInitializedSelection, setHasInitializedSelection] = useState(false);
+
+  useEffect(() => {
+    setSelectedDate(new Date());
+    setHasInitializedSelection(false);
+  }, [currentOrgId]);
+
+  useEffect(() => {
+    if (!hasInitializedSelection && events.length > 0) {
+      setSelectedDate(events[0].start);
+      setHasInitializedSelection(true);
+    }
+  }, [events, hasInitializedSelection]);
+
+  const sortedEvents = useMemo(
+    () => [...events].sort((a, b) => a.start.getTime() - b.start.getTime()),
+    [events],
+  );
+
+  const eventDates = useMemo(
+    () =>
+      Array.from(
+        new Set(sortedEvents.map((event) => startOfDay(event.start).getTime())),
+      ).map((timestamp) => new Date(timestamp)),
+    [sortedEvents],
+  );
 
   const eventsForSelectedDate = useMemo(
-    () =>
-      sortedEvents.filter((event) =>
-        isSameDay(event.start, selectedDate),
-      ),
+    () => sortedEvents.filter((event) => isSameDay(event.start, selectedDate)),
     [selectedDate, sortedEvents],
   );
 
@@ -319,6 +363,9 @@ const CalendarPage = () => {
     },
   ];
 
+  const showEmptyState = !isLoading && sortedEvents.length === 0;
+  const noOrgSelected = !currentOrgId;
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -343,6 +390,24 @@ const CalendarPage = () => {
           </div>
         </div>
 
+        {isError && (
+          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold">Impossible de charger les rendez-vous</p>
+                <p className="text-xs text-destructive/80">
+                  {error?.message ?? "Une erreur inattendue est survenue."}
+                </p>
+              </div>
+            </div>
+            <Button size="sm" variant="outline" className="gap-2" onClick={() => refetch()}>
+              <RefreshCw className="h-4 w-4" />
+              Réessayer
+            </Button>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           {statCards.map((stat) => {
             const Icon = stat.icon;
@@ -352,8 +417,17 @@ const CalendarPage = () => {
                   <div className="flex items-start justify-between">
                     <div>
                       <p className="text-sm text-muted-foreground">{stat.label}</p>
-                      <p className="text-2xl font-semibold mt-2">{stat.value}</p>
-                      <p className="text-xs text-muted-foreground mt-1">{stat.description}</p>
+                      {isLoading ? (
+                        <>
+                          <Skeleton className="mt-2 h-7 w-20" />
+                          <Skeleton className="mt-2 h-3 w-32" />
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-2xl font-semibold mt-2">{stat.value}</p>
+                          <p className="text-xs text-muted-foreground mt-1">{stat.description}</p>
+                        </>
+                      )}
                     </div>
                     <div className="p-3 rounded-full bg-primary/10 text-primary">
                       <Icon className="h-5 w-5" />
@@ -398,24 +472,39 @@ const CalendarPage = () => {
                         Rendez-vous du {capitalize(format(selectedDate, "EEEE d MMMM", { locale: fr }))}
                       </h3>
                       <p className="text-sm text-muted-foreground">
-                        {eventsForSelectedDate.length > 0
-                          ? "Organisez la journée de vos équipes et partagez les informations clés."
-                          : "Aucun rendez-vous n'est planifié pour cette date pour le moment."}
+                        {isLoading
+                          ? "Chargement des rendez-vous en cours..."
+                          : eventsForSelectedDate.length > 0
+                            ? "Organisez la journée de vos équipes et partagez les informations clés."
+                            : noOrgSelected
+                              ? "Sélectionnez une organisation pour afficher le planning."
+                              : "Aucun rendez-vous n'est planifié pour cette date pour le moment."}
                       </p>
                     </div>
                     <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20">
-                      {eventsForSelectedDate.length} {eventsForSelectedDate.length > 1 ? "événements" : "événement"}
+                      {isLoading
+                        ? "Chargement..."
+                        : `${eventsForSelectedDate.length} ${eventsForSelectedDate.length > 1 ? "événements" : "événement"}`}
                     </Badge>
                   </div>
 
-                  {eventsForSelectedDate.length === 0 ? (
+                  {isLoading ? (
+                    <div className="space-y-4">
+                      {Array.from({ length: 3 }).map((_, index) => (
+                        <Skeleton key={index} className="h-28 w-full rounded-2xl" />
+                      ))}
+                    </div>
+                  ) : eventsForSelectedDate.length === 0 ? (
                     <div className="border border-dashed border-muted-foreground/30 rounded-2xl p-8 text-center text-muted-foreground">
-                      Sélectionnez une autre date ou créez un nouveau rendez-vous depuis un lead, un projet ou directement dans Google Calendar.
+                      {noOrgSelected
+                        ? "Sélectionnez une organisation pour visualiser les rendez-vous planifiés."
+                        : "Sélectionnez une autre date ou créez un nouveau rendez-vous depuis un lead, un projet ou directement dans Google Calendar."}
                     </div>
                   ) : (
                     <div className="space-y-4">
                       {eventsForSelectedDate.map((event) => {
                         const StatusIcon = statusConfig[event.status].icon;
+                        const isPlaceholderLocation = event.location === "Adresse à confirmer";
                         return (
                           <div
                             key={event.id}
@@ -430,10 +519,7 @@ const CalendarPage = () => {
                                   {event.title}
                                 </h4>
                               </div>
-                              <Badge
-                                variant="outline"
-                                className={typeStyles[event.type] ?? "bg-muted text-foreground"}
-                              >
+                              <Badge variant="outline" className={event.typeColor}>
                                 {event.type}
                               </Badge>
                             </div>
@@ -443,7 +529,14 @@ const CalendarPage = () => {
                                 variant="ghost"
                                 size="sm"
                                 className="h-auto p-0 inline-flex items-center gap-1.5 hover:text-primary"
-                                onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}`, '_blank')}
+                                disabled={isPlaceholderLocation}
+                                onClick={() => {
+                                  if (isPlaceholderLocation) return;
+                                  window.open(
+                                    `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}`,
+                                    "_blank",
+                                  );
+                                }}
                               >
                                 <MapPin className="h-4 w-4" />
                                 {event.location}
@@ -494,47 +587,58 @@ const CalendarPage = () => {
               </CardHeader>
               <CardContent className="pt-6">
                 <ScrollArea className="h-[360px]">
-                  <div className="space-y-4 pr-2">
-                    {upcomingEvents.map((event) => (
-                      <div
-                        key={event.id}
-                        className="rounded-xl border bg-background/80 p-4 shadow-sm space-y-3"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                              {capitalize(format(event.start, "EEEE d MMMM", { locale: fr }))}
-                            </p>
-                            <h4 className="text-sm font-semibold text-foreground mt-1">
-                              {event.title}
-                            </h4>
+                  {isLoading ? (
+                    <div className="space-y-4 pr-2">
+                      {Array.from({ length: 4 }).map((_, index) => (
+                        <Skeleton key={index} className="h-28 w-full rounded-xl" />
+                      ))}
+                    </div>
+                  ) : upcomingEvents.length === 0 ? (
+                    <div className="border border-dashed border-muted-foreground/30 rounded-2xl p-6 text-center text-sm text-muted-foreground">
+                      {showEmptyState
+                        ? "Aucun rendez-vous planifié n'est disponible pour le moment."
+                        : "Aucun rendez-vous à venir."}
+                    </div>
+                  ) : (
+                    <div className="space-y-4 pr-2">
+                      {upcomingEvents.map((event) => (
+                        <div
+                          key={event.id}
+                          className="rounded-xl border bg-background/80 p-4 shadow-sm space-y-3"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-xs text-muted-foreground uppercase tracking-wide">
+                                {capitalize(format(event.start, "EEEE d MMMM", { locale: fr }))}
+                              </p>
+                              <h4 className="text-sm font-semibold text-foreground mt-1">
+                                {event.title}
+                              </h4>
+                            </div>
+                            <Badge variant="outline" className={event.typeColor}>
+                              {event.type}
+                            </Badge>
                           </div>
-                          <Badge
-                            variant="outline"
-                            className={typeStyles[event.type] ?? "bg-muted text-foreground"}
-                          >
-                            {event.type}
-                          </Badge>
+                          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                            <span className="inline-flex items-center gap-1.5">
+                              <Clock className="h-4 w-4" />
+                              {format(event.start, "HH:mm", { locale: fr })} – {format(event.end, "HH:mm", { locale: fr })}
+                            </span>
+                            <span className="inline-flex items-center gap-1.5">
+                              <MapPin className="h-4 w-4" />
+                              {event.location}
+                            </span>
+                            <Badge
+                              variant="outline"
+                              className={`${sourceLabels[event.source].className} px-2 py-0`}
+                            >
+                              {sourceLabels[event.source].label}
+                            </Badge>
+                          </div>
                         </div>
-                        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                          <span className="inline-flex items-center gap-1.5">
-                            <Clock className="h-4 w-4" />
-                            {format(event.start, "HH:mm", { locale: fr })} – {format(event.end, "HH:mm", { locale: fr })}
-                          </span>
-                          <span className="inline-flex items-center gap-1.5">
-                            <MapPin className="h-4 w-4" />
-                            {event.location}
-                          </span>
-                          <Badge
-                            variant="outline"
-                            className={sourceLabels[event.source].className + " px-2 py-0"}
-                          >
-                            {sourceLabels[event.source].label}
-                          </Badge>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </ScrollArea>
               </CardContent>
             </Card>
@@ -623,7 +727,8 @@ const CalendarPage = () => {
                 <Separator />
 
                 <p className="text-xs text-muted-foreground">
-                  Astuce : utilisez les tags de projet dans EcoProRenov pour filtrer automatiquement les événements publiés vers vos calendriers Google (commerciaux, techniciens, poseurs…).
+                  Astuce : utilisez les tags de projet dans EcoProRenov pour filtrer automatiquement les événements publiés vers
+                  vos calendriers Google (commerciaux, techniciens, poseurs…).
                 </p>
               </CardContent>
             </Card>
