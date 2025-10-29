@@ -114,6 +114,13 @@ type ProjectWithRelations = Project & {
   delegate?: Pick<Tables<"delegates">, "id" | "name" | "price_eur_per_mwh"> | null;
 };
 
+type ProjectsProps = {
+  title?: string;
+  description?: string;
+  allowedProjectIds?: string[] | null;
+  isRestrictionLoading?: boolean;
+};
+
 // Show all products except those whose code starts with "ECO"
 const getDisplayedProducts = (projectProducts?: ProjectProduct[]) =>
   (projectProducts ?? []).filter((item) => {
@@ -253,7 +260,12 @@ const DEFAULT_CATEGORY_METADATA = {
 const isUuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim());
 
-const Projects = () => {
+const Projects = ({
+  title = "Gestion des Projets",
+  description = "Suivi et gestion de vos projets de rénovation énergétique",
+  allowedProjectIds,
+  isRestrictionLoading = false,
+}: ProjectsProps = {}) => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
@@ -261,6 +273,25 @@ const Projects = () => {
   const { data: members = [], isLoading: membersLoading } = useMembers(currentOrgId);
   const projectStatuses = useProjectStatuses();
   const { primeBonification } = useOrganizationPrimeSettings();
+  const restrictionNotReady = allowedProjectIds === null;
+  const normalizedAllowedProjectIds = useMemo(() => {
+    if (!Array.isArray(allowedProjectIds)) {
+      return null;
+    }
+
+    const uniqueIds = new Set<string>();
+    allowedProjectIds.forEach((id) => {
+      if (typeof id === "string") {
+        const trimmed = id.trim();
+        if (trimmed.length > 0) {
+          uniqueIds.add(trimmed);
+        }
+      }
+    });
+
+    return Array.from(uniqueIds).sort();
+  }, [allowedProjectIds]);
+  const hasRestriction = Array.isArray(allowedProjectIds);
   const [searchTerm, setSearchTerm] = useState("");
   const [assignedFilter, setAssignedFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilterValue>("all");
@@ -329,9 +360,19 @@ const Projects = () => {
   }, [memberNameById]);
 
   const { data: projects = [], isLoading, refetch } = useQuery<ProjectWithRelations[]>({
-    queryKey: ["projects", user?.id, currentOrgId, isAdmin],
+    queryKey: [
+      "projects",
+      user?.id,
+      currentOrgId,
+      isAdmin,
+      hasRestriction ? normalizedAllowedProjectIds : "all",
+    ],
     queryFn: async () => {
       if (!user) return [];
+
+      if (hasRestriction && (normalizedAllowedProjectIds?.length ?? 0) === 0) {
+        return [];
+      }
 
       let query = supabase
         .from("projects")
@@ -346,6 +387,10 @@ const Projects = () => {
 
       if (!isAdmin) {
         query = query.eq("user_id", user.id);
+      }
+
+      if (hasRestriction && normalizedAllowedProjectIds && normalizedAllowedProjectIds.length > 0) {
+        query = query.in("id", normalizedAllowedProjectIds);
       }
 
       const { data, error } = await query;
@@ -364,7 +409,11 @@ const Projects = () => {
 
       return sanitized as ProjectWithRelations[];
     },
-    enabled: !!user && (!currentOrgId || !membersLoading),
+    enabled:
+      !!user &&
+      (!currentOrgId || !membersLoading) &&
+      !isRestrictionLoading &&
+      !restrictionNotReady,
   });
 
   const assignedOptions = useMemo(() => {
@@ -930,7 +979,7 @@ const Projects = () => {
     memberNameById,
   ]);
 
-  if (isLoading || membersLoading) {
+  if (isLoading || membersLoading || isRestrictionLoading || restrictionNotReady) {
     return (
       <Layout>
         <div className="flex items-center justify-center h-96">
@@ -947,11 +996,11 @@ const Projects = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-              Gestion des Projets
+              {title}
             </h1>
-            <p className="text-muted-foreground mt-1">
-              Suivi et gestion de vos projets de rénovation énergétique
-            </p>
+            {description ? (
+              <p className="text-muted-foreground mt-1">{description}</p>
+            ) : null}
           </div>
           <AddProjectDialog onProjectAdded={() => void refetch()} />
         </div>

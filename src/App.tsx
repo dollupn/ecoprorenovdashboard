@@ -10,6 +10,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import Index from "./pages/Index";
 import Leads from "./pages/Leads";
 import Projects from "./pages/Projects";
+import ProjectChantiers from "./pages/ProjectChantiers";
 import ProjectDetails from "./pages/ProjectDetails";
 import Quotes from "./pages/Quotes";
 import Invoices from "./pages/Invoices";
@@ -49,6 +50,14 @@ const App = () => (
               <Route path="/quotes/settings" element={<ProtectedRoute><QuoteSettings /></ProtectedRoute>} />
               <Route path="/calendar/settings" element={<ProtectedRoute><AppointmentSettings /></ProtectedRoute>} />
               <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
+              <Route
+                path="/projects/chantiers"
+                element={
+                  <ProtectedRoute>
+                    <ProjectChantiers />
+                  </ProtectedRoute>
+                }
+              />
               <Route
                 path="/projects/:id"
                 element={
