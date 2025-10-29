@@ -581,7 +581,7 @@ const normalizeHistoryEntries = (raw: unknown): HistoryEntry[] => {
 
         return null;
       })
-      .filter((entry): entry is HistoryEntry => entry !== null && typeof entry === 'object');
+      .filter((entry) => entry !== null && typeof entry === 'object') as HistoryEntry[];
   }
 
   if (typeof raw === "string") {
@@ -2554,17 +2554,19 @@ const ProjectDetails = () => {
           } satisfies ProjectUpdatesQueryResult;
         }
 
-        const validData = Array.isArray(data) 
-          ? data.filter((item): item is ProjectUpdateRecord => 
-              item !== null && typeof item === 'object' && 'id' in item && 'project_id' in item
-            ) 
-          : [];
+        const validData = (Array.isArray(data) 
+          ? data.filter((item) => {
+              if (!item || typeof item !== 'object') return false;
+              const obj = item as Record<string, unknown>;
+              return 'id' in obj && 'project_id' in obj;
+            })
+          : []) as unknown as ProjectUpdateRecord[];
         
         return {
           updates: validData,
           tableAvailable: true,
           error: null,
-        } as ProjectUpdatesQueryResult;
+        };
       } catch (unknownError) {
         const postgrestError = (unknownError as PostgrestError) ?? null;
         if (isTableUnavailableError(postgrestError)) {
