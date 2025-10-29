@@ -284,6 +284,88 @@ const Accounting = () => {
           </TableBody>
         </Table>
       </div>
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+
+import { Layout } from "@/components/layout/Layout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Calculator, TrendingUp, Receipt, FileText } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { useOrg } from "@/features/organizations/OrgContext";
+import { fetchAccountingMetrics } from "@/features/accounting/metrics";
+
+const EMPTY_METRICS = {
+  billedRevenue: 0,
+  vatCollected: 0,
+  outstandingBalance: 0,
+  cashReceived: 0,
+};
+
+const Accounting = () => {
+  const { user } = useAuth();
+  const { currentOrgId } = useOrg();
+
+  const currencyFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat("fr-FR", {
+        style: "currency",
+        currency: "EUR",
+        maximumFractionDigits: 0,
+      }),
+    [],
+  );
+
+  const {
+    data: metrics,
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
+    queryKey: ["invoices", currentOrgId, "accounting-metrics"],
+    queryFn: () => fetchAccountingMetrics(supabase, currentOrgId ?? null),
+    enabled: Boolean(user && currentOrgId),
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const resolvedMetrics = metrics ?? EMPTY_METRICS;
+
+  const renderMetric = (value?: number) => {
+    if (isLoading) {
+      return <div className="text-sm text-muted-foreground">Chargement...</div>;
+    }
+
+    if (isError) {
+      const message = error instanceof Error ? error.message : "Une erreur est survenue";
+      return <div className="text-sm text-destructive">{message}</div>;
+    }
+
+    const formattedValue = currencyFormatter.format(value ?? 0);
+    return (
+      <>
+        <div className="text-2xl font-bold">
+          {formattedValue}
+        </div>
+        <p className="text-xs text-muted-foreground">Ce mois</p>
+      </>
+    );
+  };
+
+  const outstandingContent = () => {
+    if (isLoading) {
+      return <div className="text-sm text-muted-foreground">Chargement...</div>;
+    }
+
+    if (isError) {
+      const message = error instanceof Error ? error.message : "Une erreur est survenue";
+      return <div className="text-sm text-destructive">{message}</div>;
+    }
+
+    return (
+      <>
+        <div className="text-2xl font-bold">{currencyFormatter.format(resolvedMetrics.outstandingBalance)}</div>
+        <p className="text-xs text-muted-foreground">À suivre</p>
+      </>
     );
   };
 
@@ -344,6 +426,7 @@ const Accounting = () => {
               <div className="text-2xl font-bold">{formatCurrency(aggregates.totalBilled)}</div>
               <p className="text-xs text-muted-foreground">Toutes factures confondues</p>
             </CardContent>
+            <CardContent>{renderMetric(resolvedMetrics.billedRevenue)}</CardContent>
           </Card>
 
           <Card>
@@ -357,6 +440,7 @@ const Accounting = () => {
               </div>
               <p className="text-xs text-muted-foreground">Factures non payées hors retard</p>
             </CardContent>
+            <CardContent>{renderMetric(resolvedMetrics.vatCollected)}</CardContent>
           </Card>
 
           <Card>
@@ -368,6 +452,7 @@ const Accounting = () => {
               <div className="text-2xl font-bold">{formatCurrency(aggregates.overdueAmount)}</div>
               <p className="text-xs text-muted-foreground">Montant total à relancer</p>
             </CardContent>
+            <CardContent>{outstandingContent()}</CardContent>
           </Card>
 
           <Card>
@@ -378,6 +463,20 @@ const Accounting = () => {
             <CardContent>
               <div className="text-2xl font-bold">{formatCurrency(aggregates.paidAmount)}</div>
               <p className="text-xs text-muted-foreground">Paiements enregistrés</p>
+              {isLoading ? (
+                <div className="text-sm text-muted-foreground">Chargement...</div>
+              ) : isError ? (
+                <div className="text-sm text-destructive">
+                  {error instanceof Error ? error.message : "Une erreur est survenue"}
+                </div>
+              ) : (
+                <>
+                  <div className="text-2xl font-bold">
+                    {currencyFormatter.format(resolvedMetrics.cashReceived)}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Prévisionnel</p>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>
