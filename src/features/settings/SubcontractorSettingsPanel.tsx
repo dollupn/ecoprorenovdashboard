@@ -35,6 +35,45 @@ const sanitizeRichText = (value: string | null | undefined) => {
   return isRichTextEmpty(value) ? null : value;
 };
 
+const extractPlainText = (value: string | null | undefined) => {
+  if (!value) return "";
+  return value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+};
+
+const normalizePricingValue = (value: string | null | undefined) => {
+  const plainText = extractPlainText(value);
+  if (!plainText) return "";
+  const replaced = plainText.replace(/,/g, ".").replace(/\s+/g, "");
+  if (/[0-9]/.test(replaced)) {
+    const numericValue = Number(replaced);
+    if (Number.isFinite(numericValue)) {
+      return numericValue.toString();
+    }
+  }
+  const match = replaced.match(/[0-9]+(?:\.[0-9]+)?/);
+  if (!match) return "";
+  return match[0];
+};
+
+const sanitizePricingValue = (value: string | null | undefined) => {
+  if (!value) return null;
+  const normalized = normalizePricingValue(value);
+  return normalized.length === 0 ? null : normalized;
+};
+
+const formatPricingDisplay = (value: string | null | undefined) => {
+  const normalized = normalizePricingValue(value);
+  if (normalized) {
+    const numericValue = Number(normalized);
+    if (Number.isFinite(numericValue)) {
+      return `${numericValue.toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} € / m²`;
+    }
+    return normalized;
+  }
+  const plainText = extractPlainText(value);
+  return plainText || null;
+};
+
 interface EditSubcontractorDialogProps {
   subcontractor: Subcontractor;
   onSubmit: (payload: { id: string; name: string; description: string; pricing: string }) => Promise<void>;
@@ -45,14 +84,14 @@ function EditSubcontractorDialog({ subcontractor, onSubmit, isSubmitting }: Edit
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(subcontractor.name);
   const [description, setDescription] = useState(subcontractor.description ?? "");
-  const [pricing, setPricing] = useState(subcontractor.pricing_details ?? "");
+  const [pricing, setPricing] = useState(normalizePricingValue(subcontractor.pricing_details));
 
   const handleOpenChange = (nextOpen: boolean) => {
     setOpen(nextOpen);
     if (nextOpen) {
       setName(subcontractor.name);
       setDescription(subcontractor.description ?? "");
-      setPricing(subcontractor.pricing_details ?? "");
+      setPricing(normalizePricingValue(subcontractor.pricing_details));
     }
   };
 
@@ -102,11 +141,15 @@ function EditSubcontractorDialog({ subcontractor, onSubmit, isSubmitting }: Edit
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor={`edit-subcontractor-pricing-${subcontractor.id}`}>Tarification</Label>
-            <RichTextEditor
+            <Label htmlFor={`edit-subcontractor-pricing-${subcontractor.id}`}>Tarification (€/m²)</Label>
+            <Input
+              id={`edit-subcontractor-pricing-${subcontractor.id}`}
+              type="number"
+              min="0"
+              step="0.01"
               value={pricing}
-              onChange={setPricing}
-              placeholder="Exemple : Forfait pose 80€ / m², déplacement 50€."
+              onChange={(event) => setPricing(event.target.value)}
+              placeholder="80"
             />
           </div>
         </div>
@@ -154,7 +197,7 @@ export function SubcontractorSettingsPanel() {
         org_id: currentOrgId,
         name: payload.name,
         description: sanitizeRichText(payload.description),
-        pricing_details: sanitizeRichText(payload.pricing),
+        pricing_details: sanitizePricingValue(payload.pricing),
       });
       if (error) throw error;
     },
@@ -179,7 +222,7 @@ export function SubcontractorSettingsPanel() {
         .update({
           name: payload.name,
           description: sanitizeRichText(payload.description),
-          pricing_details: sanitizeRichText(payload.pricing),
+          pricing_details: sanitizePricingValue(payload.pricing),
         })
         .eq("id", payload.id);
       if (error) throw error;
@@ -288,11 +331,17 @@ export function SubcontractorSettingsPanel() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="subcontractor-pricing">Tarification</Label>
-            <RichTextEditor
+            <Label htmlFor="subcontractor-pricing">Tarification (€/m²)</Label>
+            <Input
+              id="subcontractor-pricing"
+              type="number"
+              min="0"
+              step="0.01"
               value={newSubcontractor.pricing}
-              onChange={(html) => setNewSubcontractor((prev) => ({ ...prev, pricing: html }))}
-              placeholder="Décrivez ici les tarifs ou forfaits proposés..."
+              onChange={(event) =>
+                setNewSubcontractor((prev) => ({ ...prev, pricing: event.target.value }))
+              }
+              placeholder="80"
             />
           </div>
           <div className="flex justify-end">
@@ -338,14 +387,9 @@ export function SubcontractorSettingsPanel() {
                     />
                     <div className="rounded-md border border-border/60 bg-muted/40 p-3">
                       <p className="text-sm font-medium text-foreground">Tarification</p>
-                      <div
-                        className="prose prose-sm mt-2 max-w-none text-muted-foreground"
-                        dangerouslySetInnerHTML={{
-                          __html:
-                            subcontractor.pricing_details ??
-                            "<p class=\"text-muted-foreground\">Tarification non renseignée.</p>",
-                        }}
-                      />
+                      <p className="prose prose-sm mt-2 max-w-none text-muted-foreground">
+                        {formatPricingDisplay(subcontractor.pricing_details) ?? "Tarification non renseignée."}
+                      </p>
                     </div>
                   </div>
                 </div>
