@@ -1,11 +1,11 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout/Layout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,6 +49,10 @@ import {
   Clock,
   ChevronRight,
   NotebookPen,
+  ClipboardList,
+  Camera,
+  CheckCircle2,
+  Archive,
 } from "lucide-react";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useMembers } from "@/features/members/api";
@@ -67,6 +71,7 @@ import {
   getDynamicFieldNumericValue,
   formatDynamicFieldValue,
 } from "@/lib/product-params";
+import { parseSiteNotes } from "@/lib/sites";
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 import { useOrganizationPrimeSettings } from "@/features/organizations/useOrganizationPrimeSettings";
 import {
@@ -81,11 +86,13 @@ import {
   type ProductCeeConfig,
 } from "@/lib/prime-cee-unified";
 import {
+  normalizeValorisationFormula,
   formatFormulaCoefficient,
   getCategoryDefaultMultiplierKey,
   LEGACY_QUANTITY_KEY,
   resolveMultiplierKeyForCategory,
   FORMULA_QUANTITY_KEY,
+  type ValorisationFormulaConfig,
 } from "@/lib/valorisation-formula";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -104,6 +111,20 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { PostgrestError } from "@supabase/supabase-js";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type Project = Tables<"projects">;
 type ProductSummary = Pick<
@@ -158,6 +179,9 @@ const formatDecimal = (value: number) => decimalFormatter.format(value);
 
 const SURFACE_FACTUREE_TARGETS = ["surface_facturee", "surface facturée"] as const;
 
+const ARCHIVED_STATUS_VALUES = new Set(["ARCHIVE", "ARCHIVED"]);
+const ARCHIVED_STATUS_VALUE = "ARCHIVED";
+
 type SiteStatus =
   | "PLANIFIE"
   | "EN_PREPARATION"
@@ -196,6 +220,12 @@ type HistoryEntry = {
   text: string;
   createdAt?: string | null;
 };
+type ProjectTabValue = "details" | "chantiers" | "media" | "journal";
+
+const DEFAULT_PROJECT_TAB: ProjectTabValue = "details";
+
+const isValidProjectTab = (value: string | null | undefined): value is ProjectTabValue =>
+  value === "details" || value === "chantiers" || value === "media" || value === "journal";
 
 const isUuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim());
@@ -215,6 +245,163 @@ const parseNumber = (value: unknown): number | null => {
   if (typeof value === "string") {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+};
+
+type ProductImage = { url: string; alt?: string | null };
+
+const normalizeImageEntry = (value: unknown): ProductImage | null => {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? { url: trimmed, alt: null } : null;
+  }
+
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const rawUrl = typeof value.url === "string"
+    ? value.url
+    : typeof value.src === "string"
+      ? value.src
+      : typeof value.href === "string"
+        ? value.href
+        : null;
+
+  if (!rawUrl) {
+    return null;
+  }
+
+  const alt = typeof value.alt === "string"
+    ? value.alt
+    : typeof value.label === "string"
+      ? value.label
+      : typeof value.name === "string"
+        ? value.name
+        : null;
+
+  return { url: rawUrl, alt };
+};
+
+const extractImagesFromValue = (value: unknown, depth = 0): ProductImage[] => {
+  if (!value || depth > 3) {
+    return [];
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => normalizeImageEntry(entry))
+      .filter((entry): entry is ProductImage => Boolean(entry));
+  }
+
+  if (typeof value === "string") {
+    const normalized = normalizeImageEntry(value);
+    return normalized ? [normalized] : [];
+  }
+
+  if (isRecord(value)) {
+    if (Array.isArray(value.images)) {
+      return extractImagesFromValue(value.images, depth + 1);
+    }
+
+    if (Array.isArray(value.items)) {
+      return extractImagesFromValue(value.items, depth + 1);
+    }
+
+    const normalized = normalizeImageEntry(value);
+    if (normalized) {
+      return [normalized];
+    }
+
+    const nested: ProductImage[] = [];
+    for (const nestedValue of Object.values(value)) {
+      if (typeof nestedValue === "string" || Array.isArray(nestedValue) || isRecord(nestedValue)) {
+        nested.push(...extractImagesFromValue(nestedValue, depth + 1));
+      }
+    }
+    return nested;
+  }
+
+  return [];
+};
+
+const getProductImages = (product: ProductSummary | null | undefined): ProductImage[] => {
+  if (!product) {
+    return [];
+  }
+
+  const defaults = isRecord(product.default_params)
+    ? (product.default_params as Record<string, unknown>)
+    : undefined;
+
+  const sources: unknown[] = [];
+
+  const rawImages = (product as unknown as { images?: unknown }).images;
+  if (rawImages) {
+    sources.push(rawImages);
+  }
+
+  if (defaults && defaults["images"]) {
+    sources.push(defaults["images"]);
+  }
+
+  if (defaults && defaults["medias"]) {
+    sources.push(defaults["medias"]);
+  }
+
+  const images: ProductImage[] = [];
+  const seen = new Set<string>();
+
+  sources.forEach((source) => {
+    const entries = extractImagesFromValue(source);
+    entries.forEach((entry) => {
+      const url = entry.url?.trim?.();
+      if (url && !seen.has(url)) {
+        seen.add(url);
+        images.push({ url, alt: entry.alt ?? null });
+      }
+    });
+  });
+
+  return images;
+};
+
+const getProductValorisationFormula = (
+  product: ProductSummary | null | undefined,
+): ValorisationFormulaConfig | null => {
+  if (!product) {
+    return null;
+  }
+
+  const defaults = isRecord(product.default_params)
+    ? (product.default_params as Record<string, unknown>)
+    : undefined;
+
+  const ceeDefaults = isRecord((product.cee_config as unknown as Record<string, unknown>)?.defaults)
+    ? ((product.cee_config as unknown as Record<string, unknown>).defaults as Record<string, unknown>)
+    : undefined;
+
+  const candidates: unknown[] = [];
+
+  if (defaults) {
+    candidates.push(defaults["valorisation_formula"]);
+    candidates.push(defaults["valorisationFormula"]);
+    candidates.push(defaults["valorisation"]);
+  }
+
+  if (ceeDefaults) {
+    candidates.push(ceeDefaults["valorisation_formula"]);
+    candidates.push(ceeDefaults["valorisationFormula"]);
+    candidates.push(ceeDefaults["valorisation"]);
+  }
+
+  for (const candidate of candidates) {
+    const normalized = normalizeValorisationFormula(candidate);
+    if (normalized) {
+      return normalized;
+    }
   }
 
   return null;
@@ -514,6 +701,14 @@ const resolveMultiplierDetails = (
   const effectiveMultiplierKey =
     multiplierParam === LEGACY_QUANTITY_KEY && defaultMultiplierKey ? defaultMultiplierKey : multiplierParam;
 
+  const formatLabelWithCoefficient = (label: string | null | undefined, coefficient: number) => {
+    const normalized = typeof label === "string" && label.trim().length > 0 ? label.trim() : null;
+    if (!Number.isFinite(coefficient) || coefficient === 1) {
+      return normalized ?? null;
+    }
+    return `${normalized ?? "Multiplicateur"} × ${formatFormulaCoefficient(coefficient)}`;
+  };
+
   if (effectiveMultiplierKey && effectiveMultiplierKey !== LEGACY_QUANTITY_KEY) {
     const schemaLabel = getSchemaFieldLabel(product.params_schema, effectiveMultiplierKey);
     const coefficient = toPositiveNumber(multiplierCoefficient) ?? 1;
@@ -528,10 +723,7 @@ const resolveMultiplierDetails = (
 
     if (dynamicValue !== null && dynamicValue > 0) {
       const labelBase = schemaLabel ?? multiplierParam;
-      const label =
-        coefficient !== 1
-          ? `${labelBase} × ${formatFormulaCoefficient(coefficient)}`
-          : labelBase;
+      const label = formatLabelWithCoefficient(labelBase, coefficient) ?? labelBase;
 
       return {
         value: dynamicValue * coefficient,
@@ -542,7 +734,67 @@ const resolveMultiplierDetails = (
 
     return {
       value: null,
-      label: schemaLabel ?? effectiveMultiplierKey,
+      label: formatLabelWithCoefficient(schemaLabel ?? effectiveMultiplierKey, coefficient) ??
+        (schemaLabel ?? effectiveMultiplierKey),
+      missingDynamicParams: true,
+    };
+  }
+
+  const formulaConfig = getProductValorisationFormula(product);
+  if (formulaConfig) {
+    const coefficient = Number.isFinite(formulaConfig.coefficient ?? null)
+      ? (formulaConfig.coefficient as number)
+      : 1;
+    const baseLabel = formulaConfig.variableLabel ?? formulaConfig.variableKey ?? null;
+    const formattedLabel = formatLabelWithCoefficient(baseLabel, coefficient);
+
+    if (formulaConfig.variableKey === FORMULA_QUANTITY_KEY) {
+      const quantityValue = toPositiveNumber(projectProduct.quantity);
+      if (quantityValue !== null) {
+        return {
+          value: quantityValue * (coefficient || 1),
+          label: formattedLabel ?? "Quantité",
+          missingDynamicParams: false,
+        };
+      }
+
+      return {
+        value: null,
+        label: formattedLabel ?? "Quantité",
+        missingDynamicParams: true,
+      };
+    }
+
+    const targets = [formulaConfig.variableKey];
+    if (formulaConfig.variableLabel) {
+      targets.push(formulaConfig.variableLabel);
+    }
+
+    const dynamicValue = getDynamicFieldNumericValue(
+      product.params_schema,
+      projectProduct.dynamic_params,
+      targets,
+    );
+
+    if (dynamicValue !== null && dynamicValue > 0) {
+      return {
+        value: dynamicValue * (coefficient || 1),
+        label: formattedLabel ?? formulaConfig.variableKey ?? null,
+        missingDynamicParams: false,
+      };
+    }
+
+    if (typeof formulaConfig.variableValue === "number" && formulaConfig.variableValue > 0) {
+      return {
+        value: formulaConfig.variableValue * (coefficient || 1),
+        label: formattedLabel ?? formulaConfig.variableKey ?? null,
+        missingDynamicParams: false,
+      };
+    }
+
+    return {
+      value: null,
+      label: formattedLabel ?? formulaConfig.variableKey ?? null,
       missingDynamicParams: true,
     };
   }
@@ -1150,117 +1402,9 @@ const ApresChantierTab = ({
           <CardTitle>Produits associés</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {projectProducts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Aucun produit (hors ECO) n'est associé à ce projet.
-            </p>
-          ) : (
-            projectProducts.map((item, index) => {
-              const dynamicFields = getDynamicFieldEntries(
-                item.product?.params_schema ?? null,
-                item.dynamic_params,
-              );
-              const entryId = item.id ?? item.product_id ?? `product-${index}`;
-              const ceeEntry = ceeEntryMap[entryId];
-              const hasWarnings =
-                Boolean(ceeEntry?.warnings.missingDynamicParams) || Boolean(ceeEntry?.warnings.missingKwh);
-
-              const multiplierDisplay = (() => {
-                if (!ceeEntry) return "Non renseigné";
-                if (typeof ceeEntry.multiplierValue === "number" && ceeEntry.multiplierValue > 0) {
-                  const value = formatDecimal(ceeEntry.multiplierValue);
-                  return ceeEntry.multiplierLabel ? `${value} (${ceeEntry.multiplierLabel})` : value;
-                }
-                if (ceeEntry.warnings.missingDynamicParams) {
-                  return "Paramètres dynamiques manquants";
-                }
-                return "Non renseigné";
-              })();
-
-              const valorisationTotalDisplay = (() => {
-                if (!ceeEntry) return "Non calculée";
-                if (ceeEntry.result) {
-                  return `${formatCurrency(ceeEntry.result.valorisationTotalEur)} · ${formatDecimal(
-                    ceeEntry.result.valorisationTotalMwh,
-                  )} MWh`;
-                }
-                if (ceeEntry.warnings.missingDynamicParams) {
-                  return "Paramètres dynamiques manquants";
-                }
-                if (ceeEntry.warnings.missingKwh) {
-                  return "Aucune valeur kWh";
-                }
-                return "Non calculée";
-              })();
-
-              return (
-                <div key={item.id ?? entryId} className="border border-border/60 rounded-lg p-4 space-y-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="text-xs font-semibold">
-                        {item.product?.code ?? "Code inconnu"}
-                      </Badge>
-                      <span className="text-sm text-muted-foreground">{item.product?.name ?? "Produit"}</span>
-                    </div>
-                    {typeof item.quantity === "number" && (
-                      <span className="text-sm font-medium">Quantité : {item.quantity}</span>
-                    )}
-                  </div>
-                  {hasWarnings ? (
-                    <div className="flex flex-wrap gap-2">
-                      {ceeEntry?.warnings.missingKwh ? (
-                        <Badge className="bg-amber-100 text-amber-700 border-amber-200" variant="outline">
-                          kWh manquant pour ce bâtiment
-                        </Badge>
-                      ) : null}
-                      {ceeEntry?.warnings.missingDynamicParams ? (
-                        <Badge className="bg-amber-100 text-amber-700 border-amber-200" variant="outline">
-                          Paramètres dynamiques manquants
-                        </Badge>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  {dynamicFields.length > 0 && (
-                    <div className="grid gap-2 md:grid-cols-2 text-sm">
-                      {dynamicFields.map((field) => (
-                        <div key={`${item.id}-${field.label}`} className="flex items-center justify-between gap-2">
-                          <span className="text-muted-foreground">{field.label}</span>
-                          <span className="font-medium">{String(formatDynamicFieldValue(field))}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {ceeEntry ? (
-                    <div className="space-y-2 text-sm pt-2 border-t border-border/40">
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Multiplicateur</span>
-                        <span className="font-medium text-right">{multiplierDisplay}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Valorisation / unité</span>
-                        <span className="font-medium text-emerald-600 text-right">
-                          {ceeEntry.result
-                            ? `${formatCurrency(ceeEntry.result.valorisationPerUnitEur)}${
-                                ceeEntry.multiplierLabel ? ` / ${ceeEntry.multiplierLabel}` : ""
-                              }`
-                            : "Non calculée"}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Valorisation totale</span>
-                        <span className="font-semibold text-amber-600 text-right">{valorisationTotalDisplay}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Prime calculée</span>
-                        <span className="font-semibold text-emerald-600 text-right">
-                          {ceeEntry.result ? formatCurrency(ceeEntry.result.totalPrime) : "Non calculée"}
-                        </span>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })
+          {renderProductsTable(
+            projectProducts,
+            "Aucun produit (hors ECO) n'est associé à ce projet.",
           )}
         </CardContent>
       </Card>
@@ -1308,16 +1452,58 @@ const ProjectDetails = () => {
   const projectStatuses = useProjectStatuses();
   const { primeBonification } = useOrganizationPrimeSettings();
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<ProjectTabValue>(() => {
+    const currentTab = searchParams.get("tab");
+    return isValidProjectTab(currentTab) ? currentTab : DEFAULT_PROJECT_TAB;
+  });
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
   const [quoteInitialValues, setQuoteInitialValues] = useState<Partial<QuoteFormValues>>({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
   const [siteDialogOpen, setSiteDialogOpen] = useState(false);
   const [siteDialogMode, setSiteDialogMode] = useState<"create" | "edit">("create");
   const [siteInitialValues, setSiteInitialValues] = useState<Partial<SiteFormValues>>();
   const [activeSite, setActiveSite] = useState<ProjectSite | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
   const [quickUpdateText, setQuickUpdateText] = useState("");
+  const [siteDialogDefaultTab, setSiteDialogDefaultTab] = useState<"avant-chantier" | "apres-chantier">(
+    "avant-chantier",
+  );
+  const [siteDialogReadOnly, setSiteDialogReadOnly] = useState(false);
+  const [lightboxImage, setLightboxImage] = useState<ProductImage | null>(null);
+
+  useEffect(() => {
+    const currentTab = searchParams.get("tab");
+    if (isValidProjectTab(currentTab)) {
+      if (currentTab !== activeTab) {
+        setActiveTab(currentTab);
+      }
+      return;
+    }
+
+    if (currentTab !== activeTab) {
+      const newParams = new URLSearchParams(searchParams);
+      newParams.set("tab", activeTab);
+      setSearchParams(newParams, { replace: true });
+    }
+  }, [searchParams, activeTab, setSearchParams]);
+
+  const handleTabChange = useCallback(
+    (value: string) => {
+      if (!isValidProjectTab(value) || value === activeTab) {
+        return;
+      }
+
+      setActiveTab(value);
+      const newParams = new URLSearchParams(searchParams);
+      newParams.set("tab", value);
+      setSearchParams(newParams, { replace: true });
+    },
+    [activeTab, searchParams, setSearchParams]
+  );
 
   const memberNameById = useMemo(() => {
     const result: Record<string, string> = {};
@@ -1731,6 +1917,17 @@ const ProjectDetails = () => {
           ? (item.dynamic_params as DynamicParams)
           : null;
 
+        const rawFormulaExpression =
+          typeof product.cee_config?.formulaExpression === "string"
+            ? product.cee_config.formulaExpression.trim()
+            : "";
+        const valorisationFormula = rawFormulaExpression.length > 0 ? rawFormulaExpression : null;
+        const ledWattConstant =
+          typeof product.cee_config?.ledWattConstant === "number" &&
+          Number.isFinite(product.cee_config.ledWattConstant)
+            ? product.cee_config.ledWattConstant
+            : null;
+
         const config: CeeConfig = {
           kwhCumac: kwhValue,
           bonification: bonification ?? undefined,
@@ -1739,6 +1936,10 @@ const ProjectDetails = () => {
           quantity: quantityValue ?? null,
           delegatePriceEurPerMwh: delegatePrice ?? null,
           dynamicParams,
+          ...(valorisationFormula ? { valorisationFormula } : {}),
+          ...(ledWattConstant !== null
+            ? { overrides: { ledWatt: ledWattConstant } }
+            : {}),
         };
 
         result = computePrimeCeeEur(config);
@@ -2039,8 +2240,217 @@ const ProjectDetails = () => {
   }, [quickUpdateText, saveQuickUpdate]);
 
   const isQuickUpdateDisabled = !project || quickUpdateText.trim().length === 0 || isSavingQuickUpdate;
+  const renderProductsTable = useCallback(
+    (products: ProjectProduct[], emptyMessage: string) => {
+      if (products.length === 0) {
+        return <p className="text-sm text-muted-foreground">{emptyMessage}</p>;
+      }
+
+      return (
+        <div className="overflow-x-auto rounded-lg border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Produit</TableHead>
+                <TableHead>Images</TableHead>
+                <TableHead>Multiplicateur</TableHead>
+                <TableHead>Valorisation / unité (€)</TableHead>
+                <TableHead>Valorisation totale (€)</TableHead>
+                <TableHead>Prime calculée (€)</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {products.map((item, index) => {
+                const dynamicFields = getDynamicFieldEntries(
+                  item.product?.params_schema ?? null,
+                  item.dynamic_params,
+                );
+                const entryId = item.id ?? item.product_id ?? `product-${index}`;
+                const ceeEntry = ceeEntryMap[entryId];
+                const hasWarnings =
+                  Boolean(ceeEntry?.warnings.missingDynamicParams) ||
+                  Boolean(ceeEntry?.warnings.missingKwh);
+                const images = getProductImages(item.product);
+                const visibleImages = images.slice(0, 3);
+                const remainingImages = images.length - visibleImages.length;
+
+                const multiplierDisplay = (() => {
+                  if (!ceeEntry) return "Non renseigné";
+                  if (typeof ceeEntry.multiplierValue === "number" && ceeEntry.multiplierValue > 0) {
+                    const value = formatDecimal(ceeEntry.multiplierValue);
+                    return ceeEntry.multiplierLabel ? `${value} (${ceeEntry.multiplierLabel})` : value;
+                  }
+                  if (ceeEntry.warnings.missingDynamicParams) {
+                    return "Paramètres dynamiques manquants";
+                  }
+                  return "Non renseigné";
+                })();
+
+                const valorisationPerUnitDisplay = (() => {
+                  if (!ceeEntry) return "Non calculée";
+                  if (ceeEntry.result) {
+                    const perUnit = formatCurrency(ceeEntry.result.valorisationPerUnitEur);
+                    const perUnitMwh = formatDecimal(ceeEntry.result.valorisationPerUnitMwh);
+                    const label = ceeEntry.multiplierLabel ?? "unité";
+                    return {
+                      primary: `${perUnit}`,
+                      secondary: `${perUnitMwh} MWh par ${label}`,
+                    };
+                  }
+                  if (ceeEntry.warnings.missingDynamicParams) {
+                    return "Paramètres dynamiques manquants";
+                  }
+                  if (ceeEntry.warnings.missingKwh) {
+                    return "Aucune valeur kWh";
+                  }
+                  return "Non calculée";
+                })();
+
+                const valorisationTotalDisplay = (() => {
+                  if (!ceeEntry) return "Non calculée";
+                  if (ceeEntry.result) {
+                    return {
+                      primary: formatCurrency(ceeEntry.result.valorisationTotalEur),
+                      secondary: `${formatDecimal(ceeEntry.result.valorisationTotalMwh)} MWh`,
+                    };
+                  }
+                  if (ceeEntry.warnings.missingDynamicParams) {
+                    return "Paramètres dynamiques manquants";
+                  }
+                  if (ceeEntry.warnings.missingKwh) {
+                    return "Aucune valeur kWh";
+                  }
+                  return "Non calculée";
+                })();
+
+                const primeDisplay = (() => {
+                  if (!ceeEntry) return "Non calculée";
+                  if (ceeEntry.result) {
+                    return formatCurrency(ceeEntry.result.totalPrime);
+                  }
+                  if (ceeEntry.warnings.missingDynamicParams) {
+                    return "Paramètres dynamiques manquants";
+                  }
+                  if (ceeEntry.warnings.missingKwh) {
+                    return "Aucune valeur kWh";
+                  }
+                  return "Non calculée";
+                })();
+
+                return (
+                  <TableRow key={item.id ?? entryId} className="align-top">
+                    <TableCell>
+                      <div className="flex flex-col gap-2 text-sm">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="secondary" className="text-xs font-semibold">
+                            {item.product?.code ?? "Code inconnu"}
+                          </Badge>
+                          <span className="font-medium text-foreground">
+                            {item.product?.name ?? "Produit"}
+                          </span>
+                        </div>
+                        {typeof item.quantity === "number" ? (
+                          <span className="text-xs text-muted-foreground">
+                            Quantité : {formatDecimal(item.quantity)}
+                          </span>
+                        ) : null}
+                        {hasWarnings ? (
+                          <div className="flex flex-wrap gap-2">
+                            {ceeEntry?.warnings.missingKwh ? (
+                              <Badge className="bg-amber-100 text-amber-700 border-amber-200" variant="outline">
+                                kWh manquant pour ce bâtiment
+                              </Badge>
+                            ) : null}
+                            {ceeEntry?.warnings.missingDynamicParams ? (
+                              <Badge className="bg-amber-100 text-amber-700 border-amber-200" variant="outline">
+                                Paramètres dynamiques manquants
+                              </Badge>
+                            ) : null}
+                          </div>
+                        ) : null}
+                        {dynamicFields.length > 0 ? (
+                          <div className="grid gap-2 text-xs md:grid-cols-2">
+                            {dynamicFields.map((field) => (
+                              <div key={`${item.id}-${field.label}`} className="flex items-center justify-between gap-2">
+                                <span className="text-muted-foreground">{field.label}</span>
+                                <span className="font-medium text-foreground">
+                                  {String(formatDynamicFieldValue(field))}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {visibleImages.length === 0 ? (
+                        <span className="text-xs text-muted-foreground">Aucune image</span>
+                      ) : (
+                        <div className="flex flex-wrap items-center gap-2">
+                          {visibleImages.map((image, imageIndex) => (
+                            <button
+                              type="button"
+                              key={`${entryId}-image-${imageIndex}`}
+                              onClick={() =>
+                                setLightboxImage({
+                                  url: image.url,
+                                  alt: image.alt ?? item.product?.name ?? item.product?.code ?? "Visuel produit",
+                                })
+                              }
+                              className="h-14 w-14 overflow-hidden rounded-md border border-border/60 bg-muted/30 transition hover:ring-2 hover:ring-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                            >
+                              <img
+                                src={image.url}
+                                alt={image.alt ?? item.product?.name ?? "Visuel produit"}
+                                className="h-full w-full object-cover"
+                              />
+                            </button>
+                          ))}
+                          {remainingImages > 0 ? (
+                            <Badge variant="secondary" className="text-xs">
+                              +{remainingImages}
+                            </Badge>
+                          ) : null}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm font-medium text-foreground">{multiplierDisplay}</TableCell>
+                    <TableCell>
+                      {typeof valorisationPerUnitDisplay === "string" ? (
+                        <span className="text-sm text-muted-foreground">{valorisationPerUnitDisplay}</span>
+                      ) : (
+                        <div className="flex flex-col text-sm">
+                          <span className="font-semibold text-emerald-600">{valorisationPerUnitDisplay.primary}</span>
+                          <span className="text-xs text-muted-foreground">{valorisationPerUnitDisplay.secondary}</span>
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {typeof valorisationTotalDisplay === "string" ? (
+                        <span className="text-sm text-muted-foreground">{valorisationTotalDisplay}</span>
+                      ) : (
+                        <div className="flex flex-col text-sm">
+                          <span className="font-semibold text-amber-600">{valorisationTotalDisplay.primary}</span>
+                          <span className="text-xs text-muted-foreground">{valorisationTotalDisplay.secondary}</span>
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm font-semibold text-emerald-600">{primeDisplay}</span>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      );
+    },
+    [ceeEntryMap],
+  );
 
   const isInitialLoading = isLoading || membersLoading;
+  const canManageSites = isAdmin || (project?.user_id === user?.id);
 
   if (isInitialLoading) {
     return (
@@ -2132,6 +2542,8 @@ const ProjectDetails = () => {
 
     setSiteDialogMode("create");
     setActiveSite(null);
+    setSiteDialogDefaultTab("avant-chantier");
+    setSiteDialogReadOnly(false);
     setSiteInitialValues({
       site_ref,
       project_ref: project.project_ref ?? "",
@@ -2181,8 +2593,15 @@ const ProjectDetails = () => {
     setQuoteDialogOpen(true);
   };
 
-  const handleEditSite = (site: ProjectSite) => {
+  const handleEditSite = (
+    site: ProjectSite,
+    options?: { readOnly?: boolean; defaultTab?: "avant-chantier" | "apres-chantier" },
+  ) => {
+    const { readOnly = false, defaultTab = "avant-chantier" } = options ?? {};
+
     setSiteDialogMode("edit");
+    setSiteDialogReadOnly(readOnly);
+    setSiteDialogDefaultTab(defaultTab);
     setActiveSite(site);
     setSiteInitialValues({
       site_ref: site.site_ref,
@@ -2379,6 +2798,47 @@ const ProjectDetails = () => {
     }
   };
 
+  const handleArchiveProject = async () => {
+    if (!project) return;
+
+    try {
+      setIsArchiving(true);
+      const projectLabel = project.project_ref || "ce projet";
+      const archivedAt = new Date().toISOString();
+
+      let query = supabase
+        .from("projects")
+        .update({ status: ARCHIVED_STATUS_VALUE, archived_at: archivedAt })
+        .eq("id", project.id);
+
+      if (currentOrgId) {
+        query = query.eq("org_id", currentOrgId);
+      }
+
+      const { error } = await query;
+
+      if (error) {
+        throw error;
+      }
+
+      setArchiveDialogOpen(false);
+      toast({
+        title: "Projet archivé",
+        description: `${projectLabel} a été archivé avec succès.`,
+      });
+      navigate({ pathname: "/projects", search: "?status=active" });
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "Erreur lors de l'archivage",
+        description: error instanceof Error ? error.message : "Impossible d'archiver le projet.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsArchiving(false);
+    }
+  };
+
   const projectCostValue = project?.estimated_value ?? null;
   const projectEmail = (project as Project & { email?: string })?.email ?? null;
 
@@ -2394,6 +2854,8 @@ const ProjectDetails = () => {
 
     return null;
   })();
+
+  const isProjectArchived = project ? ARCHIVED_STATUS_VALUES.has(project.status ?? "") : false;
 
   return (
     <Layout>
@@ -2439,6 +2901,30 @@ const ProjectDetails = () => {
               <Hammer className="w-4 h-4 mr-2" />
               Créer un chantier
             </Button>
+            {(isAdmin || project.user_id === user?.id) && !isProjectArchived && (
+              <AlertDialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline">
+                    <Archive className="w-4 h-4 mr-2" />
+                    Archiver
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Archiver le projet ?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Êtes-vous sûr de vouloir archiver ce projet ?
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={isArchiving}>Annuler</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleArchiveProject} disabled={isArchiving}>
+                      {isArchiving ? "Archivage..." : "Confirmer"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
             {(isAdmin || project.user_id === user?.id) && (
               <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
                 <AlertDialogTrigger asChild>
@@ -2470,9 +2956,14 @@ const ProjectDetails = () => {
           <TabsList className="w-full justify-start overflow-x-auto">
             <TabsTrigger value="overview">Aperçu</TabsTrigger>
             <TabsTrigger value="journal">Journal</TabsTrigger>
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
+          <TabsList className="w-full justify-start overflow-x-auto">
+            <TabsTrigger value="details">Détails</TabsTrigger>
             <TabsTrigger value="chantiers">Chantiers</TabsTrigger>
+            <TabsTrigger value="media">Media</TabsTrigger>
+            <TabsTrigger value="journal">Journal</TabsTrigger>
           </TabsList>
-          <TabsContent value="overview" className="space-y-6">
+          <TabsContent value="details" className="space-y-6">
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
               <Card className="shadow-card bg-gradient-card border-0 xl:col-span-2">
                 <CardHeader>
@@ -2880,132 +3371,9 @@ const ProjectDetails = () => {
                 <CardTitle>Produits associés</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {projectProducts.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    Aucun produit (hors ECO) n'est associé à ce projet.
-                  </p>
-                ) : (
-                  projectProducts.map((item, index) => {
-                    const dynamicFields = getDynamicFieldEntries(
-                      item.product?.params_schema ?? null,
-                      item.dynamic_params
-                    );
-                    const entryId = item.id ?? item.product_id ?? `product-${index}`;
-                    const ceeEntry = ceeEntryMap[entryId];
-                    const hasWarnings =
-                      Boolean(ceeEntry?.warnings.missingDynamicParams) ||
-                      Boolean(ceeEntry?.warnings.missingKwh);
-
-                    const multiplierDisplay = (() => {
-                      if (!ceeEntry) return "Non renseigné";
-                      if (typeof ceeEntry.multiplierValue === "number" && ceeEntry.multiplierValue > 0) {
-                        const value = formatDecimal(ceeEntry.multiplierValue);
-                        return ceeEntry.multiplierLabel
-                          ? `${value} (${ceeEntry.multiplierLabel})`
-                          : value;
-                      }
-                      if (ceeEntry.warnings.missingDynamicParams) {
-                        return "Paramètres dynamiques manquants";
-                      }
-                      return "Non renseigné";
-                    })();
-
-                    const valorisationTotalDisplay = (() => {
-                      if (!ceeEntry) return "Non calculée";
-                      if (ceeEntry.result) {
-                        return `${formatCurrency(ceeEntry.result.valorisationTotalEur)} · ${formatDecimal(
-                          ceeEntry.result.valorisationTotalMwh,
-                        )} MWh`;
-                      }
-                      if (ceeEntry.warnings.missingDynamicParams) {
-                        return "Paramètres dynamiques manquants";
-                      }
-                      if (ceeEntry.warnings.missingKwh) {
-                        return "Aucune valeur kWh";
-                      }
-                      return "Non calculée";
-                    })();
-
-                    return (
-                      <div
-                        key={item.id ?? entryId}
-                        className="border border-border/60 rounded-lg p-4 space-y-3"
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="text-xs font-semibold">
-                              {item.product?.code ?? "Code inconnu"}
-                            </Badge>
-                            <span className="text-sm text-muted-foreground">
-                              {item.product?.name ?? "Produit"}
-                            </span>
-                          </div>
-                          {typeof item.quantity === "number" && (
-                            <span className="text-sm font-medium">Quantité : {item.quantity}</span>
-                          )}
-                        </div>
-                        {hasWarnings ? (
-                          <div className="flex flex-wrap gap-2">
-                            {ceeEntry?.warnings.missingKwh ? (
-                              <Badge className="bg-amber-100 text-amber-700 border-amber-200" variant="outline">
-                                kWh manquant pour ce bâtiment
-                              </Badge>
-                            ) : null}
-                            {ceeEntry?.warnings.missingDynamicParams ? (
-                              <Badge className="bg-amber-100 text-amber-700 border-amber-200" variant="outline">
-                                Paramètres dynamiques manquants
-                              </Badge>
-                            ) : null}
-                          </div>
-                        ) : null}
-                        {dynamicFields.length > 0 && (
-                          <div className="grid gap-2 md:grid-cols-2 text-sm">
-                            {dynamicFields.map((field) => (
-                              <div
-                                key={`${item.id}-${field.label}`}
-                                className="flex items-center justify-between gap-2"
-                              >
-                                <span className="text-muted-foreground">{field.label}</span>
-                                <span className="font-medium">
-                                  {String(formatDynamicFieldValue(field))}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        {ceeEntry ? (
-                          <div className="space-y-2 text-sm pt-2 border-t border-border/40">
-                            <div className="flex items-center justify-between">
-                              <span className="text-muted-foreground">Multiplicateur</span>
-                              <span className="font-medium text-right">{multiplierDisplay}</span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-muted-foreground">Valorisation / unité</span>
-                              <span className="font-medium text-emerald-600 text-right">
-                                {ceeEntry.result
-                                  ? `${formatCurrency(ceeEntry.result.valorisationPerUnitEur)}${
-                                      ceeEntry.multiplierLabel ? ` / ${ceeEntry.multiplierLabel}` : ""
-                                    }`
-                                  : "Non calculée"}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-muted-foreground">Valorisation totale</span>
-                              <span className="font-semibold text-amber-600 text-right">
-                                {valorisationTotalDisplay}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-muted-foreground">Prime calculée</span>
-                              <span className="font-semibold text-emerald-600 text-right">
-                                {ceeEntry.result ? formatCurrency(ceeEntry.result.totalPrime) : "Non calculée"}
-                              </span>
-                            </div>
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })
+                {renderProductsTable(
+                  projectProducts,
+                  "Aucun produit (hors ECO) n'est associé à ce projet.",
                 )}
               </CardContent>
             </Card>
@@ -3113,14 +3481,30 @@ const ProjectDetails = () => {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {projectSites.map((site) => {
-                      const status = (site.status ?? "PLANIFIE") as SiteStatus;
-                      const cofracStatus = (site.cofrac_status ?? "EN_ATTENTE") as CofracStatus;
-                      const teamMembersLabel = formatTeamMembers(site.team_members);
-                      const progressValue =
-                        typeof site.progress_percentage === "number"
-                          ? Math.min(Math.max(site.progress_percentage, 0), 100)
-                          : 0;
+                  {projectSites.map((site) => {
+                    const status = (site.status ?? "PLANIFIE") as SiteStatus;
+                    const cofracStatus = (site.cofrac_status ?? "EN_ATTENTE") as CofracStatus;
+                    const teamMembersLabel = formatTeamMembers(site.team_members);
+                    const progressValue =
+                      typeof site.progress_percentage === "number"
+                        ? Math.min(Math.max(site.progress_percentage, 0), 100)
+                        : 0;
+                    const parsedSiteNotes = parseSiteNotes(site.notes);
+                    const internalNotes = parsedSiteNotes.text?.trim() ?? "";
+                    const hasInternalNotes = internalNotes.length > 0;
+                    const driveFile = parsedSiteNotes.driveFile;
+                    const driveLink = driveFile?.webViewLink ?? null;
+                    const driveLabel = driveFile?.name ?? "Document chantier";
+                    const hasDriveFile = Boolean(driveLink);
+                    const additionalCostCount = Array.isArray(site.additional_costs)
+                      ? site.additional_costs.length
+                      : 0;
+                    const revenueDisplay =
+                      typeof site.revenue === "number" ? formatCurrency(site.revenue) : "—";
+                    const primeDisplay =
+                      typeof site.valorisation_cee === "number"
+                        ? formatCurrency(site.valorisation_cee)
+                        : "—";
 
                       return (
                         <div
@@ -3203,41 +3587,189 @@ const ProjectDetails = () => {
                                 </span>
                               </div>
                             )}
-                            {teamMembersLabel && (
-                              <div className="flex items-center gap-2">
-                                <Users className="h-4 w-4 text-primary" />
-                                <span>
-                                  Équipe :{" "}
-                                  <span className="font-medium text-foreground">{teamMembersLabel}</span>
+                          {teamMembersLabel && (
+                            <div className="flex items-center gap-2">
+                              <Users className="h-4 w-4 text-primary" />
+                              <span>
+                                Équipe :{" "}
+                                <span className="font-medium text-foreground">{teamMembersLabel}</span>
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="grid gap-4 lg:grid-cols-2">
+                          <Card className="border border-border/60 bg-background/60">
+                            <CardHeader className="pb-2">
+                              <CardTitle className="flex items-center gap-2 text-base">
+                                <ClipboardList className="h-4 w-4 text-primary" />
+                                Avant Chantier
+                              </CardTitle>
+                              <CardDescription>Préparation et équipe</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-3 text-sm">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-muted-foreground">Statut</span>
+                                <Badge variant="outline" className={getStatusColor(status)}>
+                                  {getStatusLabel(status)}
+                                </Badge>
+                              </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-muted-foreground">Début chantier</span>
+                                <span className="font-medium text-foreground">
+                                  {new Date(site.date_debut).toLocaleDateString("fr-FR")}
                                 </span>
                               </div>
-                            )}
-                          </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-muted-foreground">Fin prévue</span>
+                                <span className="font-medium text-foreground">
+                                  {site.date_fin_prevue
+                                    ? new Date(site.date_fin_prevue).toLocaleDateString("fr-FR")
+                                    : "—"}
+                                </span>
+                              </div>
+                              {teamMembersLabel ? (
+                                <div className="flex items-start justify-between gap-2">
+                                  <span className="text-muted-foreground">Équipe dédiée</span>
+                                  <span className="font-medium text-right text-foreground">
+                                    {teamMembersLabel}
+                                  </span>
+                                </div>
+                              ) : null}
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="flex items-center gap-2 text-muted-foreground">
+                                  <Camera className="h-4 w-4" /> Docs & photos
+                                </span>
+                                {hasDriveFile && driveLink ? (
+                                  <a
+                                    href={driveLink}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                                  >
+                                    <FolderOpen className="h-4 w-4" />
+                                    <span className="font-medium">{driveLabel}</span>
+                                  </a>
+                                ) : (
+                                  <span className="font-medium text-muted-foreground">Aucun</span>
+                                )}
+                              </div>
+                            </CardContent>
+                            <CardFooter className="flex justify-end">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  handleEditSite(site, {
+                                    readOnly: !canManageSites,
+                                    defaultTab: "avant-chantier",
+                                  })
+                                }
+                              >
+                                Voir détails
+                              </Button>
+                            </CardFooter>
+                          </Card>
 
-                          {site.notes && (
+                          <Card className="border border-border/60 bg-background/60">
+                            <CardHeader className="pb-2">
+                              <CardTitle className="flex items-center gap-2 text-base">
+                                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                                Après Chantier
+                              </CardTitle>
+                              <CardDescription>Suivi qualité & financier</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-3 text-sm">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-muted-foreground">Statut COFRAC</span>
+                                <Badge variant="outline">{getCofracStatusLabel(cofracStatus)}</Badge>
+                              </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-muted-foreground">Avancement</span>
+                                <span className="font-medium text-foreground">{progressValue}%</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-muted-foreground">Chiffre d'affaires</span>
+                                <span className="font-medium text-foreground">{revenueDisplay}</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-muted-foreground">Prime CEE</span>
+                                <span className="font-medium text-foreground">{primeDisplay}</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-muted-foreground">Coûts supplémentaires</span>
+                                <span className="font-medium text-foreground">{additionalCostCount}</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-muted-foreground">Paiement sous-traitant</span>
+                                <span
+                                  className={`font-medium ${
+                                    site.subcontractor_payment_confirmed
+                                      ? "text-emerald-600"
+                                      : "text-muted-foreground"
+                                  }`}
+                                >
+                                  {site.subcontractor_payment_confirmed ? "Confirmé" : "En attente"}
+                                </span>
+                              </div>
+                            </CardContent>
+                            <CardFooter className="flex justify-end">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  handleEditSite(site, {
+                                    readOnly: !canManageSites,
+                                    defaultTab: "apres-chantier",
+                                  })
+                                }
+                              >
+                                Voir détails
+                              </Button>
+                            </CardFooter>
+                          </Card>
+                        </div>
+
+                          {hasInternalNotes && (
                             <p className="border-t border-border/40 pt-3 text-sm text-muted-foreground">
-                              {site.notes}
+                              {internalNotes}
                             </p>
                           )}
 
                           <div className="flex flex-wrap justify-end gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                handleEditSite(site);
-                              }}
-                              className="inline-flex items-center gap-2"
-                            >
-                              <Pencil className="h-4 w-4" />
-                              Modifier
-                            </Button>
+                            {canManageSites ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  handleEditSite(site, { readOnly: false, defaultTab: "avant-chantier" });
+                                }}
+                                className="inline-flex items-center gap-2"
+                              >
+                                <Pencil className="h-4 w-4" />
+                                Modifier
+                              </Button>
+                            ) : null}
                           </div>
                         </div>
                       );
                     })}
                   </div>
                 )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="media" className="space-y-6">
+          <Card>
+            <CardContent className="py-10 text-center text-sm text-muted-foreground">
+              Les contenus média seront bientôt disponibles.
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="journal" className="space-y-6">
+          <Card>
+            <CardContent className="py-10 text-center text-sm text-muted-foreground">
+              Le journal du projet sera bientôt disponible.
             </CardContent>
           </Card>
         </TabsContent>
@@ -3262,13 +3794,43 @@ const ProjectDetails = () => {
             setSiteInitialValues(undefined);
             setActiveSite(null);
             setSiteDialogMode("create");
+            setSiteDialogDefaultTab("avant-chantier");
+            setSiteDialogReadOnly(false);
           }
         }}
         onSubmit={handleSubmitSite}
         initialValues={siteInitialValues}
         orgId={currentOrgId}
         projects={projectSiteOptions}
+        defaultTab={siteDialogDefaultTab}
+        readOnly={siteDialogReadOnly}
       />
+
+      <Dialog
+        open={Boolean(lightboxImage)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setLightboxImage(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-3xl">
+          {lightboxImage ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>{lightboxImage.alt ?? "Visuel produit"}</DialogTitle>
+              </DialogHeader>
+              <div className="flex justify-center">
+                <img
+                  src={lightboxImage.url}
+                  alt={lightboxImage.alt ?? "Visuel produit"}
+                  className="max-h-[70vh] w-full object-contain"
+                />
+              </div>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       </div>
     </Layout>
