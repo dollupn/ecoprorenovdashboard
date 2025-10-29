@@ -410,7 +410,9 @@ const Projects = ({
       if (statusFilter === "archived") {
         query = query.in("status", archivedStatuses);
       } else if (statusFilter === "active") {
-        const archivedFilter = `(${archivedStatuses.join(",")})`;
+        const archivedFilter = `(${archivedStatuses
+          .map((status) => `"${status}"`)
+          .join(",")})`;
         query = query.not("status", "in", archivedFilter);
       } else if (statusFilter !== "all") {
         query = query.eq("status", statusFilter);
