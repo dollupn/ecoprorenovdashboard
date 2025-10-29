@@ -166,7 +166,10 @@ const PROJECT_CATEGORY_VALUES = ["EQ", "EN"] as const;
 
 type ProjectCategoryValue = (typeof PROJECT_CATEGORY_VALUES)[number];
 type CategoryFilterValue = "all" | ProjectCategoryValue;
-type StatusFilterValue = "active" | "all" | ProjectStatusSetting["value"];
+type StatusFilterValue = "active" | "archived" | "all" | ProjectStatusSetting["value"];
+
+const ARCHIVED_STATUS_VALUES = ["ARCHIVE", "ARCHIVED"] as const;
+const ARCHIVED_STATUS_SET = new Set<string>(ARCHIVED_STATUS_VALUES);
 
 const normalizeCategorySource = (value: string) =>
   value
@@ -306,7 +309,7 @@ const Projects = ({
       return "active";
     }
 
-    if (statusParam === "all" || statusParam === "active") {
+    if (statusParam === "all" || statusParam === "active" || statusParam === "archived") {
       return statusParam;
     }
 
@@ -334,10 +337,13 @@ const Projects = ({
   const isAdmin = currentMember?.role === "admin" || currentMember?.role === "owner";
 
   const inactiveProjectStatuses = useMemo(() => {
-    const inactiveValues = projectStatuses
-      .map((status) => status.value)
-      .filter((status) => ["LIVRE", "ANNULE"].includes(status));
-    return new Set(inactiveValues);
+    const inactiveValues = new Set(
+      projectStatuses
+        .map((status) => status.value)
+        .filter((status) => ["LIVRE", "ANNULE"].includes(status)),
+    );
+    ARCHIVED_STATUS_VALUES.forEach((status) => inactiveValues.add(status));
+    return inactiveValues;
   }, [projectStatuses]);
 
   const memberNameById = useMemo(() => {
@@ -371,6 +377,7 @@ const Projects = ({
       currentOrgId,
       isAdmin,
       hasRestriction ? normalizedAllowedProjectIds : "all",
+      statusFilter,
     ],
     queryFn: async () => {
       if (!user) return [];
@@ -396,6 +403,17 @@ const Projects = ({
 
       if (hasRestriction && normalizedAllowedProjectIds && normalizedAllowedProjectIds.length > 0) {
         query = query.in("id", normalizedAllowedProjectIds);
+      }
+
+      const archivedStatuses = [...ARCHIVED_STATUS_VALUES];
+
+      if (statusFilter === "archived") {
+        query = query.in("status", archivedStatuses);
+      } else if (statusFilter === "active") {
+        const archivedFilter = `(${archivedStatuses.join(",")})`;
+        query = query.not("status", "in", archivedFilter);
+      } else if (statusFilter !== "all") {
+        query = query.eq("status", statusFilter);
       }
 
       const { data, error } = await query;
@@ -440,7 +458,7 @@ const Projects = ({
 
     if (!statusParam) {
       nextStatus = "active";
-    } else if (statusParam === "all" || statusParam === "active") {
+    } else if (statusParam === "all" || statusParam === "active" || statusParam === "archived") {
       nextStatus = statusParam;
     } else if (statusValues.includes(statusParam)) {
       nextStatus = statusParam as StatusFilterValue;
@@ -739,6 +757,8 @@ const Projects = ({
 
     if (statusFilter === "active") {
       base = base.filter((item) => !inactiveProjectStatuses.has(item.project.status ?? ""));
+    } else if (statusFilter === "archived") {
+      base = base.filter((item) => ARCHIVED_STATUS_SET.has(item.project.status ?? ""));
     } else if (statusFilter !== "all") {
       base = base.filter((item) => (item.project.status ?? "") === statusFilter);
     }
@@ -767,9 +787,13 @@ const Projects = ({
 
   const handleStatusFilterChange = useCallback(
     (value: string) => {
+      if (value === "__divider") {
+        return;
+      }
+
       let next: StatusFilterValue;
 
-      if (value === "all" || value === "active") {
+      if (value === "all" || value === "active" || value === "archived") {
         next = value;
       } else {
         next = value as StatusFilterValue;
@@ -781,8 +805,8 @@ const Projects = ({
           const params = new URLSearchParams(previous);
           if (next === "active") {
             params.delete("status");
-          } else if (next === "all") {
-            params.set("status", "all");
+          } else if (next === "all" || next === "archived") {
+            params.set("status", next);
           } else {
             params.set("status", next);
           }
@@ -1121,15 +1145,25 @@ const Projects = ({
                 </div>
                 <div className="flex flex-col gap-2 md:w-[220px]">
                   <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Statut
+                    Afficher
                   </span>
                   <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Tous les statuts" />
+                      <SelectValue placeholder="Filtrer les projets" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Tous les statuts</SelectItem>
-                      <SelectItem value="active">Statuts actifs</SelectItem>
+                      <SelectItem value="active">Actifs</SelectItem>
+                      <SelectItem value="archived">Archivés</SelectItem>
+                      <SelectItem value="all">Tous</SelectItem>
+                      {projectStatuses.length > 0 && (
+                        <SelectItem
+                          value="__divider"
+                          disabled
+                          className="pointer-events-none text-xs font-semibold text-muted-foreground"
+                        >
+                          Statuts personnalisés
+                        </SelectItem>
+                      )}
                       {projectStatuses.map((status) => (
                         <SelectItem key={status.value} value={status.value}>
                           {status.label}
