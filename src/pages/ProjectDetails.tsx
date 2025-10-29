@@ -1,3 +1,6 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ChangeEvent, CSSProperties } from "react";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -19,7 +22,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import type { Tables } from "@/integrations/supabase/types";
+import type { Database, Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import {
   getProjectClientName,
@@ -46,6 +49,10 @@ import {
   Loader2,
   Share2,
   FolderOpen,
+  UploadCloud,
+  CircleDot,
+  StickyNote,
+  Image as ImageIcon,
   Clock,
   ChevronRight,
   NotebookPen,
@@ -54,6 +61,12 @@ import {
   CheckCircle2,
   Archive,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useMembers } from "@/features/members/api";
 import {
@@ -199,6 +212,41 @@ type ProjectSite = Tables<"sites"> & {
 type SiteAdditionalCostFormValue = SiteFormValues["additional_costs"][number];
 type SiteTeamMemberFormValue = SiteFormValues["team_members"][number];
 
+type ProjectMediaCategory = Database["public"]["Enums"]["project_media_category"];
+type ProjectMediaItem = Tables<"project_media">;
+type ProjectStatusEvent = Tables<"project_status_events">;
+type ProjectNote = Tables<"project_notes">;
+
+const MEDIA_CATEGORIES: { value: ProjectMediaCategory; label: string }[] = [
+  { value: "PHOTOS", label: "Photos" },
+  { value: "DEVIS", label: "Devis" },
+  { value: "FACTURES", label: "Factures" },
+  { value: "CONTRATS", label: "Contrats" },
+  { value: "PRODUITS", label: "Produits" },
+];
+
+const MEDIA_CATEGORY_LABELS: Record<ProjectMediaCategory, string> = MEDIA_CATEGORIES.reduce(
+  (acc, item) => {
+    acc[item.value] = item.label;
+    return acc;
+  },
+  {} as Record<ProjectMediaCategory, string>,
+);
+
+type JournalEntryType = "status" | "rdv" | "note" | "docs" | "chantier";
+
+type JournalEntry = {
+  id: string;
+  type: JournalEntryType;
+  title: string;
+  description?: string | null;
+  date: string;
+  metadata?: string | null;
+  actor?: string | null;
+  linkUrl?: string | null;
+};
+
+type JournalFilter = "all" | "status" | "rdv" | "notes" | "docs" | "chantiers";
 type ProjectUpdateRecord = {
   id: string;
   project_id: string;
@@ -1233,6 +1281,527 @@ const InformationsGeneralesTab = ({
   );
 };
 
+type ProjectMediaTabProps = {
+  project: ProjectWithRelations;
+  mediaItems: ProjectMediaItem[];
+  selectedCategory: ProjectMediaCategory;
+  onCategoryChange: (category: ProjectMediaCategory) => void;
+  onUpload: (file: File) => Promise<void>;
+  isUploading: boolean;
+  isLoading: boolean;
+  driveFolderUrl?: string | null;
+};
+
+const ProjectMediaTab = ({
+  project,
+  mediaItems,
+  selectedCategory,
+  onCategoryChange,
+  onUpload,
+  isUploading,
+  isLoading,
+  driveFolderUrl,
+}: ProjectMediaTabProps) => {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [lightboxItem, setLightboxItem] = useState<ProjectMediaItem | null>(null);
+
+  const filteredItems = useMemo(
+    () => mediaItems.filter((item) => item.category === selectedCategory),
+    [mediaItems, selectedCategory],
+  );
+
+  const { imageItems, documentItems } = useMemo(() => {
+    const images: ProjectMediaItem[] = [];
+    const documents: ProjectMediaItem[] = [];
+
+    filteredItems.forEach((item) => {
+      const mime = item.mime_type?.toLowerCase() ?? "";
+      const looksLikeImage = mime.startsWith("image/") || Boolean(item.thumbnail_url);
+      if (looksLikeImage) {
+        images.push(item);
+      } else {
+        documents.push(item);
+      }
+    });
+
+    return { imageItems: images, documentItems: documents };
+  }, [filteredItems]);
+
+  const handleFileChange = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(event.target.files ?? []);
+      for (const file of files) {
+        await onUpload(file);
+      }
+      event.target.value = "";
+    },
+    [onUpload],
+  );
+
+  return (
+    <Card className="shadow-card bg-gradient-card border-0">
+      <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <CardTitle>Media du projet</CardTitle>
+          <CardDescription>
+            Gérez les documents et images rattachés à {project.project_ref} par catégorie.
+          </CardDescription>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {MEDIA_CATEGORIES.map((category) => (
+            <Button
+              key={category.value}
+              variant={category.value === selectedCategory ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => {
+                onCategoryChange(category.value);
+              }}
+            >
+              {category.label}
+            </Button>
+          ))}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+            className="inline-flex items-center gap-2"
+          >
+            {isUploading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <UploadCloud className="h-4 w-4" />
+            )}
+            {isUploading ? "Téléversement..." : "Ajouter un fichier"}
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            onChange={(event) => {
+              void handleFileChange(event);
+            }}
+          />
+          {driveFolderUrl ? (
+            <Button asChild variant="outline" size="sm">
+              <a href={driveFolderUrl} target="_blank" rel="noreferrer">
+                Ouvrir le dossier Drive
+              </a>
+            </Button>
+          ) : null}
+        </div>
+
+        {isLoading ? (
+          <div className="py-10 text-center text-sm text-muted-foreground">
+            Chargement des fichiers...
+          </div>
+        ) : filteredItems.length === 0 ? (
+          <div className="py-10 text-center text-sm text-muted-foreground">
+            Aucun fichier dans la catégorie {MEDIA_CATEGORY_LABELS[selectedCategory]}.
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {imageItems.length > 0 ? (
+              <div>
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                  Galerie photo
+                </h3>
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  {imageItems.map((item) => {
+                    const previewUrl = item.thumbnail_url ?? item.preview_url ?? item.file_url ?? item.drive_url;
+                    if (!previewUrl) {
+                      return null;
+                    }
+
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setLightboxItem(item)}
+                        className="group relative overflow-hidden rounded-lg border border-border/50 bg-background/60"
+                      >
+                        <img
+                          src={previewUrl}
+                          alt={item.file_name ?? "Image du projet"}
+                          className="h-40 w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                        />
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2 text-left">
+                          <p className="text-xs font-medium text-white line-clamp-1">
+                            {item.file_name ?? MEDIA_CATEGORY_LABELS[item.category]}
+                          </p>
+                          <p className="text-[10px] text-white/70">
+                            {new Date(item.created_at).toLocaleString("fr-FR", {
+                              dateStyle: "short",
+                              timeStyle: "short",
+                            })}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            {documentItems.length > 0 ? (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                  Documents
+                </h3>
+                {documentItems.map((item) => {
+                  const link = item.file_url ?? item.drive_url;
+                  return (
+                    <div
+                      key={item.id}
+                      className="flex flex-col gap-2 rounded-lg border border-border/50 bg-background/60 p-4 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="flex items-start gap-3">
+                        <FileText className="h-5 w-5 text-primary" />
+                        <div>
+                          <p className="text-sm font-medium text-foreground">
+                            {item.file_name ?? `Document ${MEDIA_CATEGORY_LABELS[item.category]}`}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Ajouté le {new Date(item.created_at).toLocaleString("fr-FR", {
+                              dateStyle: "short",
+                              timeStyle: "short",
+                            })}
+                          </p>
+                          {item.drive_url && !item.file_url ? (
+                            <p className="text-xs text-muted-foreground">Stocké dans Google Drive</p>
+                          ) : null}
+                        </div>
+                      </div>
+                      {link ? (
+                        <Button asChild variant="outline" size="sm">
+                          <a href={link} target="_blank" rel="noreferrer">
+                            Ouvrir
+                          </a>
+                        </Button>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        <Dialog open={Boolean(lightboxItem)} onOpenChange={(open) => setLightboxItem(open ? lightboxItem : null)}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>{lightboxItem?.file_name ?? "Aperçu"}</DialogTitle>
+            </DialogHeader>
+            {lightboxItem ? (
+              <div className="relative w-full overflow-hidden rounded-lg border border-border/40 bg-muted/40">
+                <img
+                  src={
+                    lightboxItem.file_url ??
+                    lightboxItem.preview_url ??
+                    lightboxItem.thumbnail_url ??
+                    lightboxItem.drive_url ??
+                    ""
+                  }
+                  alt={lightboxItem.file_name ?? "Aperçu"}
+                  className="h-full w-full object-contain"
+                />
+              </div>
+            ) : null}
+          </DialogContent>
+        </Dialog>
+      </CardContent>
+    </Card>
+  );
+};
+
+const journalNoteSchema = z.object({
+  content: z
+    .string()
+    .min(3, "La note doit contenir au moins 3 caractères")
+    .max(2000, "La note est trop longue"),
+});
+
+type ProjectJournalTabProps = {
+  project: ProjectWithRelations;
+  statusEvents: ProjectStatusEvent[];
+  notes: ProjectNote[];
+  mediaItems: ProjectMediaItem[];
+  appointments: ProjectAppointment[];
+  sites: ProjectSite[];
+  memberNameById: Record<string, string>;
+  filter: JournalFilter;
+  onFilterChange: (filter: JournalFilter) => void;
+  onAddNote: (content: string) => Promise<void>;
+  isAddingNote: boolean;
+  statusOptions: ProjectStatusSetting[];
+  feedRef: React.RefObject<HTMLDivElement>;
+  isLoading: boolean;
+};
+
+const ProjectJournalTab = ({
+  project,
+  statusEvents,
+  notes,
+  mediaItems,
+  appointments,
+  sites,
+  memberNameById,
+  filter,
+  onFilterChange,
+  onAddNote,
+  isAddingNote,
+  statusOptions,
+  feedRef,
+  isLoading,
+}: ProjectJournalTabProps) => {
+  const noteForm = useForm<z.infer<typeof journalNoteSchema>>({
+    resolver: zodResolver(journalNoteSchema),
+    defaultValues: {
+      content: "",
+    },
+  });
+
+  const statusLabelByValue = useMemo(() => {
+    const map: Record<string, string> = {};
+    statusOptions.forEach((status) => {
+      map[status.value] = status.label;
+    });
+    return map;
+  }, [statusOptions]);
+
+  const entries = useMemo(() => {
+    const items: JournalEntry[] = [];
+
+    statusEvents.forEach((event) => {
+      const actor = event.changed_by ? memberNameById[event.changed_by] ?? null : null;
+      items.push({
+        id: `status-${event.id}`,
+        type: "status",
+        title: "Statut mis à jour",
+        description: statusLabelByValue[event.status] ?? event.status,
+        metadata: event.notes,
+        actor,
+        date: event.changed_at,
+      });
+    });
+
+    appointments.forEach((appointment) => {
+      if (!appointment.appointment_date || !appointment.appointment_time) {
+        return;
+      }
+      const date = new Date(`${appointment.appointment_date}T${appointment.appointment_time}`);
+      if (Number.isNaN(date.getTime())) {
+        return;
+      }
+      items.push({
+        id: `rdv-${appointment.id}`,
+        type: "rdv",
+        title: appointment.appointment_type?.name ?? "RDV planifié",
+        description: date.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }),
+        metadata: appointment.notes,
+        actor: appointment.assignee_id ? memberNameById[appointment.assignee_id] ?? null : null,
+        date: date.toISOString(),
+      });
+    });
+
+    notes.forEach((note) => {
+      items.push({
+        id: `note-${note.id}`,
+        type: "note",
+        title: "Note interne",
+        description: note.content,
+        actor: note.created_by ? memberNameById[note.created_by] ?? null : null,
+        date: note.created_at,
+      });
+    });
+
+    mediaItems.forEach((media) => {
+      items.push({
+        id: `media-${media.id}`,
+        type: "docs",
+        title: `Document ${MEDIA_CATEGORY_LABELS[media.category]}`,
+        description: media.file_name ?? MEDIA_CATEGORY_LABELS[media.category],
+        actor: media.created_by ? memberNameById[media.created_by] ?? null : null,
+        metadata: media.drive_url && !media.file_url ? "Stocké dans Google Drive" : null,
+        date: media.created_at,
+        linkUrl: media.file_url ?? media.drive_url ?? null,
+      });
+    });
+
+    sites.forEach((site) => {
+      const status = (site.status ?? "PLANIFIE") as SiteStatus;
+      const eventDate = site.updated_at ?? site.created_at;
+      items.push({
+        id: `site-${site.id}`,
+        type: "chantier",
+        title: `Chantier ${site.site_ref}`,
+        description: getStatusLabel(status),
+        metadata: site.notes,
+        actor: site.user_id ? memberNameById[site.user_id] ?? null : null,
+        date: eventDate,
+      });
+    });
+
+    return items
+      .filter((item) => item.date)
+      .sort((a, b) => {
+        const timeA = new Date(a.date).getTime();
+        const timeB = new Date(b.date).getTime();
+        return timeB - timeA;
+      });
+  }, [appointments, memberNameById, mediaItems, notes, sites, statusEvents, statusLabelByValue]);
+
+  const filterToTypes: Record<JournalFilter, JournalEntryType[]> = {
+    all: ["status", "rdv", "note", "docs", "chantier"],
+    status: ["status"],
+    rdv: ["rdv"],
+    notes: ["note"],
+    docs: ["docs"],
+    chantiers: ["chantier"],
+  };
+
+  const filteredEntries = entries.filter((entry) => filterToTypes[filter].includes(entry.type));
+
+  const iconByType: Record<JournalEntryType, JSX.Element> = {
+    status: <CircleDot className="h-4 w-4 text-primary" />,
+    rdv: <Calendar className="h-4 w-4 text-primary" />,
+    note: <StickyNote className="h-4 w-4 text-primary" />,
+    docs: <FileText className="h-4 w-4 text-primary" />,
+    chantier: <Hammer className="h-4 w-4 text-primary" />,
+  };
+
+  const onSubmitNote = noteForm.handleSubmit(async (values) => {
+    await onAddNote(values.content);
+    noteForm.reset({ content: "" });
+  });
+
+  return (
+    <div ref={feedRef} tabIndex={-1} className="outline-none">
+      <Card className="shadow-card bg-gradient-card border-0">
+        <CardHeader className="space-y-4">
+          <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+            <div>
+              <CardTitle>Journal d'activité</CardTitle>
+              <CardDescription>
+              Historique complet des interactions et documents pour {project.project_ref}.
+            </CardDescription>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                { value: "all" as JournalFilter, label: "Tout" },
+                { value: "status" as JournalFilter, label: "Statut" },
+                { value: "rdv" as JournalFilter, label: "RDV" },
+                { value: "notes" as JournalFilter, label: "Notes" },
+                { value: "docs" as JournalFilter, label: "Docs" },
+                { value: "chantiers" as JournalFilter, label: "Chantiers" },
+              ] satisfies { value: JournalFilter; label: string }[]
+            ).map((item) => (
+              <Button
+                key={item.value}
+                variant={filter === item.value ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => onFilterChange(item.value)}
+              >
+                {item.label}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        <Form {...noteForm}>
+          <form onSubmit={onSubmitNote} className="space-y-3">
+            <FormField
+              control={noteForm.control}
+              name="content"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Ajouter une note</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      {...field}
+                      placeholder="Consignez une information importante pour l'équipe"
+                      rows={3}
+                      disabled={isAddingNote}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="flex justify-end">
+              <Button type="submit" size="sm" disabled={isAddingNote} className="inline-flex items-center gap-2">
+                {isAddingNote ? <Loader2 className="h-4 w-4 animate-spin" /> : <StickyNote className="h-4 w-4" />}
+                {isAddingNote ? "Enregistrement..." : "Ajouter la note"}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="py-10 text-center text-sm text-muted-foreground">
+            Chargement de l'historique...
+          </div>
+        ) : filteredEntries.length === 0 ? (
+          <div className="py-10 text-center text-sm text-muted-foreground">
+            Aucun événement correspondant au filtre sélectionné.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filteredEntries.map((entry) => (
+              <div
+                key={entry.id}
+                className="rounded-lg border border-border/50 bg-background/60 p-4"
+              >
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-1">{iconByType[entry.type]}</div>
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-foreground">{entry.title}</p>
+                      {entry.description ? (
+                        <p className="text-sm text-muted-foreground whitespace-pre-line">
+                          {entry.description}
+                        </p>
+                      ) : null}
+                      {entry.metadata ? (
+                        <p className="text-xs text-muted-foreground whitespace-pre-line">
+                          {entry.metadata}
+                        </p>
+                      ) : null}
+                      {entry.actor ? (
+                        <p className="text-xs text-muted-foreground">Par {entry.actor}</p>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-start gap-2 sm:items-end">
+                    <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                      {new Date(entry.date).toLocaleString("fr-FR", {
+                        dateStyle: "short",
+                        timeStyle: "short",
+                      })}
+                    </span>
+                    {entry.linkUrl ? (
+                      <Button asChild size="sm" variant="outline">
+                        <a href={entry.linkUrl} target="_blank" rel="noreferrer">
+                          Ouvrir
+                        </a>
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+      </Card>
+    </div>
+  );
+};
+
 type DocumentsTabProps = {
   project: ProjectWithRelations;
 };
@@ -1467,6 +2036,38 @@ const ProjectDetails = () => {
   const [siteDialogMode, setSiteDialogMode] = useState<"create" | "edit">("create");
   const [siteInitialValues, setSiteInitialValues] = useState<Partial<SiteFormValues>>();
   const [activeSite, setActiveSite] = useState<ProjectSite | null>(null);
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const journalFeedRef = useRef<HTMLDivElement | null>(null);
+  const [activeTab, setActiveTab] = useState<"overview" | "media" | "journal" | "chantiers">("overview");
+  const [selectedMediaCategory, setSelectedMediaCategory] = useState<ProjectMediaCategory>(
+    MEDIA_CATEGORIES[0]?.value ?? "PHOTOS",
+  );
+  const [journalFilter, setJournalFilter] = useState<JournalFilter>("all");
+
+  const handleTabChange = useCallback((value: string) => {
+    if (value === "overview" || value === "media" || value === "journal" || value === "chantiers") {
+      setActiveTab(value);
+    }
+  }, []);
+
+  const focusJournalFeed = useCallback(() => {
+    setTimeout(() => {
+      journalFeedRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      journalFeedRef.current?.focus({ preventScroll: true });
+    }, 150);
+  }, []);
+
+  const handleOpenDocuments = useCallback(() => {
+    setActiveTab("media");
+    setSelectedMediaCategory(MEDIA_CATEGORIES[0]?.value ?? "PHOTOS");
+  }, []);
+
+  const handleViewFullHistory = useCallback(() => {
+    setActiveTab("journal");
+    setJournalFilter("all");
+    focusJournalFeed();
+  }, [focusJournalFeed]);
   const [activeTab, setActiveTab] = useState("overview");
   const [quickUpdateText, setQuickUpdateText] = useState("");
   const [siteDialogDefaultTab, setSiteDialogDefaultTab] = useState<"avant-chantier" | "apres-chantier">(
@@ -1749,6 +2350,81 @@ const ProjectDetails = () => {
     ];
   }, [project, projectProducts, projectSurfaceFacturee]);
 
+  const {
+    data: projectMedia = [],
+    isLoading: projectMediaLoading,
+    refetch: refetchProjectMedia,
+  } = useQuery<ProjectMediaItem[]>({
+    queryKey: ["project-media", project?.id, currentOrgId],
+    queryFn: async () => {
+      if (!project?.id || !currentOrgId) {
+        return [] as ProjectMediaItem[];
+      }
+
+      const { data, error } = await supabase
+        .from("project_media")
+        .select("*")
+        .eq("project_id", project.id)
+        .eq("org_id", currentOrgId)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      return (data ?? []) as ProjectMediaItem[];
+    },
+    enabled: Boolean(project?.id && currentOrgId),
+  });
+
+  const {
+    data: projectNotes = [],
+    isLoading: projectNotesLoading,
+    refetch: refetchProjectNotes,
+  } = useQuery<ProjectNote[]>({
+    queryKey: ["project-notes", project?.id, currentOrgId],
+    queryFn: async () => {
+      if (!project?.id || !currentOrgId) {
+        return [] as ProjectNote[];
+      }
+
+      const { data, error } = await supabase
+        .from("project_notes")
+        .select("*")
+        .eq("project_id", project.id)
+        .eq("org_id", currentOrgId)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      return (data ?? []) as ProjectNote[];
+    },
+    enabled: Boolean(project?.id && currentOrgId),
+  });
+
+  const {
+    data: statusEvents = [],
+    isLoading: statusEventsLoading,
+    refetch: refetchStatusEvents,
+  } = useQuery<ProjectStatusEvent[]>({
+    queryKey: ["project-status-events", project?.id, currentOrgId],
+    queryFn: async () => {
+      if (!project?.id || !currentOrgId) {
+        return [] as ProjectStatusEvent[];
+      }
+
+      const { data, error } = await supabase
+        .from("project_status_events")
+        .select("*")
+        .eq("project_id", project.id)
+        .eq("org_id", currentOrgId)
+        .order("changed_at", { ascending: false });
+
+      if (error) throw error;
+
+      return (data ?? []) as ProjectStatusEvent[];
+    },
+    enabled: Boolean(project?.id && currentOrgId),
+  });
+
   const projectRefFilter = project?.project_ref?.trim() ?? "";
 
   const {
@@ -1783,6 +2459,150 @@ const ProjectDetails = () => {
     },
     enabled: Boolean(project?.id && currentOrgId),
   });
+
+  const uploadMediaMutation = useMutation({
+    mutationKey: ["project-media-upload", project?.id, selectedMediaCategory],
+    mutationFn: async (file: File) => {
+      if (!project?.id || !currentOrgId || !user?.id) {
+        throw new Error("Impossible de téléverser le fichier.");
+      }
+
+      const sanitizedName = file.name.replace(/\s+/g, "-");
+      const storagePath = `${project.id}/${Date.now()}-${sanitizedName}`;
+      const bucket = supabase.storage.from("project-media");
+
+      const { error: uploadError } = await bucket.upload(storagePath, file, {
+        upsert: false,
+        contentType: file.type || undefined,
+      });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data: publicUrlData } = bucket.getPublicUrl(storagePath);
+      const fileUrl = publicUrlData?.publicUrl ?? null;
+
+      const { error: insertError } = await supabase.from("project_media").insert({
+        project_id: project.id,
+        org_id: currentOrgId,
+        category: selectedMediaCategory,
+        file_name: file.name,
+        file_url: fileUrl,
+        preview_url: fileUrl,
+        thumbnail_url: fileUrl,
+        storage_path,
+        mime_type: file.type || null,
+        created_by: user.id,
+      });
+
+      if (insertError) {
+        throw insertError;
+      }
+    },
+    onSuccess: async () => {
+      toast({
+        title: "Fichier ajouté",
+        description: `Le fichier a été ajouté à ${MEDIA_CATEGORY_LABELS[selectedMediaCategory]}.`,
+      });
+      await Promise.all([refetchProjectMedia(), refetchStatusEvents()]);
+    },
+    onError: (error) => {
+      const message =
+        error instanceof Error ? error.message : "Impossible de téléverser le fichier.";
+      toast({
+        title: "Téléversement échoué",
+        description: message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const addNoteMutation = useMutation({
+    mutationKey: ["project-notes-add", project?.id],
+    mutationFn: async (content: string) => {
+      if (!project?.id || !currentOrgId || !user?.id) {
+        throw new Error("Impossible d'ajouter la note.");
+      }
+
+      const trimmed = content.trim();
+      if (trimmed.length === 0) {
+        throw new Error("Le contenu de la note est vide.");
+      }
+
+      const { error: insertError } = await supabase.from("project_notes").insert({
+        project_id: project.id,
+        org_id: currentOrgId,
+        content: trimmed,
+        created_by: user.id,
+      });
+
+      if (insertError) {
+        throw insertError;
+      }
+    },
+    onSuccess: async () => {
+      toast({
+        title: "Note ajoutée",
+        description: "La note a été enregistrée dans le journal.",
+      });
+      await Promise.all([refetchProjectNotes(), refetchStatusEvents()]);
+    },
+    onError: (error) => {
+      const message =
+        error instanceof Error ? error.message : "Impossible d'ajouter la note.";
+      toast({
+        title: "Erreur lors de l'ajout",
+        description: message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleUploadMedia = useCallback(
+    (file: File) => uploadMediaMutation.mutateAsync(file),
+    [uploadMediaMutation],
+  );
+
+  const handleAddNote = useCallback(
+    (content: string) => addNoteMutation.mutateAsync(content),
+    [addNoteMutation],
+  );
+
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    if (!tabParam) {
+      return;
+    }
+    if (tabParam === activeTab) {
+      return;
+    }
+    handleTabChange(tabParam);
+    if (tabParam === "journal") {
+      setJournalFilter("all");
+    }
+  }, [searchParams, activeTab, handleTabChange]);
+
+  useEffect(() => {
+    const state = location.state as
+      | { openTab?: "overview" | "media" | "journal" | "chantiers"; focus?: string | null }
+      | null;
+
+    if (!state?.openTab) {
+      return;
+    }
+
+    handleTabChange(state.openTab);
+
+    if (state.openTab === "journal") {
+      setJournalFilter("all");
+      if (state.focus === "journal") {
+        focusJournalFeed();
+      }
+    }
+
+    navigate(`${location.pathname}${location.search}`, { replace: true });
+  }, [focusJournalFeed, handleTabChange, location, navigate]);
 
   const mapTeamMembersToFormValues = useCallback(
     (teamMembers: string[] | null | undefined): SiteTeamMemberFormValue[] => {
@@ -2841,6 +3661,12 @@ const ProjectDetails = () => {
 
   const projectCostValue = project?.estimated_value ?? null;
   const projectEmail = (project as Project & { email?: string })?.email ?? null;
+  const driveFolderUrl = project
+    ? ((project as Project & { drive_folder_url?: string | null }).drive_folder_url ?? null)
+    : null;
+  const projectAppointments = project?.project_appointments ?? [];
+  const journalLoading =
+    projectMediaLoading || projectNotesLoading || statusEventsLoading || projectSitesLoading;
 
   const displayedPrimeValue = (() => {
     const storedPrime = resolvePrimeCeeEuro(project);
@@ -2901,6 +3727,10 @@ const ProjectDetails = () => {
               <Hammer className="w-4 h-4 mr-2" />
               Créer un chantier
             </Button>
+            <Button variant="outline" onClick={handleOpenDocuments}>
+              <FolderOpen className="w-4 h-4 mr-2" />
+              Voir les media
+            </Button>
             {(isAdmin || project.user_id === user?.id) && !isProjectArchived && (
               <AlertDialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
                 <AlertDialogTrigger asChild>
@@ -2952,6 +3782,11 @@ const ProjectDetails = () => {
           </div>
         </div>
 
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
+          <TabsList className="w-full justify-start overflow-x-auto">
+            <TabsTrigger value="overview">Aperçu</TabsTrigger>
+            <TabsTrigger value="media">Media</TabsTrigger>
+            <TabsTrigger value="journal">Journal</TabsTrigger>
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="w-full justify-start overflow-x-auto">
             <TabsTrigger value="overview">Aperçu</TabsTrigger>
@@ -3240,6 +4075,65 @@ const ProjectDetails = () => {
                           : "Non calculée"}
                       </span>
                     </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-card border border-dashed border-primary/20">
+                <CardHeader>
+                  <CardTitle>Détails & actions</CardTitle>
+                  <CardDescription>
+                    Accédez rapidement aux documents et à l'historique du projet.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4 text-sm">
+                  {nextAppointmentDetails ? (
+                    <div className="flex items-start gap-3 rounded-lg border border-border/40 bg-background/60 p-3">
+                      <Calendar className="w-4 h-4 text-primary mt-1" />
+                      <div className="space-y-1">
+                        <p className="font-medium">Prochain RDV</p>
+                        <p className="text-muted-foreground leading-tight">
+                          {nextAppointmentDetails.formattedDate}
+                        </p>
+                        {nextAppointmentDetails.metadata ? (
+                          <p className="text-xs text-muted-foreground leading-tight">
+                            {nextAppointmentDetails.metadata}
+                          </p>
+                        ) : null}
+                        {nextAppointmentDetails.notes ? (
+                          <p className="text-xs text-muted-foreground italic leading-tight">
+                            {nextAppointmentDetails.notes}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 rounded-lg border border-border/40 bg-background/60 p-3 text-muted-foreground">
+                      <Calendar className="w-4 h-4" />
+                      <span>Aucun RDV planifié</span>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start"
+                      onClick={handleOpenDocuments}
+                    >
+                      <ImageIcon className="h-4 w-4 mr-2" />
+                      Media du projet
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      className="w-full justify-start"
+                      onClick={handleViewFullHistory}
+                    >
+                      <CircleDot className="h-4 w-4 mr-2" />
+                      Voir tout l'historique
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
                     {nextAppointmentDetails ? (
                       <div className="flex items-start gap-2">
                         <Calendar className="w-4 h-4 text-primary mt-1" />
@@ -3433,6 +4327,36 @@ const ProjectDetails = () => {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+          <TabsContent value="media" className="space-y-6">
+            <ProjectMediaTab
+              project={project}
+              mediaItems={projectMedia}
+              selectedCategory={selectedMediaCategory}
+              onCategoryChange={setSelectedMediaCategory}
+              onUpload={handleUploadMedia}
+              isUploading={uploadMediaMutation.isPending}
+              isLoading={projectMediaLoading}
+              driveFolderUrl={driveFolderUrl}
+            />
+          </TabsContent>
+          <TabsContent value="journal" className="space-y-6">
+            <ProjectJournalTab
+              project={project}
+              statusEvents={statusEvents}
+              notes={projectNotes}
+              mediaItems={projectMedia}
+              appointments={projectAppointments}
+              sites={projectSites}
+              memberNameById={memberNameById}
+              filter={journalFilter}
+              onFilterChange={setJournalFilter}
+              onAddNote={handleAddNote}
+              isAddingNote={addNoteMutation.isPending}
+              statusOptions={projectStatuses}
+              feedRef={journalFeedRef}
+              isLoading={journalLoading}
+            />
           </TabsContent>
           <TabsContent value="chantiers" className="space-y-6">
           <Card className="shadow-card bg-gradient-card border-0">

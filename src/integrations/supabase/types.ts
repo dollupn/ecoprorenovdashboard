@@ -674,6 +674,162 @@ export type Database = {
           },
         ]
       }
+      project_media: {
+        Row: {
+          category: Database["public"]["Enums"]["project_media_category"]
+          created_at: string
+          created_by: string | null
+          drive_file_id: string | null
+          drive_url: string | null
+          file_name: string | null
+          file_url: string | null
+          id: string
+          mime_type: string | null
+          org_id: string
+          preview_url: string | null
+          project_id: string
+          storage_path: string | null
+          thumbnail_url: string | null
+        }
+        Insert: {
+          category: Database["public"]["Enums"]["project_media_category"]
+          created_at?: string
+          created_by?: string | null
+          drive_file_id?: string | null
+          drive_url?: string | null
+          file_name?: string | null
+          file_url?: string | null
+          id?: string
+          mime_type?: string | null
+          org_id: string
+          preview_url?: string | null
+          project_id: string
+          storage_path?: string | null
+          thumbnail_url?: string | null
+        }
+        Update: {
+          category?: Database["public"]["Enums"]["project_media_category"]
+          created_at?: string
+          created_by?: string | null
+          drive_file_id?: string | null
+          drive_url?: string | null
+          file_name?: string | null
+          file_url?: string | null
+          id?: string
+          mime_type?: string | null
+          org_id?: string
+          preview_url?: string | null
+          project_id?: string
+          storage_path?: string | null
+          thumbnail_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_media_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_media_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_notes: {
+        Row: {
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          org_id: string
+          project_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          org_id: string
+          project_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          org_id?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_notes_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_notes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_status_events: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          id: string
+          notes: string | null
+          org_id: string
+          previous_status: string | null
+          project_id: string
+          status: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: string
+          notes?: string | null
+          org_id: string
+          previous_status?: string | null
+          project_id: string
+          status: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: string
+          notes?: string | null
+          org_id?: string
+          previous_status?: string | null
+          project_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_status_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_status_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_products: {
         Row: {
           created_at: string
@@ -1174,6 +1330,12 @@ export type Database = {
         | "reunion"
         | "mayotte"
       org_role: "owner" | "admin" | "member" | "commercial"
+      project_media_category:
+        | "DEVIS"
+        | "PHOTOS"
+        | "FACTURES"
+        | "CONTRATS"
+        | "PRODUITS"
     }
     CompositeTypes: {
       [_ in never]: never
