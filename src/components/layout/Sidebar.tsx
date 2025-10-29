@@ -28,6 +28,7 @@ import {
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
@@ -156,15 +157,21 @@ export function AppSidebar() {
                   {item.subItems ? (
                     <>
                       <NavLink to={item.url} className={({ isActive: linkActive }) => getNavClassName(linkActive)}>
-                        <SidebarMenuButton className="h-11">
+                        <SidebarMenuButton className="h-11 pr-8">
                           <item.icon className="w-5 h-5 flex-shrink-0" />
                           {!isCollapsed && <span className="ml-3 flex-1 text-left">{item.title}</span>}
                         </SidebarMenuButton>
                       </NavLink>
                       {!isCollapsed && (
-                        <button onClick={() => toggleGroup(item.title)} className="p-2">
-                          <ChevronDown className={`w-4 h-4 transition-transform ${openGroups[item.title] ? 'rotate-180' : ''}`} />
-                        </button>
+                        <SidebarMenuAction
+                          onClick={() => toggleGroup(item.title)}
+                          aria-label={`Toggle ${item.title}`}
+                          aria-expanded={Boolean(openGroups[item.title] || isActive(item.url, item.subItems))}
+                        >
+                          <ChevronDown
+                            className={`w-4 h-4 transition-transform ${openGroups[item.title] ? "rotate-180" : ""}`}
+                          />
+                        </SidebarMenuAction>
                       )}
                       {!isCollapsed && (openGroups[item.title] || isActive(item.url, item.subItems)) && (
                         <SidebarMenu className="ml-4 mt-1 space-y-1">
