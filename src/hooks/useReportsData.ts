@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
+import type { ProjectStatus } from "@/integrations/supabase/types";
 import {
   differenceInCalendarDays,
   isValid,
@@ -152,7 +153,7 @@ export const useReportsData = (orgId: string | null, options: QueryOptions = {})
             project_products(id, quantity, dynamic_params, product:product_catalog(id, code, category, cee_config, default_params, is_active, params_schema, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))`
           )
           .eq("org_id", orgId)
-          .in("status", PROJECT_SURFACE_STATUSES),
+          .in("status", PROJECT_SURFACE_STATUSES as ProjectStatus[]),
       ]);
 
       if (leadsRes.error) throw leadsRes.error;

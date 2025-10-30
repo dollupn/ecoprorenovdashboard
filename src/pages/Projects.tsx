@@ -19,6 +19,7 @@ import {
 } from "@/components/sites/SiteDialog";
 import { toast as showToast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
+import type { ProjectStatus } from "@/integrations/supabase/types";
 import {
   getProjectClientName,
   getProjectStatusBadgeStyle,
@@ -413,7 +414,7 @@ const Projects = ({
         const archivedFilter = `(${archivedStatuses.join(",")})`;
         query = query.not("status", "in", archivedFilter);
       } else if (statusFilter !== "all") {
-        query = query.eq("status", statusFilter);
+        query = query.eq("status", statusFilter as ProjectStatus);
       }
 
       const { data, error } = await query;
@@ -513,7 +514,7 @@ const Projects = ({
       try {
         const { error } = await supabase
           .from("projects")
-          .update({ status })
+          .update({ status: status as ProjectStatus })
           .eq("id", projectId)
           .eq("org_id", currentOrgId);
 

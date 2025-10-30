@@ -4007,6 +4007,8 @@ const ProjectDetails = () => {
       site_ref: values.site_ref,
       project_ref: projectRef,
       client_name: clientName,
+      client_first_name: project.client_first_name || null,
+      client_last_name: project.client_last_name || null,
       product_name: values.product_name?.trim() || "",
       address: values.address,
       city: values.city,

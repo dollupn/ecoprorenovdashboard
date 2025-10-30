@@ -35,6 +35,7 @@ import { addMonths, format, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
+import type { ProjectStatus } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useOrganizationPrimeSettings } from "@/features/organizations/useOrganizationPrimeSettings";
@@ -1369,7 +1370,7 @@ export const AddProjectDialog = ({
         external_reference: normalizedExternalRef ? normalizedExternalRef : undefined,
         city: data.city,
         postal_code: data.postal_code,
-        status: data.status,
+        status: data.status as ProjectStatus,
         assigned_to: data.assigned_to,
         source: data.source || undefined,
         company: data.company || undefined,
@@ -1484,7 +1485,7 @@ export const AddProjectDialog = ({
             external_reference: normalizedExternalRef ? normalizedExternalRef : undefined,
             city: data.city,
             postal_code: data.postal_code,
-            status: data.status,
+            status: data.status as ProjectStatus,
             assigned_to: data.assigned_to,
             source: data.source || undefined,
             company: data.company || undefined,

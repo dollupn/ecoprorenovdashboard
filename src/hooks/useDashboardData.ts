@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getProjectClientName } from "@/lib/projects";
 import type { Tables } from "@/integrations/supabase/types";
+import type { ProjectStatus } from "@/integrations/supabase/types";
 import {
   addDays,
   addMonths,
@@ -212,7 +213,7 @@ export const useDashboardMetrics = (
             project_products(id, quantity, dynamic_params, product:product_catalog(id, code, category, cee_config, default_params, is_active, params_schema, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))`
           )
           .eq("org_id", orgId)
-          .in("status", [...ACTIVE_PROJECT_STATUSES, ...PROJECT_SURFACE_STATUSES]),
+          .in("status", [...ACTIVE_PROJECT_STATUSES, ...PROJECT_SURFACE_STATUSES] as ProjectStatus[]),
         supabase
           .from("quotes")
           .select("id, status, valid_until")
@@ -239,7 +240,7 @@ export const useDashboardMetrics = (
           .from("projects")
           .select("id, updated_at")
           .eq("org_id", orgId)
-          .eq("status", ACCEPTED_PROJECT_STATUS)
+          .eq("status", ACCEPTED_PROJECT_STATUS as ProjectStatus)
           .gte("updated_at", previousPeriodStart.toISOString()),
       ]);
 
@@ -477,7 +478,7 @@ export const useActivityFeed = (
             "id, project_ref, client_name, client_first_name, client_last_name, city, status, updated_at"
           )
           .eq("org_id", orgId)
-          .eq("status", ACCEPTED_PROJECT_STATUS)
+          .eq("status", ACCEPTED_PROJECT_STATUS as ProjectStatus)
           .order("updated_at", { ascending: false })
           .limit(20),
         supabase
