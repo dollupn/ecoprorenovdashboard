@@ -65,6 +65,10 @@ import { GripVertical, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMembers } from "@/features/members/api";
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
+import {
+  TRAVAUX_NON_SUBVENTIONNES_OPTIONS,
+  type TravauxNonSubventionnesValue,
+} from "./travauxNonSubventionnes";
 
 const teamMemberSchema = z.object({
   id: z.string().min(1, "Sélection invalide"),
@@ -180,6 +184,25 @@ const createBaseSiteSchema = (statusOptions: readonly string[]) => {
     isolation_utilisee_m2: z.coerce.number({ invalid_type_error: "Quantité invalide" }).min(0),
     montant_commission: z.coerce.number({ invalid_type_error: "Montant invalide" }).min(0),
     valorisation_cee: z.coerce.number({ invalid_type_error: "Montant invalide" }).min(0),
+    travaux_non_subventionnes: z.enum(
+      TRAVAUX_NON_SUBVENTIONNES_OPTIONS.map((option) => option.value) as [
+        TravauxNonSubventionnesValue,
+        ...TravauxNonSubventionnesValue[],
+      ],
+    ),
+    travaux_non_subventionnes_description: z
+      .string()
+      .optional()
+      .nullable()
+      .transform((value) => (value ?? "")),
+    travaux_non_subventionnes_montant: z.coerce
+      .number({ invalid_type_error: "Montant invalide" })
+      .min(0),
+    travaux_non_subventionnes_financement: z.boolean().default(false),
+    commission_commerciale_ht: z.boolean().default(false),
+    commission_commerciale_ht_montant: z.coerce
+      .number({ invalid_type_error: "Montant invalide" })
+      .min(0),
     notes: z.string().optional(),
     subcontractor_id: z
       .string({ invalid_type_error: "Sélection invalide" })
@@ -271,6 +294,12 @@ const defaultValues: SiteFormValues = {
   isolation_utilisee_m2: 0,
   montant_commission: 0,
   valorisation_cee: 0,
+  travaux_non_subventionnes: "NA",
+  travaux_non_subventionnes_description: "",
+  travaux_non_subventionnes_montant: 0,
+  travaux_non_subventionnes_financement: false,
+  commission_commerciale_ht: false,
+  commission_commerciale_ht_montant: 0,
   notes: "",
   subcontractor_id: null,
   additional_costs: [],
@@ -760,6 +789,36 @@ export const SiteDialog = ({
 
     values.notes = parsedNotes.text;
 
+    const allowedTravauxValues = TRAVAUX_NON_SUBVENTIONNES_OPTIONS.map(
+      (option) => option.value,
+    );
+    if (!allowedTravauxValues.includes(values.travaux_non_subventionnes)) {
+      values.travaux_non_subventionnes = defaultValues.travaux_non_subventionnes;
+    }
+
+    if (
+      values.travaux_non_subventionnes_montant === null ||
+      values.travaux_non_subventionnes_montant === undefined ||
+      Number.isNaN(values.travaux_non_subventionnes_montant)
+    ) {
+      values.travaux_non_subventionnes_montant = 0;
+    }
+
+    values.travaux_non_subventionnes_description =
+      values.travaux_non_subventionnes_description?.trim() ?? "";
+    values.travaux_non_subventionnes_financement = Boolean(
+      values.travaux_non_subventionnes_financement,
+    );
+    values.commission_commerciale_ht = Boolean(values.commission_commerciale_ht);
+
+    if (
+      values.commission_commerciale_ht_montant === null ||
+      values.commission_commerciale_ht_montant === undefined ||
+      Number.isNaN(values.commission_commerciale_ht_montant)
+    ) {
+      values.commission_commerciale_ht_montant = 0;
+    }
+
     if (
       values.valorisation_cee === null ||
       values.valorisation_cee === undefined ||
@@ -851,6 +910,11 @@ export const SiteDialog = ({
   const watchedSiteRef = form.watch("site_ref");
   const watchedStartDate = form.watch("date_debut");
   const watchedEndDate = form.watch("date_fin_prevue");
+  const watchedTravauxChoice = form.watch("travaux_non_subventionnes");
+  const watchedCommissionCommerciale = form.watch("commission_commerciale_ht");
+  const shouldShowTravauxDetails =
+    (watchedTravauxChoice ?? "NA") !== "NA";
+  const commissionCommercialeActive = watchedCommissionCommerciale === true;
 
   useEffect(() => {
     const currentProgress = form.getValues("progress_percentage");
@@ -975,6 +1039,25 @@ export const SiteDialog = ({
 
     const projectRef = values.project_ref?.trim?.() ?? "";
     const clientName = values.client_name?.trim?.() ?? "";
+    const travauxChoice = values.travaux_non_subventionnes ?? "NA";
+    const shouldResetTravaux = travauxChoice === "NA";
+    const travauxDescription = shouldResetTravaux
+      ? ""
+      : values.travaux_non_subventionnes_description?.trim() ?? "";
+    const travauxMontant = shouldResetTravaux
+      ? 0
+      : Number.isFinite(values.travaux_non_subventionnes_montant)
+        ? values.travaux_non_subventionnes_montant
+        : 0;
+    const travauxFinancement = shouldResetTravaux
+      ? false
+      : Boolean(values.travaux_non_subventionnes_financement);
+    const commissionActive = Boolean(values.commission_commerciale_ht);
+    const commissionMontant = commissionActive
+      ? Number.isFinite(values.commission_commerciale_ht_montant)
+        ? values.commission_commerciale_ht_montant
+        : 0
+      : 0;
 
     onSubmit({
       ...values,
@@ -983,6 +1066,12 @@ export const SiteDialog = ({
       subcontractor_id: values.subcontractor_id ?? null,
       additional_costs: filteredCosts,
       notes: serializedNotes,
+      travaux_non_subventionnes: travauxChoice,
+      travaux_non_subventionnes_description: travauxDescription,
+      travaux_non_subventionnes_montant: travauxMontant,
+      travaux_non_subventionnes_financement: travauxFinancement,
+      commission_commerciale_ht: commissionActive,
+      commission_commerciale_ht_montant: commissionMontant,
     });
   };
 
@@ -1334,6 +1423,118 @@ export const SiteDialog = ({
                   )}
                 />
 
+                <FormField
+                  control={form.control}
+                  name="travaux_non_subventionnes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Travaux non subventionnés</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                        disabled={isReadOnly}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sélectionner une option" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {TRAVAUX_NON_SUBVENTIONNES_OPTIONS.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Indique comment les travaux complémentaires sont financés.
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {shouldShowTravauxDetails ? (
+                  <div className="space-y-4 rounded-lg border border-dashed border-border/60 bg-muted/20 p-4">
+                    <FormField
+                      control={form.control}
+                      name="travaux_non_subventionnes_description"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Description</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              placeholder="Précisez les travaux réalisés et leur contexte"
+                              {...field}
+                              disabled={isReadOnly}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <FormField
+                        control={form.control}
+                        name="travaux_non_subventionnes_montant"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Montant des travaux (€)</FormLabel>
+                            <FormControl>
+                              <Input type="number" min={0} step={50} {...field} disabled={isReadOnly} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="travaux_non_subventionnes_financement"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={(checked) => field.onChange(checked === true)}
+                                disabled={isReadOnly}
+                              />
+                            </FormControl>
+                            <div className="space-y-1 leading-none">
+                              <FormLabel>Financement externe confirmé</FormLabel>
+                              <p className="text-sm text-muted-foreground">
+                                Activez si un financement complémentaire est mis en place.
+                              </p>
+                            </div>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </div>
+                ) : null}
+
+                <FormField
+                  control={form.control}
+                  name="commission_commerciale_ht"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={(checked) => field.onChange(checked === true)}
+                          disabled={isReadOnly}
+                        />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel>Commission commerciale (HT)</FormLabel>
+                        <p className="text-sm text-muted-foreground">
+                          Indique si une commission commerciale HT est à prévoir.
+                        </p>
+                      </div>
+                    </FormItem>
+                  )}
+                />
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -1413,6 +1614,21 @@ export const SiteDialog = ({
                       </FormItem>
                     )}
                   />
+                  {commissionCommercialeActive ? (
+                    <FormField
+                      control={form.control}
+                      name="commission_commerciale_ht_montant"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Montant commission commerciale HT (€)</FormLabel>
+                          <FormControl>
+                            <Input type="number" min={0} step={50} {...field} disabled={isReadOnly} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ) : null}
                 </div>
 
                 <div className="space-y-2">
