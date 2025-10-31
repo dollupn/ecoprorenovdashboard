@@ -38,7 +38,7 @@ const fetchProjectStatuses = async (
     throw error;
   }
 
-  const rawStatuses = Array.isArray(data?.statuts_projets)
+  const rawStatuses = Array.isArray(data?.statuts_projets) && data.statuts_projets.length > 0
     ? (data?.statuts_projets as ProjectStatusSetting[])
     : DEFAULT_PROJECT_STATUSES;
 

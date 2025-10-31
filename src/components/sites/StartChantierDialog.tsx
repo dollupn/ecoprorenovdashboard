@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { z } from "zod";
@@ -133,15 +133,25 @@ export const StartChantierDialog = ({
   const driveConnection = useDriveConnectionStatus(currentOrgId ?? null);
   const driveUpload = useDriveUpload();
 
-  const activeStatuses = statuses.filter(s => s.isActive);
-  const defaultStatus = activeStatuses.find(s => s.value === "CHANTIER_PLANIFIE") ?? activeStatuses[0];
+  const activeStatuses = useMemo(
+    () => statuses.filter((s) => s.isActive),
+    [statuses],
+  );
+
+  const defaultStatus = useMemo(() => {
+    if (activeStatuses.length === 0) {
+      return "NOUVEAU";
+    }
+    const firstActive = activeStatuses.find((s) => s.value === "CHANTIER_PLANIFIE");
+    return firstActive?.value ?? activeStatuses[0]?.value ?? "NOUVEAU";
+  }, [activeStatuses]);
 
   const form = useForm<StartChantierFormValues>({
     resolver: zodResolver(startChantierSchema),
     defaultValues: {
       startDate: format(new Date(), "yyyy-MM-dd"),
       endDate: "",
-      status: defaultStatus?.value ?? "NOUVEAU",
+      status: defaultStatus,
       subcontractorId: null,
       notes: "",
     },
@@ -152,7 +162,7 @@ export const StartChantierDialog = ({
       form.reset({
         startDate: format(new Date(), "yyyy-MM-dd"),
         endDate: "",
-        status: defaultStatus?.value ?? "NOUVEAU",
+        status: defaultStatus,
         subcontractorId: null,
         notes: "",
       });
@@ -285,6 +295,8 @@ export const StartChantierDialog = ({
       return { chantier, project };
     },
   });
+
+  const canSubmit = activeStatuses.length > 0 && !creationMutation.isPending && !isSubmitting;
 
   const uploadPhotos = useCallback(
     async (chantier: StartChantierResponse["chantier"], internalNotes: string | undefined) => {
@@ -631,20 +643,27 @@ export const StartChantierDialog = ({
               ) : null}
             </div>
 
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-                Annuler
-              </Button>
-              <Button type="submit" disabled={isSubmitting || creationMutation.isPending}>
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Démarrage...
-                  </>
-                ) : (
-                  "Démarrer le chantier"
-                )}
-              </Button>
+            <div className="flex flex-col gap-3">
+              {activeStatuses.length === 0 && (
+                <div className="rounded-md bg-yellow-50 dark:bg-yellow-950 p-3 text-sm text-yellow-800 dark:text-yellow-200 border border-yellow-200 dark:border-yellow-800">
+                  Aucun statut actif disponible. Veuillez configurer les statuts dans les paramètres.
+                </div>
+              )}
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+                  Annuler
+                </Button>
+                <Button type="submit" disabled={!canSubmit}>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Démarrage...
+                    </>
+                  ) : (
+                    "Démarrer le chantier"
+                  )}
+                </Button>
+              </div>
             </div>
           </form>
         </Form>
