@@ -33,6 +33,7 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database, Tables, ProjectStatus } from "@/integrations/supabase/types";
+import { startChantier, updateChantierStatus } from "@/integrations/chantiers";
 import { useAuth } from "@/hooks/useAuth";
 import {
   getProjectClientName,
@@ -2253,6 +2254,7 @@ const ProjectDetails = () => {
   const [quoteInitialValues, setQuoteInitialValues] = useState<
     Partial<QuoteFormValues>
   >({});
+  const [quickStartOpen, setQuickStartOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
@@ -2760,7 +2762,7 @@ const ProjectDetails = () => {
 
   const projectRefFilter = project?.project_ref?.trim() ?? "";
 
-  const {
+  const { 
     data: projectSites = [],
     isLoading: projectSitesLoading,
     refetch: refetchProjectSites,
@@ -2793,6 +2795,71 @@ const ProjectDetails = () => {
     enabled: Boolean(project?.id && currentOrgId),
   });
 
+  const startChantierMutation = useMutation({
+    mutationKey: ["project-start-chantier", project?.id],
+    mutationFn: async (values: AvantChantierFormValues) => {
+      if (!project) {
+        throw new Error("Le projet n'est plus disponible.");
+      }
+
+      const primaryProduct =
+        projectProducts[0]?.product ?? project.project_products?.[0]?.product ?? null;
+      const resolvedProductName =
+        primaryProduct?.name ??
+        primaryProduct?.code ??
+        (project as Project & { product_name?: string | null }).product_name ??
+        project.project_ref ??
+        null;
+
+      const payload = {
+        siteRef: values.siteRef?.trim() ?? undefined,
+        dateDebut: values.startDate,
+        dateFinPrevue: values.expectedEndDate ?? null,
+        notes: values.notes?.trim() ? values.notes.trim() : null,
+        productName: resolvedProductName,
+        address:
+          (project as Project & { address?: string | null }).address ??
+          project.hq_address ??
+          null,
+        city: project.city ?? null,
+        postalCode: project.postal_code ?? null,
+        teamMembers:
+          values.teamLead && values.teamLead.trim().length > 0
+            ? [values.teamLead.trim()]
+            : [],
+      } satisfies Parameters<typeof startChantier>[1];
+
+      return await startChantier(project.id, payload);
+    },
+    onSuccess: async (result) => {
+      setQuickStartOpen(false);
+      toast({
+        title: "Chantier démarré",
+        description: `${result.chantier.site_ref} a été initialisé avec succès.`,
+      });
+      await Promise.all([refetchProjectSites(), refetch()]);
+    },
+    onError: (error) => {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Impossible de démarrer le chantier pour le moment.";
+      toast({
+        title: "Démarrage échoué",
+        description: message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleQuickStartSubmit = useCallback(
+    async (values: AvantChantierFormValues) => {
+      await startChantierMutation.mutateAsync(values);
+    },
+    [startChantierMutation],
+  );
+
+  const isStartingChantier = startChantierMutation.isPending;
   const startChantierDisabled = !project?.id;
   const startChantierDisabledReason = startChantierDisabled
     ? "Le projet doit être enregistré avant de démarrer un chantier."
@@ -3984,7 +4051,7 @@ const ProjectDetails = () => {
           ? activeSite.project_id
           : project.id;
 
-    const siteData = {
+    const baseSiteData = {
       site_ref: values.site_ref,
       project_ref: projectRef,
       client_name: clientName,
@@ -4030,31 +4097,47 @@ const ProjectDetails = () => {
       rentability_additional_costs_total: values.rentability_additional_costs_total,
     };
 
+    const { status: nextStatus, ...siteUpdateData } = baseSiteData;
+    const normalizedNextStatus = typeof nextStatus === "string" ? nextStatus : null;
+    const statusChanged =
+      siteDialogMode === "edit" &&
+      activeSite &&
+      normalizedNextStatus &&
+      normalizedNextStatus !== activeSite.status;
+
     try {
       if (siteDialogMode === "edit" && activeSite) {
         const { error } = await supabase
           .from("sites")
-          .update(siteData)
+          .update(siteUpdateData)
           .eq("id", activeSite.id);
 
         if (error) throw error;
+
+        if (statusChanged) {
+          await updateChantierStatus(activeSite.id, normalizedNextStatus);
+        }
 
         toast({
           title: "Chantier mis à jour",
           description: `${values.site_ref} a été mis à jour avec succès.`,
         });
       } else {
-        const { error } = await supabase.from("sites").insert([siteData]);
+        const { error } = await supabase.from("sites").insert([baseSiteData]);
 
         if (error) throw error;
 
         toast({
           title: "Chantier créé",
-          description: `${siteData.site_ref} a été ajouté à la liste des chantiers.`,
+          description: `${baseSiteData.site_ref} a été ajouté à la liste des chantiers.`,
         });
       }
 
-      await refetchProjectSites();
+      if (statusChanged) {
+        await Promise.all([refetchProjectSites(), refetch()]);
+      } else {
+        await refetchProjectSites();
+      }
       setSiteDialogOpen(false);
       setSiteInitialValues(undefined);
       setActiveSite(null);
@@ -4523,14 +4606,47 @@ const ProjectDetails = () => {
                       </p>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+              </CardContent>
+            </Card>
 
-              <div className="flex flex-col gap-6">
-                <Card className="shadow-card bg-gradient-card border-0">
-                  <CardHeader>
-                    <CardTitle>Finances & planning</CardTitle>
-                  </CardHeader>
+            <Card className="shadow-card border border-dashed border-primary/20">
+              <CardHeader>
+                <CardTitle>Démarrer un chantier</CardTitle>
+                <CardDescription>
+                  Initialisez rapidement un chantier opérationnel synchronisé avec
+                  ce projet.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <p className="text-sm text-muted-foreground">
+                  Créez un chantier prérempli avec les informations du projet et
+                  mettez à jour automatiquement le statut associé.
+                </p>
+                <Button
+                  onClick={() => setQuickStartOpen(true)}
+                  className="inline-flex items-center gap-2"
+                  disabled={isStartingChantier}
+                >
+                  {isStartingChantier ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Initialisation...
+                    </>
+                  ) : (
+                    <>
+                      <Hammer className="h-4 w-4" />
+                      Démarrer le chantier
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <div className="flex flex-col gap-6">
+              <Card className="shadow-card bg-gradient-card border-0">
+                <CardHeader>
+                  <CardTitle>Finances & planning</CardTitle>
+                </CardHeader>
                   <CardContent className="space-y-4 text-sm">
                     <div className="flex items-center gap-2">
                       <Euro className="w-4 h-4 text-primary" />
@@ -5473,6 +5589,29 @@ const ProjectDetails = () => {
             </Card>
           </TabsContent>
         </Tabs>
+
+        <Dialog
+          open={quickStartOpen}
+          onOpenChange={(open) => {
+            if (startChantierMutation.isPending) {
+              return;
+            }
+            setQuickStartOpen(open);
+          }}
+        >
+          <DialogContent className="max-w-xl">
+            <DialogHeader>
+              <DialogTitle>Initialiser un chantier</DialogTitle>
+            </DialogHeader>
+            {project ? (
+              <AvantChantierForm
+                project={project}
+                onSubmit={handleQuickStartSubmit}
+                isSubmitting={isStartingChantier}
+              />
+            ) : null}
+          </DialogContent>
+        </Dialog>
 
         <AddQuoteDialog
           open={quoteDialogOpen}
