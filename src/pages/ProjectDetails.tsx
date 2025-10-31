@@ -84,6 +84,11 @@ import {
   type SiteProjectOption,
 } from "@/components/sites/SiteDialog";
 import {
+  TRAVAUX_NON_SUBVENTIONNES_LABELS,
+  TRAVAUX_NON_SUBVENTIONNES_OPTIONS,
+  type TravauxNonSubventionnesValue,
+} from "@/components/sites/travauxNonSubventionnes";
+import {
   getDynamicFieldEntries,
   getDynamicFieldNumericValue,
   formatDynamicFieldValue,
@@ -3915,6 +3920,12 @@ const ProjectDetails = () => {
       isolation_utilisee_m2: 0,
       montant_commission: 0,
       valorisation_cee: valorisationEur ?? 0,
+      travaux_non_subventionnes: "NA",
+      travaux_non_subventionnes_description: "",
+      travaux_non_subventionnes_montant: 0,
+      travaux_non_subventionnes_financement: false,
+      commission_commerciale_ht: false,
+      commission_commerciale_ht_montant: 0,
       subcontractor_id: null,
       team_members: [],
       additional_costs: [],
@@ -3957,6 +3968,31 @@ const ProjectDetails = () => {
     setSiteDialogReadOnly(readOnly);
     setSiteDialogDefaultTab(defaultTab);
     setActiveSite(site);
+    const rawTravauxChoice = (site.travaux_non_subventionnes ?? "NA") as
+      | TravauxNonSubventionnesValue
+      | string;
+    const isValidTravauxChoice = TRAVAUX_NON_SUBVENTIONNES_OPTIONS.some(
+      (option) => option.value === rawTravauxChoice,
+    );
+    const resolvedTravauxChoice = isValidTravauxChoice
+      ? (rawTravauxChoice as TravauxNonSubventionnesValue)
+      : "NA";
+    const travauxDescription =
+      typeof site.travaux_non_subventionnes_description === "string"
+        ? site.travaux_non_subventionnes_description.trim()
+        : "";
+    const travauxMontant =
+      typeof site.travaux_non_subventionnes_montant === "number" &&
+      Number.isFinite(site.travaux_non_subventionnes_montant)
+        ? site.travaux_non_subventionnes_montant
+        : 0;
+    const travauxFinancement = Boolean(site.travaux_non_subventionnes_financement);
+    const commissionCommercialeActive = Boolean(site.commission_commerciale_ht);
+    const commissionCommercialeMontant =
+      typeof site.commission_commerciale_ht_montant === "number" &&
+      Number.isFinite(site.commission_commerciale_ht_montant)
+        ? site.commission_commerciale_ht_montant
+        : 0;
     setSiteInitialValues({
       site_ref: site.site_ref,
       project_ref: site.project_ref,
@@ -3978,6 +4014,12 @@ const ProjectDetails = () => {
       isolation_utilisee_m2: site.isolation_utilisee_m2 ?? 0,
       montant_commission: site.montant_commission ?? 0,
       valorisation_cee: site.valorisation_cee ?? 0,
+      travaux_non_subventionnes: resolvedTravauxChoice,
+      travaux_non_subventionnes_description: travauxDescription,
+      travaux_non_subventionnes_montant: travauxMontant,
+      travaux_non_subventionnes_financement: travauxFinancement,
+      commission_commerciale_ht: commissionCommercialeActive,
+      commission_commerciale_ht_montant: commissionCommercialeMontant,
       notes: site.notes ?? "",
       subcontractor_payment_confirmed: Boolean(
         site.subcontractor_payment_confirmed,
@@ -4035,6 +4077,25 @@ const ProjectDetails = () => {
 
     const projectRef = values.project_ref?.trim?.() ?? "";
     const clientName = values.client_name?.trim?.() ?? "";
+    const travauxChoice = values.travaux_non_subventionnes ?? "NA";
+    const shouldResetTravaux = travauxChoice === "NA";
+    const travauxDescription = shouldResetTravaux
+      ? ""
+      : values.travaux_non_subventionnes_description?.trim() ?? "";
+    const travauxMontant = shouldResetTravaux
+      ? 0
+      : Number.isFinite(values.travaux_non_subventionnes_montant)
+        ? values.travaux_non_subventionnes_montant
+        : 0;
+    const travauxFinancement = shouldResetTravaux
+      ? false
+      : Boolean(values.travaux_non_subventionnes_financement);
+    const commissionActive = Boolean(values.commission_commerciale_ht);
+    const commissionMontant = commissionActive
+      ? Number.isFinite(values.commission_commerciale_ht_montant)
+        ? values.commission_commerciale_ht_montant
+        : 0
+      : 0;
     const matchedProject = projectSiteOptions.find(
       (option) => option.project_ref === projectRef,
     );
@@ -4070,6 +4131,12 @@ const ProjectDetails = () => {
       montant_commission: values.montant_commission,
       valorisation_cee: values.valorisation_cee,
       subcontractor_payment_confirmed: values.subcontractor_payment_confirmed,
+      travaux_non_subventionnes: travauxChoice,
+      travaux_non_subventionnes_description: travauxDescription,
+      travaux_non_subventionnes_montant: travauxMontant,
+      travaux_non_subventionnes_financement: travauxFinancement,
+      commission_commerciale_ht: commissionActive,
+      commission_commerciale_ht_montant: commissionMontant,
       notes: values.notes?.trim() || null,
       team_members: (sanitizedTeam.length > 0 ? sanitizedTeam : []) as string[],
       additional_costs: sanitizedCosts.length > 0 ? sanitizedCosts : [],
@@ -4998,6 +5065,38 @@ const ProjectDetails = () => {
                         typeof site.valorisation_cee === "number"
                           ? formatCurrency(site.valorisation_cee)
                           : "—";
+                      const rawTravauxChoice = (site.travaux_non_subventionnes ?? "NA") as
+                        | TravauxNonSubventionnesValue
+                        | string;
+                      const isValidTravauxChoice = TRAVAUX_NON_SUBVENTIONNES_OPTIONS.some(
+                        (option) => option.value === rawTravauxChoice,
+                      );
+                      const travauxChoice = isValidTravauxChoice
+                        ? (rawTravauxChoice as TravauxNonSubventionnesValue)
+                        : "NA";
+                      const travauxLabel =
+                        TRAVAUX_NON_SUBVENTIONNES_LABELS[travauxChoice] ?? "N/A";
+                      const hasTravauxDetails = travauxChoice !== "NA";
+                      const travauxDescription =
+                        typeof site.travaux_non_subventionnes_description === "string"
+                          ? site.travaux_non_subventionnes_description.trim()
+                          : "";
+                      const travauxMontant =
+                        typeof site.travaux_non_subventionnes_montant === "number" &&
+                        Number.isFinite(site.travaux_non_subventionnes_montant)
+                          ? site.travaux_non_subventionnes_montant
+                          : 0;
+                      const travauxFinancement = hasTravauxDetails
+                        ? Boolean(site.travaux_non_subventionnes_financement)
+                        : false;
+                      const commissionCommercialeActive = Boolean(
+                        site.commission_commerciale_ht,
+                      );
+                      const commissionCommercialeMontant =
+                        typeof site.commission_commerciale_ht_montant === "number" &&
+                        Number.isFinite(site.commission_commerciale_ht_montant)
+                          ? site.commission_commerciale_ht_montant
+                          : 0;
 
                       return (
                         <div
@@ -5243,6 +5342,64 @@ const ProjectDetails = () => {
                                   </span>
                                   <span className="font-medium text-foreground">
                                     {primeDisplay}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Travaux non subventionnés
+                                  </span>
+                                  <span className="font-medium text-foreground">
+                                    {travauxLabel}
+                                  </span>
+                                </div>
+                                {hasTravauxDetails ? (
+                                  <>
+                                    {travauxDescription ? (
+                                      <div>
+                                        <span className="text-muted-foreground">Description</span>
+                                        <p className="mt-1 text-sm font-medium text-foreground">
+                                          {travauxDescription}
+                                        </p>
+                                      </div>
+                                    ) : null}
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-muted-foreground">
+                                        Montant travaux
+                                      </span>
+                                      <span className="font-medium text-foreground">
+                                        {formatCurrency(travauxMontant)}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-muted-foreground">
+                                        Financement externe
+                                      </span>
+                                      <span
+                                        className={`font-medium ${
+                                          travauxFinancement
+                                            ? "text-emerald-600"
+                                            : "text-muted-foreground"
+                                        }`}
+                                      >
+                                        {travauxFinancement ? "Oui" : "Non"}
+                                      </span>
+                                    </div>
+                                  </>
+                                ) : null}
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Commission commerciale HT
+                                  </span>
+                                  <span
+                                    className={`font-medium ${
+                                      commissionCommercialeActive
+                                        ? "text-foreground"
+                                        : "text-muted-foreground"
+                                    }`}
+                                  >
+                                    {commissionCommercialeActive
+                                      ? formatCurrency(commissionCommercialeMontant)
+                                      : "Non"}
                                   </span>
                                 </div>
                                 <div className="flex items-center justify-between gap-2">
