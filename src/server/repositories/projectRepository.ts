@@ -1,4 +1,4 @@
-import type { PostgrestSingleResponse } from "@supabase/supabase-js";
+import type { PostgrestResponse, PostgrestSingleResponse } from "@supabase/supabase-js";
 
 import type { Database } from "../../integrations/supabase/types";
 import { getServiceSupabaseClient } from "./supabaseClient";
@@ -105,6 +105,25 @@ export const updateProjectStatus = async (
   }
 
   return response.data;
+};
+
+export const updateChantiersStatusForProject = async (
+  projectId: string,
+  orgId: string,
+  status: SiteRow["status"],
+): Promise<SiteRow[]> => {
+  const response: PostgrestResponse<SiteRow> = await client()
+    .from("sites")
+    .update({ status })
+    .eq("project_id", projectId)
+    .eq("org_id", orgId)
+    .select("*");
+
+  if (response.error) {
+    throw response.error;
+  }
+
+  return response.data ?? [];
 };
 
 export const fetchChantierById = async (
