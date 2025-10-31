@@ -44,6 +44,7 @@ import {
   LayoutGrid,
   List,
   HardHat,
+  Loader2,
 } from "lucide-react";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useMembers } from "@/features/members/api";
@@ -1556,64 +1557,7 @@ const Projects = ({
                         </div>
 
                           {/* Action Buttons */}
-                          <div className="flex gap-2 pt-3">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="flex-1 h-8 justify-between gap-2 text-xs"
-                                  disabled={isStatusUpdating}
-                                  onClick={(event) => event.stopPropagation()}
-                                  onPointerDown={(event) => event.stopPropagation()}
-                                  onKeyDown={(event) => event.stopPropagation()}
-                                >
-                                  <span className="flex items-center gap-1">
-                                    Statut
-                                    <Badge
-                                      variant="outline"
-                                      style={badgeStyle}
-                                      className="border-none text-[10px] font-medium"
-                                    >
-                                      {statusLabel}
-                                    </Badge>
-                                  </span>
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent
-                                align="start"
-                                className="w-48"
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                {projectStatuses.map((statusOption) => {
-                                  const optionBadgeStyle = getProjectStatusBadgeStyle(statusOption.color);
-                                  const isCurrentStatus = statusOption.value === project.status;
-
-                                  return (
-                                    <DropdownMenuItem
-                                      key={statusOption.value}
-                                      disabled={isStatusUpdating || isCurrentStatus}
-                                      className="flex items-center justify-between gap-2 text-xs"
-                                      onClick={(event) => event.stopPropagation()}
-                                      onSelect={() => {
-                                        if (!isCurrentStatus) {
-                                          void handleProjectStatusChange(project.id, statusOption.value);
-                                        }
-                                      }}
-                                    >
-                                      <span className="truncate">{statusOption.label}</span>
-                                      <Badge
-                                        variant="outline"
-                                        style={optionBadgeStyle}
-                                        className="border-none text-[10px] font-medium"
-                                      >
-                                        {statusOption.label}
-                                      </Badge>
-                                    </DropdownMenuItem>
-                                  );
-                                })}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                          <div className="flex gap-2 pt-2">
                             <Button
                               size="sm"
                               variant="outline"
