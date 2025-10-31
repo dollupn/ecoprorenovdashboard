@@ -82,6 +82,7 @@ import {
   type SiteProjectOption,
   type SiteSubmitValues,
 } from "@/components/sites/SiteDialog";
+import { StartChantierDialog } from "@/components/sites/StartChantierDialog";
 import {
   TRAVAUX_NON_SUBVENTIONNES_LABELS,
   TRAVAUX_NON_SUBVENTIONNES_OPTIONS,
@@ -2256,6 +2257,7 @@ const ProjectDetails = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
+  const [startChantierDialogOpen, setStartChantierDialogOpen] = useState(false);
   const [siteDialogOpen, setSiteDialogOpen] = useState(false);
   const [siteDialogMode, setSiteDialogMode] = useState<"create" | "edit">(
     "create",
@@ -2790,6 +2792,11 @@ const ProjectDetails = () => {
     },
     enabled: Boolean(project?.id && currentOrgId),
   });
+
+  const startChantierDisabled = !project?.id;
+  const startChantierDisabledReason = startChantierDisabled
+    ? "Le projet doit être enregistré avant de démarrer un chantier."
+    : undefined;
 
   const uploadMediaMutation = useMutation({
     mutationKey: ["project-media-upload", project?.id, selectedMediaCategory],
@@ -3874,85 +3881,6 @@ const ProjectDetails = () => {
     );
   }
 
-  const handleCreateSite = async () => {
-    if (!project || !currentOrgId) return;
-
-    const displayedProducts = getDisplayedProducts(project.project_products);
-    const firstProduct =
-      displayedProducts[0]?.product ??
-      project.project_products?.[0]?.product ??
-      null;
-    const productLabel =
-      firstProduct?.code ||
-      (project as Project & { product_name?: string | null }).product_name ||
-      "";
-    const clientName = getProjectClientName(project);
-    const address =
-      (project as Project & { address?: string | null }).address ?? "";
-
-    const today = new Date();
-    const datePrefix = `SITE-${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(
-      today.getDate(),
-    ).padStart(2, "0")}`;
-
-    const { data: existingSites } = await supabase
-      .from("sites")
-      .select("site_ref")
-      .eq("org_id", currentOrgId)
-      .like("site_ref", `${datePrefix}-%`)
-      .order("created_at", { ascending: false })
-      .limit(1);
-
-    let nextNumber = 1;
-    if (existingSites && existingSites.length > 0) {
-      const lastRef = existingSites[0].site_ref;
-      const lastNumber = parseInt(lastRef.split("-").pop() || "0", 10);
-      nextNumber = Number.isFinite(lastNumber) ? lastNumber + 1 : 1;
-    }
-
-    const site_ref = `${datePrefix}-${String(nextNumber).padStart(3, "0")}`;
-    const valorisationEur = hasComputedCeeTotals
-      ? ceeTotals.totalValorisationEur
-      : (ceeTotals.totalPrime ?? 0);
-
-    setSiteDialogMode("create");
-    setActiveSite(null);
-    setSiteDialogDefaultTab("avant-chantier");
-    setSiteDialogReadOnly(false);
-    setSiteInitialValues({
-      site_ref,
-      project_ref: project.project_ref ?? "",
-      client_name: clientName,
-      product_name: productLabel,
-      address,
-      city: project.city ?? "",
-      postal_code: project.postal_code ?? "",
-      date_debut: new Date().toISOString().slice(0, 10),
-      status: "PLANIFIE",
-      cofrac_status: "EN_ATTENTE",
-      progress_percentage: 0,
-      revenue: 0,
-      profit_margin: 0,
-      surface_facturee: projectSurfaceFacturee > 0 ? projectSurfaceFacturee : 0,
-      cout_main_oeuvre_m2_ht: 0,
-      cout_isolation_m2: 0,
-      isolation_utilisee_m2: 0,
-      montant_commission: 0,
-      valorisation_cee: valorisationEur ?? 0,
-      travaux_non_subventionnes: "NA",
-      travaux_non_subventionnes_description: "",
-      travaux_non_subventionnes_montant: 0,
-      travaux_non_subventionnes_financement: false,
-      commission_commerciale_ht: false,
-      commission_commerciale_ht_montant: 0,
-      subcontractor_id: null,
-      team_members: [],
-      additional_costs: [],
-      subcontractor_payment_confirmed: false,
-    });
-    setSiteDialogOpen(true);
-  };
-
   const handleOpenQuote = () => {
     const displayedProducts = getDisplayedProducts(project.project_products);
     const firstProduct =
@@ -4953,13 +4881,13 @@ const ProjectDetails = () => {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => {
-                    void handleCreateSite();
-                  }}
+                  onClick={() => setStartChantierDialogOpen(true)}
                   className="inline-flex items-center gap-2"
+                  disabled={startChantierDisabled}
+                  title={startChantierDisabledReason}
                 >
                   <Hammer className="h-4 w-4" />
-                  Nouveau chantier
+                  Démarrer Chantier
                 </Button>
               </CardHeader>
               <CardContent>
@@ -4978,15 +4906,20 @@ const ProjectDetails = () => {
                       </p>
                     </div>
                     <Button
-                      onClick={() => {
-                        void handleCreateSite();
-                      }}
+                      onClick={() => setStartChantierDialogOpen(true)}
                       size="sm"
                       className="inline-flex items-center gap-2"
+                      disabled={startChantierDisabled}
+                      title={startChantierDisabledReason}
                     >
                       <Plus className="h-4 w-4" />
-                      Créer un chantier
+                      Démarrer un chantier
                     </Button>
+                    {startChantierDisabled && startChantierDisabledReason ? (
+                      <p className="text-xs text-muted-foreground">
+                        {startChantierDisabledReason}
+                      </p>
+                    ) : null}
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -5004,10 +4937,16 @@ const ProjectDetails = () => {
                       const parsedSiteNotes = parseSiteNotes(site.notes);
                       const internalNotes = parsedSiteNotes.text?.trim() ?? "";
                       const hasInternalNotes = internalNotes.length > 0;
-                      const driveFile = parsedSiteNotes.driveFile;
-                      const driveLink = driveFile?.webViewLink ?? null;
-                      const driveLabel = driveFile?.name ?? "Document chantier";
-                      const hasDriveFile = Boolean(driveLink);
+                      const attachments = parsedSiteNotes.attachments;
+                      const primaryAttachment = attachments[0] ?? parsedSiteNotes.driveFile;
+                      const driveLink =
+                        primaryAttachment?.webViewLink ?? primaryAttachment?.webContentLink ?? null;
+                      const hasDriveFile = Boolean(driveLink) || attachments.length > 0;
+                      const extraAttachmentCount = Math.max(0, attachments.length - 1);
+                      const driveLabel =
+                        attachments.length > 1
+                          ? `${attachments.length} documents`
+                          : primaryAttachment?.name ?? "Document chantier";
                       const additionalCostCount = Array.isArray(
                         site.additional_costs,
                       )
@@ -5228,6 +5167,292 @@ const ProjectDetails = () => {
                               </div>
                             ) : null}
                           </CardContent>
+                          </div>
+
+                          <div className="grid gap-4 lg:grid-cols-2">
+                            <Card className="border border-border/60 bg-background/60">
+                              <CardHeader className="pb-2">
+                                <CardTitle className="flex items-center gap-2 text-base">
+                                  <ClipboardList className="h-4 w-4 text-primary" />
+                                  Avant Chantier
+                                </CardTitle>
+                                <CardDescription>
+                                  Préparation et équipe
+                                </CardDescription>
+                              </CardHeader>
+                              <CardContent className="space-y-3 text-sm">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Statut
+                                  </span>
+                                  <Badge
+                                    variant="outline"
+                                    className={getStatusColor(status)}
+                                  >
+                                    {getStatusLabel(status)}
+                                  </Badge>
+                                </div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Début chantier
+                                  </span>
+                                  <span className="font-medium text-foreground">
+                                    {new Date(
+                                      site.date_debut,
+                                    ).toLocaleDateString("fr-FR")}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Fin prévue
+                                  </span>
+                                  <span className="font-medium text-foreground">
+                                    {site.date_fin_prevue
+                                      ? new Date(
+                                          site.date_fin_prevue,
+                                        ).toLocaleDateString("fr-FR")
+                                      : "—"}
+                                  </span>
+                                </div>
+                                {teamMembersLabel ? (
+                                  <div className="flex items-start justify-between gap-2">
+                                    <span className="text-muted-foreground">
+                                      Équipe dédiée
+                                    </span>
+                                    <span className="text-right font-medium text-foreground">
+                                      {teamMembersLabel}
+                                    </span>
+                                  </div>
+                                ) : null}
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="flex items-center gap-2 text-muted-foreground">
+                                    <Camera className="h-4 w-4" /> Docs & photos
+                                  </span>
+                                  {hasDriveFile ? (
+                                    driveLink ? (
+                                      <div className="flex items-center gap-2">
+                                        <a
+                                          href={driveLink}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                                        >
+                                          <FolderOpen className="h-4 w-4" />
+                                          <span className="font-medium">{driveLabel}</span>
+                                        </a>
+                                        {extraAttachmentCount > 0 ? (
+                                          <Badge variant="outline" className="px-2 text-xs font-medium">
+                                            +{extraAttachmentCount}
+                                          </Badge>
+                                        ) : null}
+                                      </div>
+                                    ) : (
+                                      <span className="font-medium text-foreground">{driveLabel}</span>
+                                    )
+                                  ) : (
+                                    <span className="font-medium text-muted-foreground">Aucun</span>
+                                  )}
+                                </div>
+                              </CardContent>
+                              <CardFooter className="flex justify-end">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() =>
+                                    handleEditSite(site, {
+                                      readOnly: !canManageSites,
+                                      defaultTab: "avant-chantier",
+                                    })
+                                  }
+                                >
+                                  Voir détails
+                                </Button>
+                              </CardFooter>
+                            </Card>
+
+                            <Card className="border border-border/60 bg-background/60">
+                              <CardHeader className="pb-2">
+                                <CardTitle className="flex items-center gap-2 text-base">
+                                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                                  Après Chantier
+                                </CardTitle>
+                                <CardDescription>
+                                  Suivi qualité & financier
+                                </CardDescription>
+                              </CardHeader>
+                              <CardContent className="space-y-3 text-sm">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Statut COFRAC
+                                  </span>
+                                  <Badge variant="outline">
+                                    {getCofracStatusLabel(cofracStatus)}
+                                  </Badge>
+                                </div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Avancement
+                                  </span>
+                                  <span className="font-medium text-foreground">
+                                    {progressValue}%
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Chiffre d'affaires
+                                  </span>
+                                  <span className="font-medium text-foreground">
+                                    {revenueDisplay}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Prime CEE
+                                  </span>
+                                  <span className="font-medium text-foreground">
+                                    {primeDisplay}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Frais de chantier
+                                    Travaux non subventionnés
+                                  </span>
+                                  <span className="font-medium text-foreground">
+                                    {travauxLabel}
+                                  </span>
+                                </div>
+                                {hasTravauxDetails ? (
+                                  <>
+                                    {travauxDescription ? (
+                                      <div>
+                                        <span className="text-muted-foreground">Description</span>
+                                        <p className="mt-1 text-sm font-medium text-foreground">
+                                          {travauxDescription}
+                                        </p>
+                                      </div>
+                                    ) : null}
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-muted-foreground">
+                                        Montant travaux
+                                      </span>
+                                      <span className="font-medium text-foreground">
+                                        {formatCurrency(travauxMontant)}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-muted-foreground">
+                                        Financement externe
+                                      </span>
+                                      <span
+                                        className={`font-medium ${
+                                          travauxFinancement
+                                            ? "text-emerald-600"
+                                            : "text-muted-foreground"
+                                        }`}
+                                      >
+                                        {travauxFinancement ? "Oui" : "Non"}
+                                      </span>
+                                    </div>
+                                  </>
+                                ) : null}
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Commission commerciale HT
+                                  </span>
+                                  <span
+                                    className={`font-medium ${
+                                      commissionCommercialeActive
+                                        ? "text-foreground"
+                                        : "text-muted-foreground"
+                                    }`}
+                                  >
+                                    {commissionCommercialeActive
+                                      ? formatCurrency(commissionCommercialeMontant)
+                                      : "Non"}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Coûts supplémentaires
+                                  </span>
+                                  <span className="font-medium text-foreground">
+                                    {additionalCostDisplay}
+                                  </span>
+                                </div>
+                                <div className="w-full">
+                                  <div className="rounded-md border border-primary/30 bg-primary/5 p-3">
+                                    <div className="text-xs font-semibold uppercase tracking-wide text-primary">
+                                      Rentabilité
+                                    </div>
+                                    <dl className="mt-2 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+                                      <div className="flex flex-col">
+                                        <dt>Frais de chantier (HT+TVA)</dt>
+                                        <dd className="text-sm font-semibold text-foreground">
+                                          {rentabilityAdditionalCostsDisplay}
+                                        </dd>
+                                      </div>
+                                      <div className="flex flex-col">
+                                        <dt>Coûts totaux</dt>
+                                        <dd className="text-sm font-semibold text-foreground">
+                                          {rentabilityTotalCostsDisplay}
+                                        </dd>
+                                      </div>
+                                      <div className="flex flex-col">
+                                        <dt>{rentabilityMarginPerUnitLabel}</dt>
+                                        <dd className="text-sm font-semibold text-foreground">
+                                          {rentabilityMarginPerUnitDisplay}
+                                        </dd>
+                                      </div>
+                                      <div className="flex flex-col">
+                                        <dt>Marge totale (€)</dt>
+                                        <dd className="text-sm font-semibold text-foreground">
+                                          {rentabilityMarginTotalDisplay}
+                                        </dd>
+                                      </div>
+                                      <div className="flex flex-col">
+                                        <dt>Marge (%)</dt>
+                                        <dd className="text-sm font-semibold text-foreground">
+                                          {rentabilityMarginRateDisplay}
+                                        </dd>
+                                      </div>
+                                    </dl>
+                                  </div>
+                                </div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Paiement sous-traitant
+                                  </span>
+                                  <span
+                                    className={`font-medium ${
+                                      site.subcontractor_payment_confirmed
+                                        ? "text-emerald-600"
+                                        : "text-muted-foreground"
+                                    }`}
+                                  >
+                                    {site.subcontractor_payment_confirmed
+                                      ? "Confirmé"
+                                      : "En attente"}
+                                  </span>
+                                </div>
+                              </CardContent>
+                              <CardFooter className="flex justify-end">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() =>
+                                    handleEditSite(site, {
+                                      readOnly: !canManageSites,
+                                      defaultTab: "apres-chantier",
+                                    })
+                                  }
+                                >
+                                  Voir détails
+                                </Button>
+                              </CardFooter>
+                            </Card>
+                          </div>
+
                           {hasInternalNotes ? (
                             <CardContent className="border-t border-border/40 pt-3 text-sm text-muted-foreground">
                               {internalNotes}
@@ -5259,6 +5484,15 @@ const ProjectDetails = () => {
           }}
           initialValues={quoteInitialValues}
         />
+        {project?.id ? (
+          <StartChantierDialog
+            projectId={project.id}
+            projectRef={project.project_ref ?? null}
+            projectName={getProjectClientName(project)}
+            open={startChantierDialogOpen}
+            onOpenChange={setStartChantierDialogOpen}
+          />
+        ) : null}
         <SiteDialog
           open={siteDialogOpen}
           mode={siteDialogMode}
