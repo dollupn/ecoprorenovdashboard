@@ -387,7 +387,10 @@ export const fetchScheduledAppointments = async (
     const location = deriveProjectLocation(project);
     const projectAssignedTo = getString(project?.assigned_to);
     const appointmentAssignee = getString(appointment.assignee_id);
-    const assignedTo = projectAssignedTo ?? (looksLikeUuid(appointmentAssignee) ? null : appointmentAssignee);
+    const assignedTo =
+      appointmentAssignee && !looksLikeUuid(appointmentAssignee)
+        ? appointmentAssignee
+        : projectAssignedTo;
 
     const fullName =
       deriveProjectClientName(project) ?? getString(project?.project_ref) ?? "Projet";
