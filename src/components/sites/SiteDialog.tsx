@@ -649,6 +649,14 @@ export const SiteDialog = ({
 
     values.notes = parsedNotes.text;
 
+    if (
+      values.valorisation_cee === null ||
+      values.valorisation_cee === undefined ||
+      Number.isNaN(values.valorisation_cee)
+    ) {
+      values.valorisation_cee = 0;
+    }
+
     if (!resolvedStatusOptions.includes(values.status)) {
       values.status = resolvedStatusOptions[0] ?? "";
     }
