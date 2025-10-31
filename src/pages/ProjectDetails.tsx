@@ -85,6 +85,11 @@ import {
   type SiteSubmitValues,
 } from "@/components/sites/SiteDialog";
 import {
+  TRAVAUX_NON_SUBVENTIONNES_LABELS,
+  TRAVAUX_NON_SUBVENTIONNES_OPTIONS,
+  type TravauxNonSubventionnesValue,
+} from "@/components/sites/travauxNonSubventionnes";
+import {
   getDynamicFieldEntries,
   getDynamicFieldNumericValue,
   formatDynamicFieldValue,
@@ -341,9 +346,13 @@ const isUuid = (value: string) =>
 const createEmptyAdditionalCost = (): SiteAdditionalCostFormValue => ({
   label: "",
   amount_ht: 0,
-  taxes: 0,
+  montant_tva: 0,
+  amount_ttc: 0,
   attachment: null,
 });
+
+const computeAdditionalCostTTC = (amountHT: number, montantTVA: number) =>
+  Math.round((amountHT + montantTVA) * 100) / 100;
 
 const parseNumber = (value: unknown): number | null => {
   if (typeof value === "number") {
@@ -547,7 +556,15 @@ const normalizeAdditionalCosts = (
         parseNumber(raw.amount) ??
         parseNumber(raw.amount_ttc) ??
         0;
-      const taxesValue = parseNumber(raw.taxes) ?? 0;
+      const montantTvaValue =
+        parseNumber(raw.montant_tva) ??
+        parseNumber(raw.taxes) ??
+        0;
+      const amountTTCValue =
+        parseNumber(raw.amount_ttc) ??
+        parseNumber(raw.total_ttc) ??
+        parseNumber(raw.amount) ??
+        computeAdditionalCostTTC(amountHTValue, montantTvaValue);
       const attachmentValue =
         typeof raw.attachment === "string" && raw.attachment.trim().length > 0
           ? raw.attachment.trim()
@@ -556,7 +573,8 @@ const normalizeAdditionalCosts = (
       return {
         label,
         amount_ht: amountHTValue,
-        taxes: taxesValue,
+        montant_tva: montantTvaValue,
+        amount_ttc: amountTTCValue,
         attachment: attachmentValue,
       } as SiteAdditionalCostFormValue;
     })
@@ -3924,6 +3942,12 @@ const ProjectDetails = () => {
       montant_commission: 0,
       travaux_non_subventionnes: 0,
       valorisation_cee: valorisationEur ?? 0,
+      travaux_non_subventionnes: "NA",
+      travaux_non_subventionnes_description: "",
+      travaux_non_subventionnes_montant: 0,
+      travaux_non_subventionnes_financement: false,
+      commission_commerciale_ht: false,
+      commission_commerciale_ht_montant: 0,
       subcontractor_id: null,
       team_members: [],
       additional_costs: [],
@@ -3966,6 +3990,31 @@ const ProjectDetails = () => {
     setSiteDialogReadOnly(readOnly);
     setSiteDialogDefaultTab(defaultTab);
     setActiveSite(site);
+    const rawTravauxChoice = (site.travaux_non_subventionnes ?? "NA") as
+      | TravauxNonSubventionnesValue
+      | string;
+    const isValidTravauxChoice = TRAVAUX_NON_SUBVENTIONNES_OPTIONS.some(
+      (option) => option.value === rawTravauxChoice,
+    );
+    const resolvedTravauxChoice = isValidTravauxChoice
+      ? (rawTravauxChoice as TravauxNonSubventionnesValue)
+      : "NA";
+    const travauxDescription =
+      typeof site.travaux_non_subventionnes_description === "string"
+        ? site.travaux_non_subventionnes_description.trim()
+        : "";
+    const travauxMontant =
+      typeof site.travaux_non_subventionnes_montant === "number" &&
+      Number.isFinite(site.travaux_non_subventionnes_montant)
+        ? site.travaux_non_subventionnes_montant
+        : 0;
+    const travauxFinancement = Boolean(site.travaux_non_subventionnes_financement);
+    const commissionCommercialeActive = Boolean(site.commission_commerciale_ht);
+    const commissionCommercialeMontant =
+      typeof site.commission_commerciale_ht_montant === "number" &&
+      Number.isFinite(site.commission_commerciale_ht_montant)
+        ? site.commission_commerciale_ht_montant
+        : 0;
     setSiteInitialValues({
       site_ref: site.site_ref,
       project_ref: site.project_ref,
@@ -3988,6 +4037,12 @@ const ProjectDetails = () => {
       montant_commission: site.montant_commission ?? 0,
       travaux_non_subventionnes: site.travaux_non_subventionnes ?? 0,
       valorisation_cee: site.valorisation_cee ?? 0,
+      travaux_non_subventionnes: resolvedTravauxChoice,
+      travaux_non_subventionnes_description: travauxDescription,
+      travaux_non_subventionnes_montant: travauxMontant,
+      travaux_non_subventionnes_financement: travauxFinancement,
+      commission_commerciale_ht: commissionCommercialeActive,
+      commission_commerciale_ht_montant: commissionCommercialeMontant,
       notes: site.notes ?? "",
       subcontractor_payment_confirmed: Boolean(
         site.subcontractor_payment_confirmed,
@@ -4033,11 +4088,17 @@ const ProjectDetails = () => {
           .filter((cost) => cost.label.trim().length > 0)
           .map((cost) => {
             const attachment = cost.attachment ? cost.attachment.trim() : "";
+            const montantTVA = Number.isFinite(cost.montant_tva) ? cost.montant_tva : 0;
+            const amountHT = Number.isFinite(cost.amount_ht) ? cost.amount_ht : 0;
+            const amountTTC = Number.isFinite(cost.amount_ttc)
+              ? cost.amount_ttc
+              : computeAdditionalCostTTC(amountHT, montantTVA);
 
             return {
               label: cost.label.trim(),
-              amount_ht: Number.isFinite(cost.amount_ht) ? cost.amount_ht : 0,
-              taxes: Number.isFinite(cost.taxes) ? cost.taxes : 0,
+              amount_ht: amountHT,
+              montant_tva: montantTVA,
+              amount_ttc: amountTTC,
               attachment: attachment.length > 0 ? attachment : null,
             };
           })
@@ -4045,6 +4106,25 @@ const ProjectDetails = () => {
 
     const projectRef = values.project_ref?.trim?.() ?? "";
     const clientName = values.client_name?.trim?.() ?? "";
+    const travauxChoice = values.travaux_non_subventionnes ?? "NA";
+    const shouldResetTravaux = travauxChoice === "NA";
+    const travauxDescription = shouldResetTravaux
+      ? ""
+      : values.travaux_non_subventionnes_description?.trim() ?? "";
+    const travauxMontant = shouldResetTravaux
+      ? 0
+      : Number.isFinite(values.travaux_non_subventionnes_montant)
+        ? values.travaux_non_subventionnes_montant
+        : 0;
+    const travauxFinancement = shouldResetTravaux
+      ? false
+      : Boolean(values.travaux_non_subventionnes_financement);
+    const commissionActive = Boolean(values.commission_commerciale_ht);
+    const commissionMontant = commissionActive
+      ? Number.isFinite(values.commission_commerciale_ht_montant)
+        ? values.commission_commerciale_ht_montant
+        : 0
+      : 0;
     const matchedProject = projectSiteOptions.find(
       (option) => option.project_ref === projectRef,
     );
@@ -4081,6 +4161,12 @@ const ProjectDetails = () => {
       travaux_non_subventionnes: values.travaux_non_subventionnes,
       valorisation_cee: values.valorisation_cee,
       subcontractor_payment_confirmed: values.subcontractor_payment_confirmed,
+      travaux_non_subventionnes: travauxChoice,
+      travaux_non_subventionnes_description: travauxDescription,
+      travaux_non_subventionnes_montant: travauxMontant,
+      travaux_non_subventionnes_financement: travauxFinancement,
+      commission_commerciale_ht: commissionActive,
+      commission_commerciale_ht_montant: commissionMontant,
       notes: values.notes?.trim() || null,
       team_members: (sanitizedTeam.length > 0 ? sanitizedTeam : []) as string[],
       additional_costs: sanitizedCosts.length > 0 ? sanitizedCosts : [],
@@ -5008,6 +5094,27 @@ const ProjectDetails = () => {
                       )
                         ? site.additional_costs.length
                         : 0;
+                      const additionalCostTotal = Array.isArray(site.additional_costs)
+                        ? site.additional_costs.reduce((total, rawCost) => {
+                            if (!rawCost || typeof rawCost !== "object") {
+                              return total;
+                            }
+
+                            const cost = rawCost as Record<string, unknown>;
+                            const amountHT = parseNumber(cost.amount_ht) ?? 0;
+                            const montantTVA =
+                              parseNumber(cost.montant_tva) ?? parseNumber(cost.taxes) ?? 0;
+                            const amountTTC =
+                              parseNumber(cost.amount_ttc) ??
+                              computeAdditionalCostTTC(amountHT, montantTVA);
+
+                            return total + amountTTC;
+                          }, 0)
+                        : 0;
+                      const additionalCostDisplay =
+                        additionalCostCount > 0
+                          ? `${formatCurrency(additionalCostTotal)} (${additionalCostCount})`
+                          : "—";
                       const revenueDisplay =
                         typeof site.revenue === "number"
                           ? formatCurrency(site.revenue)
@@ -5081,6 +5188,38 @@ const ProjectDetails = () => {
                       )
                         ? `${formatDecimal(rentabilityMetrics.marginPerUnit)} € / ${rentabilityMetrics.unitLabel}`
                         : `— / ${rentabilityMetrics.unitLabel}`;
+                      const rawTravauxChoice = (site.travaux_non_subventionnes ?? "NA") as
+                        | TravauxNonSubventionnesValue
+                        | string;
+                      const isValidTravauxChoice = TRAVAUX_NON_SUBVENTIONNES_OPTIONS.some(
+                        (option) => option.value === rawTravauxChoice,
+                      );
+                      const travauxChoice = isValidTravauxChoice
+                        ? (rawTravauxChoice as TravauxNonSubventionnesValue)
+                        : "NA";
+                      const travauxLabel =
+                        TRAVAUX_NON_SUBVENTIONNES_LABELS[travauxChoice] ?? "N/A";
+                      const hasTravauxDetails = travauxChoice !== "NA";
+                      const travauxDescription =
+                        typeof site.travaux_non_subventionnes_description === "string"
+                          ? site.travaux_non_subventionnes_description.trim()
+                          : "";
+                      const travauxMontant =
+                        typeof site.travaux_non_subventionnes_montant === "number" &&
+                        Number.isFinite(site.travaux_non_subventionnes_montant)
+                          ? site.travaux_non_subventionnes_montant
+                          : 0;
+                      const travauxFinancement = hasTravauxDetails
+                        ? Boolean(site.travaux_non_subventionnes_financement)
+                        : false;
+                      const commissionCommercialeActive = Boolean(
+                        site.commission_commerciale_ht,
+                      );
+                      const commissionCommercialeMontant =
+                        typeof site.commission_commerciale_ht_montant === "number" &&
+                        Number.isFinite(site.commission_commerciale_ht_montant)
+                          ? site.commission_commerciale_ht_montant
+                          : 0;
 
                       return (
                         <div
@@ -5330,10 +5469,69 @@ const ProjectDetails = () => {
                                 </div>
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="text-muted-foreground">
+                                    Frais de chantier
+                                    Travaux non subventionnés
+                                  </span>
+                                  <span className="font-medium text-foreground">
+                                    {travauxLabel}
+                                  </span>
+                                </div>
+                                {hasTravauxDetails ? (
+                                  <>
+                                    {travauxDescription ? (
+                                      <div>
+                                        <span className="text-muted-foreground">Description</span>
+                                        <p className="mt-1 text-sm font-medium text-foreground">
+                                          {travauxDescription}
+                                        </p>
+                                      </div>
+                                    ) : null}
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-muted-foreground">
+                                        Montant travaux
+                                      </span>
+                                      <span className="font-medium text-foreground">
+                                        {formatCurrency(travauxMontant)}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-muted-foreground">
+                                        Financement externe
+                                      </span>
+                                      <span
+                                        className={`font-medium ${
+                                          travauxFinancement
+                                            ? "text-emerald-600"
+                                            : "text-muted-foreground"
+                                        }`}
+                                      >
+                                        {travauxFinancement ? "Oui" : "Non"}
+                                      </span>
+                                    </div>
+                                  </>
+                                ) : null}
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Commission commerciale HT
+                                  </span>
+                                  <span
+                                    className={`font-medium ${
+                                      commissionCommercialeActive
+                                        ? "text-foreground"
+                                        : "text-muted-foreground"
+                                    }`}
+                                  >
+                                    {commissionCommercialeActive
+                                      ? formatCurrency(commissionCommercialeMontant)
+                                      : "Non"}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
                                     Coûts supplémentaires
                                   </span>
                                   <span className="font-medium text-foreground">
-                                    {additionalCostCount}
+                                    {additionalCostDisplay}
                                   </span>
                                 </div>
                                 <div className="w-full">

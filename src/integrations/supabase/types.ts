@@ -1183,6 +1183,12 @@ export type Database = {
           updated_at: string
           user_id: string
           valorisation_cee: number | null
+          travaux_non_subventionnes: string | null
+          travaux_non_subventionnes_description: string | null
+          travaux_non_subventionnes_financement: boolean | null
+          travaux_non_subventionnes_montant: number | null
+          commission_commerciale_ht: boolean | null
+          commission_commerciale_ht_montant: number | null
         }
         Insert: {
           additional_costs?: Json | null
@@ -1226,6 +1232,12 @@ export type Database = {
           updated_at?: string
           user_id: string
           valorisation_cee?: number | null
+          travaux_non_subventionnes?: string | null
+          travaux_non_subventionnes_description?: string | null
+          travaux_non_subventionnes_financement?: boolean | null
+          travaux_non_subventionnes_montant?: number | null
+          commission_commerciale_ht?: boolean | null
+          commission_commerciale_ht_montant?: number | null
         }
         Update: {
           additional_costs?: Json | null
@@ -1269,6 +1281,12 @@ export type Database = {
           updated_at?: string
           user_id?: string
           valorisation_cee?: number | null
+          travaux_non_subventionnes?: string | null
+          travaux_non_subventionnes_description?: string | null
+          travaux_non_subventionnes_financement?: boolean | null
+          travaux_non_subventionnes_montant?: number | null
+          commission_commerciale_ht?: boolean | null
+          commission_commerciale_ht_montant?: number | null
         }
         Relationships: [
           {

@@ -48,6 +48,7 @@ import {
   Loader2,
   NotebookPen,
   Images,
+  CheckCircle2,
 } from "lucide-react";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useMembers } from "@/features/members/api";
@@ -955,6 +956,12 @@ const Projects = ({
       montant_commission: 0,
       travaux_non_subventionnes: 0,
       valorisation_cee: valorisationTotalEur,
+      travaux_non_subventionnes: "NA",
+      travaux_non_subventionnes_description: "",
+      travaux_non_subventionnes_montant: 0,
+      travaux_non_subventionnes_financement: false,
+      commission_commerciale_ht: false,
+      commission_commerciale_ht_montant: 0,
       subcontractor_id: null,
       team_members: [],
       additional_costs: [],
@@ -1014,11 +1021,17 @@ const Projects = ({
           .filter((cost) => cost.label.trim().length > 0)
           .map((cost) => {
             const attachment = cost.attachment ? cost.attachment.trim() : "";
+            const montantTVA = Number.isFinite(cost.montant_tva) ? cost.montant_tva : 0;
+            const amountHT = Number.isFinite(cost.amount_ht) ? cost.amount_ht : 0;
+            const amountTTC = Number.isFinite(cost.amount_ttc)
+              ? cost.amount_ttc
+              : Math.round((amountHT + montantTVA) * 100) / 100;
 
             return {
               label: cost.label.trim(),
-              amount_ht: Number.isFinite(cost.amount_ht) ? cost.amount_ht : 0,
-              taxes: Number.isFinite(cost.taxes) ? cost.taxes : 0,
+              amount_ht: amountHT,
+              montant_tva: montantTVA,
+              amount_ttc: amountTTC,
               attachment: attachment.length > 0 ? attachment : null,
             };
           })
@@ -1026,6 +1039,25 @@ const Projects = ({
 
     const projectRef = values.project_ref?.trim?.() ?? "";
     const clientName = values.client_name?.trim?.() ?? "";
+    const travauxChoice = values.travaux_non_subventionnes ?? "NA";
+    const shouldResetTravaux = travauxChoice === "NA";
+    const travauxDescription = shouldResetTravaux
+      ? ""
+      : values.travaux_non_subventionnes_description?.trim() ?? "";
+    const travauxMontant = shouldResetTravaux
+      ? 0
+      : Number.isFinite(values.travaux_non_subventionnes_montant)
+        ? values.travaux_non_subventionnes_montant
+        : 0;
+    const travauxFinancement = shouldResetTravaux
+      ? false
+      : Boolean(values.travaux_non_subventionnes_financement);
+    const commissionActive = Boolean(values.commission_commerciale_ht);
+    const commissionMontant = commissionActive
+      ? Number.isFinite(values.commission_commerciale_ht_montant)
+        ? values.commission_commerciale_ht_montant
+        : 0
+      : 0;
     const matchedProject = projectOptions.find(
       (option) => option.project_ref === projectRef,
     );
@@ -1054,6 +1086,12 @@ const Projects = ({
       travaux_non_subventionnes: values.travaux_non_subventionnes,
       valorisation_cee: values.valorisation_cee,
       subcontractor_payment_confirmed: values.subcontractor_payment_confirmed,
+      travaux_non_subventionnes: travauxChoice,
+      travaux_non_subventionnes_description: travauxDescription,
+      travaux_non_subventionnes_montant: travauxMontant,
+      travaux_non_subventionnes_financement: travauxFinancement,
+      commission_commerciale_ht: commissionActive,
+      commission_commerciale_ht_montant: commissionMontant,
       notes: values.notes?.trim() || null,
       team_members: (sanitizedTeam.length > 0 ? sanitizedTeam : []) as string[],
       additional_costs: sanitizedCosts.length > 0 ? sanitizedCosts : [],
@@ -1382,13 +1420,61 @@ const Projects = ({
                                 </h3>
                               </button>
                               <div className="flex items-center gap-2 mt-1.5">
-                                <Badge 
-                                  variant="outline" 
-                                  style={badgeStyle} 
-                                  className="text-xs font-medium px-2.5 py-0.5"
-                                >
-                                  {statusLabel}
-                                </Badge>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild disabled={isStatusUpdating}>
+                                    <button
+                                      type="button"
+                                      onClick={(event) => event.stopPropagation()}
+                                      className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
+                                      aria-label="Changer le statut du projet"
+                                    >
+                                      <Badge
+                                        variant="outline"
+                                        style={badgeStyle}
+                                        className={cn(
+                                          "text-xs font-medium px-2.5 py-0.5 transition",
+                                          isStatusUpdating
+                                            ? "cursor-not-allowed opacity-70"
+                                            : "cursor-pointer hover:shadow",
+                                        )}
+                                      >
+                                        {isStatusUpdating ? (
+                                          <>
+                                            <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                                            Mise à jour...
+                                          </>
+                                        ) : (
+                                          statusLabel
+                                        )}
+                                      </Badge>
+                                    </button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="start" className="w-56">
+                                    <div className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                      Changer le statut
+                                    </div>
+                                    {projectStatuses
+                                      .filter((status) => status != null)
+                                      .map((status) => {
+                                        const isActive = status.value === (project.status ?? "");
+                                        return (
+                                          <DropdownMenuItem
+                                            key={status.value}
+                                            onClick={() => {
+                                              void handleProjectStatusChange(project.id, status.value);
+                                            }}
+                                            disabled={isActive || isStatusUpdating}
+                                            className="flex items-center justify-between gap-2"
+                                          >
+                                            <span>{status.label}</span>
+                                            {isActive ? (
+                                              <CheckCircle2 className="h-4 w-4 text-primary" />
+                                            ) : null}
+                                          </DropdownMenuItem>
+                                        );
+                                      })}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                               </div>
                             </div>
                           </div>
@@ -1694,6 +1780,7 @@ const Projects = ({
                         const statusConfig = statusMap[project.status ?? ""];
                         const badgeStyle = getProjectStatusBadgeStyle(statusConfig?.color);
                         const statusLabel = statusConfig?.label ?? project.status ?? "Statut";
+                        const isStatusUpdating = statusUpdating[project.id] ?? false;
                         const primeCeeEuro = resolvePrimeCeeEuro(project);
                         const projectCostValue = project.estimated_value ?? null;
                         const valorisationSummary = displayedValorisationEntries[0];
@@ -1779,9 +1866,60 @@ const Projects = ({
                                   {categoryLabel}
                                 </div>
                               )}
-                              <Badge variant="outline" style={badgeStyle}>
-                                {statusLabel}
-                              </Badge>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild disabled={isStatusUpdating}>
+                                  <button
+                                    type="button"
+                                    className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
+                                    aria-label="Changer le statut du projet"
+                                  >
+                                    <Badge
+                                      variant="outline"
+                                      style={badgeStyle}
+                                      className={cn(
+                                        "transition",
+                                        isStatusUpdating
+                                          ? "cursor-not-allowed opacity-70"
+                                          : "cursor-pointer hover:shadow",
+                                      )}
+                                    >
+                                      {isStatusUpdating ? (
+                                        <>
+                                          <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                                          Mise à jour...
+                                        </>
+                                      ) : (
+                                        statusLabel
+                                      )}
+                                    </Badge>
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="start" className="w-56">
+                                  <div className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                    Changer le statut
+                                  </div>
+                                  {projectStatuses
+                                    .filter((status) => status != null)
+                                    .map((status) => {
+                                      const isActive = status.value === (project.status ?? "");
+                                      return (
+                                        <DropdownMenuItem
+                                          key={status.value}
+                                          onClick={() => {
+                                            void handleProjectStatusChange(project.id, status.value);
+                                          }}
+                                          disabled={isActive || isStatusUpdating}
+                                          className="flex items-center justify-between gap-2"
+                                        >
+                                          <span>{status.label}</span>
+                                          {isActive ? (
+                                            <CheckCircle2 className="h-4 w-4 text-primary" />
+                                          ) : null}
+                                        </DropdownMenuItem>
+                                      );
+                                    })}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </TableCell>
                             <TableCell className="align-top">
                               {typeof primeCeeEuro === "number" ? (
