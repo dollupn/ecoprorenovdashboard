@@ -338,9 +338,13 @@ const isUuid = (value: string) =>
 const createEmptyAdditionalCost = (): SiteAdditionalCostFormValue => ({
   label: "",
   amount_ht: 0,
-  taxes: 0,
+  montant_tva: 0,
+  amount_ttc: 0,
   attachment: null,
 });
+
+const computeAdditionalCostTTC = (amountHT: number, montantTVA: number) =>
+  Math.round((amountHT + montantTVA) * 100) / 100;
 
 const parseNumber = (value: unknown): number | null => {
   if (typeof value === "number") {
@@ -544,7 +548,15 @@ const normalizeAdditionalCosts = (
         parseNumber(raw.amount) ??
         parseNumber(raw.amount_ttc) ??
         0;
-      const taxesValue = parseNumber(raw.taxes) ?? 0;
+      const montantTvaValue =
+        parseNumber(raw.montant_tva) ??
+        parseNumber(raw.taxes) ??
+        0;
+      const amountTTCValue =
+        parseNumber(raw.amount_ttc) ??
+        parseNumber(raw.total_ttc) ??
+        parseNumber(raw.amount) ??
+        computeAdditionalCostTTC(amountHTValue, montantTvaValue);
       const attachmentValue =
         typeof raw.attachment === "string" && raw.attachment.trim().length > 0
           ? raw.attachment.trim()
@@ -553,7 +565,8 @@ const normalizeAdditionalCosts = (
       return {
         label,
         amount_ht: amountHTValue,
-        taxes: taxesValue,
+        montant_tva: montantTvaValue,
+        amount_ttc: amountTTCValue,
         attachment: attachmentValue,
       } as SiteAdditionalCostFormValue;
     })
@@ -4065,11 +4078,17 @@ const ProjectDetails = () => {
           .filter((cost) => cost.label.trim().length > 0)
           .map((cost) => {
             const attachment = cost.attachment ? cost.attachment.trim() : "";
+            const montantTVA = Number.isFinite(cost.montant_tva) ? cost.montant_tva : 0;
+            const amountHT = Number.isFinite(cost.amount_ht) ? cost.amount_ht : 0;
+            const amountTTC = Number.isFinite(cost.amount_ttc)
+              ? cost.amount_ttc
+              : computeAdditionalCostTTC(amountHT, montantTVA);
 
             return {
               label: cost.label.trim(),
-              amount_ht: Number.isFinite(cost.amount_ht) ? cost.amount_ht : 0,
-              taxes: Number.isFinite(cost.taxes) ? cost.taxes : 0,
+              amount_ht: amountHT,
+              montant_tva: montantTVA,
+              amount_ttc: amountTTC,
               attachment: attachment.length > 0 ? attachment : null,
             };
           })
@@ -5057,6 +5076,27 @@ const ProjectDetails = () => {
                       )
                         ? site.additional_costs.length
                         : 0;
+                      const additionalCostTotal = Array.isArray(site.additional_costs)
+                        ? site.additional_costs.reduce((total, rawCost) => {
+                            if (!rawCost || typeof rawCost !== "object") {
+                              return total;
+                            }
+
+                            const cost = rawCost as Record<string, unknown>;
+                            const amountHT = parseNumber(cost.amount_ht) ?? 0;
+                            const montantTVA =
+                              parseNumber(cost.montant_tva) ?? parseNumber(cost.taxes) ?? 0;
+                            const amountTTC =
+                              parseNumber(cost.amount_ttc) ??
+                              computeAdditionalCostTTC(amountHT, montantTVA);
+
+                            return total + amountTTC;
+                          }, 0)
+                        : 0;
+                      const additionalCostDisplay =
+                        additionalCostCount > 0
+                          ? `${formatCurrency(additionalCostTotal)} (${additionalCostCount})`
+                          : "—";
                       const revenueDisplay =
                         typeof site.revenue === "number"
                           ? formatCurrency(site.revenue)
@@ -5346,6 +5386,7 @@ const ProjectDetails = () => {
                                 </div>
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="text-muted-foreground">
+                                    Frais de chantier
                                     Travaux non subventionnés
                                   </span>
                                   <span className="font-medium text-foreground">
@@ -5407,7 +5448,7 @@ const ProjectDetails = () => {
                                     Coûts supplémentaires
                                   </span>
                                   <span className="font-medium text-foreground">
-                                    {additionalCostCount}
+                                    {additionalCostDisplay}
                                   </span>
                                 </div>
                                 <div className="flex items-center justify-between gap-2">
