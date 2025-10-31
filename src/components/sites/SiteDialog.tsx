@@ -47,7 +47,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { getProjectClientName } from "@/lib/projects";
+import { DEFAULT_PROJECT_STATUSES, getProjectClientName } from "@/lib/projects";
 import { parseSiteNotes, serializeSiteNotes } from "@/lib/sites";
 import {
   Select,
@@ -62,6 +62,7 @@ import type { DriveFileMetadata } from "@/integrations/googleDrive";
 import { GripVertical, Plus, Trash2, Upload, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMembers } from "@/features/members/api";
+import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 
 const teamMemberSchema = z.object({
   id: z.string().min(1, "Sélection invalide"),
@@ -140,40 +141,50 @@ const additionalCostSchema = z.object({
     .transform((value) => (value && value.length > 0 ? value : null)),
 });
 
-const baseSiteSchema = z.object({
-  site_ref: z.string().min(3, "Référence requise"),
-  project_ref: z.string(),
-  client_name: z.string(),
-  product_name: z.string().optional().nullable(),
-  address: z.string().min(3, "Adresse requise"),
-  city: z.string().min(2, "Ville requise"),
-  postal_code: z.string().min(4, "Code postal invalide"),
-  status: z.enum(["PLANIFIE", "EN_PREPARATION", "EN_COURS", "SUSPENDU", "TERMINE", "LIVRE"]),
-  cofrac_status: z.enum(["EN_ATTENTE", "CONFORME", "NON_CONFORME", "A_PLANIFIER"]),
-  date_debut: z.string().min(1, "Date de début requise"),
-  date_fin_prevue: z.string().optional(),
-  progress_percentage: z.coerce.number({ invalid_type_error: "Avancement invalide" }).min(0).max(100),
-  revenue: z.coerce.number({ invalid_type_error: "CA invalide" }).min(0, "Le CA doit être positif"),
-  profit_margin: z.coerce.number({ invalid_type_error: "Marge invalide" }).min(-100).max(100),
-  surface_facturee: z.coerce.number({ invalid_type_error: "Surface invalide" }).min(0),
-  cout_main_oeuvre_m2_ht: z.coerce.number({ invalid_type_error: "Coût invalide" }).min(0),
-  cout_isolation_m2: z.coerce.number({ invalid_type_error: "Coût invalide" }).min(0),
-  isolation_utilisee_m2: z.coerce.number({ invalid_type_error: "Quantité invalide" }).min(0),
-  montant_commission: z.coerce.number({ invalid_type_error: "Montant invalide" }).min(0),
-  valorisation_cee: z.coerce.number({ invalid_type_error: "Montant invalide" }).min(0),
-  notes: z.string().optional(),
-  subcontractor_id: z
-    .string({ invalid_type_error: "Sélection invalide" })
-    .uuid("Sélection invalide")
-    .optional()
-    .nullable(),
-  team_members: z.array(teamMemberSchema).optional().default([]),
-  additional_costs: z.array(additionalCostSchema).optional().default([]),
-  subcontractor_payment_confirmed: z.boolean().default(false),
-});
+const fallbackProjectStatusValues = DEFAULT_PROJECT_STATUSES.map((status) => status.value);
 
-const createSiteSchema = (requiresProjectAssociation: boolean) =>
-  baseSiteSchema.superRefine((data, ctx) => {
+const createBaseSiteSchema = (statusOptions: readonly string[]) => {
+  const allowedStatuses = statusOptions.length > 0 ? [...statusOptions] : fallbackProjectStatusValues;
+  const statusSet = new Set(allowedStatuses);
+
+  return z.object({
+    site_ref: z.string().min(3, "Référence requise"),
+    project_ref: z.string(),
+    client_name: z.string(),
+    product_name: z.string().optional().nullable(),
+    address: z.string().min(3, "Adresse requise"),
+    city: z.string().min(2, "Ville requise"),
+    postal_code: z.string().min(4, "Code postal invalide"),
+    status: z
+      .string({ required_error: "Statut requis" })
+      .min(1, "Statut requis")
+      .refine((value) => statusSet.has(value), { message: "Statut invalide" }),
+    cofrac_status: z.enum(["EN_ATTENTE", "CONFORME", "NON_CONFORME", "A_PLANIFIER"]),
+    date_debut: z.string().min(1, "Date de début requise"),
+    date_fin_prevue: z.string().optional(),
+    progress_percentage: z.coerce.number({ invalid_type_error: "Avancement invalide" }).min(0).max(100),
+    revenue: z.coerce.number({ invalid_type_error: "CA invalide" }).min(0, "Le CA doit être positif"),
+    profit_margin: z.coerce.number({ invalid_type_error: "Marge invalide" }).min(-100).max(100),
+    surface_facturee: z.coerce.number({ invalid_type_error: "Surface invalide" }).min(0),
+    cout_main_oeuvre_m2_ht: z.coerce.number({ invalid_type_error: "Coût invalide" }).min(0),
+    cout_isolation_m2: z.coerce.number({ invalid_type_error: "Coût invalide" }).min(0),
+    isolation_utilisee_m2: z.coerce.number({ invalid_type_error: "Quantité invalide" }).min(0),
+    montant_commission: z.coerce.number({ invalid_type_error: "Montant invalide" }).min(0),
+    valorisation_cee: z.coerce.number({ invalid_type_error: "Montant invalide" }).min(0),
+    notes: z.string().optional(),
+    subcontractor_id: z
+      .string({ invalid_type_error: "Sélection invalide" })
+      .uuid("Sélection invalide")
+      .optional()
+      .nullable(),
+    team_members: z.array(teamMemberSchema).optional().default([]),
+    additional_costs: z.array(additionalCostSchema).optional().default([]),
+    subcontractor_payment_confirmed: z.boolean().default(false),
+  });
+};
+
+const createSiteSchema = (requiresProjectAssociation: boolean, statusOptions: readonly string[]) =>
+  createBaseSiteSchema(statusOptions).superRefine((data, ctx) => {
     const projectRef = data.project_ref?.trim?.() ?? "";
     const clientName = data.client_name?.trim?.() ?? "";
 
@@ -198,7 +209,7 @@ const createSiteSchema = (requiresProjectAssociation: boolean) =>
     }
   });
 
-export type SiteFormValues = z.infer<typeof baseSiteSchema>;
+export type SiteFormValues = z.infer<ReturnType<typeof createBaseSiteSchema>>;
 
 export type SiteProjectOption = {
   id?: string;
@@ -236,7 +247,7 @@ const defaultValues: SiteFormValues = {
   address: "",
   city: "",
   postal_code: "",
-  status: "PLANIFIE",
+  status: fallbackProjectStatusValues[0] ?? "",
   cofrac_status: "EN_ATTENTE",
   date_debut: "",
   date_fin_prevue: "",
@@ -529,15 +540,6 @@ const SortableAdditionalCostRow = ({
   );
 };
 
-const statusOptions = [
-  { value: "PLANIFIE", label: "Planifié" },
-  { value: "EN_PREPARATION", label: "En préparation" },
-  { value: "EN_COURS", label: "En cours" },
-  { value: "SUSPENDU", label: "Suspendu" },
-  { value: "TERMINE", label: "Terminé" },
-  { value: "LIVRE", label: "Livré" },
-] as const;
-
 const cofracStatusOptions = [
   { value: "EN_ATTENTE", label: "En attente" },
   { value: "CONFORME", label: "Conforme" },
@@ -556,6 +558,7 @@ export const SiteDialog = ({
   defaultTab = "avant-chantier",
   readOnly = false,
 }: SiteDialogProps) => {
+  const projectStatuses = useProjectStatuses();
   const parsedNotes = useMemo(() => parseSiteNotes(initialValues?.notes), [initialValues?.notes]);
 
   const [siteDriveFile, setSiteDriveFile] = useState<DriveFileMetadata | null>(parsedNotes.driveFile);
@@ -580,6 +583,15 @@ export const SiteDialog = ({
         name: memberNameById[member.user_id] ?? "Utilisateur",
       })),
     [members, memberNameById],
+  );
+  const statusValues = useMemo(() => projectStatuses.map((status) => status.value), [projectStatuses]);
+  const resolvedStatusOptions = useMemo(
+    () => (statusValues.length > 0 ? statusValues : fallbackProjectStatusValues),
+    [statusValues],
+  );
+  const statusDisplayOptions = useMemo(
+    () => (projectStatuses.length > 0 ? projectStatuses : DEFAULT_PROJECT_STATUSES),
+    [projectStatuses],
   );
   useEffect(() => {
     if (open) {
@@ -632,8 +644,12 @@ export const SiteDialog = ({
 
     values.notes = parsedNotes.text;
 
+    if (!resolvedStatusOptions.includes(values.status)) {
+      values.status = resolvedStatusOptions[0] ?? "";
+    }
+
     return values;
-  }, [initialValues, parsedNotes.text, memberNameById]);
+  }, [initialValues, parsedNotes.text, memberNameById, resolvedStatusOptions]);
 
   const availableProjects = useMemo<SiteProjectOption[]>(() => {
     const base = [...(projects ?? [])];
@@ -658,8 +674,8 @@ export const SiteDialog = ({
   const hasAvailableProjects = availableProjects.length > 0;
 
   const schema = useMemo(
-    () => createSiteSchema(hasAvailableProjects),
-    [hasAvailableProjects],
+    () => createSiteSchema(hasAvailableProjects, resolvedStatusOptions),
+    [hasAvailableProjects, resolvedStatusOptions],
   );
 
   const resolver = useMemo(() => zodResolver(schema), [schema]);
@@ -898,14 +914,18 @@ export const SiteDialog = ({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Statut</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value} disabled={isReadOnly}>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value}
+                          disabled={isReadOnly || resolvedStatusOptions.length === 0}
+                        >
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Sélectionner un statut" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {statusOptions.map((option) => (
+                            {statusDisplayOptions.map((option) => (
                               <SelectItem key={option.value} value={option.value}>
                                 {option.label}
                               </SelectItem>
