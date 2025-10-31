@@ -82,7 +82,7 @@ import {
   type SiteSubmitValues,
   type SubcontractorOption,
 } from "./siteFormSchema";
-import { TRAVAUX_NON_SUBVENTIONNES_OPTIONS } from "./travauxNonSubventionnes";
+import {
   TRAVAUX_NON_SUBVENTIONNES_OPTIONS,
   type TravauxNonSubventionnesValue,
 } from "./travauxNonSubventionnes";
