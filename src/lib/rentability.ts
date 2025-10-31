@@ -44,6 +44,9 @@ const roundZero = (value: number): number => {
   return Math.abs(rounded) < 1e-6 ? 0 : rounded;
 };
 
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value);
+
 export const calculateRentability = (input: RentabilityInput): RentabilityResult => {
   const revenue = Math.max(0, sanitizeNumber(input.revenue));
   const laborCostPerUnit = Math.max(0, sanitizeNumber(input.laborCostPerUnit));
@@ -99,6 +102,31 @@ export const isLedProduct = (productName: string | null | undefined): boolean =>
   const normalized = productName.normalize("NFD").replace(/[^\p{L}\p{N}]+/gu, " ").toLowerCase();
   if (normalized.length === 0) return false;
   return normalized.includes("led") || normalized.includes("luminaire");
+};
+
+export interface RentabilityPersistedMetricsSource {
+  rentability_margin_rate?: number | null;
+  rentability_margin_total?: number | null;
+  rentability_total_costs?: number | null;
+  rentability_additional_costs_total?: number | null;
+  rentability_margin_per_unit?: number | null;
+}
+
+export const hasPersistedRentabilityMetrics = (
+  source: RentabilityPersistedMetricsSource,
+): boolean => {
+  if (isFiniteNumber(source.rentability_margin_rate) && source.rentability_margin_rate !== 0) {
+    return true;
+  }
+
+  return (
+    [
+      source.rentability_margin_total,
+      source.rentability_total_costs,
+      source.rentability_additional_costs_total,
+      source.rentability_margin_per_unit,
+    ].some((value) => isFiniteNumber(value) && value !== 0)
+  );
 };
 
 export interface SiteRentabilitySource {
