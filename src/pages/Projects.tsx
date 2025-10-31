@@ -44,6 +44,7 @@ import {
   LayoutGrid,
   List,
   HardHat,
+  Loader2,
 } from "lucide-react";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useMembers } from "@/features/members/api";
@@ -280,7 +281,13 @@ const Projects = ({
   const { user } = useAuth();
   const { currentOrgId } = useOrg();
   const { data: members = [], isLoading: membersLoading } = useMembers(currentOrgId);
-  const projectStatuses = useProjectStatuses();
+  const {
+    statuses: projectStatuses,
+    isLoading: projectStatusesLoading,
+    isFetching: projectStatusesFetching,
+    error: projectStatusesError,
+  } = useProjectStatuses();
+  const projectStatusQueriesBusy = projectStatusesLoading || projectStatusesFetching;
   const { primeBonification } = useOrganizationPrimeSettings();
   const restrictionNotReady = allowedProjectIds === null;
   const normalizedAllowedProjectIds = useMemo(() => {
@@ -333,6 +340,15 @@ const Projects = ({
     }
     localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode);
   }, [viewMode]);
+
+  useEffect(() => {
+    if (!projectStatusesError) return;
+
+    console.error("Erreur lors du chargement des statuts projets", projectStatusesError);
+    showToast("Statuts projets indisponibles", {
+      description: "Les statuts ont été chargés avec les valeurs par défaut.",
+    });
+  }, [projectStatusesError]);
 
   const currentMember = members.find((member) => member.user_id === user?.id);
   const isAdmin = currentMember?.role === "admin" || currentMember?.role === "owner";
@@ -512,14 +528,21 @@ const Projects = ({
       setStatusUpdating((previous) => ({ ...previous, [projectId]: true }));
 
       try {
-        const { error } = await supabase
-          .from("projects")
-          .update({ status: status as ProjectStatus })
-          .eq("id", projectId)
-          .eq("org_id", currentOrgId);
+        const response = await fetch(`/api/projects/${projectId}/status`, {
+          method: "PATCH",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ status }),
+        });
 
-        if (error) {
-          throw error;
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          const message =
+            (typeof payload?.message === "string" && payload.message) ||
+            "Impossible de mettre à jour le statut du projet.";
+          throw new Error(message);
         }
 
         const statusLabel = statusMap[status]?.label ?? status;
@@ -1147,7 +1170,11 @@ const Projects = ({
                   <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Afficher
                   </span>
-                  <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
+                  <Select
+                    value={statusFilter}
+                    onValueChange={handleStatusFilterChange}
+                    disabled={projectStatusQueriesBusy && projectStatuses.length === 0}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Filtrer les projets" />
                     </SelectTrigger>
@@ -1556,64 +1583,7 @@ const Projects = ({
                         </div>
 
                           {/* Action Buttons */}
-                          <div className="flex gap-2 pt-3">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="flex-1 h-8 justify-between gap-2 text-xs"
-                                  disabled={isStatusUpdating}
-                                  onClick={(event) => event.stopPropagation()}
-                                  onPointerDown={(event) => event.stopPropagation()}
-                                  onKeyDown={(event) => event.stopPropagation()}
-                                >
-                                  <span className="flex items-center gap-1">
-                                    Statut
-                                    <Badge
-                                      variant="outline"
-                                      style={badgeStyle}
-                                      className="border-none text-[10px] font-medium"
-                                    >
-                                      {statusLabel}
-                                    </Badge>
-                                  </span>
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent
-                                align="start"
-                                className="w-48"
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                {projectStatuses.map((statusOption) => {
-                                  const optionBadgeStyle = getProjectStatusBadgeStyle(statusOption.color);
-                                  const isCurrentStatus = statusOption.value === project.status;
-
-                                  return (
-                                    <DropdownMenuItem
-                                      key={statusOption.value}
-                                      disabled={isStatusUpdating || isCurrentStatus}
-                                      className="flex items-center justify-between gap-2 text-xs"
-                                      onClick={(event) => event.stopPropagation()}
-                                      onSelect={() => {
-                                        if (!isCurrentStatus) {
-                                          void handleProjectStatusChange(project.id, statusOption.value);
-                                        }
-                                      }}
-                                    >
-                                      <span className="truncate">{statusOption.label}</span>
-                                      <Badge
-                                        variant="outline"
-                                        style={optionBadgeStyle}
-                                        className="border-none text-[10px] font-medium"
-                                      >
-                                        {statusOption.label}
-                                      </Badge>
-                                    </DropdownMenuItem>
-                                  );
-                                })}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                          <div className="flex gap-2 pt-2">
                             <Button
                               size="sm"
                               variant="outline"

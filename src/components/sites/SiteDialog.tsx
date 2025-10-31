@@ -46,7 +46,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { getProjectClientName } from "@/lib/projects";
+import { Badge } from "@/components/ui/badge";
+import { DEFAULT_PROJECT_STATUSES, getProjectClientName } from "@/lib/projects";
 import { parseSiteNotes, serializeSiteNotes } from "@/lib/sites";
 import {
   Select,
@@ -60,6 +61,69 @@ import { DriveFileUploader } from "@/components/integrations/DriveFileUploader";
 import type { DriveFileMetadata } from "@/integrations/googleDrive";
 import { GripVertical, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useMembers } from "@/features/members/api";
+import { useProjectStatuses } from "@/hooks/useProjectStatuses";
+
+const teamMemberSchema = z.object({
+  id: z.string().min(1, "Sélection invalide"),
+  name: z.string().optional().nullable(),
+});
+
+type TeamMemberFormValue = z.infer<typeof teamMemberSchema>;
+
+const normalizeTeamMembers = (
+  rawTeamMembers: unknown,
+  nameLookup: Record<string, string>,
+): TeamMemberFormValue[] => {
+  if (!Array.isArray(rawTeamMembers)) {
+    return [];
+  }
+
+  const uniqueMembers = new Map<string, TeamMemberFormValue>();
+
+  for (const rawMember of rawTeamMembers) {
+    if (!rawMember) continue;
+
+    if (typeof rawMember === "string") {
+      const trimmed = rawMember.trim();
+      if (trimmed.length === 0) continue;
+
+      if (!uniqueMembers.has(trimmed)) {
+        uniqueMembers.set(trimmed, {
+          id: trimmed,
+          name: nameLookup[trimmed] ?? trimmed,
+        });
+      }
+      continue;
+    }
+
+    if (typeof rawMember === "object") {
+      const candidate = rawMember as Record<string, unknown>;
+      const rawId = typeof candidate.id === "string" ? candidate.id.trim() : "";
+      const rawName = typeof candidate.name === "string" ? candidate.name.trim() : "";
+      const fallbackName = rawName.length > 0 ? rawName : nameLookup[rawId] ?? rawId;
+
+      if (rawId.length > 0) {
+        if (!uniqueMembers.has(rawId)) {
+          uniqueMembers.set(rawId, {
+            id: rawId,
+            name: fallbackName.length > 0 ? fallbackName : undefined,
+          });
+        }
+        continue;
+      }
+
+      if (rawName.length > 0 && !uniqueMembers.has(rawName)) {
+        uniqueMembers.set(rawName, {
+          id: rawName,
+          name: rawName,
+        });
+      }
+    }
+  }
+
+  return Array.from(uniqueMembers.values());
+};
 
 const additionalCostSchema = z.object({
   label: z.string().min(1, "Intitulé requis"),
@@ -77,39 +141,51 @@ const additionalCostSchema = z.object({
     .transform((value) => (value && value.length > 0 ? value : null)),
 });
 
-const baseSiteSchema = z.object({
-  site_ref: z.string().min(3, "Référence requise"),
-  project_ref: z.string(),
-  client_name: z.string(),
-  product_name: z.string().optional().nullable(),
-  address: z.string().min(3, "Adresse requise"),
-  city: z.string().min(2, "Ville requise"),
-  postal_code: z.string().min(4, "Code postal invalide"),
-  status: z.enum(["PLANIFIE", "EN_PREPARATION", "EN_COURS", "SUSPENDU", "TERMINE", "LIVRE"]),
-  cofrac_status: z.enum(["EN_ATTENTE", "CONFORME", "NON_CONFORME", "A_PLANIFIER"]),
-  date_debut: z.string().min(1, "Date de début requise"),
-  date_fin_prevue: z.string().optional(),
-  progress_percentage: z.coerce.number({ invalid_type_error: "Avancement invalide" }).min(0).max(100),
-  revenue: z.coerce.number({ invalid_type_error: "CA invalide" }).min(0, "Le CA doit être positif"),
-  profit_margin: z.coerce.number({ invalid_type_error: "Marge invalide" }).min(-100).max(100),
-  surface_facturee: z.coerce.number({ invalid_type_error: "Surface invalide" }).min(0),
-  cout_main_oeuvre_m2_ht: z.coerce.number({ invalid_type_error: "Coût invalide" }).min(0),
-  cout_isolation_m2: z.coerce.number({ invalid_type_error: "Coût invalide" }).min(0),
-  isolation_utilisee_m2: z.coerce.number({ invalid_type_error: "Quantité invalide" }).min(0),
-  montant_commission: z.coerce.number({ invalid_type_error: "Montant invalide" }).min(0),
-  valorisation_cee: z.coerce.number({ invalid_type_error: "Montant invalide" }).min(0),
-  notes: z.string().optional(),
-  subcontractor_id: z
-    .string({ invalid_type_error: "Sélection invalide" })
-    .uuid("Sélection invalide")
-    .optional()
-    .nullable(),
-  additional_costs: z.array(additionalCostSchema).optional().default([]),
-  subcontractor_payment_confirmed: z.boolean().default(false),
-});
+const fallbackProjectStatusValues = DEFAULT_PROJECT_STATUSES.map((status) => status.value);
 
-const createSiteSchema = (requiresProjectAssociation: boolean) =>
-  baseSiteSchema.superRefine((data, ctx) => {
+const createBaseSiteSchema = (statusOptions: readonly string[]) => {
+  const allowedStatuses = statusOptions.length > 0 ? [...statusOptions] : fallbackProjectStatusValues;
+  const statusSet = new Set(allowedStatuses);
+
+  return z.object({
+    site_ref: z.string().min(3, "Référence requise"),
+    project_ref: z.string(),
+    client_name: z.string(),
+    product_name: z.string().optional().nullable(),
+    address: z.string().min(3, "Adresse requise"),
+    city: z.string().min(2, "Ville requise"),
+    postal_code: z.string().min(4, "Code postal invalide"),
+    status: statusSchema,
+    cofrac_status: z.enum(["EN_ATTENTE", "CONFORME", "NON_CONFORME", "A_PLANIFIER"]),
+    date_debut: z.string().min(1, "Date de début requise"),
+    date_fin_prevue: z.string().optional(),
+    progress_percentage: z.coerce.number({ invalid_type_error: "Avancement invalide" }).min(0).max(100),
+    revenue: z.coerce.number({ invalid_type_error: "CA invalide" }).min(0, "Le CA doit être positif"),
+    profit_margin: z.coerce.number({ invalid_type_error: "Marge invalide" }).min(-100).max(100),
+    surface_facturee: z.coerce.number({ invalid_type_error: "Surface invalide" }).min(0),
+    cout_main_oeuvre_m2_ht: z.coerce.number({ invalid_type_error: "Coût invalide" }).min(0),
+    cout_isolation_m2: z.coerce.number({ invalid_type_error: "Coût invalide" }).min(0),
+    isolation_utilisee_m2: z.coerce.number({ invalid_type_error: "Quantité invalide" }).min(0),
+    montant_commission: z.coerce.number({ invalid_type_error: "Montant invalide" }).min(0),
+    valorisation_cee: z.coerce.number({ invalid_type_error: "Montant invalide" }).min(0),
+    notes: z.string().optional(),
+    subcontractor_id: z
+      .string({ invalid_type_error: "Sélection invalide" })
+      .uuid("Sélection invalide")
+      .optional()
+      .nullable(),
+    team_members: z.array(teamMemberSchema).optional().default([]),
+    additional_costs: z.array(additionalCostSchema).optional().default([]),
+    subcontractor_payment_confirmed: z.boolean().default(false),
+  });
+};
+
+type SiteFormSchema = ReturnType<typeof createSiteBaseSchema>;
+
+export type SiteFormValues = z.infer<SiteFormSchema>;
+
+const createSiteSchema = (statusValues: readonly string[], requiresProjectAssociation: boolean) =>
+  createSiteBaseSchema(statusValues).superRefine((data, ctx) => {
     const projectRef = data.project_ref?.trim?.() ?? "";
     const clientName = data.client_name?.trim?.() ?? "";
 
@@ -133,8 +209,6 @@ const createSiteSchema = (requiresProjectAssociation: boolean) =>
       }
     }
   });
-
-export type SiteFormValues = z.infer<typeof baseSiteSchema>;
 
 export type SiteProjectOption = {
   id?: string;
@@ -172,7 +246,7 @@ const defaultValues: SiteFormValues = {
   address: "",
   city: "",
   postal_code: "",
-  status: "PLANIFIE",
+  status: fallbackProjectStatusValues[0] ?? "",
   cofrac_status: "EN_ATTENTE",
   date_debut: "",
   date_fin_prevue: "",
@@ -464,15 +538,6 @@ const SortableAdditionalCostRow = ({
   );
 };
 
-const statusOptions = [
-  { value: "PLANIFIE", label: "Planifié" },
-  { value: "EN_PREPARATION", label: "En préparation" },
-  { value: "EN_COURS", label: "En cours" },
-  { value: "SUSPENDU", label: "Suspendu" },
-  { value: "TERMINE", label: "Terminé" },
-  { value: "LIVRE", label: "Livré" },
-] as const;
-
 const cofracStatusOptions = [
   { value: "EN_ATTENTE", label: "En attente" },
   { value: "CONFORME", label: "Conforme" },
@@ -491,12 +556,43 @@ export const SiteDialog = ({
   defaultTab = "avant-chantier",
   readOnly = false,
 }: SiteDialogProps) => {
+  const projectStatuses = useProjectStatuses();
   const parsedNotes = useMemo(() => parseSiteNotes(initialValues?.notes), [initialValues?.notes]);
 
   const [siteDriveFile, setSiteDriveFile] = useState<DriveFileMetadata | null>(parsedNotes.driveFile);
   const [activeTab, setActiveTab] = useState<"avant-chantier" | "apres-chantier">(defaultTab);
   const isReadOnly = Boolean(readOnly);
   const resolvedOrgId = orgId ?? initialValues?.org_id ?? null;
+  const { data: members = [], isLoading: membersLoading } = useMembers(resolvedOrgId);
+  const projectStatuses = useProjectStatuses();
+  const statusValues = useMemo(() => projectStatuses.map((status) => status.value), [projectStatuses]);
+  const memberNameById = useMemo(() => {
+    const result: Record<string, string> = {};
+    members.forEach((member) => {
+      const name = member.profiles?.full_name?.trim();
+      if (member.user_id) {
+        result[member.user_id] = name && name.length > 0 ? name : "Utilisateur";
+      }
+    });
+    return result;
+  }, [members]);
+  const memberOptions = useMemo(
+    () =>
+      members.map((member) => ({
+        id: member.user_id,
+        name: memberNameById[member.user_id] ?? "Utilisateur",
+      })),
+    [members, memberNameById],
+  );
+  const statusValues = useMemo(() => projectStatuses.map((status) => status.value), [projectStatuses]);
+  const resolvedStatusOptions = useMemo(
+    () => (statusValues.length > 0 ? statusValues : fallbackProjectStatusValues),
+    [statusValues],
+  );
+  const statusDisplayOptions = useMemo(
+    () => (projectStatuses.length > 0 ? projectStatuses : DEFAULT_PROJECT_STATUSES),
+    [projectStatuses],
+  );
   useEffect(() => {
     if (open) {
       setActiveTab(defaultTab);
@@ -533,9 +629,17 @@ export const SiteDialog = ({
           }))
         : defaultValues.additional_costs;
 
+    const normalizedTeamMembers = normalizeTeamMembers(initialValues?.team_members, memberNameById);
+
+    const resolvedStatus =
+      initialValues?.status && statusValues.includes(initialValues.status)
+        ? initialValues.status
+        : statusValues[0] ?? defaultValues.status;
+
     const values: SiteFormValues = {
       ...defaultValues,
       ...initialValues,
+      status: resolvedStatus,
       subcontractor_id:
         typeof initialValues?.subcontractor_id === "string" && initialValues.subcontractor_id.length > 0
           ? initialValues.subcontractor_id
@@ -544,6 +648,10 @@ export const SiteDialog = ({
     } as SiteFormValues;
 
     values.notes = parsedNotes.text;
+
+    if (!resolvedStatusOptions.includes(values.status)) {
+      values.status = resolvedStatusOptions[0] ?? "";
+    }
 
     return values;
   }, [initialValues, parsedNotes.text]);
@@ -570,10 +678,10 @@ export const SiteDialog = ({
 
   const hasAvailableProjects = availableProjects.length > 0;
 
-  const schema = useMemo(
-    () => createSiteSchema(hasAvailableProjects),
-    [hasAvailableProjects],
-  );
+ const schema = useMemo(
+  () => createSiteSchema(resolvedStatusOptions, hasAvailableProjects),
+  [resolvedStatusOptions, hasAvailableProjects]
+);
 
   const resolver = useMemo(() => zodResolver(schema), [schema]);
 
@@ -793,14 +901,18 @@ export const SiteDialog = ({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Statut</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value} disabled={isReadOnly}>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value}
+                          disabled={isReadOnly || resolvedStatusOptions.length === 0}
+                        >
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Sélectionner un statut" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {statusOptions.map((option) => (
+                            {statusDisplayOptions.map((option) => (
                               <SelectItem key={option.value} value={option.value}>
                                 {option.label}
                               </SelectItem>
