@@ -19,8 +19,12 @@ export type ProjectStatus =
   | "CHANTIER_TERMINE"
   | "VISITE_TECHNIQUE"
   | "LIVRE"
+  | "FACTURE_ENVOYEE"
+  | "AH"
+  | "AAF"
   | "CLOTURE"
   | "ANNULE"
+  | "ABANDONNE"
   | "ARCHIVE"
   | "ARCHIVED"
 

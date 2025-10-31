@@ -35,8 +35,17 @@ const SITE_COMPLETED_STATUSES: SiteStatus[] = ["TERMINE", "LIVRE"];
 const MARGIN_TARGET = 0.35;
 
 const PROJECT_STATUS_VALUES = DEFAULT_PROJECT_STATUSES.map((status) => status.value);
+const PROJECT_SURFACE_STATUS_SET = new Set([
+  "CHANTIER_EN_COURS",
+  "CHANTIER_TERMINE",
+  "LIVRE",
+  "FACTURE_ENVOYEE",
+  "AH",
+  "AAF",
+  "CLOTURE",
+]);
 const PROJECT_SURFACE_STATUSES = PROJECT_STATUS_VALUES.filter((status) =>
-  ["CHANTIER_EN_COURS", "CHANTIER_TERMINE", "LIVRE"].includes(status)
+  PROJECT_SURFACE_STATUS_SET.has(status),
 );
 
 const isStatusValue = <T extends string>(
