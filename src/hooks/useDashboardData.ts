@@ -32,11 +32,22 @@ const PROJECT_STATUS_LABELS = DEFAULT_PROJECT_STATUSES.reduce<Record<string, str
   {}
 );
 
-const ACTIVE_PROJECT_STATUSES = PROJECT_STATUS_VALUES.filter(
-  (status) => !["LIVRE", "ANNULE"].includes(status)
-);
+const ACTIVE_PROJECT_STATUSES = DEFAULT_PROJECT_STATUSES.filter(
+  (status) => status.isActive !== false,
+).map((status) => status.value);
+
+const PROJECT_SURFACE_STATUS_SET = new Set([
+  "CHANTIER_EN_COURS",
+  "CHANTIER_TERMINE",
+  "LIVRE",
+  "FACTURE_ENVOYEE",
+  "AH",
+  "AAF",
+  "CLOTURE",
+]);
+
 const PROJECT_SURFACE_STATUSES = PROJECT_STATUS_VALUES.filter((status) =>
-  ["CHANTIER_EN_COURS", "CHANTIER_TERMINE", "LIVRE"].includes(status)
+  PROJECT_SURFACE_STATUS_SET.has(status),
 );
 
 const ACCEPTED_PROJECT_STATUS =

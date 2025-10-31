@@ -356,8 +356,8 @@ const Projects = ({
   const inactiveProjectStatuses = useMemo(() => {
     const inactiveValues = new Set(
       projectStatuses
-        .map((status) => status.value)
-        .filter((status) => ["LIVRE", "ANNULE"].includes(status)),
+        .filter((status) => status.isActive === false)
+        .map((status) => status.value),
     );
     ARCHIVED_STATUS_VALUES.forEach((status) => inactiveValues.add(status));
     return inactiveValues;
