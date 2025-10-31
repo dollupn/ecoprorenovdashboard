@@ -47,6 +47,7 @@ import {
   Loader2,
   NotebookPen,
   Images,
+  CheckCircle2,
 } from "lucide-react";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useMembers } from "@/features/members/api";
@@ -1372,13 +1373,61 @@ const Projects = ({
                                 </h3>
                               </button>
                               <div className="flex items-center gap-2 mt-1.5">
-                                <Badge 
-                                  variant="outline" 
-                                  style={badgeStyle} 
-                                  className="text-xs font-medium px-2.5 py-0.5"
-                                >
-                                  {statusLabel}
-                                </Badge>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild disabled={isStatusUpdating}>
+                                    <button
+                                      type="button"
+                                      onClick={(event) => event.stopPropagation()}
+                                      className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
+                                      aria-label="Changer le statut du projet"
+                                    >
+                                      <Badge
+                                        variant="outline"
+                                        style={badgeStyle}
+                                        className={cn(
+                                          "text-xs font-medium px-2.5 py-0.5 transition",
+                                          isStatusUpdating
+                                            ? "cursor-not-allowed opacity-70"
+                                            : "cursor-pointer hover:shadow",
+                                        )}
+                                      >
+                                        {isStatusUpdating ? (
+                                          <>
+                                            <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                                            Mise à jour...
+                                          </>
+                                        ) : (
+                                          statusLabel
+                                        )}
+                                      </Badge>
+                                    </button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="start" className="w-56">
+                                    <div className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                      Changer le statut
+                                    </div>
+                                    {projectStatuses
+                                      .filter((status) => status != null)
+                                      .map((status) => {
+                                        const isActive = status.value === (project.status ?? "");
+                                        return (
+                                          <DropdownMenuItem
+                                            key={status.value}
+                                            onClick={() => {
+                                              void handleProjectStatusChange(project.id, status.value);
+                                            }}
+                                            disabled={isActive || isStatusUpdating}
+                                            className="flex items-center justify-between gap-2"
+                                          >
+                                            <span>{status.label}</span>
+                                            {isActive ? (
+                                              <CheckCircle2 className="h-4 w-4 text-primary" />
+                                            ) : null}
+                                          </DropdownMenuItem>
+                                        );
+                                      })}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                               </div>
                             </div>
                           </div>
@@ -1684,6 +1733,7 @@ const Projects = ({
                         const statusConfig = statusMap[project.status ?? ""];
                         const badgeStyle = getProjectStatusBadgeStyle(statusConfig?.color);
                         const statusLabel = statusConfig?.label ?? project.status ?? "Statut";
+                        const isStatusUpdating = statusUpdating[project.id] ?? false;
                         const primeCeeEuro = resolvePrimeCeeEuro(project);
                         const projectCostValue = project.estimated_value ?? null;
                         const valorisationSummary = displayedValorisationEntries[0];
@@ -1769,9 +1819,60 @@ const Projects = ({
                                   {categoryLabel}
                                 </div>
                               )}
-                              <Badge variant="outline" style={badgeStyle}>
-                                {statusLabel}
-                              </Badge>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild disabled={isStatusUpdating}>
+                                  <button
+                                    type="button"
+                                    className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
+                                    aria-label="Changer le statut du projet"
+                                  >
+                                    <Badge
+                                      variant="outline"
+                                      style={badgeStyle}
+                                      className={cn(
+                                        "transition",
+                                        isStatusUpdating
+                                          ? "cursor-not-allowed opacity-70"
+                                          : "cursor-pointer hover:shadow",
+                                      )}
+                                    >
+                                      {isStatusUpdating ? (
+                                        <>
+                                          <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                                          Mise à jour...
+                                        </>
+                                      ) : (
+                                        statusLabel
+                                      )}
+                                    </Badge>
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="start" className="w-56">
+                                  <div className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                    Changer le statut
+                                  </div>
+                                  {projectStatuses
+                                    .filter((status) => status != null)
+                                    .map((status) => {
+                                      const isActive = status.value === (project.status ?? "");
+                                      return (
+                                        <DropdownMenuItem
+                                          key={status.value}
+                                          onClick={() => {
+                                            void handleProjectStatusChange(project.id, status.value);
+                                          }}
+                                          disabled={isActive || isStatusUpdating}
+                                          className="flex items-center justify-between gap-2"
+                                        >
+                                          <span>{status.label}</span>
+                                          {isActive ? (
+                                            <CheckCircle2 className="h-4 w-4 text-primary" />
+                                          ) : null}
+                                        </DropdownMenuItem>
+                                      );
+                                    })}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </TableCell>
                             <TableCell className="align-top">
                               {typeof primeCeeEuro === "number" ? (
