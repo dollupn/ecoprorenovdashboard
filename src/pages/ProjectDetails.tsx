@@ -95,7 +95,11 @@ import {
   formatDynamicFieldValue,
 } from "@/lib/product-params";
 import { parseSiteNotes } from "@/lib/sites";
-import { calculateRentability, buildRentabilityInputFromSite } from "@/lib/rentability";
+import {
+  calculateRentability,
+  buildRentabilityInputFromSite,
+  hasPersistedRentabilityMetrics,
+} from "@/lib/rentability";
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 import { useOrganizationPrimeSettings } from "@/features/organizations/useOrganizationPrimeSettings";
 import {
@@ -5137,32 +5141,47 @@ const ProjectDetails = () => {
                         product_name: site.product_name,
                       });
                       const computedRentability = calculateRentability(rentabilityInput);
+                      const hasPersistedRentability = hasPersistedRentabilityMetrics(site);
                       const rentabilityUnitLabel =
+                        hasPersistedRentability &&
                         typeof site.rentability_unit_label === "string" &&
                         site.rentability_unit_label.trim().length > 0
                           ? site.rentability_unit_label
                           : computedRentability.unitLabel;
                       const rentabilityMetrics = {
                         additionalCostsTotal:
-                          typeof site.rentability_additional_costs_total === "number"
+                          hasPersistedRentability &&
+                          typeof site.rentability_additional_costs_total === "number" &&
+                          Number.isFinite(site.rentability_additional_costs_total)
                             ? site.rentability_additional_costs_total
                             : computedRentability.additionalCostsTotal,
                         totalCosts:
-                          typeof site.rentability_total_costs === "number"
+                          hasPersistedRentability &&
+                          typeof site.rentability_total_costs === "number" &&
+                          Number.isFinite(site.rentability_total_costs)
                             ? site.rentability_total_costs
                             : computedRentability.totalCosts,
                         marginPerUnit:
-                          typeof site.rentability_margin_per_unit === "number"
+                          hasPersistedRentability &&
+                          typeof site.rentability_margin_per_unit === "number" &&
+                          Number.isFinite(site.rentability_margin_per_unit)
                             ? site.rentability_margin_per_unit
                             : computedRentability.marginPerUnit,
                         marginTotal:
-                          typeof site.rentability_margin_total === "number"
+                          hasPersistedRentability &&
+                          typeof site.rentability_margin_total === "number" &&
+                          Number.isFinite(site.rentability_margin_total)
                             ? site.rentability_margin_total
                             : computedRentability.marginTotal,
                         marginRate:
-                          typeof site.rentability_margin_rate === "number"
+                          hasPersistedRentability &&
+                          typeof site.rentability_margin_rate === "number" &&
+                          Number.isFinite(site.rentability_margin_rate)
                             ? site.rentability_margin_rate
-                            : computedRentability.marginRate,
+                            : typeof site.profit_margin === "number" &&
+                                Number.isFinite(site.profit_margin)
+                                ? site.profit_margin
+                                : computedRentability.marginRate,
                         unitLabel: rentabilityUnitLabel,
                       };
                       const rentabilityMarginPerUnitLabel =

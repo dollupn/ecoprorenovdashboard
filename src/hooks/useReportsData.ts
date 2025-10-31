@@ -12,6 +12,7 @@ import { aggregateEnergyByCategory, type EnergyBreakdownEntry, type ProjectWithP
 import {
   calculateRentability,
   buildRentabilityInputFromSite,
+  hasPersistedRentabilityMetrics,
   type RentabilityInput,
 } from "@/lib/rentability";
 import { withDefaultProductCeeConfig } from "@/lib/prime-cee-unified";
@@ -165,30 +166,38 @@ const resolveSiteRentability = (site: SiteRow) => {
     }),
   );
 
+  const hasPersistedMetrics = hasPersistedRentabilityMetrics(site);
+
   const marginRate =
-    typeof site.rentability_margin_rate === "number" && Number.isFinite(site.rentability_margin_rate)
+    hasPersistedMetrics &&
+    typeof site.rentability_margin_rate === "number" &&
+    Number.isFinite(site.rentability_margin_rate)
       ? site.rentability_margin_rate
       : typeof site.profit_margin === "number" && Number.isFinite(site.profit_margin)
         ? site.profit_margin
         : computed.marginRate;
 
   const marginTotal =
+    hasPersistedMetrics &&
     typeof site.rentability_margin_total === "number" && Number.isFinite(site.rentability_margin_total)
       ? site.rentability_margin_total
       : computed.marginTotal;
 
   const totalCosts =
+    hasPersistedMetrics &&
     typeof site.rentability_total_costs === "number" && Number.isFinite(site.rentability_total_costs)
       ? site.rentability_total_costs
       : computed.totalCosts;
 
   const additionalCostsTotal =
+    hasPersistedMetrics &&
     typeof site.rentability_additional_costs_total === "number" &&
     Number.isFinite(site.rentability_additional_costs_total)
       ? site.rentability_additional_costs_total
       : computed.additionalCostsTotal;
 
   const unitLabel =
+    hasPersistedMetrics &&
     typeof site.rentability_unit_label === "string" && site.rentability_unit_label.trim().length > 0
       ? site.rentability_unit_label
       : computed.unitLabel;
