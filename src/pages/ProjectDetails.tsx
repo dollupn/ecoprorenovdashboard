@@ -4393,9 +4393,9 @@ const ProjectDetails = () => {
             </Button>
             <Button
               variant="secondary"
-              onClick={() => {
-                void handleCreateSite();
-              }}
+              onClick={() => setStartChantierDialogOpen(true)}
+              disabled={startChantierDisabled}
+              title={startChantierDisabledReason}
             >
               <Hammer className="w-4 h-4 mr-2" />
               Créer un chantier
