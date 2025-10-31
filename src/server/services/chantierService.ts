@@ -22,6 +22,7 @@ type StartChantierInput = {
   productName?: string | null;
   notes?: string | null;
   teamMembers?: unknown;
+  subcontractorId?: string | null;
 };
 
 const normaliseDate = (value?: string | null): string => {
@@ -135,13 +136,17 @@ export const startChantierService = async (orgId: string, projectId: string, inp
     address,
     city,
     postal_code: postalCode,
-    status: "EN_PREPARATION",
+    status: "PLANIFIE",
     date_debut: dateDebut,
     date_fin_prevue: dateFinPrevue,
     team_members: normaliseTeamMembers(input.teamMembers),
     notes,
     user_id: project.user_id,
     org_id: project.org_id,
+    subcontractor_id:
+      typeof input.subcontractorId === "string" && input.subcontractorId.trim().length > 0
+        ? input.subcontractorId
+        : null,
   });
 
   const syncedProject = await syncProjectStatusWithChantiers(project, orgId);

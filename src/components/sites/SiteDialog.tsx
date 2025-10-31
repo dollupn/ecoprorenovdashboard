@@ -165,6 +165,9 @@ const computeAmountTTC = (amountHT: unknown, montantTVA: unknown) => {
   return Math.round(total * 100) / 100;
 };
 
+const getDriveFileKey = (file: DriveFileMetadata | null | undefined) =>
+  file?.id ?? file?.webViewLink ?? file?.webContentLink ?? file?.name ?? null;
+
 const fallbackProjectStatusValues = DEFAULT_PROJECT_STATUSES.map((status) => status.value);
 
 const createBaseSiteSchema = (statusOptions: readonly string[]) => {
@@ -706,6 +709,9 @@ export const SiteDialog = ({
   const parsedNotes = useMemo(() => parseSiteNotes(initialValues?.notes), [initialValues?.notes]);
 
   const [siteDriveFile, setSiteDriveFile] = useState<DriveFileMetadata | null>(parsedNotes.driveFile);
+  const [siteDriveAttachments, setSiteDriveAttachments] = useState<DriveFileMetadata[]>(
+    parsedNotes.attachments,
+  );
   const [activeTab, setActiveTab] = useState<"avant-chantier" | "apres-chantier">(defaultTab);
   const isReadOnly = Boolean(readOnly);
   const resolvedOrgId = orgId ?? initialValues?.org_id ?? null;
@@ -1067,9 +1073,27 @@ export const SiteDialog = ({
   }, [open, mergedDefaults, form]);
 
   useEffect(() => {
-    if (open) setSiteDriveFile(parsedNotes.driveFile);
-    else setSiteDriveFile(null);
-  }, [open, parsedNotes.driveFile]);
+    if (open) {
+      setSiteDriveFile(parsedNotes.driveFile);
+      setSiteDriveAttachments(parsedNotes.attachments);
+    } else {
+      setSiteDriveFile(null);
+      setSiteDriveAttachments([]);
+    }
+  }, [open, parsedNotes.attachments, parsedNotes.driveFile]);
+
+  const handleSiteDriveFileChange = useCallback((file: DriveFileMetadata | null) => {
+    setSiteDriveFile(file);
+    setSiteDriveAttachments((current) => {
+      if (!file) {
+        return current.slice(1);
+      }
+
+      const nextKey = getDriveFileKey(file);
+      const filtered = current.filter((existing) => getDriveFileKey(existing) !== nextKey);
+      return [file, ...filtered];
+    });
+  }, []);
 
   const {
     fields: costFields,
@@ -1121,7 +1145,7 @@ export const SiteDialog = ({
         };
       });
 
-    const serializedNotes = serializeSiteNotes(values.notes, siteDriveFile);
+    const serializedNotes = serializeSiteNotes(values.notes, siteDriveFile, siteDriveAttachments);
 
     const projectRef = values.project_ref?.trim?.() ?? "";
     const clientName = values.client_name?.trim?.() ?? "";
@@ -1856,7 +1880,7 @@ export const SiteDialog = ({
                   <DriveFileUploader
                     orgId={orgId ?? initialValues?.org_id ?? null}
                     value={siteDriveFile}
-                    onChange={setSiteDriveFile}
+                    onChange={handleSiteDriveFileChange}
                     accept="application/pdf,image/*"
                     maxSizeMb={35}
                     entityType="site"
