@@ -2197,7 +2197,13 @@ const ProjectDetails = () => {
   const { currentOrgId } = useOrg();
   const { data: members = [], isLoading: membersLoading } =
     useMembers(currentOrgId);
-  const projectStatuses = useProjectStatuses();
+  const {
+    statuses: projectStatuses,
+    isLoading: projectStatusesLoading,
+    isFetching: projectStatusesFetching,
+    error: projectStatusesError,
+  } = useProjectStatuses();
+  const projectStatusesBusy = projectStatusesLoading || projectStatusesFetching;
   const { primeBonification } = useOrganizationPrimeSettings();
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -2219,6 +2225,17 @@ const ProjectDetails = () => {
   );
   const [siteInitialValues, setSiteInitialValues] =
     useState<Partial<SiteFormValues>>();
+
+  useEffect(() => {
+    if (!projectStatusesError) return;
+
+    console.error("Erreur lors du chargement des statuts projets", projectStatusesError);
+    toast({
+      variant: "destructive",
+      title: "Statuts indisponibles",
+      description: "Les statuts projets n'ont pas pu être synchronisés. Les valeurs par défaut sont utilisées.",
+    });
+  }, [projectStatusesError, toast]);
   const [activeSite, setActiveSite] = useState<ProjectSite | null>(null);
   const location = useLocation();
   const journalFeedRef = useRef<HTMLDivElement | null>(null);

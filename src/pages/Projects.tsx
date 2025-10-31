@@ -44,6 +44,7 @@ import {
   LayoutGrid,
   List,
   HardHat,
+  Loader2,
 } from "lucide-react";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useMembers } from "@/features/members/api";
@@ -280,7 +281,13 @@ const Projects = ({
   const { user } = useAuth();
   const { currentOrgId } = useOrg();
   const { data: members = [], isLoading: membersLoading } = useMembers(currentOrgId);
-  const projectStatuses = useProjectStatuses();
+  const {
+    statuses: projectStatuses,
+    isLoading: projectStatusesLoading,
+    isFetching: projectStatusesFetching,
+    error: projectStatusesError,
+  } = useProjectStatuses();
+  const projectStatusQueriesBusy = projectStatusesLoading || projectStatusesFetching;
   const { primeBonification } = useOrganizationPrimeSettings();
   const restrictionNotReady = allowedProjectIds === null;
   const normalizedAllowedProjectIds = useMemo(() => {
@@ -333,6 +340,15 @@ const Projects = ({
     }
     localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode);
   }, [viewMode]);
+
+  useEffect(() => {
+    if (!projectStatusesError) return;
+
+    console.error("Erreur lors du chargement des statuts projets", projectStatusesError);
+    showToast("Statuts projets indisponibles", {
+      description: "Les statuts ont été chargés avec les valeurs par défaut.",
+    });
+  }, [projectStatusesError]);
 
   const currentMember = members.find((member) => member.user_id === user?.id);
   const isAdmin = currentMember?.role === "admin" || currentMember?.role === "owner";
@@ -1147,7 +1163,11 @@ const Projects = ({
                   <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Afficher
                   </span>
-                  <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
+                  <Select
+                    value={statusFilter}
+                    onValueChange={handleStatusFilterChange}
+                    disabled={projectStatusQueriesBusy && projectStatuses.length === 0}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Filtrer les projets" />
                     </SelectTrigger>
@@ -1290,30 +1310,33 @@ const Projects = ({
                     <Card
                       key={project.id}
                       className={cn(
-                        "group relative overflow-hidden border bg-card shadow-sm transition-all duration-300",
-                        "hover:shadow-md hover:border-primary/20",
+                        "group relative overflow-hidden border border-border/50 bg-card shadow-sm",
+                        "transition-all duration-300 hover:shadow-lg hover:shadow-primary/5",
+                        "hover:border-primary/30 hover:-translate-y-0.5",
                       )}
                     >
-                      {/* Top accent bar */}
+                      {/* Top accent bar with gradient */}
                       <div
                         aria-hidden="true"
                         className={cn(
-                          "absolute inset-x-0 top-0 h-1 bg-gradient-to-r transition-opacity",
+                          "absolute inset-x-0 top-0 h-1 bg-gradient-to-r transition-all duration-300",
+                          "group-hover:h-1.5",
                           categoryMetadata.accentBar,
                         )}
                       />
                       
-                      <CardHeader className="space-y-4 pb-3">
+                      <CardHeader className="space-y-4 pb-4">
                         {/* Header: Category Icon, Ref, Status, Edit */}
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-start gap-3 flex-1 min-w-0">
                             <div
                               className={cn(
-                                "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+                                "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+                                "transition-transform duration-300 group-hover:scale-110",
                                 categoryMetadata.iconWrapper,
                               )}
                             >
-                              <CategoryIcon className="h-4 w-4" aria-hidden="true" />
+                              <CategoryIcon className="h-5 w-5" aria-hidden="true" />
                               <span className="sr-only">{categoryMetadata.srLabel}</span>
                             </div>
                             <div className="flex-1 min-w-0">
@@ -1323,14 +1346,18 @@ const Projects = ({
                                   event.stopPropagation();
                                   handleViewProject(project.id);
                                 }}
-                                className="text-left w-full"
+                                className="text-left w-full group/title"
                               >
-                                <h3 className="text-base font-semibold text-foreground truncate">
+                                <h3 className="text-base font-semibold text-foreground truncate transition-colors group-hover/title:text-primary">
                                   {project.project_ref || "Sans référence"}
                                 </h3>
                               </button>
-                              <div className="flex items-center gap-2 mt-1">
-                                <Badge variant="outline" style={badgeStyle} className="text-xs">
+                              <div className="flex items-center gap-2 mt-1.5">
+                                <Badge 
+                                  variant="outline" 
+                                  style={badgeStyle} 
+                                  className="text-xs font-medium px-2.5 py-0.5"
+                                >
                                   {statusLabel}
                                 </Badge>
                               </div>
@@ -1342,13 +1369,13 @@ const Projects = ({
                               type="button"
                               variant="ghost"
                               size="sm"
-                              className="shrink-0 h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                              className="shrink-0 h-8 w-8 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                               onClick={(event) => {
                                 event.stopPropagation();
                                 handleViewProject(project.id);
                               }}
                             >
-                              <Eye className="h-3.5 w-3.5" />
+                              <Eye className="h-4 w-4" />
                               <span className="sr-only">Voir</span>
                             </Button>
                             <AddProjectDialog
@@ -1362,10 +1389,10 @@ const Projects = ({
                                   type="button"
                                   variant="ghost"
                                   size="sm"
-                                  className="shrink-0 h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                                  className="shrink-0 h-8 w-8 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                                   onClick={(event) => event.stopPropagation()}
                                 >
-                                  <Pencil className="h-3.5 w-3.5" />
+                                  <Pencil className="h-4 w-4" />
                                   <span className="sr-only">Modifier</span>
                                 </Button>
                               }
@@ -1374,35 +1401,35 @@ const Projects = ({
                         </div>
 
                         {/* Contact Info */}
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium text-foreground">{contactDisplay}</p>
+                        <div className="space-y-2.5">
+                          <p className="text-sm font-semibold text-foreground">{contactDisplay}</p>
                           {companyDisplay && (
-                            <p className="text-xs text-muted-foreground">{companyDisplay}</p>
+                            <p className="text-xs text-muted-foreground/90">{companyDisplay}</p>
                           )}
                           
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
                             {project.siren && (
-                              <span className="flex items-center gap-1">
-                                <span className="font-medium">SIREN:</span> {project.siren}
+                              <span className="flex items-center gap-1.5 bg-muted/40 px-2 py-1 rounded-md">
+                                <span className="font-medium text-foreground">SIREN:</span> {project.siren}
                               </span>
                             )}
                             {project.phone && (
                               <a
                                 href={`tel:${project.phone}`}
-                                className="flex items-center gap-1 hover:text-primary transition-colors"
+                                className="flex items-center gap-1.5 hover:text-primary transition-colors bg-muted/40 px-2 py-1 rounded-md"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <Phone className="h-3 w-3" />
+                                <Phone className="h-3.5 w-3.5" />
                                 {project.phone}
                               </a>
                             )}
                             {projectEmail && (
                               <a
                                 href={`mailto:${projectEmail}`}
-                                className="flex items-center gap-1 hover:text-primary transition-colors"
+                                className="flex items-center gap-1.5 hover:text-primary transition-colors bg-muted/40 px-2 py-1 rounded-md"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <Mail className="h-3 w-3" />
+                                <Mail className="h-3.5 w-3.5" />
                                 {projectEmail}
                               </a>
                             )}
@@ -1410,16 +1437,16 @@ const Projects = ({
                         </div>
                       </CardHeader>
 
-                      <CardContent className="space-y-4 pb-4">
+                      <CardContent className="space-y-5 pb-5">
                         {/* Products & Address */}
-                        <div className="space-y-2.5">
+                        <div className="space-y-3">
                           {displayedProducts.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5">
+                            <div className="flex flex-wrap gap-2">
                               {displayedProducts.map((item, index) => (
                                 <Badge
                                   key={`${project.id}-${item.product?.code ?? index}`}
                                   variant="secondary"
-                                  className="text-[10px] font-medium px-2 py-0.5"
+                                  className="text-xs font-semibold px-2.5 py-1 bg-primary/10 text-primary border border-primary/20"
                                 >
                                   {item.product?.code ?? "Produit"}
                                 </Badge>
@@ -1428,9 +1455,9 @@ const Projects = ({
                           )}
                           
                           {formattedAddress && (
-                            <div className="flex items-start gap-2 text-xs text-muted-foreground">
-                              <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                              <span className="line-clamp-2">{formattedAddress}</span>
+                            <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/30 p-2.5 rounded-lg">
+                              <MapPin className="h-4 w-4 mt-0.5 shrink-0 text-primary" />
+                              <span className="line-clamp-2 leading-relaxed">{formattedAddress}</span>
                             </div>
                           )}
                         </div>
@@ -1449,28 +1476,28 @@ const Projects = ({
 
                         {/* Surfaces & Dates */}
                         {(project.surface_batiment_m2 || project.surface_isolee_m2 || showSurfaceFacturee || startDate || endDate) && (
-                          <div className="rounded-lg bg-muted/30 p-3 space-y-2">
-                            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                          <div className="rounded-lg bg-gradient-to-br from-muted/50 to-muted/30 p-4 space-y-3 border border-border/30">
+                            <div className="grid grid-cols-2 gap-x-5 gap-y-3 text-xs">
                               {project.surface_batiment_m2 && (
-                                <div>
-                                  <div className="text-muted-foreground">Surface bâtiment</div>
-                                  <div className="font-medium text-foreground mt-0.5">
+                                <div className="space-y-1">
+                                  <div className="text-muted-foreground/80 text-[11px] uppercase tracking-wide">Surface bâtiment</div>
+                                  <div className="font-semibold text-foreground text-sm">
                                     {formatDecimal(project.surface_batiment_m2)} m²
                                   </div>
                                 </div>
                               )}
                               {project.surface_isolee_m2 && (
-                                <div>
-                                  <div className="text-muted-foreground">Surface isolée</div>
-                                  <div className="font-medium text-foreground mt-0.5">
+                                <div className="space-y-1">
+                                  <div className="text-muted-foreground/80 text-[11px] uppercase tracking-wide">Surface isolée</div>
+                                  <div className="font-semibold text-foreground text-sm">
                                     {formatDecimal(project.surface_isolee_m2)} m²
                                   </div>
                                 </div>
                               )}
                               {showSurfaceFacturee && (
-                                <div>
-                                  <div className="text-muted-foreground">Surface facturée</div>
-                                  <div className="font-medium text-foreground mt-0.5">
+                                <div className="space-y-1">
+                                  <div className="text-muted-foreground/80 text-[11px] uppercase tracking-wide">Surface facturée</div>
+                                  <div className="font-semibold text-foreground text-sm">
                                     {formatDecimal(surfaceFacturee)} m²
                                   </div>
                                 </div>
@@ -1478,18 +1505,18 @@ const Projects = ({
                             </div>
                             
                             {(startDate || endDate) && (
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1 border-t border-border/40">
-                                <Calendar className="h-3.5 w-3.5 shrink-0" />
-                                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                              <div className="flex items-center gap-2.5 text-xs text-muted-foreground pt-2 border-t border-border/40">
+                                <Calendar className="h-4 w-4 shrink-0 text-primary" />
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                                   {startDate && (
                                     <span>
-                                      Début: <span className="font-medium text-foreground">{startDate.toLocaleDateString("fr-FR")}</span>
+                                      Début: <span className="font-semibold text-foreground">{startDate.toLocaleDateString("fr-FR")}</span>
                                     </span>
                                   )}
-                                  {startDate && endDate && <span>•</span>}
+                                  {startDate && endDate && <span className="text-muted-foreground/40">•</span>}
                                   {endDate && (
                                     <span>
-                                      Fin: <span className="font-medium text-foreground">{endDate.toLocaleDateString("fr-FR")}</span>
+                                      Fin: <span className="font-semibold text-foreground">{endDate.toLocaleDateString("fr-FR")}</span>
                                     </span>
                                   )}
                                 </div>
@@ -1498,35 +1525,35 @@ const Projects = ({
                           </div>
                         )}
 
-                        {/* Financial Info - Compact Grid */}
-                        <div className="grid grid-cols-2 gap-3 text-xs">
-                          <div className="space-y-1">
-                            <div className="text-muted-foreground">Prime CEE totale</div>
-                            <div className="text-sm font-semibold text-emerald-600">
+                        {/* Financial Info - Highlight Grid */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5 bg-emerald-50/50 dark:bg-emerald-950/20 p-3 rounded-lg border border-emerald-200/50 dark:border-emerald-900/30">
+                            <div className="text-muted-foreground text-[11px] uppercase tracking-wide">Prime CEE totale</div>
+                            <div className="text-base font-bold text-emerald-600 dark:text-emerald-500">
                               {formatCurrency(totalPrime)}
                             </div>
                           </div>
                           
-                          <div className="space-y-1">
-                            <div className="text-muted-foreground">MWh généré</div>
-                            <div className="text-sm font-semibold text-foreground">
+                          <div className="space-y-1.5 bg-blue-50/50 dark:bg-blue-950/20 p-3 rounded-lg border border-blue-200/50 dark:border-blue-900/30">
+                            <div className="text-muted-foreground text-[11px] uppercase tracking-wide">MWh généré</div>
+                            <div className="text-base font-bold text-blue-600 dark:text-blue-500">
                               {formatDecimal(totalValorisationMwh)} MWh
                             </div>
                           </div>
                           
                           {typeof projectCostValue === "number" && (
-                            <div className="space-y-1">
-                              <div className="text-muted-foreground">Coût chantier</div>
-                              <div className="text-sm font-semibold text-primary">
+                            <div className="space-y-1.5 bg-primary/5 p-3 rounded-lg border border-primary/20">
+                              <div className="text-muted-foreground text-[11px] uppercase tracking-wide">Coût chantier</div>
+                              <div className="text-base font-bold text-primary">
                                 {formatCurrency(projectCostValue)}
                               </div>
                             </div>
                           )}
                           
                           {primeCeeEuro !== null && primeCeeEuro !== totalPrime && (
-                            <div className="space-y-1">
-                              <div className="text-muted-foreground">Prime CEE estimée</div>
-                              <div className="text-sm font-semibold text-emerald-600">
+                            <div className="space-y-1.5 bg-amber-50/50 dark:bg-amber-950/20 p-3 rounded-lg border border-amber-200/50 dark:border-amber-900/30">
+                              <div className="text-muted-foreground text-[11px] uppercase tracking-wide">Prime CEE estimée</div>
+                              <div className="text-base font-bold text-amber-600 dark:text-amber-500">
                                 {formatCurrency(primeCeeEuro)}
                               </div>
                             </div>
@@ -1534,100 +1561,44 @@ const Projects = ({
                         </div>
 
                         {/* Assignment & References - Compact */}
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground border-t border-border/40 pt-3">
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground border-t border-border/30 pt-4">
                           {assignedTo && (
-                            <span className="flex items-center gap-1">
-                              <span className="font-medium">Assigné:</span> {assignedTo}
+                            <span className="flex items-center gap-1.5 bg-muted/40 px-2.5 py-1.5 rounded-md">
+                              <UserRound className="h-3.5 w-3.5 text-primary" />
+                              <span className="font-medium text-foreground">{assignedTo}</span>
                             </span>
                           )}
                           {externalReference && (
-                            <span className="flex items-center gap-1">
-                              <span className="font-medium">Réf. ext:</span> {externalReference}
+                            <span className="flex items-center gap-1.5 bg-muted/40 px-2.5 py-1.5 rounded-md">
+                              <span className="font-medium text-foreground">Réf. ext:</span> {externalReference}
                             </span>
                           )}
                         </div>
 
                           {/* Action Buttons */}
                           <div className="flex gap-2 pt-2">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="flex-1 h-8 justify-between gap-2 text-xs"
-                                  disabled={isStatusUpdating}
-                                  onClick={(event) => event.stopPropagation()}
-                                  onPointerDown={(event) => event.stopPropagation()}
-                                  onKeyDown={(event) => event.stopPropagation()}
-                                >
-                                  <span className="flex items-center gap-1">
-                                    Statut
-                                    <Badge
-                                      variant="outline"
-                                      style={badgeStyle}
-                                      className="border-none text-[10px] font-medium"
-                                    >
-                                      {statusLabel}
-                                    </Badge>
-                                  </span>
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent
-                                align="start"
-                                className="w-48"
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                {projectStatuses.map((statusOption) => {
-                                  const optionBadgeStyle = getProjectStatusBadgeStyle(statusOption.color);
-                                  const isCurrentStatus = statusOption.value === project.status;
-
-                                  return (
-                                    <DropdownMenuItem
-                                      key={statusOption.value}
-                                      disabled={isStatusUpdating || isCurrentStatus}
-                                      className="flex items-center justify-between gap-2 text-xs"
-                                      onClick={(event) => event.stopPropagation()}
-                                      onSelect={() => {
-                                        if (!isCurrentStatus) {
-                                          void handleProjectStatusChange(project.id, statusOption.value);
-                                        }
-                                      }}
-                                    >
-                                      <span className="truncate">{statusOption.label}</span>
-                                      <Badge
-                                        variant="outline"
-                                        style={optionBadgeStyle}
-                                        className="border-none text-[10px] font-medium"
-                                      >
-                                        {statusOption.label}
-                                      </Badge>
-                                    </DropdownMenuItem>
-                                  );
-                                })}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
                             <Button
                               size="sm"
                               variant="outline"
-                              className="flex-1 h-8 text-xs"
+                              className="flex-1 h-9 text-xs font-medium hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all"
                               onClick={(event) => {
                                 event.stopPropagation();
                                 handleCreateQuote(project);
                               }}
                             >
-                              <FileText className="mr-1.5 h-3.5 w-3.5" />
+                              <FileText className="mr-1.5 h-4 w-4" />
                               Devis
                             </Button>
                             <Button
                               size="sm"
-                              variant="secondary"
-                              className="flex-1 h-8 text-xs"
+                              variant="default"
+                              className="flex-1 h-9 text-xs font-medium shadow-sm hover:shadow-md transition-all"
                               onClick={(event) => {
                                 event.stopPropagation();
                                 handleCreateSite(project);
                               }}
                             >
-                              <HardHat className="mr-1.5 h-3.5 w-3.5" />
+                              <HardHat className="mr-1.5 h-4 w-4" />
                               Chantier
                             </Button>
                           </div>
