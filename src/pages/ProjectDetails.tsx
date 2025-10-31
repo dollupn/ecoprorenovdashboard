@@ -69,6 +69,8 @@ import {
   CheckCircle2,
   Archive,
   Zap,
+  Camera,
+  Clipboard as ClipboardList,
 } from "lucide-react";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useMembers } from "@/features/members/api";
@@ -3969,6 +3971,21 @@ const ProjectDetails = () => {
     setQuoteDialogOpen(true);
   };
 
+  const handleCreateSite = () => {
+    setSiteDialogMode("create");
+    setSiteInitialValues(undefined);
+    setActiveSite(null);
+    setSiteDialogOpen(true);
+  };
+
+  const handleEditSite = (site: any, options?: { readOnly?: boolean; defaultTab?: "avant-chantier" | "apres-chantier" }) => {
+    setSiteDialogMode("edit");
+    setActiveSite(site);
+    setSiteDialogReadOnly(options?.readOnly ?? false);
+    setSiteDialogDefaultTab(options?.defaultTab ?? "avant-chantier");
+    setSiteDialogOpen(true);
+  };
+
   const handleSubmitSite = async (values: SiteSubmitValues) => {
     if (!user || !currentOrgId || !project) return;
 
@@ -4109,7 +4126,7 @@ const ProjectDetails = () => {
       if (siteDialogMode === "edit" && activeSite) {
         const { error } = await supabase
           .from("sites")
-          .update(siteUpdateData)
+          .update(siteUpdateData as any)
           .eq("id", activeSite.id);
 
         if (error) throw error;
@@ -4123,7 +4140,7 @@ const ProjectDetails = () => {
           description: `${values.site_ref} a été mis à jour avec succès.`,
         });
       } else {
-        const { error } = await supabase.from("sites").insert([baseSiteData]);
+        const { error } = await supabase.from("sites").insert([baseSiteData as any]);
 
         if (error) throw error;
 
@@ -5078,11 +5095,9 @@ const ProjectDetails = () => {
                             const amountHT = parseNumber(cost.amount_ht) ?? 0;
                             const montantTVA =
                               parseNumber(cost.montant_tva) ?? parseNumber(cost.taxes) ?? 0;
-                            const amountTTC =
-                              parseNumber(cost.amount_ttc) ??
-                              computeAdditionalCostTTC(amountHT, montantTVA);
+                            const amountTTC = typeof cost.amount_ttc === 'number' ? cost.amount_ttc : (amountHT + montantTVA);
 
-                            return total + amountTTC;
+                            return (total as number) + amountTTC;
                           }, 0)
                         : 0;
                       const additionalCostDisplay =

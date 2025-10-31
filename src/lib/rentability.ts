@@ -137,7 +137,7 @@ export const buildRentabilityInputFromSite = (
     unitsUsed,
     billedUnits,
     commission: values.montant_commission,
-    nonSubsidizedWork: rawNonSubsidized,
+    nonSubsidizedWork: typeof rawNonSubsidized === 'number' ? rawNonSubsidized : 0,
     additionalCosts: values.additional_costs,
     measurementMode: led ? "luminaire" : "surface",
     unitLabel: led ? "luminaire" : "m²",

@@ -1107,7 +1107,7 @@ const Projects = ({
     };
 
     try {
-      const { error } = await supabase.from("sites").insert([siteData]);
+      const { error } = await supabase.from("sites").insert([siteData as any]);
 
       if (error) throw error;
 

@@ -104,7 +104,7 @@ const ChantierDetails = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const { currentOrgId } = useOrg();
-  const { statusOptions, isLoading: statusesLoading } = useProjectStatuses();
+  const { statuses: statusOptions, isLoading: statusesLoading } = useProjectStatuses();
   const [siteDriveFile, setSiteDriveFile] = useState<DriveFileMetadata | null>(null);
 
   const projectStatusValues = useMemo(
@@ -155,14 +155,13 @@ const ChantierDetails = () => {
         .select(
           `*, project:projects(*, lead:leads(id,email,phone_raw)), subcontractor:subcontractors(id,name)`,
         )
-        .eq("id", id)
-        .maybeSingle();
+        .eq("id", id);
 
       if (currentOrgId) {
         query = query.eq("org_id", currentOrgId);
       }
 
-      const { data, error } = await query;
+      const { data, error} = await query.maybeSingle();
       if (error) throw error;
       if (!data) return null;
       return { site: data as SiteWithProject } satisfies ChantierQueryResult;
@@ -191,14 +190,30 @@ const ChantierDetails = () => {
 
   useEffect(() => {
     if (!chantier) return;
-    const defaults: SiteFormValues = {
+    const defaults: Partial<SiteFormValues> = {
       ...defaultSiteFormValues,
-      ...chantier,
+      site_ref: chantier.site_ref,
       project_ref: chantier.project_ref ?? project?.project_ref ?? "",
       client_name: chantier.client_name ?? project?.client_name ?? "",
       product_name: chantier.product_name ?? project?.product_name ?? "",
+      address: chantier.address,
+      city: chantier.city,
+      postal_code: chantier.postal_code,
+      status: chantier.status,
+      cofrac_status: chantier.cofrac_status as "EN_ATTENTE" | "CONFORME" | "NON_CONFORME" | "A_PLANIFIER",
+      date_debut: chantier.date_debut,
+      date_fin_prevue: chantier.date_fin_prevue ?? "",
+      progress_percentage: chantier.progress_percentage ?? 0,
+      revenue: sanitizeNumber(chantier.revenue),
+      profit_margin: sanitizeNumber(chantier.profit_margin),
+      surface_facturee: sanitizeNumber(chantier.surface_facturee),
+      cout_main_oeuvre_m2_ht: sanitizeNumber(chantier.cout_main_oeuvre_m2_ht),
+      cout_isolation_m2: sanitizeNumber(chantier.cout_isolation_m2),
+      isolation_utilisee_m2: sanitizeNumber(chantier.isolation_utilisee_m2),
+      montant_commission: sanitizeNumber(chantier.montant_commission),
+      valorisation_cee: sanitizeNumber(chantier.valorisation_cee),
       subcontractor_id: chantier.subcontractor_id ?? null,
-      travaux_non_subventionnes: (chantier.travaux_non_subventionnes as SiteFormValues["travaux_non_subventionnes"]) ?? "NA",
+      travaux_non_subventionnes: (String(chantier.travaux_non_subventionnes) as SiteFormValues["travaux_non_subventionnes"]) || "NA",
       travaux_non_subventionnes_description: chantier.travaux_non_subventionnes_description ?? "",
       travaux_non_subventionnes_montant: sanitizeNumber(chantier.travaux_non_subventionnes_montant),
       travaux_non_subventionnes_financement: Boolean(chantier.travaux_non_subventionnes_financement),
@@ -264,7 +279,7 @@ const ChantierDetails = () => {
   const updateMutation = useMutation({
     mutationFn: async (payload: SiteSubmitValues) => {
       if (!chantier || !user?.id) return;
-      const { error } = await supabase.from("sites").update(payload).eq("id", chantier.id);
+      const { error } = await supabase.from("sites").update(payload as any).eq("id", chantier.id);
       if (error) throw error;
     },
     onSuccess: async () => {
