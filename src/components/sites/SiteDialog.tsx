@@ -8,7 +8,6 @@ import {
   type FieldArrayWithId,
 } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
 import { useQuery } from "@tanstack/react-query";
 import {
   DndContext,
@@ -49,7 +48,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { DEFAULT_PROJECT_STATUSES, getProjectClientName } from "@/lib/projects";
+import { getProjectClientName } from "@/lib/projects";
 import { parseSiteNotes, serializeSiteNotes } from "@/lib/sites";
 import {
   Select,
@@ -73,6 +72,17 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
+  additionalCostSchema,
+  computeAdditionalCostTTC,
+  createSiteSchema,
+  defaultSiteFormValues,
+  normalizeTeamMembers,
+  type SiteFormValues,
+  type SiteProjectOption,
+  type SiteSubmitValues,
+  type SubcontractorOption,
+} from "./siteFormSchema";
+import { TRAVAUX_NON_SUBVENTIONNES_OPTIONS } from "./travauxNonSubventionnes";
   TRAVAUX_NON_SUBVENTIONNES_OPTIONS,
   type TravauxNonSubventionnesValue,
 } from "./travauxNonSubventionnes";
@@ -164,6 +174,9 @@ const computeAmountTTC = (amountHT: unknown, montantTVA: unknown) => {
   const total = ht + tva;
   return Math.round(total * 100) / 100;
 };
+
+const getDriveFileKey = (file: DriveFileMetadata | null | undefined) =>
+  file?.id ?? file?.webViewLink ?? file?.webContentLink ?? file?.name ?? null;
 
 const fallbackProjectStatusValues = DEFAULT_PROJECT_STATUSES.map((status) => status.value);
 
@@ -289,39 +302,6 @@ interface SiteDialogProps {
   defaultTab?: "avant-chantier" | "apres-chantier";
   readOnly?: boolean;
 }
-
-const defaultValues: SiteFormValues = {
-  site_ref: "",
-  project_ref: "",
-  client_name: "",
-  product_name: "",
-  address: "",
-  city: "",
-  postal_code: "",
-  status: fallbackProjectStatusValues[0] ?? "",
-  cofrac_status: "EN_ATTENTE",
-  date_debut: "",
-  date_fin_prevue: "",
-  progress_percentage: 0,
-  revenue: 0,
-  profit_margin: 0,
-  surface_facturee: 0,
-  cout_main_oeuvre_m2_ht: 0,
-  cout_isolation_m2: 0,
-  isolation_utilisee_m2: 0,
-  montant_commission: 0,
-  valorisation_cee: 0,
-  travaux_non_subventionnes: "NA",
-  travaux_non_subventionnes_description: "",
-  travaux_non_subventionnes_montant: 0,
-  travaux_non_subventionnes_financement: false,
-  commission_commerciale_ht: false,
-  commission_commerciale_ht_montant: 0,
-  notes: "",
-  subcontractor_id: null,
-  additional_costs: [],
-  subcontractor_payment_confirmed: false,
-};
 
 const currencyFormatter = new Intl.NumberFormat("fr-FR", {
   style: "currency",
@@ -465,7 +445,7 @@ const SortableAdditionalCostRow = ({
     name: `additional_costs.${index}.montant_tva`,
   });
   const computedAmountTTC = useMemo(
-    () => computeAmountTTC(watchedAmountHT, watchedMontantTVA),
+    () => computeAdditionalCostTTC(watchedAmountHT, watchedMontantTVA),
     [watchedAmountHT, watchedMontantTVA],
   );
 
@@ -706,6 +686,9 @@ export const SiteDialog = ({
   const parsedNotes = useMemo(() => parseSiteNotes(initialValues?.notes), [initialValues?.notes]);
 
   const [siteDriveFile, setSiteDriveFile] = useState<DriveFileMetadata | null>(parsedNotes.driveFile);
+  const [siteDriveAttachments, setSiteDriveAttachments] = useState<DriveFileMetadata[]>(
+    parsedNotes.attachments,
+  );
   const [activeTab, setActiveTab] = useState<"avant-chantier" | "apres-chantier">(defaultTab);
   const isReadOnly = Boolean(readOnly);
   const resolvedOrgId = orgId ?? initialValues?.org_id ?? null;
@@ -787,7 +770,7 @@ export const SiteDialog = ({
             const amountTTC =
               typeof rawCost.amount_ttc === "number" && Number.isFinite(rawCost.amount_ttc)
                 ? rawCost.amount_ttc
-                : computeAmountTTC(amountHT, montantTVAValue);
+                : computeAdditionalCostTTC(amountHT, montantTVAValue);
             const attachmentValue =
               typeof rawCost.attachment === "string" && rawCost.attachment.trim().length > 0
                 ? rawCost.attachment.trim()
@@ -801,17 +784,17 @@ export const SiteDialog = ({
               attachment: attachmentValue,
             } satisfies SiteFormValues["additional_costs"][number];
           })
-        : defaultValues.additional_costs;
+        : defaultSiteFormValues.additional_costs;
 
     const normalizedTeamMembers = normalizeTeamMembers(initialValues?.team_members, memberNameById);
 
     const resolvedStatus =
       initialValues?.status && statusValues.includes(initialValues.status)
         ? initialValues.status
-        : statusValues[0] ?? defaultValues.status;
+        : statusValues[0] ?? defaultSiteFormValues.status;
 
     const values: SiteFormValues = {
-      ...defaultValues,
+      ...defaultSiteFormValues,
       ...initialValues,
       status: resolvedStatus,
       subcontractor_id:
@@ -827,7 +810,7 @@ export const SiteDialog = ({
       (option) => option.value,
     );
     if (!allowedTravauxValues.includes(values.travaux_non_subventionnes)) {
-      values.travaux_non_subventionnes = defaultValues.travaux_non_subventionnes;
+      values.travaux_non_subventionnes = defaultSiteFormValues.travaux_non_subventionnes;
     }
 
     if (
@@ -1067,9 +1050,27 @@ export const SiteDialog = ({
   }, [open, mergedDefaults, form]);
 
   useEffect(() => {
-    if (open) setSiteDriveFile(parsedNotes.driveFile);
-    else setSiteDriveFile(null);
-  }, [open, parsedNotes.driveFile]);
+    if (open) {
+      setSiteDriveFile(parsedNotes.driveFile);
+      setSiteDriveAttachments(parsedNotes.attachments);
+    } else {
+      setSiteDriveFile(null);
+      setSiteDriveAttachments([]);
+    }
+  }, [open, parsedNotes.attachments, parsedNotes.driveFile]);
+
+  const handleSiteDriveFileChange = useCallback((file: DriveFileMetadata | null) => {
+    setSiteDriveFile(file);
+    setSiteDriveAttachments((current) => {
+      if (!file) {
+        return current.slice(1);
+      }
+
+      const nextKey = getDriveFileKey(file);
+      const filtered = current.filter((existing) => getDriveFileKey(existing) !== nextKey);
+      return [file, ...filtered];
+    });
+  }, []);
 
   const {
     fields: costFields,
@@ -1110,7 +1111,7 @@ export const SiteDialog = ({
         const amountHT = Number.isFinite(c.amount_ht) ? c.amount_ht : 0;
         const amountTTC = Number.isFinite(c.amount_ttc)
           ? c.amount_ttc
-          : computeAmountTTC(amountHT, montantTVA);
+          : computeAdditionalCostTTC(amountHT, montantTVA);
 
         return {
           label: c.label.trim(),
@@ -1121,7 +1122,7 @@ export const SiteDialog = ({
         };
       });
 
-    const serializedNotes = serializeSiteNotes(values.notes, siteDriveFile);
+    const serializedNotes = serializeSiteNotes(values.notes, siteDriveFile, siteDriveAttachments);
 
     const projectRef = values.project_ref?.trim?.() ?? "";
     const clientName = values.client_name?.trim?.() ?? "";
@@ -1856,7 +1857,7 @@ export const SiteDialog = ({
                   <DriveFileUploader
                     orgId={orgId ?? initialValues?.org_id ?? null}
                     value={siteDriveFile}
-                    onChange={setSiteDriveFile}
+                    onChange={handleSiteDriveFileChange}
                     accept="application/pdf,image/*"
                     maxSizeMb={35}
                     entityType="site"

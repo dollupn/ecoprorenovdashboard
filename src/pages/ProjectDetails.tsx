@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import {
+  Link,
   useLocation,
   useNavigate,
   useParams,
@@ -53,7 +54,6 @@ import {
   Trash2,
   Mail,
   AlertTriangle,
-  Pencil,
   Users,
   Plus,
   Loader2,
@@ -66,8 +66,6 @@ import {
   Clock,
   ChevronRight,
   NotebookPen,
-  ClipboardList,
-  Camera,
   CheckCircle2,
   Archive,
   Zap,
@@ -85,6 +83,7 @@ import {
   type SiteProjectOption,
   type SiteSubmitValues,
 } from "@/components/sites/SiteDialog";
+import { StartChantierDialog } from "@/components/sites/StartChantierDialog";
 import {
   TRAVAUX_NON_SUBVENTIONNES_LABELS,
   TRAVAUX_NON_SUBVENTIONNES_OPTIONS,
@@ -2260,6 +2259,7 @@ const ProjectDetails = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
+  const [startChantierDialogOpen, setStartChantierDialogOpen] = useState(false);
   const [siteDialogOpen, setSiteDialogOpen] = useState(false);
   const [siteDialogMode, setSiteDialogMode] = useState<"create" | "edit">(
     "create",
@@ -2860,6 +2860,10 @@ const ProjectDetails = () => {
   );
 
   const isStartingChantier = startChantierMutation.isPending;
+  const startChantierDisabled = !project?.id;
+  const startChantierDisabledReason = startChantierDisabled
+    ? "Le projet doit être enregistré avant de démarrer un chantier."
+    : undefined;
 
   const uploadMediaMutation = useMutation({
     mutationKey: ["project-media-upload", project?.id, selectedMediaCategory],
@@ -3944,85 +3948,6 @@ const ProjectDetails = () => {
     );
   }
 
-  const handleCreateSite = async () => {
-    if (!project || !currentOrgId) return;
-
-    const displayedProducts = getDisplayedProducts(project.project_products);
-    const firstProduct =
-      displayedProducts[0]?.product ??
-      project.project_products?.[0]?.product ??
-      null;
-    const productLabel =
-      firstProduct?.code ||
-      (project as Project & { product_name?: string | null }).product_name ||
-      "";
-    const clientName = getProjectClientName(project);
-    const address =
-      (project as Project & { address?: string | null }).address ?? "";
-
-    const today = new Date();
-    const datePrefix = `SITE-${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(
-      today.getDate(),
-    ).padStart(2, "0")}`;
-
-    const { data: existingSites } = await supabase
-      .from("sites")
-      .select("site_ref")
-      .eq("org_id", currentOrgId)
-      .like("site_ref", `${datePrefix}-%`)
-      .order("created_at", { ascending: false })
-      .limit(1);
-
-    let nextNumber = 1;
-    if (existingSites && existingSites.length > 0) {
-      const lastRef = existingSites[0].site_ref;
-      const lastNumber = parseInt(lastRef.split("-").pop() || "0", 10);
-      nextNumber = Number.isFinite(lastNumber) ? lastNumber + 1 : 1;
-    }
-
-    const site_ref = `${datePrefix}-${String(nextNumber).padStart(3, "0")}`;
-    const valorisationEur = hasComputedCeeTotals
-      ? ceeTotals.totalValorisationEur
-      : (ceeTotals.totalPrime ?? 0);
-
-    setSiteDialogMode("create");
-    setActiveSite(null);
-    setSiteDialogDefaultTab("avant-chantier");
-    setSiteDialogReadOnly(false);
-    setSiteInitialValues({
-      site_ref,
-      project_ref: project.project_ref ?? "",
-      client_name: clientName,
-      product_name: productLabel,
-      address,
-      city: project.city ?? "",
-      postal_code: project.postal_code ?? "",
-      date_debut: new Date().toISOString().slice(0, 10),
-      status: "PLANIFIE",
-      cofrac_status: "EN_ATTENTE",
-      progress_percentage: 0,
-      revenue: 0,
-      profit_margin: 0,
-      surface_facturee: projectSurfaceFacturee > 0 ? projectSurfaceFacturee : 0,
-      cout_main_oeuvre_m2_ht: 0,
-      cout_isolation_m2: 0,
-      isolation_utilisee_m2: 0,
-      montant_commission: 0,
-      valorisation_cee: valorisationEur ?? 0,
-      travaux_non_subventionnes: "NA",
-      travaux_non_subventionnes_description: "",
-      travaux_non_subventionnes_montant: 0,
-      travaux_non_subventionnes_financement: false,
-      commission_commerciale_ht: false,
-      commission_commerciale_ht_montant: 0,
-      subcontractor_id: null,
-      team_members: [],
-      additional_costs: [],
-      subcontractor_payment_confirmed: false,
-    });
-    setSiteDialogOpen(true);
-  };
-
   const handleOpenQuote = () => {
     const displayedProducts = getDisplayedProducts(project.project_products);
     const firstProduct =
@@ -4042,82 +3967,6 @@ const ProjectDetails = () => {
       quote_ref: project.project_ref ? `${project.project_ref}-DEV` : undefined,
     });
     setQuoteDialogOpen(true);
-  };
-
-  const handleEditSite = (
-    site: ProjectSite,
-    options?: {
-      readOnly?: boolean;
-      defaultTab?: "avant-chantier" | "apres-chantier";
-    },
-  ) => {
-    const { readOnly = false, defaultTab = "avant-chantier" } = options ?? {};
-
-    setSiteDialogMode("edit");
-    setSiteDialogReadOnly(readOnly);
-    setSiteDialogDefaultTab(defaultTab);
-    setActiveSite(site);
-    const rawTravauxChoice = (site.travaux_non_subventionnes ?? "NA") as
-      | TravauxNonSubventionnesValue
-      | string;
-    const isValidTravauxChoice = TRAVAUX_NON_SUBVENTIONNES_OPTIONS.some(
-      (option) => option.value === rawTravauxChoice,
-    );
-    const resolvedTravauxChoice = isValidTravauxChoice
-      ? (rawTravauxChoice as TravauxNonSubventionnesValue)
-      : "NA";
-    const travauxDescription =
-      typeof site.travaux_non_subventionnes_description === "string"
-        ? site.travaux_non_subventionnes_description.trim()
-        : "";
-    const travauxMontant =
-      typeof site.travaux_non_subventionnes_montant === "number" &&
-      Number.isFinite(site.travaux_non_subventionnes_montant)
-        ? site.travaux_non_subventionnes_montant
-        : 0;
-    const travauxFinancement = Boolean(site.travaux_non_subventionnes_financement);
-    const commissionCommercialeActive = Boolean(site.commission_commerciale_ht);
-    const commissionCommercialeMontant =
-      typeof site.commission_commerciale_ht_montant === "number" &&
-      Number.isFinite(site.commission_commerciale_ht_montant)
-        ? site.commission_commerciale_ht_montant
-        : 0;
-    setSiteInitialValues({
-      site_ref: site.site_ref,
-      project_ref: site.project_ref,
-      client_name: site.client_name,
-      product_name: site.product_name,
-      address: site.address,
-      city: site.city,
-      postal_code: site.postal_code,
-      status: (site.status as SiteStatus) ?? "PLANIFIE",
-      cofrac_status: (site.cofrac_status as CofracStatus) ?? "EN_ATTENTE",
-      date_debut: site.date_debut,
-      date_fin_prevue: site.date_fin_prevue ?? "",
-      progress_percentage: site.progress_percentage ?? 0,
-      revenue: site.revenue ?? 0,
-      profit_margin: site.profit_margin ?? 0,
-      surface_facturee: site.surface_facturee ?? 0,
-      cout_main_oeuvre_m2_ht: site.cout_main_oeuvre_m2_ht ?? 0,
-      cout_isolation_m2: site.cout_isolation_m2 ?? 0,
-      isolation_utilisee_m2: site.isolation_utilisee_m2 ?? 0,
-      montant_commission: site.montant_commission ?? 0,
-      valorisation_cee: site.valorisation_cee ?? 0,
-      travaux_non_subventionnes: resolvedTravauxChoice,
-      travaux_non_subventionnes_description: travauxDescription,
-      travaux_non_subventionnes_montant: travauxMontant,
-      travaux_non_subventionnes_financement: travauxFinancement,
-      commission_commerciale_ht: commissionCommercialeActive,
-      commission_commerciale_ht_montant: commissionCommercialeMontant,
-      notes: site.notes ?? "",
-      subcontractor_payment_confirmed: Boolean(
-        site.subcontractor_payment_confirmed,
-      ),
-      subcontractor_id: site.subcontractor_id ?? null,
-      team_members: mapTeamMembersToFormValues(site.team_members ?? []),
-      additional_costs: normalizeAdditionalCosts(site.additional_costs ?? []),
-    });
-    setSiteDialogOpen(true);
   };
 
   const handleSubmitSite = async (values: SiteSubmitValues) => {
@@ -5148,13 +4997,13 @@ const ProjectDetails = () => {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => {
-                    void handleCreateSite();
-                  }}
+                  onClick={() => setStartChantierDialogOpen(true)}
                   className="inline-flex items-center gap-2"
+                  disabled={startChantierDisabled}
+                  title={startChantierDisabledReason}
                 >
                   <Hammer className="h-4 w-4" />
-                  Nouveau chantier
+                  Démarrer Chantier
                 </Button>
               </CardHeader>
               <CardContent>
@@ -5173,15 +5022,20 @@ const ProjectDetails = () => {
                       </p>
                     </div>
                     <Button
-                      onClick={() => {
-                        void handleCreateSite();
-                      }}
+                      onClick={() => setStartChantierDialogOpen(true)}
                       size="sm"
                       className="inline-flex items-center gap-2"
+                      disabled={startChantierDisabled}
+                      title={startChantierDisabledReason}
                     >
                       <Plus className="h-4 w-4" />
-                      Créer un chantier
+                      Démarrer un chantier
                     </Button>
+                    {startChantierDisabled && startChantierDisabledReason ? (
+                      <p className="text-xs text-muted-foreground">
+                        {startChantierDisabledReason}
+                      </p>
+                    ) : null}
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -5199,10 +5053,16 @@ const ProjectDetails = () => {
                       const parsedSiteNotes = parseSiteNotes(site.notes);
                       const internalNotes = parsedSiteNotes.text?.trim() ?? "";
                       const hasInternalNotes = internalNotes.length > 0;
-                      const driveFile = parsedSiteNotes.driveFile;
-                      const driveLink = driveFile?.webViewLink ?? null;
-                      const driveLabel = driveFile?.name ?? "Document chantier";
-                      const hasDriveFile = Boolean(driveLink);
+                      const attachments = parsedSiteNotes.attachments;
+                      const primaryAttachment = attachments[0] ?? parsedSiteNotes.driveFile;
+                      const driveLink =
+                        primaryAttachment?.webViewLink ?? primaryAttachment?.webContentLink ?? null;
+                      const hasDriveFile = Boolean(driveLink) || attachments.length > 0;
+                      const extraAttachmentCount = Math.max(0, attachments.length - 1);
+                      const driveLabel =
+                        attachments.length > 1
+                          ? `${attachments.length} documents`
+                          : primaryAttachment?.name ?? "Document chantier";
                       const additionalCostCount = Array.isArray(
                         site.additional_costs,
                       )
@@ -5337,44 +5197,34 @@ const ProjectDetails = () => {
                           ? site.commission_commerciale_ht_montant
                           : 0;
 
+                      const addressDisplay = site.address
+                        ? `${site.address} · ${site.postal_code} ${site.city}`
+                        : `${site.city} (${site.postal_code})`;
+
                       return (
-                        <div
+                        <Card
                           key={site.id}
-                          className="space-y-4 rounded-lg border border-border/60 bg-background/60 p-4"
+                          className="border border-border/60 bg-background/60"
                         >
-                          <div className="flex flex-wrap items-start justify-between gap-3">
+                          <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                             <div>
-                              <h3 className="text-base font-semibold text-foreground">
-                                {site.site_ref}
-                              </h3>
-                              <p className="text-sm text-muted-foreground">
-                                {site.address
-                                  ? `${site.address} · ${site.postal_code} ${site.city}`
-                                  : `${site.city} (${site.postal_code})`}
-                              </p>
+                              <CardTitle className="text-base">{site.site_ref}</CardTitle>
+                              <CardDescription>{addressDisplay}</CardDescription>
                             </div>
                             <div className="flex flex-wrap gap-2">
-                              <Badge
-                                variant="outline"
-                                className={getStatusColor(status)}
-                              >
+                              <Badge variant="outline" className={getStatusColor(status)}>
                                 {getStatusLabel(status)}
                               </Badge>
-                              <Badge variant="outline">
-                                {getCofracStatusLabel(cofracStatus)}
-                              </Badge>
+                              <Badge variant="outline">{getCofracStatusLabel(cofracStatus)}</Badge>
                             </div>
-                          </div>
-
-                          <div className="grid gap-3 text-sm text-muted-foreground md:grid-cols-2 xl:grid-cols-4">
+                          </CardHeader>
+                          <CardContent className="grid gap-3 text-sm text-muted-foreground md:grid-cols-2 xl:grid-cols-4">
                             <div className="flex items-center gap-2">
                               <Calendar className="h-4 w-4 text-primary" />
                               <span>
                                 Début :{" "}
                                 <span className="font-medium text-foreground">
-                                  {new Date(site.date_debut).toLocaleDateString(
-                                    "fr-FR",
-                                  )}
+                                  {new Date(site.date_debut).toLocaleDateString("fr-FR")}
                                 </span>
                               </span>
                             </div>
@@ -5384,9 +5234,7 @@ const ProjectDetails = () => {
                                 Fin prévue :{" "}
                                 <span className="font-medium text-foreground">
                                   {site.date_fin_prevue
-                                    ? new Date(
-                                        site.date_fin_prevue,
-                                      ).toLocaleDateString("fr-FR")
+                                    ? new Date(site.date_fin_prevue).toLocaleDateString("fr-FR")
                                     : "—"}
                                 </span>
                               </span>
@@ -5394,9 +5242,7 @@ const ProjectDetails = () => {
                             <div>
                               <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
                                 <span>Avancement</span>
-                                <span className="font-medium text-foreground">
-                                  {progressValue}%
-                                </span>
+                                <span className="font-medium text-foreground">{progressValue}%</span>
                               </div>
                               <Progress value={progressValue} />
                             </div>
@@ -5404,11 +5250,7 @@ const ProjectDetails = () => {
                               <Euro className="h-4 w-4 text-emerald-600" />
                               <span>
                                 CA :{" "}
-                                <span className="font-medium text-foreground">
-                                  {typeof site.revenue === "number"
-                                    ? formatCurrency(site.revenue)
-                                    : "—"}
-                                </span>
+                                <span className="font-medium text-foreground">{revenueDisplay}</span>
                               </span>
                             </div>
                             {typeof site.valorisation_cee === "number" ? (
@@ -5416,9 +5258,7 @@ const ProjectDetails = () => {
                                 <HandCoins className="h-4 w-4 text-amber-600" />
                                 <span>
                                   Valorisation :{" "}
-                                  <span className="font-medium text-foreground">
-                                    {formatCurrency(site.valorisation_cee)}
-                                  </span>
+                                  <span className="font-medium text-foreground">{primeDisplay}</span>
                                 </span>
                               </div>
                             ) : null}
@@ -5438,12 +5278,11 @@ const ProjectDetails = () => {
                                 <Users className="h-4 w-4 text-primary" />
                                 <span>
                                   Équipe :{" "}
-                                  <span className="font-medium text-foreground">
-                                    {teamMembersLabel}
-                                  </span>
+                                  <span className="font-medium text-foreground">{teamMembersLabel}</span>
                                 </span>
                               </div>
                             ) : null}
+                          </CardContent>
                           </div>
 
                           <div className="grid gap-4 lg:grid-cols-2">
@@ -5505,22 +5344,29 @@ const ProjectDetails = () => {
                                   <span className="flex items-center gap-2 text-muted-foreground">
                                     <Camera className="h-4 w-4" /> Docs & photos
                                   </span>
-                                  {hasDriveFile && driveLink ? (
-                                    <a
-                                      href={driveLink}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-                                    >
-                                      <FolderOpen className="h-4 w-4" />
-                                      <span className="font-medium">
-                                        {driveLabel}
-                                      </span>
-                                    </a>
+                                  {hasDriveFile ? (
+                                    driveLink ? (
+                                      <div className="flex items-center gap-2">
+                                        <a
+                                          href={driveLink}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                                        >
+                                          <FolderOpen className="h-4 w-4" />
+                                          <span className="font-medium">{driveLabel}</span>
+                                        </a>
+                                        {extraAttachmentCount > 0 ? (
+                                          <Badge variant="outline" className="px-2 text-xs font-medium">
+                                            +{extraAttachmentCount}
+                                          </Badge>
+                                        ) : null}
+                                      </div>
+                                    ) : (
+                                      <span className="font-medium text-foreground">{driveLabel}</span>
+                                    )
                                   ) : (
-                                    <span className="font-medium text-muted-foreground">
-                                      Aucun
-                                    </span>
+                                    <span className="font-medium text-muted-foreground">Aucun</span>
                                   )}
                                 </div>
                               </CardContent>
@@ -5724,31 +5570,18 @@ const ProjectDetails = () => {
                           </div>
 
                           {hasInternalNotes ? (
-                            <p className="border-t border-border/40 pt-3 text-sm text-muted-foreground">
+                            <CardContent className="border-t border-border/40 pt-3 text-sm text-muted-foreground">
                               {internalNotes}
-                            </p>
+                            </CardContent>
                           ) : null}
-
-                          <div className="flex flex-wrap justify-end gap-2">
-                            {canManageSites ? (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="inline-flex items-center gap-2"
-                                onClick={() => {
-                                  handleEditSite(site, {
-                                    readOnly: false,
-                                    defaultTab: "avant-chantier",
-                                  });
-                                }}
-                              >
-                                <Pencil className="h-4 w-4" />
-                                Modifier
-                              </Button>
-                            ) : null}
-                          </div>
-                        </div>
+                          <CardFooter className="flex justify-end">
+                            <Button asChild variant="outline" size="sm">
+                              <Link to={`/chantiers/${site.id}`}>Voir détails</Link>
+                            </Button>
+                          </CardFooter>
+                        </Card>
                       );
+
                     })}
                   </div>
                 )}
@@ -5790,6 +5623,15 @@ const ProjectDetails = () => {
           }}
           initialValues={quoteInitialValues}
         />
+        {project?.id ? (
+          <StartChantierDialog
+            projectId={project.id}
+            projectRef={project.project_ref ?? null}
+            projectName={getProjectClientName(project)}
+            open={startChantierDialogOpen}
+            onOpenChange={setStartChantierDialogOpen}
+          />
+        ) : null}
         <SiteDialog
           open={siteDialogOpen}
           mode={siteDialogMode}
