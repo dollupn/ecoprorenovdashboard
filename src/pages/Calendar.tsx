@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Card,
   CardContent,
@@ -55,6 +56,11 @@ type CalendarEvent = {
   status: EventStatus;
   source: EventSource;
   notes?: string;
+  entityType: ScheduledAppointmentRecord["entityType"];
+  leadId: string | null;
+  projectId: string | null;
+  detailUrl?: string;
+  detailLabel?: string;
 };
 const DEFAULT_APPOINTMENT_TYPE_COLOR = "bg-slate-500/10 text-slate-600 border-slate-200";
 
@@ -170,6 +176,26 @@ const mapAppointmentsToEvents = (
       if (record.commentaire) notesParts.push(record.commentaire);
       const notes = notesParts.length > 0 ? notesParts.join(" · ") : undefined;
 
+      const projectId = record.project?.id ?? record.projectId ?? null;
+      const leadId = record.leadId ?? (record.entityType === "lead" ? record.id : null);
+
+      let detailUrl: string | undefined;
+      let detailLabel: string | undefined;
+
+      if (projectId) {
+        detailUrl = `/projects/${projectId}`;
+        if (record.project?.projectRef) {
+          detailLabel = `Voir le projet ${record.project.projectRef}`;
+        } else if (record.project?.clientName) {
+          detailLabel = `Voir le projet de ${record.project.clientName}`;
+        } else {
+          detailLabel = "Voir le projet";
+        }
+      } else if (record.entityType === "lead" && leadId) {
+        detailUrl = `/leads/${leadId}`;
+        detailLabel = "Voir le lead";
+      }
+
       return {
         id: record.id,
         title,
@@ -182,6 +208,11 @@ const mapAppointmentsToEvents = (
         status: determineEventStatus(record.status),
         source: record.source,
         notes,
+        entityType: record.entityType,
+        leadId,
+        projectId,
+        detailUrl,
+        detailLabel,
       } satisfies CalendarEvent;
     })
     .filter((event) => event !== null) as CalendarEvent[];
@@ -214,7 +245,7 @@ const statusConfig: Record<
 
 const googleIntegration = {
   connected: true,
-  calendarName: "Set RDV Equipe Commerciale",
+  calendarName: "Planning Équipe Commerciale",
   lastSync: subMinutes(new Date(), 42),
   primaryEmail: "planning@ecoprorenov.fr",
 };
@@ -372,10 +403,10 @@ const CalendarPage = () => {
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-              Set RDV & Rendez-vous
+              Planning & Rendez-vous
             </h1>
             <p className="text-muted-foreground mt-1">
-              Visualisez vos visites techniques, réunions commerciales et synchronisations Google Calendar
+              Pilotez vos visites techniques, suivis de projet et synchronisations Google Calendar depuis un planning unifié
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -560,6 +591,19 @@ const CalendarPage = () => {
                                   {sourceLabels[event.source].label}
                                 </Badge>
                               </span>
+                              {event.detailUrl && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-auto p-0 inline-flex items-center gap-1.5 hover:text-primary"
+                                  asChild
+                                >
+                                  <Link to={event.detailUrl}>
+                                    <ExternalLink className="h-4 w-4" />
+                                    {event.detailLabel ?? (event.entityType === "project" ? "Voir le projet" : "Voir le lead")}
+                                  </Link>
+                                </Button>
+                              )}
                             </div>
 
                             {event.notes && (
@@ -635,6 +679,19 @@ const CalendarPage = () => {
                               {sourceLabels[event.source].label}
                             </Badge>
                           </div>
+                          {event.detailUrl && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-auto p-0 inline-flex items-center gap-1.5 text-primary hover:text-primary"
+                              asChild
+                            >
+                              <Link to={event.detailUrl}>
+                                <ExternalLink className="h-4 w-4" />
+                                {event.detailLabel ?? (event.entityType === "project" ? "Voir le projet" : "Voir le lead")}
+                              </Link>
+                            </Button>
+                          )}
                         </div>
                       ))}
                     </div>
