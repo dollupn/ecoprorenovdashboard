@@ -143,6 +143,47 @@ const additionalCostSchema = z.object({
 
 const fallbackProjectStatusValues = DEFAULT_PROJECT_STATUSES.map((status) => status.value);
 
+const LEGACY_SITE_STATUS_LABELS = {
+  PLANIFIE: "Planifié",
+  EN_PREPARATION: "En préparation",
+  EN_COURS: "En cours",
+  SUSPENDU: "Suspendu",
+  TERMINE: "Terminé",
+  LIVRE: "Livré",
+} as const;
+
+type LegacySiteStatus = keyof typeof LEGACY_SITE_STATUS_LABELS;
+
+const PROJECT_STATUS_TO_CHANTIER_STATUS: Record<string, LegacySiteStatus> = {
+  CHANTIER_PLANIFIE: "PLANIFIE",
+  CHANTIER_EN_COURS: "EN_COURS",
+  CHANTIER_TERMINE: "TERMINE",
+  LIVRE: "LIVRE",
+};
+
+const deriveLegacyStatusFromProject = (status: string): LegacySiteStatus | null => {
+  if (status in PROJECT_STATUS_TO_CHANTIER_STATUS) {
+    return PROJECT_STATUS_TO_CHANTIER_STATUS[status];
+  }
+
+  if (status.startsWith("CHANTIER_")) {
+    const candidate = status.replace("CHANTIER_", "") as LegacySiteStatus;
+    if (candidate in LEGACY_SITE_STATUS_LABELS) {
+      return candidate;
+    }
+  }
+
+  return null;
+};
+
+const formatLegacyStatusLabel = (status: string) =>
+  LEGACY_SITE_STATUS_LABELS[status as LegacySiteStatus] ??
+  status
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1).toLowerCase())
+    .join(" ");
+
 const createBaseSiteSchema = (statusOptions: readonly string[]) => {
   const allowedStatuses = statusOptions.length > 0 ? [...statusOptions] : fallbackProjectStatusValues;
   const statusSet = new Set(allowedStatuses);
@@ -557,7 +598,7 @@ export const SiteDialog = ({
   defaultTab = "avant-chantier",
   readOnly = false,
 }: SiteDialogProps) => {
-  const projectStatuses = useProjectStatuses();
+  const { statuses: projectStatuses } = useProjectStatuses();
   const parsedNotes = useMemo(() => parseSiteNotes(initialValues?.notes), [initialValues?.notes]);
 
   const [siteDriveFile, setSiteDriveFile] = useState<DriveFileMetadata | null>(parsedNotes.driveFile);
@@ -565,8 +606,48 @@ export const SiteDialog = ({
   const isReadOnly = Boolean(readOnly);
   const resolvedOrgId = orgId ?? initialValues?.org_id ?? null;
   const { data: members = [], isLoading: membersLoading } = useMembers(resolvedOrgId);
-  const projectStatuses = useProjectStatuses();
-  const statusValues = useMemo(() => projectStatuses.map((status) => status.value), [projectStatuses]);
+  const currentStatus =
+    typeof initialValues?.status === "string" && initialValues.status.length > 0
+      ? initialValues.status
+      : null;
+  const normalizedProjectStatuses = useMemo(
+    () => (projectStatuses.length > 0 ? projectStatuses : DEFAULT_PROJECT_STATUSES),
+    [projectStatuses],
+  );
+  const statusOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const options: { value: string; label: string }[] = [];
+
+    const addOption = (value: string | null | undefined, label: string | null | undefined) => {
+      if (!value || seen.has(value)) {
+        return;
+      }
+
+      options.push({ value, label: label && label.length > 0 ? label : formatLegacyStatusLabel(value) });
+      seen.add(value);
+    };
+
+    normalizedProjectStatuses.forEach((status) => {
+      const mapped = deriveLegacyStatusFromProject(status.value);
+      if (mapped) {
+        addOption(mapped, status.label);
+      }
+    });
+
+    (Object.entries(LEGACY_SITE_STATUS_LABELS) as [LegacySiteStatus, string][]).forEach(([value, label]) => {
+      addOption(value, label);
+    });
+
+    if (currentStatus) {
+      addOption(currentStatus, formatLegacyStatusLabel(currentStatus));
+    }
+
+    return options;
+  }, [normalizedProjectStatuses, currentStatus]);
+  const resolvedStatusValues = useMemo(
+    () => statusOptions.map((option) => option.value),
+    [statusOptions],
+  );
   const memberNameById = useMemo(() => {
     const result: Record<string, string> = {};
     members.forEach((member) => {
@@ -584,15 +665,6 @@ export const SiteDialog = ({
         name: memberNameById[member.user_id] ?? "Utilisateur",
       })),
     [members, memberNameById],
-  );
-  const statusValues = useMemo(() => projectStatuses.map((status) => status.value), [projectStatuses]);
-  const resolvedStatusOptions = useMemo(
-    () => (statusValues.length > 0 ? statusValues : fallbackProjectStatusValues),
-    [statusValues],
-  );
-  const statusDisplayOptions = useMemo(
-    () => (projectStatuses.length > 0 ? projectStatuses : DEFAULT_PROJECT_STATUSES),
-    [projectStatuses],
   );
   useEffect(() => {
     if (open) {
@@ -633,9 +705,9 @@ export const SiteDialog = ({
     const normalizedTeamMembers = normalizeTeamMembers(initialValues?.team_members, memberNameById);
 
     const resolvedStatus =
-      initialValues?.status && statusValues.includes(initialValues.status)
+      initialValues?.status && resolvedStatusValues.includes(initialValues.status)
         ? initialValues.status
-        : statusValues[0] ?? defaultValues.status;
+        : resolvedStatusValues[0] ?? defaultValues.status;
 
     const values: SiteFormValues = {
       ...defaultValues,
@@ -651,12 +723,12 @@ export const SiteDialog = ({
 
     values.notes = parsedNotes.text;
 
-    if (!resolvedStatusOptions.includes(values.status)) {
-      values.status = resolvedStatusOptions[0] ?? "";
+    if (!resolvedStatusValues.includes(values.status)) {
+      values.status = resolvedStatusValues[0] ?? "";
     }
 
     return values;
-  }, [initialValues, parsedNotes.text, memberNameById, resolvedStatusOptions]);
+  }, [initialValues, parsedNotes.text, memberNameById, resolvedStatusValues]);
 
   const availableProjects = useMemo<SiteProjectOption[]>(() => {
     const base = [...(projects ?? [])];
@@ -680,10 +752,10 @@ export const SiteDialog = ({
 
   const hasAvailableProjects = availableProjects.length > 0;
 
- const schema = useMemo(
-  () => createSiteSchema(resolvedStatusOptions, hasAvailableProjects),
-  [resolvedStatusOptions, hasAvailableProjects]
-);
+  const schema = useMemo(
+    () => createSiteSchema(resolvedStatusValues, hasAvailableProjects),
+    [resolvedStatusValues, hasAvailableProjects]
+  );
 
   const resolver = useMemo(() => zodResolver(schema), [schema]);
 
@@ -864,6 +936,12 @@ export const SiteDialog = ({
         };
       });
 
+    const mappedStatus = deriveLegacyStatusFromProject(values.status ?? "") ?? values.status;
+    const normalizedStatus =
+      typeof mappedStatus === "string" && mappedStatus.length > 0
+        ? mappedStatus
+        : resolvedStatusValues[0] ?? "";
+
     const serializedNotes = serializeSiteNotes(values.notes, siteDriveFile);
 
     const projectRef = values.project_ref?.trim?.() ?? "";
@@ -871,6 +949,7 @@ export const SiteDialog = ({
 
     onSubmit({
       ...values,
+      status: normalizedStatus,
       project_ref: projectRef,
       client_name: clientName,
       subcontractor_id: values.subcontractor_id ?? null,
@@ -924,7 +1003,7 @@ export const SiteDialog = ({
                         <Select
                           onValueChange={field.onChange}
                           value={field.value}
-                          disabled={isReadOnly || resolvedStatusOptions.length === 0}
+                          disabled={isReadOnly || resolvedStatusValues.length === 0}
                         >
                           <FormControl>
                             <SelectTrigger>
@@ -932,7 +1011,7 @@ export const SiteDialog = ({
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {statusDisplayOptions.map((option) => (
+                            {statusOptions.map((option) => (
                               <SelectItem key={option.value} value={option.value}>
                                 {option.label}
                               </SelectItem>
