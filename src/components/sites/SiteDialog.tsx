@@ -61,10 +61,17 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { DriveFileUploader } from "@/components/integrations/DriveFileUploader";
 import type { DriveFileMetadata } from "@/integrations/googleDrive";
-import { GripVertical, Plus, Trash2 } from "lucide-react";
+import { GripVertical, Info, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMembers } from "@/features/members/api";
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
+import { calculateRentability, buildRentabilityInputFromSite } from "@/lib/rentability";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   TRAVAUX_NON_SUBVENTIONNES_OPTIONS,
   type TravauxNonSubventionnesValue,
@@ -183,6 +190,9 @@ const createBaseSiteSchema = (statusOptions: readonly string[]) => {
     cout_isolation_m2: z.coerce.number({ invalid_type_error: "Coût invalide" }).min(0),
     isolation_utilisee_m2: z.coerce.number({ invalid_type_error: "Quantité invalide" }).min(0),
     montant_commission: z.coerce.number({ invalid_type_error: "Montant invalide" }).min(0),
+    travaux_non_subventionnes: z.coerce
+      .number({ invalid_type_error: "Montant invalide" })
+      .min(0, "Le montant doit être positif"),
     valorisation_cee: z.coerce.number({ invalid_type_error: "Montant invalide" }).min(0),
     travaux_non_subventionnes: z.enum(
       TRAVAUX_NON_SUBVENTIONNES_OPTIONS.map((option) => option.value) as [
@@ -218,6 +228,16 @@ const createBaseSiteSchema = (statusOptions: readonly string[]) => {
 type SiteFormSchema = ReturnType<typeof createBaseSiteSchema>;
 
 export type SiteFormValues = z.infer<SiteFormSchema>;
+
+export type SiteSubmitValues = SiteFormValues & {
+  rentability_total_costs: number;
+  rentability_margin_total: number;
+  rentability_margin_per_unit: number;
+  rentability_margin_rate: number;
+  rentability_unit_label: string;
+  rentability_unit_count: number;
+  rentability_additional_costs_total: number;
+};
 
 const createSiteSchema = (statusValues: readonly string[], requiresProjectAssociation: boolean) =>
   createBaseSiteSchema(statusValues).superRefine((data, ctx) => {
@@ -265,7 +285,7 @@ interface SiteDialogProps {
   open: boolean;
   mode: "create" | "edit";
   onOpenChange: (open: boolean) => void;
-  onSubmit: (values: SiteFormValues) => void;
+  onSubmit: (values: SiteSubmitValues) => void;
   initialValues?: (Partial<SiteFormValues> & { org_id?: string | null }) | undefined;
   orgId?: string | null;
   projects?: SiteProjectOption[];
@@ -293,6 +313,7 @@ const defaultValues: SiteFormValues = {
   cout_isolation_m2: 0,
   isolation_utilisee_m2: 0,
   montant_commission: 0,
+  travaux_non_subventionnes: 0,
   valorisation_cee: 0,
   travaux_non_subventionnes: "NA",
   travaux_non_subventionnes_description: "",
@@ -305,6 +326,23 @@ const defaultValues: SiteFormValues = {
   additional_costs: [],
   subcontractor_payment_confirmed: false,
 };
+
+const currencyFormatter = new Intl.NumberFormat("fr-FR", {
+  style: "currency",
+  currency: "EUR",
+  maximumFractionDigits: 0,
+});
+
+const decimalFormatter = new Intl.NumberFormat("fr-FR", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
+const percentFormatter = new Intl.NumberFormat("fr-FR", {
+  style: "percent",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 1,
+});
 
 interface SortableAdditionalCostRowProps {
   field: FieldArrayWithId<SiteFormValues, "additional_costs">;
@@ -910,6 +948,58 @@ export const SiteDialog = ({
   const watchedSiteRef = form.watch("site_ref");
   const watchedStartDate = form.watch("date_debut");
   const watchedEndDate = form.watch("date_fin_prevue");
+  const watchedRevenue = form.watch("revenue");
+  const watchedLaborCost = form.watch("cout_main_oeuvre_m2_ht");
+  const watchedMaterialCost = form.watch("cout_isolation_m2");
+  const watchedIsolationUsed = form.watch("isolation_utilisee_m2");
+  const watchedSurfaceFacturee = form.watch("surface_facturee");
+  const watchedCommission = form.watch("montant_commission");
+  const watchedNonSubsidized = form.watch("travaux_non_subventionnes");
+  const watchedAdditionalCosts = form.watch("additional_costs");
+  const watchedProductName = form.watch("product_name");
+
+  const rentability = useMemo(
+    () =>
+      calculateRentability(
+        buildRentabilityInputFromSite({
+          revenue: watchedRevenue,
+          cout_main_oeuvre_m2_ht: watchedLaborCost,
+          cout_isolation_m2: watchedMaterialCost,
+          isolation_utilisee_m2: watchedIsolationUsed,
+          surface_facturee: watchedSurfaceFacturee,
+          montant_commission: watchedCommission,
+          travaux_non_subventionnes: watchedNonSubsidized,
+          additional_costs: watchedAdditionalCosts ?? [],
+          product_name: watchedProductName,
+        }),
+      ),
+    [
+      watchedAdditionalCosts,
+      watchedCommission,
+      watchedLaborCost,
+      watchedMaterialCost,
+      watchedNonSubsidized,
+      watchedProductName,
+      watchedRevenue,
+      watchedIsolationUsed,
+      watchedSurfaceFacturee,
+    ],
+  );
+
+  const rentabilityMarginPerUnitLabel =
+    rentability.measurementMode === "luminaire"
+      ? "Marge (€ / luminaire)"
+      : "Marge (€ / m²)";
+
+  const formattedAdditionalCosts = currencyFormatter.format(rentability.additionalCostsTotal);
+  const formattedTotalCosts = currencyFormatter.format(rentability.totalCosts);
+  const formattedMarginTotal = currencyFormatter.format(rentability.marginTotal);
+  const formattedMarginRate = Number.isFinite(rentability.marginRate)
+    ? percentFormatter.format(rentability.marginRate)
+    : "—";
+  const formattedMarginPerUnit = Number.isFinite(rentability.marginPerUnit)
+    ? `${decimalFormatter.format(rentability.marginPerUnit)} € / ${rentability.unitLabel}`
+    : `— / ${rentability.unitLabel}`;
   const watchedTravauxChoice = form.watch("travaux_non_subventionnes");
   const watchedCommissionCommerciale = form.watch("commission_commerciale_ht");
   const shouldShowTravauxDetails =
@@ -1059,6 +1149,13 @@ export const SiteDialog = ({
         : 0
       : 0;
 
+    const rentabilityResult = calculateRentability(
+      buildRentabilityInputFromSite({
+        ...values,
+        additional_costs: filteredCosts,
+      }),
+    );
+
     onSubmit({
       ...values,
       project_ref: projectRef,
@@ -1066,6 +1163,14 @@ export const SiteDialog = ({
       subcontractor_id: values.subcontractor_id ?? null,
       additional_costs: filteredCosts,
       notes: serializedNotes,
+      profit_margin: rentabilityResult.marginRate,
+      rentability_total_costs: rentabilityResult.totalCosts,
+      rentability_margin_total: rentabilityResult.marginTotal,
+      rentability_margin_per_unit: rentabilityResult.marginPerUnit,
+      rentability_margin_rate: rentabilityResult.marginRate,
+      rentability_unit_label: rentabilityResult.unitLabel,
+      rentability_unit_count: rentabilityResult.unitsUsed,
+      rentability_additional_costs_total: rentabilityResult.additionalCostsTotal,
       travaux_non_subventionnes: travauxChoice,
       travaux_non_subventionnes_description: travauxDescription,
       travaux_non_subventionnes_montant: travauxMontant,
@@ -1551,19 +1656,6 @@ export const SiteDialog = ({
                   />
                   <FormField
                     control={form.control}
-                    name="profit_margin"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Marge (%)</FormLabel>
-                        <FormControl>
-                          <Input type="number" step={0.1} {...field} disabled={isReadOnly} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
                     name="cout_main_oeuvre_m2_ht"
                     render={({ field }) => (
                       <FormItem>
@@ -1593,9 +1685,50 @@ export const SiteDialog = ({
                     name="isolation_utilisee_m2"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Isolation utilisée (m²)</FormLabel>
+                        <FormLabel className="flex items-center gap-1">
+                          Surface utilisée (m²)
+                          <TooltipProvider delayDuration={150}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Info
+                                  className="h-4 w-4 cursor-help text-muted-foreground"
+                                  aria-hidden="true"
+                                />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>incluant les pertes</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </FormLabel>
                         <FormControl>
                           <Input type="number" min={0} step={0.1} {...field} disabled={isReadOnly} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="montant_commission"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Commission commerciale (€)</FormLabel>
+                        <FormControl>
+                          <Input type="number" min={0} step={50} {...field} disabled={isReadOnly} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="travaux_non_subventionnes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Travaux non subventionnés (€)</FormLabel>
+                        <FormControl>
+                          <Input type="number" min={0} step={50} {...field} disabled={isReadOnly} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1629,6 +1762,51 @@ export const SiteDialog = ({
                       )}
                     />
                   ) : null}
+                </div>
+
+                <div className="space-y-2 rounded-md border border-primary/30 bg-primary/5 p-4">
+                  <div>
+                    <h4 className="text-sm font-semibold text-primary">Rentabilité</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Calculée automatiquement à partir du CA, des coûts et de la surface réelle.
+                    </p>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                    <div className="space-y-1">
+                      <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                        Frais de chantier (HT+TVA)
+                      </span>
+                      <span className="text-sm font-semibold text-foreground">
+                        {formattedAdditionalCosts}
+                      </span>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-xs uppercase tracking-wide text-muted-foreground">Coûts totaux</span>
+                      <span className="text-sm font-semibold text-foreground">
+                        {formattedTotalCosts}
+                      </span>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                        {rentabilityMarginPerUnitLabel}
+                      </span>
+                      <span className="text-sm font-semibold text-foreground">
+                        {formattedMarginPerUnit}
+                      </span>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-xs uppercase tracking-wide text-muted-foreground">Marge totale (€)</span>
+                      <span className="text-sm font-semibold text-foreground">
+                        {formattedMarginTotal}
+                      </span>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-xs uppercase tracking-wide text-muted-foreground">Marge (%)</span>
+                      <span className="text-sm font-semibold text-foreground">
+                        {formattedMarginRate}
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="space-y-2">

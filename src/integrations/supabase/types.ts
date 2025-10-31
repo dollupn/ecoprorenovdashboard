@@ -1157,11 +1157,19 @@ export type Database = {
           id: string
           isolation_utilisee_m2: number | null
           montant_commission: number | null
+          travaux_non_subventionnes: number | null
           notes: string | null
           org_id: string | null
           postal_code: string
           product_name: string
           profit_margin: number | null
+          rentability_additional_costs_total: number | null
+          rentability_margin_per_unit: number | null
+          rentability_margin_rate: number | null
+          rentability_margin_total: number | null
+          rentability_total_costs: number | null
+          rentability_unit_count: number | null
+          rentability_unit_label: string | null
           progress_percentage: number | null
           project_id: string | null
           project_ref: string
@@ -1198,11 +1206,19 @@ export type Database = {
           id?: string
           isolation_utilisee_m2?: number | null
           montant_commission?: number | null
+          travaux_non_subventionnes?: number | null
           notes?: string | null
           org_id?: string | null
           postal_code: string
           product_name: string
           profit_margin?: number | null
+          rentability_additional_costs_total?: number | null
+          rentability_margin_per_unit?: number | null
+          rentability_margin_rate?: number | null
+          rentability_margin_total?: number | null
+          rentability_total_costs?: number | null
+          rentability_unit_count?: number | null
+          rentability_unit_label?: string | null
           progress_percentage?: number | null
           project_id?: string | null
           project_ref: string
@@ -1239,11 +1255,19 @@ export type Database = {
           id?: string
           isolation_utilisee_m2?: number | null
           montant_commission?: number | null
+          travaux_non_subventionnes?: number | null
           notes?: string | null
           org_id?: string | null
           postal_code?: string
           product_name?: string
           profit_margin?: number | null
+          rentability_additional_costs_total?: number | null
+          rentability_margin_per_unit?: number | null
+          rentability_margin_rate?: number | null
+          rentability_margin_total?: number | null
+          rentability_total_costs?: number | null
+          rentability_unit_count?: number | null
+          rentability_unit_label?: string | null
           progress_percentage?: number | null
           project_id?: string | null
           project_ref?: string
