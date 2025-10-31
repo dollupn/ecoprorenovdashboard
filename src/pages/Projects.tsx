@@ -280,7 +280,13 @@ const Projects = ({
   const { user } = useAuth();
   const { currentOrgId } = useOrg();
   const { data: members = [], isLoading: membersLoading } = useMembers(currentOrgId);
-  const projectStatuses = useProjectStatuses();
+  const {
+    statuses: projectStatuses,
+    isLoading: projectStatusesLoading,
+    isFetching: projectStatusesFetching,
+    error: projectStatusesError,
+  } = useProjectStatuses();
+  const projectStatusQueriesBusy = projectStatusesLoading || projectStatusesFetching;
   const { primeBonification } = useOrganizationPrimeSettings();
   const restrictionNotReady = allowedProjectIds === null;
   const normalizedAllowedProjectIds = useMemo(() => {
@@ -333,6 +339,15 @@ const Projects = ({
     }
     localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode);
   }, [viewMode]);
+
+  useEffect(() => {
+    if (!projectStatusesError) return;
+
+    console.error("Erreur lors du chargement des statuts projets", projectStatusesError);
+    showToast("Statuts projets indisponibles", {
+      description: "Les statuts ont été chargés avec les valeurs par défaut.",
+    });
+  }, [projectStatusesError]);
 
   const currentMember = members.find((member) => member.user_id === user?.id);
   const isAdmin = currentMember?.role === "admin" || currentMember?.role === "owner";
@@ -1147,7 +1162,11 @@ const Projects = ({
                   <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Afficher
                   </span>
-                  <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
+                  <Select
+                    value={statusFilter}
+                    onValueChange={handleStatusFilterChange}
+                    disabled={projectStatusQueriesBusy && projectStatuses.length === 0}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Filtrer les projets" />
                     </SelectTrigger>

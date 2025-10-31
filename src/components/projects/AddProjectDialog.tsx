@@ -483,10 +483,27 @@ export const AddProjectDialog = ({
   const { user } = useAuth();
   const { currentOrgId } = useOrg();
   const { toast } = useToast();
-  const projectStatuses = useProjectStatuses();
+  const {
+    statuses: projectStatuses,
+    isLoading: projectStatusesLoading,
+    isFetching: projectStatusesFetching,
+    error: projectStatusesError,
+  } = useProjectStatuses();
   const buildingTypes = useProjectBuildingTypes();
   const usages = useProjectUsages();
   const { primeBonification } = useOrganizationPrimeSettings();
+  const projectStatusesBusy = projectStatusesLoading || projectStatusesFetching;
+
+  useEffect(() => {
+    if (!projectStatusesError) return;
+
+    console.error("Erreur lors du chargement des statuts projets", projectStatusesError);
+    toast({
+      variant: "destructive",
+      title: "Statuts indisponibles",
+      description: "Les statuts projets n'ont pas pu être synchronisés. Les valeurs par défaut ont été chargées.",
+    });
+  }, [projectStatusesError, toast]);
 
   const statusOptions = useMemo(
     () => projectStatuses.map((status) => status.value),
@@ -1593,13 +1610,15 @@ export const AddProjectDialog = ({
                   <Select
                     onValueChange={field.onChange}
                     value={field.value}
-                    disabled={projectStatuses.length === 0}
+                    disabled={projectStatusesBusy && projectStatuses.length === 0}
                   >
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue
                           placeholder={
-                            projectStatuses.length === 0
+                            projectStatusesBusy && projectStatuses.length === 0
+                              ? "Chargement des statuts..."
+                              : projectStatuses.length === 0
                               ? "Aucun statut disponible"
                               : "Sélectionnez un statut"
                           }

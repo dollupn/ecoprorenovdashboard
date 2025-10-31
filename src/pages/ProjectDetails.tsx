@@ -973,6 +973,7 @@ type ProjectHeaderProps = {
   onBack: () => void;
   onStatusChange: (status: string) => void;
   isStatusUpdating: boolean;
+  projectStatusesBusy: boolean;
   onOpenQuote: () => void;
   onDelete: () => void;
   onShare: () => void;
@@ -999,6 +1000,7 @@ const ProjectHeader = ({
   isDeleting,
   progressValue,
   productCodes,
+  projectStatusesBusy,
 }: ProjectHeaderProps) => {
   return (
     <Card className="shadow-card bg-gradient-card border-0">
@@ -1020,10 +1022,18 @@ const ProjectHeader = ({
               <Select
                 onValueChange={(value) => onStatusChange(value)}
                 value={project.status ?? undefined}
-                disabled={isStatusUpdating}
+                disabled={
+                  isStatusUpdating || (projectStatusesBusy && statusOptions.length === 0)
+                }
               >
                 <SelectTrigger className="w-[180px] bg-background/80">
-                  <SelectValue placeholder="Changer le statut" />
+                  <SelectValue
+                    placeholder={
+                      projectStatusesBusy && statusOptions.length === 0
+                        ? "Chargement des statuts..."
+                        : "Changer le statut"
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {statusOptions
@@ -2336,7 +2346,13 @@ const ProjectDetails = () => {
   const { currentOrgId } = useOrg();
   const { data: members = [], isLoading: membersLoading } =
     useMembers(currentOrgId);
-  const projectStatuses = useProjectStatuses();
+  const {
+    statuses: projectStatuses,
+    isLoading: projectStatusesLoading,
+    isFetching: projectStatusesFetching,
+    error: projectStatusesError,
+  } = useProjectStatuses();
+  const projectStatusesBusy = projectStatusesLoading || projectStatusesFetching;
   const { primeBonification } = useOrganizationPrimeSettings();
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -2358,6 +2374,17 @@ const ProjectDetails = () => {
   );
   const [siteInitialValues, setSiteInitialValues] =
     useState<Partial<SiteFormValues>>();
+
+  useEffect(() => {
+    if (!projectStatusesError) return;
+
+    console.error("Erreur lors du chargement des statuts projets", projectStatusesError);
+    toast({
+      variant: "destructive",
+      title: "Statuts indisponibles",
+      description: "Les statuts projets n'ont pas pu être synchronisés. Les valeurs par défaut sont utilisées.",
+    });
+  }, [projectStatusesError, toast]);
   const [activeSite, setActiveSite] = useState<ProjectSite | null>(null);
   const location = useLocation();
   const journalFeedRef = useRef<HTMLDivElement | null>(null);
@@ -4201,6 +4228,12 @@ const ProjectDetails = () => {
               <Badge variant="outline" style={badgeStyle}>
                 {statusLabel}
               </Badge>
+              {projectStatusesBusy ? (
+                <span className="flex items-center gap-2 rounded-full border border-border/60 bg-background/80 px-3 py-1 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Mise à jour…
+                </span>
+              ) : null}
             </div>
             <h1 className="mt-2 text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
               {project.project_ref}
