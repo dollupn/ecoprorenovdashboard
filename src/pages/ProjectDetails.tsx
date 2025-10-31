@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import {
+  Link,
   useLocation,
   useNavigate,
   useParams,
@@ -52,7 +53,6 @@ import {
   Trash2,
   Mail,
   AlertTriangle,
-  Pencil,
   Users,
   Plus,
   Loader2,
@@ -65,8 +65,6 @@ import {
   Clock,
   ChevronRight,
   NotebookPen,
-  ClipboardList,
-  Camera,
   CheckCircle2,
   Archive,
   Zap,
@@ -3976,82 +3974,6 @@ const ProjectDetails = () => {
     setQuoteDialogOpen(true);
   };
 
-  const handleEditSite = (
-    site: ProjectSite,
-    options?: {
-      readOnly?: boolean;
-      defaultTab?: "avant-chantier" | "apres-chantier";
-    },
-  ) => {
-    const { readOnly = false, defaultTab = "avant-chantier" } = options ?? {};
-
-    setSiteDialogMode("edit");
-    setSiteDialogReadOnly(readOnly);
-    setSiteDialogDefaultTab(defaultTab);
-    setActiveSite(site);
-    const rawTravauxChoice = (site.travaux_non_subventionnes ?? "NA") as
-      | TravauxNonSubventionnesValue
-      | string;
-    const isValidTravauxChoice = TRAVAUX_NON_SUBVENTIONNES_OPTIONS.some(
-      (option) => option.value === rawTravauxChoice,
-    );
-    const resolvedTravauxChoice = isValidTravauxChoice
-      ? (rawTravauxChoice as TravauxNonSubventionnesValue)
-      : "NA";
-    const travauxDescription =
-      typeof site.travaux_non_subventionnes_description === "string"
-        ? site.travaux_non_subventionnes_description.trim()
-        : "";
-    const travauxMontant =
-      typeof site.travaux_non_subventionnes_montant === "number" &&
-      Number.isFinite(site.travaux_non_subventionnes_montant)
-        ? site.travaux_non_subventionnes_montant
-        : 0;
-    const travauxFinancement = Boolean(site.travaux_non_subventionnes_financement);
-    const commissionCommercialeActive = Boolean(site.commission_commerciale_ht);
-    const commissionCommercialeMontant =
-      typeof site.commission_commerciale_ht_montant === "number" &&
-      Number.isFinite(site.commission_commerciale_ht_montant)
-        ? site.commission_commerciale_ht_montant
-        : 0;
-    setSiteInitialValues({
-      site_ref: site.site_ref,
-      project_ref: site.project_ref,
-      client_name: site.client_name,
-      product_name: site.product_name,
-      address: site.address,
-      city: site.city,
-      postal_code: site.postal_code,
-      status: (site.status as SiteStatus) ?? "PLANIFIE",
-      cofrac_status: (site.cofrac_status as CofracStatus) ?? "EN_ATTENTE",
-      date_debut: site.date_debut,
-      date_fin_prevue: site.date_fin_prevue ?? "",
-      progress_percentage: site.progress_percentage ?? 0,
-      revenue: site.revenue ?? 0,
-      profit_margin: site.profit_margin ?? 0,
-      surface_facturee: site.surface_facturee ?? 0,
-      cout_main_oeuvre_m2_ht: site.cout_main_oeuvre_m2_ht ?? 0,
-      cout_isolation_m2: site.cout_isolation_m2 ?? 0,
-      isolation_utilisee_m2: site.isolation_utilisee_m2 ?? 0,
-      montant_commission: site.montant_commission ?? 0,
-      valorisation_cee: site.valorisation_cee ?? 0,
-      travaux_non_subventionnes: resolvedTravauxChoice,
-      travaux_non_subventionnes_description: travauxDescription,
-      travaux_non_subventionnes_montant: travauxMontant,
-      travaux_non_subventionnes_financement: travauxFinancement,
-      commission_commerciale_ht: commissionCommercialeActive,
-      commission_commerciale_ht_montant: commissionCommercialeMontant,
-      notes: site.notes ?? "",
-      subcontractor_payment_confirmed: Boolean(
-        site.subcontractor_payment_confirmed,
-      ),
-      subcontractor_id: site.subcontractor_id ?? null,
-      team_members: mapTeamMembersToFormValues(site.team_members ?? []),
-      additional_costs: normalizeAdditionalCosts(site.additional_costs ?? []),
-    });
-    setSiteDialogOpen(true);
-  };
-
   const handleSubmitSite = async (values: SiteSubmitValues) => {
     if (!user || !currentOrgId || !project) return;
 
@@ -5220,44 +5142,34 @@ const ProjectDetails = () => {
                           ? site.commission_commerciale_ht_montant
                           : 0;
 
+                      const addressDisplay = site.address
+                        ? `${site.address} · ${site.postal_code} ${site.city}`
+                        : `${site.city} (${site.postal_code})`;
+
                       return (
-                        <div
+                        <Card
                           key={site.id}
-                          className="space-y-4 rounded-lg border border-border/60 bg-background/60 p-4"
+                          className="border border-border/60 bg-background/60"
                         >
-                          <div className="flex flex-wrap items-start justify-between gap-3">
+                          <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                             <div>
-                              <h3 className="text-base font-semibold text-foreground">
-                                {site.site_ref}
-                              </h3>
-                              <p className="text-sm text-muted-foreground">
-                                {site.address
-                                  ? `${site.address} · ${site.postal_code} ${site.city}`
-                                  : `${site.city} (${site.postal_code})`}
-                              </p>
+                              <CardTitle className="text-base">{site.site_ref}</CardTitle>
+                              <CardDescription>{addressDisplay}</CardDescription>
                             </div>
                             <div className="flex flex-wrap gap-2">
-                              <Badge
-                                variant="outline"
-                                className={getStatusColor(status)}
-                              >
+                              <Badge variant="outline" className={getStatusColor(status)}>
                                 {getStatusLabel(status)}
                               </Badge>
-                              <Badge variant="outline">
-                                {getCofracStatusLabel(cofracStatus)}
-                              </Badge>
+                              <Badge variant="outline">{getCofracStatusLabel(cofracStatus)}</Badge>
                             </div>
-                          </div>
-
-                          <div className="grid gap-3 text-sm text-muted-foreground md:grid-cols-2 xl:grid-cols-4">
+                          </CardHeader>
+                          <CardContent className="grid gap-3 text-sm text-muted-foreground md:grid-cols-2 xl:grid-cols-4">
                             <div className="flex items-center gap-2">
                               <Calendar className="h-4 w-4 text-primary" />
                               <span>
                                 Début :{" "}
                                 <span className="font-medium text-foreground">
-                                  {new Date(site.date_debut).toLocaleDateString(
-                                    "fr-FR",
-                                  )}
+                                  {new Date(site.date_debut).toLocaleDateString("fr-FR")}
                                 </span>
                               </span>
                             </div>
@@ -5267,9 +5179,7 @@ const ProjectDetails = () => {
                                 Fin prévue :{" "}
                                 <span className="font-medium text-foreground">
                                   {site.date_fin_prevue
-                                    ? new Date(
-                                        site.date_fin_prevue,
-                                      ).toLocaleDateString("fr-FR")
+                                    ? new Date(site.date_fin_prevue).toLocaleDateString("fr-FR")
                                     : "—"}
                                 </span>
                               </span>
@@ -5277,9 +5187,7 @@ const ProjectDetails = () => {
                             <div>
                               <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
                                 <span>Avancement</span>
-                                <span className="font-medium text-foreground">
-                                  {progressValue}%
-                                </span>
+                                <span className="font-medium text-foreground">{progressValue}%</span>
                               </div>
                               <Progress value={progressValue} />
                             </div>
@@ -5287,11 +5195,7 @@ const ProjectDetails = () => {
                               <Euro className="h-4 w-4 text-emerald-600" />
                               <span>
                                 CA :{" "}
-                                <span className="font-medium text-foreground">
-                                  {typeof site.revenue === "number"
-                                    ? formatCurrency(site.revenue)
-                                    : "—"}
-                                </span>
+                                <span className="font-medium text-foreground">{revenueDisplay}</span>
                               </span>
                             </div>
                             {typeof site.valorisation_cee === "number" ? (
@@ -5299,9 +5203,7 @@ const ProjectDetails = () => {
                                 <HandCoins className="h-4 w-4 text-amber-600" />
                                 <span>
                                   Valorisation :{" "}
-                                  <span className="font-medium text-foreground">
-                                    {formatCurrency(site.valorisation_cee)}
-                                  </span>
+                                  <span className="font-medium text-foreground">{primeDisplay}</span>
                                 </span>
                               </div>
                             ) : null}
@@ -5321,317 +5223,24 @@ const ProjectDetails = () => {
                                 <Users className="h-4 w-4 text-primary" />
                                 <span>
                                   Équipe :{" "}
-                                  <span className="font-medium text-foreground">
-                                    {teamMembersLabel}
-                                  </span>
+                                  <span className="font-medium text-foreground">{teamMembersLabel}</span>
                                 </span>
                               </div>
                             ) : null}
-                          </div>
-
-                          <div className="grid gap-4 lg:grid-cols-2">
-                            <Card className="border border-border/60 bg-background/60">
-                              <CardHeader className="pb-2">
-                                <CardTitle className="flex items-center gap-2 text-base">
-                                  <ClipboardList className="h-4 w-4 text-primary" />
-                                  Avant Chantier
-                                </CardTitle>
-                                <CardDescription>
-                                  Préparation et équipe
-                                </CardDescription>
-                              </CardHeader>
-                              <CardContent className="space-y-3 text-sm">
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-muted-foreground">
-                                    Statut
-                                  </span>
-                                  <Badge
-                                    variant="outline"
-                                    className={getStatusColor(status)}
-                                  >
-                                    {getStatusLabel(status)}
-                                  </Badge>
-                                </div>
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-muted-foreground">
-                                    Début chantier
-                                  </span>
-                                  <span className="font-medium text-foreground">
-                                    {new Date(
-                                      site.date_debut,
-                                    ).toLocaleDateString("fr-FR")}
-                                  </span>
-                                </div>
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-muted-foreground">
-                                    Fin prévue
-                                  </span>
-                                  <span className="font-medium text-foreground">
-                                    {site.date_fin_prevue
-                                      ? new Date(
-                                          site.date_fin_prevue,
-                                        ).toLocaleDateString("fr-FR")
-                                      : "—"}
-                                  </span>
-                                </div>
-                                {teamMembersLabel ? (
-                                  <div className="flex items-start justify-between gap-2">
-                                    <span className="text-muted-foreground">
-                                      Équipe dédiée
-                                    </span>
-                                    <span className="text-right font-medium text-foreground">
-                                      {teamMembersLabel}
-                                    </span>
-                                  </div>
-                                ) : null}
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="flex items-center gap-2 text-muted-foreground">
-                                    <Camera className="h-4 w-4" /> Docs & photos
-                                  </span>
-                                  {hasDriveFile && driveLink ? (
-                                    <a
-                                      href={driveLink}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-                                    >
-                                      <FolderOpen className="h-4 w-4" />
-                                      <span className="font-medium">
-                                        {driveLabel}
-                                      </span>
-                                    </a>
-                                  ) : (
-                                    <span className="font-medium text-muted-foreground">
-                                      Aucun
-                                    </span>
-                                  )}
-                                </div>
-                              </CardContent>
-                              <CardFooter className="flex justify-end">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() =>
-                                    handleEditSite(site, {
-                                      readOnly: !canManageSites,
-                                      defaultTab: "avant-chantier",
-                                    })
-                                  }
-                                >
-                                  Voir détails
-                                </Button>
-                              </CardFooter>
-                            </Card>
-
-                            <Card className="border border-border/60 bg-background/60">
-                              <CardHeader className="pb-2">
-                                <CardTitle className="flex items-center gap-2 text-base">
-                                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                                  Après Chantier
-                                </CardTitle>
-                                <CardDescription>
-                                  Suivi qualité & financier
-                                </CardDescription>
-                              </CardHeader>
-                              <CardContent className="space-y-3 text-sm">
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-muted-foreground">
-                                    Statut COFRAC
-                                  </span>
-                                  <Badge variant="outline">
-                                    {getCofracStatusLabel(cofracStatus)}
-                                  </Badge>
-                                </div>
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-muted-foreground">
-                                    Avancement
-                                  </span>
-                                  <span className="font-medium text-foreground">
-                                    {progressValue}%
-                                  </span>
-                                </div>
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-muted-foreground">
-                                    Chiffre d'affaires
-                                  </span>
-                                  <span className="font-medium text-foreground">
-                                    {revenueDisplay}
-                                  </span>
-                                </div>
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-muted-foreground">
-                                    Prime CEE
-                                  </span>
-                                  <span className="font-medium text-foreground">
-                                    {primeDisplay}
-                                  </span>
-                                </div>
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-muted-foreground">
-                                    Frais de chantier
-                                    Travaux non subventionnés
-                                  </span>
-                                  <span className="font-medium text-foreground">
-                                    {travauxLabel}
-                                  </span>
-                                </div>
-                                {hasTravauxDetails ? (
-                                  <>
-                                    {travauxDescription ? (
-                                      <div>
-                                        <span className="text-muted-foreground">Description</span>
-                                        <p className="mt-1 text-sm font-medium text-foreground">
-                                          {travauxDescription}
-                                        </p>
-                                      </div>
-                                    ) : null}
-                                    <div className="flex items-center justify-between gap-2">
-                                      <span className="text-muted-foreground">
-                                        Montant travaux
-                                      </span>
-                                      <span className="font-medium text-foreground">
-                                        {formatCurrency(travauxMontant)}
-                                      </span>
-                                    </div>
-                                    <div className="flex items-center justify-between gap-2">
-                                      <span className="text-muted-foreground">
-                                        Financement externe
-                                      </span>
-                                      <span
-                                        className={`font-medium ${
-                                          travauxFinancement
-                                            ? "text-emerald-600"
-                                            : "text-muted-foreground"
-                                        }`}
-                                      >
-                                        {travauxFinancement ? "Oui" : "Non"}
-                                      </span>
-                                    </div>
-                                  </>
-                                ) : null}
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-muted-foreground">
-                                    Commission commerciale HT
-                                  </span>
-                                  <span
-                                    className={`font-medium ${
-                                      commissionCommercialeActive
-                                        ? "text-foreground"
-                                        : "text-muted-foreground"
-                                    }`}
-                                  >
-                                    {commissionCommercialeActive
-                                      ? formatCurrency(commissionCommercialeMontant)
-                                      : "Non"}
-                                  </span>
-                                </div>
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-muted-foreground">
-                                    Coûts supplémentaires
-                                  </span>
-                                  <span className="font-medium text-foreground">
-                                    {additionalCostDisplay}
-                                  </span>
-                                </div>
-                                <div className="w-full">
-                                  <div className="rounded-md border border-primary/30 bg-primary/5 p-3">
-                                    <div className="text-xs font-semibold uppercase tracking-wide text-primary">
-                                      Rentabilité
-                                    </div>
-                                    <dl className="mt-2 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-                                      <div className="flex flex-col">
-                                        <dt>Frais de chantier (HT+TVA)</dt>
-                                        <dd className="text-sm font-semibold text-foreground">
-                                          {rentabilityAdditionalCostsDisplay}
-                                        </dd>
-                                      </div>
-                                      <div className="flex flex-col">
-                                        <dt>Coûts totaux</dt>
-                                        <dd className="text-sm font-semibold text-foreground">
-                                          {rentabilityTotalCostsDisplay}
-                                        </dd>
-                                      </div>
-                                      <div className="flex flex-col">
-                                        <dt>{rentabilityMarginPerUnitLabel}</dt>
-                                        <dd className="text-sm font-semibold text-foreground">
-                                          {rentabilityMarginPerUnitDisplay}
-                                        </dd>
-                                      </div>
-                                      <div className="flex flex-col">
-                                        <dt>Marge totale (€)</dt>
-                                        <dd className="text-sm font-semibold text-foreground">
-                                          {rentabilityMarginTotalDisplay}
-                                        </dd>
-                                      </div>
-                                      <div className="flex flex-col">
-                                        <dt>Marge (%)</dt>
-                                        <dd className="text-sm font-semibold text-foreground">
-                                          {rentabilityMarginRateDisplay}
-                                        </dd>
-                                      </div>
-                                    </dl>
-                                  </div>
-                                </div>
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-muted-foreground">
-                                    Paiement sous-traitant
-                                  </span>
-                                  <span
-                                    className={`font-medium ${
-                                      site.subcontractor_payment_confirmed
-                                        ? "text-emerald-600"
-                                        : "text-muted-foreground"
-                                    }`}
-                                  >
-                                    {site.subcontractor_payment_confirmed
-                                      ? "Confirmé"
-                                      : "En attente"}
-                                  </span>
-                                </div>
-                              </CardContent>
-                              <CardFooter className="flex justify-end">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() =>
-                                    handleEditSite(site, {
-                                      readOnly: !canManageSites,
-                                      defaultTab: "apres-chantier",
-                                    })
-                                  }
-                                >
-                                  Voir détails
-                                </Button>
-                              </CardFooter>
-                            </Card>
-                          </div>
-
+                          </CardContent>
                           {hasInternalNotes ? (
-                            <p className="border-t border-border/40 pt-3 text-sm text-muted-foreground">
+                            <CardContent className="border-t border-border/40 pt-3 text-sm text-muted-foreground">
                               {internalNotes}
-                            </p>
+                            </CardContent>
                           ) : null}
-
-                          <div className="flex flex-wrap justify-end gap-2">
-                            {canManageSites ? (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="inline-flex items-center gap-2"
-                                onClick={() => {
-                                  handleEditSite(site, {
-                                    readOnly: false,
-                                    defaultTab: "avant-chantier",
-                                  });
-                                }}
-                              >
-                                <Pencil className="h-4 w-4" />
-                                Modifier
-                              </Button>
-                            ) : null}
-                          </div>
-                        </div>
+                          <CardFooter className="flex justify-end">
+                            <Button asChild variant="outline" size="sm">
+                              <Link to={`/chantiers/${site.id}`}>Voir détails</Link>
+                            </Button>
+                          </CardFooter>
+                        </Card>
                       );
+
                     })}
                   </div>
                 )}

@@ -12,6 +12,7 @@ import Leads from "./pages/Leads";
 import Projects from "./pages/Projects";
 import ProjectChantiers from "./pages/ProjectChantiers";
 import ProjectDetails from "./pages/ProjectDetails";
+import ChantierDetails from "./pages/ChantierDetails";
 import Quotes from "./pages/Quotes";
 import Invoices from "./pages/Invoices";
 import Sites from "./pages/Sites";
@@ -38,9 +39,9 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <OrgProvider>
+        <BrowserRouter>
+          <AuthProvider>
+            <OrgProvider>
             <Routes>
               <Route path="/auth" element={<Auth />} />
               <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
@@ -63,6 +64,14 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <ProjectDetails />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/chantiers/:id"
+                element={
+                  <ProtectedRoute>
+                    <ChantierDetails />
                   </ProtectedRoute>
                 }
               />
