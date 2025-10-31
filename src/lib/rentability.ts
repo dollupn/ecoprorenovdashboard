@@ -50,7 +50,9 @@ export const calculateRentability = (input: RentabilityInput): RentabilityResult
   const materialCostPerUnit = Math.max(0, sanitizeNumber(input.materialCostPerUnit));
   const measurementMode = input.measurementMode ?? "surface";
   const defaultLabel = measurementMode === "luminaire" ? "luminaire" : "m²";
-  const unitLabel = (input.unitLabel ?? defaultLabel || defaultLabel).trim() || defaultLabel;
+  const rawUnitLabel = input.unitLabel ?? defaultLabel;
+  const trimmedUnitLabel = rawUnitLabel.trim();
+  const unitLabel = trimmedUnitLabel.length > 0 ? trimmedUnitLabel : defaultLabel;
 
   const unitsCandidates = [input.unitsUsed, input.billedUnits];
   let unitsUsed = 0;
