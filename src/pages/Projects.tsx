@@ -953,6 +953,12 @@ const Projects = ({
       isolation_utilisee_m2: 0,
       montant_commission: 0,
       valorisation_cee: valorisationTotalEur,
+      travaux_non_subventionnes: "NA",
+      travaux_non_subventionnes_description: "",
+      travaux_non_subventionnes_montant: 0,
+      travaux_non_subventionnes_financement: false,
+      commission_commerciale_ht: false,
+      commission_commerciale_ht_montant: 0,
       subcontractor_id: null,
       team_members: [],
       additional_costs: [],
@@ -1024,6 +1030,25 @@ const Projects = ({
 
     const projectRef = values.project_ref?.trim?.() ?? "";
     const clientName = values.client_name?.trim?.() ?? "";
+    const travauxChoice = values.travaux_non_subventionnes ?? "NA";
+    const shouldResetTravaux = travauxChoice === "NA";
+    const travauxDescription = shouldResetTravaux
+      ? ""
+      : values.travaux_non_subventionnes_description?.trim() ?? "";
+    const travauxMontant = shouldResetTravaux
+      ? 0
+      : Number.isFinite(values.travaux_non_subventionnes_montant)
+        ? values.travaux_non_subventionnes_montant
+        : 0;
+    const travauxFinancement = shouldResetTravaux
+      ? false
+      : Boolean(values.travaux_non_subventionnes_financement);
+    const commissionActive = Boolean(values.commission_commerciale_ht);
+    const commissionMontant = commissionActive
+      ? Number.isFinite(values.commission_commerciale_ht_montant)
+        ? values.commission_commerciale_ht_montant
+        : 0
+      : 0;
     const matchedProject = projectOptions.find(
       (option) => option.project_ref === projectRef,
     );
@@ -1051,6 +1076,12 @@ const Projects = ({
       montant_commission: values.montant_commission,
       valorisation_cee: values.valorisation_cee,
       subcontractor_payment_confirmed: values.subcontractor_payment_confirmed,
+      travaux_non_subventionnes: travauxChoice,
+      travaux_non_subventionnes_description: travauxDescription,
+      travaux_non_subventionnes_montant: travauxMontant,
+      travaux_non_subventionnes_financement: travauxFinancement,
+      commission_commerciale_ht: commissionActive,
+      commission_commerciale_ht_montant: commissionMontant,
       notes: values.notes?.trim() || null,
       team_members: (sanitizedTeam.length > 0 ? sanitizedTeam : []) as string[],
       additional_costs: sanitizedCosts.length > 0 ? sanitizedCosts : [],
