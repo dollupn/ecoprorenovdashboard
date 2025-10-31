@@ -20,7 +20,7 @@ import {
 } from "@/components/sites/SiteDialog";
 import { toast as showToast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
-import type { ProjectStatus } from "@/integrations/supabase/types";
+import type { ProjectStatus } from "@/lib/projects";
 import {
   getProjectClientName,
   getProjectStatusBadgeStyle,

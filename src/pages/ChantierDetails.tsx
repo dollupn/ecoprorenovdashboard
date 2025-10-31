@@ -13,7 +13,7 @@ import {
   type SiteFormValues,
   type SiteSubmitValues,
 } from "@/components/sites/siteFormSchema";
-import { TRAVAUX_NON_SUBVENTIONNES_OPTIONS } from "@/components/sites/travauxNonSubventionnes";
+import { TRAVAUX_NON_SUBVENTIONNES_OPTIONS, TRAVAUX_NON_SUBVENTIONNES_LABELS, type TravauxNonSubventionnesValue } from "@/components/sites/travauxNonSubventionnes";
 import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import {
@@ -214,10 +214,7 @@ const ChantierDetails = () => {
       valorisation_cee: sanitizeNumber(chantier.valorisation_cee),
       subcontractor_id: chantier.subcontractor_id ?? null,
       travaux_non_subventionnes: (String(chantier.travaux_non_subventionnes) as SiteFormValues["travaux_non_subventionnes"]) || "NA",
-      travaux_non_subventionnes_description: chantier.travaux_non_subventionnes_description ?? "",
       travaux_non_subventionnes_montant: sanitizeNumber(chantier.travaux_non_subventionnes_montant),
-      travaux_non_subventionnes_financement: Boolean(chantier.travaux_non_subventionnes_financement),
-      commission_commerciale_ht: Boolean(chantier.commission_commerciale_ht),
       commission_commerciale_ht_montant: sanitizeNumber(chantier.commission_commerciale_ht_montant),
       notes: parsedNotes.text ?? "",
       additional_costs: Array.isArray(chantier.additional_costs)

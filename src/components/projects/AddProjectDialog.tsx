@@ -35,7 +35,7 @@ import { addMonths, format, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
-import type { ProjectStatus } from "@/integrations/supabase/types";
+import type { ProjectStatus } from "@/lib/projects";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useOrganizationPrimeSettings } from "@/features/organizations/useOrganizationPrimeSettings";

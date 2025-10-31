@@ -6,28 +6,6 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-export type ProjectStatus =
-  | "NOUVEAU"
-  | "ETUDE"
-  | "DEVIS_ENVOYE"
-  | "DEVIS_SIGNE"
-  | "ACCEPTE"
-  | "A_PLANIFIER"
-  | "CHANTIER_PLANIFIE"
-  | "EN_COURS"
-  | "CHANTIER_EN_COURS"
-  | "CHANTIER_TERMINE"
-  | "VISITE_TECHNIQUE"
-  | "LIVRE"
-  | "FACTURE_ENVOYEE"
-  | "AH"
-  | "AAF"
-  | "CLOTURE"
-  | "ANNULE"
-  | "ABANDONNE"
-  | "ARCHIVE"
-  | "ARCHIVED"
-
 export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
@@ -846,7 +824,7 @@ export type Database = {
           notes: string | null
           org_id: string
           project_id: string
-          status: ProjectStatus
+          status: string
         }
         Insert: {
           changed_at?: string
@@ -855,7 +833,7 @@ export type Database = {
           notes?: string | null
           org_id: string
           project_id: string
-          status: ProjectStatus
+          status: string
         }
         Update: {
           changed_at?: string
@@ -864,7 +842,7 @@ export type Database = {
           notes?: string | null
           org_id?: string
           project_id?: string
-          status?: ProjectStatus
+          status?: string
         }
         Relationships: [
           {
@@ -924,7 +902,6 @@ export type Database = {
         Row: {
           address: string | null
           assigned_to: string
-          archived_at: string | null
           building_type: string | null
           city: string
           client_first_name: string | null
@@ -955,7 +932,7 @@ export type Database = {
           signatory_title: string | null
           siren: string | null
           source: string | null
-          status: ProjectStatus
+          status: string
           surface_batiment_m2: number | null
           surface_isolee_m2: number | null
           unit_price: number | null
@@ -966,7 +943,6 @@ export type Database = {
         Insert: {
           address?: string | null
           assigned_to: string
-          archived_at?: string | null
           building_type?: string | null
           city: string
           client_first_name?: string | null
@@ -997,7 +973,7 @@ export type Database = {
           signatory_title?: string | null
           siren?: string | null
           source?: string | null
-          status?: ProjectStatus
+          status?: string
           surface_batiment_m2?: number | null
           surface_isolee_m2?: number | null
           unit_price?: number | null
@@ -1008,7 +984,6 @@ export type Database = {
         Update: {
           address?: string | null
           assigned_to?: string
-          archived_at?: string | null
           building_type?: string | null
           city?: string
           client_first_name?: string | null
@@ -1039,7 +1014,7 @@ export type Database = {
           signatory_title?: string | null
           siren?: string | null
           source?: string | null
-          status?: ProjectStatus
+          status?: string
           surface_batiment_m2?: number | null
           surface_isolee_m2?: number | null
           unit_price?: number | null
@@ -1149,6 +1124,8 @@ export type Database = {
           client_last_name: string | null
           client_name: string
           cofrac_status: string | null
+          commission_commerciale_ht: string | null
+          commission_commerciale_ht_montant: number | null
           cout_isolation_m2: number | null
           cout_main_oeuvre_m2_ht: number | null
           created_at: string
@@ -1157,22 +1134,20 @@ export type Database = {
           id: string
           isolation_utilisee_m2: number | null
           montant_commission: number | null
-          travaux_non_subventionnes: number | null
           notes: string | null
           org_id: string | null
           postal_code: string
           product_name: string
           profit_margin: number | null
+          progress_percentage: number | null
+          project_id: string | null
+          project_ref: string
           rentability_additional_costs_total: number | null
           rentability_margin_per_unit: number | null
           rentability_margin_rate: number | null
           rentability_margin_total: number | null
           rentability_total_costs: number | null
-          rentability_unit_count: number | null
           rentability_unit_label: string | null
-          progress_percentage: number | null
-          project_id: string | null
-          project_ref: string
           revenue: number | null
           site_ref: string
           status: string
@@ -1180,15 +1155,11 @@ export type Database = {
           subcontractor_payment_confirmed: boolean
           surface_facturee: number | null
           team_members: string[] | null
+          travaux_non_subventionnes: string | null
+          travaux_non_subventionnes_montant: number | null
           updated_at: string
           user_id: string
           valorisation_cee: number | null
-          travaux_non_subventionnes: string | null
-          travaux_non_subventionnes_description: string | null
-          travaux_non_subventionnes_financement: boolean | null
-          travaux_non_subventionnes_montant: number | null
-          commission_commerciale_ht: boolean | null
-          commission_commerciale_ht_montant: number | null
         }
         Insert: {
           additional_costs?: Json | null
@@ -1198,6 +1169,8 @@ export type Database = {
           client_last_name?: string | null
           client_name: string
           cofrac_status?: string | null
+          commission_commerciale_ht?: string | null
+          commission_commerciale_ht_montant?: number | null
           cout_isolation_m2?: number | null
           cout_main_oeuvre_m2_ht?: number | null
           created_at?: string
@@ -1206,22 +1179,20 @@ export type Database = {
           id?: string
           isolation_utilisee_m2?: number | null
           montant_commission?: number | null
-          travaux_non_subventionnes?: number | null
           notes?: string | null
           org_id?: string | null
           postal_code: string
           product_name: string
           profit_margin?: number | null
+          progress_percentage?: number | null
+          project_id?: string | null
+          project_ref: string
           rentability_additional_costs_total?: number | null
           rentability_margin_per_unit?: number | null
           rentability_margin_rate?: number | null
           rentability_margin_total?: number | null
           rentability_total_costs?: number | null
-          rentability_unit_count?: number | null
           rentability_unit_label?: string | null
-          progress_percentage?: number | null
-          project_id?: string | null
-          project_ref: string
           revenue?: number | null
           site_ref: string
           status?: string
@@ -1229,15 +1200,11 @@ export type Database = {
           subcontractor_payment_confirmed?: boolean
           surface_facturee?: number | null
           team_members?: string[] | null
+          travaux_non_subventionnes?: string | null
+          travaux_non_subventionnes_montant?: number | null
           updated_at?: string
           user_id: string
           valorisation_cee?: number | null
-          travaux_non_subventionnes?: string | null
-          travaux_non_subventionnes_description?: string | null
-          travaux_non_subventionnes_financement?: boolean | null
-          travaux_non_subventionnes_montant?: number | null
-          commission_commerciale_ht?: boolean | null
-          commission_commerciale_ht_montant?: number | null
         }
         Update: {
           additional_costs?: Json | null
@@ -1247,6 +1214,8 @@ export type Database = {
           client_last_name?: string | null
           client_name?: string
           cofrac_status?: string | null
+          commission_commerciale_ht?: string | null
+          commission_commerciale_ht_montant?: number | null
           cout_isolation_m2?: number | null
           cout_main_oeuvre_m2_ht?: number | null
           created_at?: string
@@ -1255,22 +1224,20 @@ export type Database = {
           id?: string
           isolation_utilisee_m2?: number | null
           montant_commission?: number | null
-          travaux_non_subventionnes?: number | null
           notes?: string | null
           org_id?: string | null
           postal_code?: string
           product_name?: string
           profit_margin?: number | null
+          progress_percentage?: number | null
+          project_id?: string | null
+          project_ref?: string
           rentability_additional_costs_total?: number | null
           rentability_margin_per_unit?: number | null
           rentability_margin_rate?: number | null
           rentability_margin_total?: number | null
           rentability_total_costs?: number | null
-          rentability_unit_count?: number | null
           rentability_unit_label?: string | null
-          progress_percentage?: number | null
-          project_id?: string | null
-          project_ref?: string
           revenue?: number | null
           site_ref?: string
           status?: string
@@ -1278,15 +1245,11 @@ export type Database = {
           subcontractor_payment_confirmed?: boolean
           surface_facturee?: number | null
           team_members?: string[] | null
+          travaux_non_subventionnes?: string | null
+          travaux_non_subventionnes_montant?: number | null
           updated_at?: string
           user_id?: string
           valorisation_cee?: number | null
-          travaux_non_subventionnes?: string | null
-          travaux_non_subventionnes_description?: string | null
-          travaux_non_subventionnes_financement?: boolean | null
-          travaux_non_subventionnes_montant?: number | null
-          commission_commerciale_ht?: boolean | null
-          commission_commerciale_ht_montant?: number | null
         }
         Relationships: [
           {

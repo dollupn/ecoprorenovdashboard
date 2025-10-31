@@ -1,6 +1,17 @@
 import type { CSSProperties } from "react";
 import type { Project } from "@/data/projects";
 
+// Define ProjectStatus type locally since it's not in generated types
+export type ProjectStatus = 
+  | "NOUVEAU"
+  | "DEVIS_ENVOYE"
+  | "DEVIS_ACCEPTE"
+  | "DEVIS_REFUSE"
+  | "EN_COURS"
+  | "TERMINE"
+  | "ANNULE"
+  | "FACTURE";
+
 type ProjectNameFields = {
   client_first_name?: string | null;
   client_last_name?: string | null;

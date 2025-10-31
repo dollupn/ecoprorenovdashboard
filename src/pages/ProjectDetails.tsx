@@ -32,7 +32,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import type { Database, Tables, ProjectStatus } from "@/integrations/supabase/types";
+import type { Database, Tables } from "@/integrations/supabase/types";
+import type { ProjectStatus } from "@/lib/projects";
 import { startChantier, updateChantierStatus } from "@/integrations/chantiers";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -5102,7 +5103,7 @@ const ProjectDetails = () => {
                         : 0;
                       const additionalCostDisplay =
                         additionalCostCount > 0
-                          ? `${formatCurrency(additionalCostTotal)} (${additionalCostCount})`
+                          ? `${formatCurrency(Number(additionalCostTotal))} (${additionalCostCount})`
                           : "—";
                       const revenueDisplay =
                         typeof site.revenue === "number"
@@ -5191,18 +5192,11 @@ const ProjectDetails = () => {
                       const travauxLabel =
                         TRAVAUX_NON_SUBVENTIONNES_LABELS[travauxChoice] ?? "N/A";
                       const hasTravauxDetails = travauxChoice !== "NA";
-                      const travauxDescription =
-                        typeof site.travaux_non_subventionnes_description === "string"
-                          ? site.travaux_non_subventionnes_description.trim()
-                          : "";
                       const travauxMontant =
                         typeof site.travaux_non_subventionnes_montant === "number" &&
                         Number.isFinite(site.travaux_non_subventionnes_montant)
                           ? site.travaux_non_subventionnes_montant
                           : 0;
-                      const travauxFinancement = hasTravauxDetails
-                        ? Boolean(site.travaux_non_subventionnes_financement)
-                        : false;
                       const commissionCommercialeActive = Boolean(
                         site.commission_commerciale_ht,
                       );
@@ -5456,34 +5450,12 @@ const ProjectDetails = () => {
                                 </div>
                                 {hasTravauxDetails ? (
                                   <>
-                                    {travauxDescription ? (
-                                      <div>
-                                        <span className="text-muted-foreground">Description</span>
-                                        <p className="mt-1 text-sm font-medium text-foreground">
-                                          {travauxDescription}
-                                        </p>
-                                      </div>
-                                    ) : null}
                                     <div className="flex items-center justify-between gap-2">
                                       <span className="text-muted-foreground">
                                         Montant travaux
                                       </span>
                                       <span className="font-medium text-foreground">
                                         {formatCurrency(travauxMontant)}
-                                      </span>
-                                    </div>
-                                    <div className="flex items-center justify-between gap-2">
-                                      <span className="text-muted-foreground">
-                                        Financement externe
-                                      </span>
-                                      <span
-                                        className={`font-medium ${
-                                          travauxFinancement
-                                            ? "text-emerald-600"
-                                            : "text-muted-foreground"
-                                        }`}
-                                      >
-                                        {travauxFinancement ? "Oui" : "Non"}
                                       </span>
                                     </div>
                                   </>

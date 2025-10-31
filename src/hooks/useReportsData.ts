@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
-import type { ProjectStatus } from "@/integrations/supabase/types";
+import type { ProjectStatus } from "@/lib/projects";
 import {
   differenceInCalendarDays,
   isValid,
