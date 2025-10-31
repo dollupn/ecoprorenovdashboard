@@ -512,14 +512,21 @@ const Projects = ({
       setStatusUpdating((previous) => ({ ...previous, [projectId]: true }));
 
       try {
-        const { error } = await supabase
-          .from("projects")
-          .update({ status: status as ProjectStatus })
-          .eq("id", projectId)
-          .eq("org_id", currentOrgId);
+        const response = await fetch(`/api/projects/${projectId}/status`, {
+          method: "PATCH",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ status }),
+        });
 
-        if (error) {
-          throw error;
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          const message =
+            (typeof payload?.message === "string" && payload.message) ||
+            "Impossible de mettre à jour le statut du projet.";
+          throw new Error(message);
         }
 
         const statusLabel = statusMap[status]?.label ?? status;
