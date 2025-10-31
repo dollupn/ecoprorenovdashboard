@@ -110,7 +110,8 @@ export interface SiteRentabilitySource {
   isolation_utilisee_m2?: number | null;
   surface_facturee?: number | null;
   montant_commission?: number | null;
-  travaux_non_subventionnes?: number | null;
+  travaux_non_subventionnes?: string | number | null;
+  travaux_non_subventionnes_montant?: number | null;
   additional_costs?: ReadonlyArray<{
     amount_ht?: number | null;
     taxes?: number | null;
@@ -124,6 +125,10 @@ export const buildRentabilityInputFromSite = (
   const led = isLedProduct(values.product_name);
   const unitsUsed = values.isolation_utilisee_m2;
   const billedUnits = led ? values.surface_facturee : values.isolation_utilisee_m2;
+  const rawNonSubsidized =
+    typeof values.travaux_non_subventionnes_montant === "number"
+      ? values.travaux_non_subventionnes_montant
+      : values.travaux_non_subventionnes;
 
   return {
     revenue: values.revenue,
@@ -132,7 +137,7 @@ export const buildRentabilityInputFromSite = (
     unitsUsed,
     billedUnits,
     commission: values.montant_commission,
-    nonSubsidizedWork: values.travaux_non_subventionnes,
+    nonSubsidizedWork: rawNonSubsidized,
     additionalCosts: values.additional_costs,
     measurementMode: led ? "luminaire" : "surface",
     unitLabel: led ? "luminaire" : "m²",

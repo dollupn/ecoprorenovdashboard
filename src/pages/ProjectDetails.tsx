@@ -3940,7 +3940,6 @@ const ProjectDetails = () => {
       cout_isolation_m2: 0,
       isolation_utilisee_m2: 0,
       montant_commission: 0,
-      travaux_non_subventionnes: 0,
       valorisation_cee: valorisationEur ?? 0,
       travaux_non_subventionnes: "NA",
       travaux_non_subventionnes_description: "",
@@ -4035,7 +4034,6 @@ const ProjectDetails = () => {
       cout_isolation_m2: site.cout_isolation_m2 ?? 0,
       isolation_utilisee_m2: site.isolation_utilisee_m2 ?? 0,
       montant_commission: site.montant_commission ?? 0,
-      travaux_non_subventionnes: site.travaux_non_subventionnes ?? 0,
       valorisation_cee: site.valorisation_cee ?? 0,
       travaux_non_subventionnes: resolvedTravauxChoice,
       travaux_non_subventionnes_description: travauxDescription,
@@ -4158,7 +4156,6 @@ const ProjectDetails = () => {
       cout_isolation_m2: values.cout_isolation_m2,
       isolation_utilisee_m2: values.isolation_utilisee_m2,
       montant_commission: values.montant_commission,
-      travaux_non_subventionnes: values.travaux_non_subventionnes,
       valorisation_cee: values.valorisation_cee,
       subcontractor_payment_confirmed: values.subcontractor_payment_confirmed,
       travaux_non_subventionnes: travauxChoice,
@@ -5131,6 +5128,8 @@ const ProjectDetails = () => {
                         surface_facturee: site.surface_facturee,
                         montant_commission: site.montant_commission,
                         travaux_non_subventionnes: site.travaux_non_subventionnes,
+                        travaux_non_subventionnes_montant:
+                          site.travaux_non_subventionnes_montant,
                         additional_costs: Array.isArray(site.additional_costs)
                           ? (site.additional_costs as SiteFormValues["additional_costs"])
                           : [],

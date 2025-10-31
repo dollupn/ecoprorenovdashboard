@@ -160,6 +160,7 @@ const resolveSiteRentability = (site: SiteRow) => {
       surface_facturee: site.surface_facturee,
       montant_commission: site.montant_commission,
       travaux_non_subventionnes: site.travaux_non_subventionnes,
+      travaux_non_subventionnes_montant: site.travaux_non_subventionnes_montant,
       additional_costs: additionalCosts ?? [],
       product_name: site.product_name,
     }),
