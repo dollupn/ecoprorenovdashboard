@@ -47,7 +47,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { getProjectClientName } from "@/lib/projects";
+import { DEFAULT_PROJECT_STATUSES, getProjectClientName } from "@/lib/projects";
 import { parseSiteNotes, serializeSiteNotes } from "@/lib/sites";
 import {
   Select,
@@ -141,18 +141,11 @@ const additionalCostSchema = z.object({
     .transform((value) => (value && value.length > 0 ? value : null)),
 });
 
-const createSiteStatusSchema = (statusValues: readonly string[]) =>
-  statusValues.length > 0
-    ? z
-        .string({ required_error: "Sélectionnez un statut" })
-        .min(1, "Sélectionnez un statut")
-        .refine((value) => statusValues.includes(value), {
-          message: "Statut invalide",
-        })
-    : z.string({ required_error: "Sélectionnez un statut" }).min(1, "Sélectionnez un statut");
+const fallbackProjectStatusValues = DEFAULT_PROJECT_STATUSES.map((status) => status.value);
 
-const createSiteBaseSchema = (statusValues: readonly string[]) => {
-  const statusSchema = createSiteStatusSchema(statusValues);
+const createBaseSiteSchema = (statusOptions: readonly string[]) => {
+  const allowedStatuses = statusOptions.length > 0 ? [...statusOptions] : fallbackProjectStatusValues;
+  const statusSet = new Set(allowedStatuses);
 
   return z.object({
     site_ref: z.string().min(3, "Référence requise"),
@@ -253,7 +246,7 @@ const defaultValues: SiteFormValues = {
   address: "",
   city: "",
   postal_code: "",
-  status: "",
+  status: fallbackProjectStatusValues[0] ?? "",
   cofrac_status: "EN_ATTENTE",
   date_debut: "",
   date_fin_prevue: "",
@@ -564,6 +557,7 @@ export const SiteDialog = ({
   defaultTab = "avant-chantier",
   readOnly = false,
 }: SiteDialogProps) => {
+  const projectStatuses = useProjectStatuses();
   const parsedNotes = useMemo(() => parseSiteNotes(initialValues?.notes), [initialValues?.notes]);
 
   const [siteDriveFile, setSiteDriveFile] = useState<DriveFileMetadata | null>(parsedNotes.driveFile);
@@ -590,6 +584,15 @@ export const SiteDialog = ({
         name: memberNameById[member.user_id] ?? "Utilisateur",
       })),
     [members, memberNameById],
+  );
+  const statusValues = useMemo(() => projectStatuses.map((status) => status.value), [projectStatuses]);
+  const resolvedStatusOptions = useMemo(
+    () => (statusValues.length > 0 ? statusValues : fallbackProjectStatusValues),
+    [statusValues],
+  );
+  const statusDisplayOptions = useMemo(
+    () => (projectStatuses.length > 0 ? projectStatuses : DEFAULT_PROJECT_STATUSES),
+    [projectStatuses],
   );
   useEffect(() => {
     if (open) {
@@ -648,8 +651,12 @@ export const SiteDialog = ({
 
     values.notes = parsedNotes.text;
 
+    if (!resolvedStatusOptions.includes(values.status)) {
+      values.status = resolvedStatusOptions[0] ?? "";
+    }
+
     return values;
-  }, [initialValues, parsedNotes.text, memberNameById, statusValues]);
+  }, [initialValues, parsedNotes.text, memberNameById, resolvedStatusOptions]);
 
   const availableProjects = useMemo<SiteProjectOption[]>(() => {
     const base = [...(projects ?? [])];
@@ -673,10 +680,10 @@ export const SiteDialog = ({
 
   const hasAvailableProjects = availableProjects.length > 0;
 
-  const schema = useMemo(
-    () => createSiteSchema(statusValues, hasAvailableProjects),
-    [statusValues, hasAvailableProjects],
-  );
+ const schema = useMemo(
+  () => createSiteSchema(resolvedStatusOptions, hasAvailableProjects),
+  [resolvedStatusOptions, hasAvailableProjects]
+);
 
   const resolver = useMemo(() => zodResolver(schema), [schema]);
 
@@ -917,7 +924,7 @@ export const SiteDialog = ({
                         <Select
                           onValueChange={field.onChange}
                           value={field.value}
-                          disabled={isReadOnly || projectStatuses.length === 0}
+                          disabled={isReadOnly || resolvedStatusOptions.length === 0}
                         >
                           <FormControl>
                             <SelectTrigger>
@@ -925,9 +932,9 @@ export const SiteDialog = ({
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {projectStatuses.map((status) => (
-                              <SelectItem key={status.value} value={status.value}>
-                                {status.label}
+                            {statusDisplayOptions.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
                               </SelectItem>
                             ))}
                           </SelectContent>
