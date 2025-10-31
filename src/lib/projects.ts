@@ -82,7 +82,6 @@ export const DEFAULT_PROJECT_STATUSES: ProjectStatusSetting[] = [
   },
 ];
 
-export const PROJECT_STATUS_STORAGE_KEY = "project-status-config";
 export const PROJECT_STATUS_UPDATED_EVENT = "project-statuses-updated";
 
 const DEFAULT_STATUS_COLOR = "#6B7280";
@@ -169,7 +168,9 @@ const ensureUniqueValues = (statuses: ProjectStatusSetting[]) => {
   });
 };
 
-const sanitizeProjectStatuses = (statuses: ProjectStatusSetting[]): ProjectStatusSetting[] => {
+export const sanitizeProjectStatuses = (
+  statuses: ProjectStatusSetting[],
+): ProjectStatusSetting[] => {
   if (!Array.isArray(statuses) || statuses.length === 0) {
     return DEFAULT_PROJECT_STATUSES.map((status) => ({ ...status }));
   }
@@ -194,42 +195,16 @@ export const getProjectStatusSettings = (options?: { skipCache?: boolean }) => {
     cachedStatuses = null;
   }
 
-  if (cachedStatuses) {
-    return cachedStatuses.map((status) => ({ ...status }));
-  }
-
-  if (typeof window === "undefined") {
+  if (!cachedStatuses) {
     cachedStatuses = DEFAULT_PROJECT_STATUSES.map((status) => ({ ...status }));
-    return cachedStatuses.map((status) => ({ ...status }));
   }
 
-  const stored = window.localStorage.getItem(PROJECT_STATUS_STORAGE_KEY);
-
-  if (!stored) {
-    cachedStatuses = DEFAULT_PROJECT_STATUSES.map((status) => ({ ...status }));
-    return cachedStatuses.map((status) => ({ ...status }));
-  }
-
-  try {
-    const parsed = JSON.parse(stored) as ProjectStatusSetting[];
-    cachedStatuses = sanitizeProjectStatuses(parsed);
-    return cachedStatuses.map((status) => ({ ...status }));
-  } catch (error) {
-    console.error("Unable to parse stored project statuses", error);
-    cachedStatuses = DEFAULT_PROJECT_STATUSES.map((status) => ({ ...status }));
-    return cachedStatuses.map((status) => ({ ...status }));
-  }
+  return cachedStatuses.map((status) => ({ ...status }));
 };
 
 export const saveProjectStatuses = (statuses: ProjectStatusSetting[]) => {
   const sanitized = sanitizeProjectStatuses(statuses);
   cachedStatuses = sanitized.map((status) => ({ ...status }));
-
-  if (typeof window !== "undefined") {
-    window.localStorage.setItem(PROJECT_STATUS_STORAGE_KEY, JSON.stringify(cachedStatuses));
-    window.dispatchEvent(new CustomEvent(PROJECT_STATUS_UPDATED_EVENT));
-  }
-
   return cachedStatuses.map((status) => ({ ...status }));
 };
 

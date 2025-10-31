@@ -155,10 +155,7 @@ const createBaseSiteSchema = (statusOptions: readonly string[]) => {
     address: z.string().min(3, "Adresse requise"),
     city: z.string().min(2, "Ville requise"),
     postal_code: z.string().min(4, "Code postal invalide"),
-    status: z
-      .string({ required_error: "Statut requis" })
-      .min(1, "Statut requis")
-      .refine((value) => statusSet.has(value), { message: "Statut invalide" }),
+    status: statusSchema,
     cofrac_status: z.enum(["EN_ATTENTE", "CONFORME", "NON_CONFORME", "A_PLANIFIER"]),
     date_debut: z.string().min(1, "Date de début requise"),
     date_fin_prevue: z.string().optional(),
@@ -183,8 +180,12 @@ const createBaseSiteSchema = (statusOptions: readonly string[]) => {
   });
 };
 
-const createSiteSchema = (requiresProjectAssociation: boolean, statusOptions: readonly string[]) =>
-  createBaseSiteSchema(statusOptions).superRefine((data, ctx) => {
+type SiteFormSchema = ReturnType<typeof createSiteBaseSchema>;
+
+export type SiteFormValues = z.infer<SiteFormSchema>;
+
+const createSiteSchema = (statusValues: readonly string[], requiresProjectAssociation: boolean) =>
+  createSiteBaseSchema(statusValues).superRefine((data, ctx) => {
     const projectRef = data.project_ref?.trim?.() ?? "";
     const clientName = data.client_name?.trim?.() ?? "";
 
@@ -208,8 +209,6 @@ const createSiteSchema = (requiresProjectAssociation: boolean, statusOptions: re
       }
     }
   });
-
-export type SiteFormValues = z.infer<ReturnType<typeof createBaseSiteSchema>>;
 
 export type SiteProjectOption = {
   id?: string;
@@ -566,6 +565,8 @@ export const SiteDialog = ({
   const isReadOnly = Boolean(readOnly);
   const resolvedOrgId = orgId ?? initialValues?.org_id ?? null;
   const { data: members = [], isLoading: membersLoading } = useMembers(resolvedOrgId);
+  const projectStatuses = useProjectStatuses();
+  const statusValues = useMemo(() => projectStatuses.map((status) => status.value), [projectStatuses]);
   const memberNameById = useMemo(() => {
     const result: Record<string, string> = {};
     members.forEach((member) => {
@@ -631,9 +632,15 @@ export const SiteDialog = ({
 
     const normalizedTeamMembers = normalizeTeamMembers(initialValues?.team_members, memberNameById);
 
+    const resolvedStatus =
+      initialValues?.status && statusValues.includes(initialValues.status)
+        ? initialValues.status
+        : statusValues[0] ?? defaultValues.status;
+
     const values: SiteFormValues = {
       ...defaultValues,
       ...initialValues,
+      status: resolvedStatus,
       subcontractor_id:
         typeof initialValues?.subcontractor_id === "string" && initialValues.subcontractor_id.length > 0
           ? initialValues.subcontractor_id
@@ -673,10 +680,10 @@ export const SiteDialog = ({
 
   const hasAvailableProjects = availableProjects.length > 0;
 
-  const schema = useMemo(
-    () => createSiteSchema(hasAvailableProjects, resolvedStatusOptions),
-    [hasAvailableProjects, resolvedStatusOptions],
-  );
+ const schema = useMemo(
+  () => createSiteSchema(resolvedStatusOptions, hasAvailableProjects),
+  [resolvedStatusOptions, hasAvailableProjects]
+);
 
   const resolver = useMemo(() => zodResolver(schema), [schema]);
 

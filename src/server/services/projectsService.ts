@@ -3,6 +3,7 @@ import {
   fetchInvoicesForProject,
   fetchProjectById,
   fetchQuotesForProject,
+  updateChantiersStatusForProject,
   updateProjectStatus,
   type ProjectRow,
 } from "../repositories/projectRepository";
@@ -58,7 +59,20 @@ export const updateProjectStatusService = async (orgId: string, projectId: strin
   const chantiers = await fetchChantiersForProject(projectId, orgId);
   ensureProjectStatusNotBehindChantiers(normalizedNextStatus, chantiers);
 
+  const previousStatus = project.status;
+
   const updatedProject: ProjectRow = await updateProjectStatus(projectId, orgId, normalizedNextStatus);
+
+  try {
+    await updateChantiersStatusForProject(projectId, orgId, normalizedNextStatus);
+  } catch (error) {
+    try {
+      await updateProjectStatus(projectId, orgId, previousStatus);
+    } catch (rollbackError) {
+      console.error("Échec lors du rollback du statut projet", rollbackError);
+    }
+    throw error;
+  }
 
   return {
     project: updatedProject,
