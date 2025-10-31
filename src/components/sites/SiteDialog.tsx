@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "r
 import {
   useForm,
   useFieldArray,
+  useFormContext,
+  useWatch,
   type Control,
   type FieldArrayWithId,
 } from "react-hook-form";
@@ -130,9 +132,12 @@ const additionalCostSchema = z.object({
   amount_ht: z.coerce
     .number({ invalid_type_error: "Montant HT invalide" })
     .min(0, "Le montant HT doit être positif"),
-  taxes: z.coerce
-    .number({ invalid_type_error: "Montant des taxes invalide" })
-    .min(0, "Le montant des taxes doit être positif"),
+  montant_tva: z.coerce
+    .number({ invalid_type_error: "Montant TVA invalide" })
+    .min(0, "Le montant de TVA doit être positif"),
+  amount_ttc: z.coerce
+    .number({ invalid_type_error: "Montant TTC invalide" })
+    .min(0, "Le montant TTC doit être positif"),
   attachment: z
     .string()
     .trim()
@@ -140,6 +145,14 @@ const additionalCostSchema = z.object({
     .nullable()
     .transform((value) => (value && value.length > 0 ? value : null)),
 });
+
+const computeAmountTTC = (amountHT: unknown, montantTVA: unknown) => {
+  const ht = typeof amountHT === "number" && Number.isFinite(amountHT) ? amountHT : 0;
+  const tva = typeof montantTVA === "number" && Number.isFinite(montantTVA) ? montantTVA : 0;
+
+  const total = ht + tva;
+  return Math.round(total * 100) / 100;
+};
 
 const fallbackProjectStatusValues = DEFAULT_PROJECT_STATUSES.map((status) => status.value);
 
@@ -379,9 +392,41 @@ const SortableAdditionalCostRow = ({
     id: field.id,
     disabled: disabled ?? false,
   });
+  const formContext = useFormContext<SiteFormValues>();
+  const watchedAmountHT = useWatch({
+    control,
+    name: `additional_costs.${index}.amount_ht`,
+  });
+  const watchedMontantTVA = useWatch({
+    control,
+    name: `additional_costs.${index}.montant_tva`,
+  });
+  const computedAmountTTC = useMemo(
+    () => computeAmountTTC(watchedAmountHT, watchedMontantTVA),
+    [watchedAmountHT, watchedMontantTVA],
+  );
 
-  const style: CSSProperties = { transform: CSS.Transform.toString(transform), transition };
-  const costTitle = `Coût supplémentaire ${index + 1}`;
+  useEffect(() => {
+    if (!formContext) return;
+
+    const currentValue = formContext.getValues(`additional_costs.${index}.amount_ttc`);
+    const normalizedCurrent =
+      typeof currentValue === "number" && Number.isFinite(currentValue) ? currentValue : 0;
+
+    if (Math.abs(normalizedCurrent - computedAmountTTC) > 0.005) {
+      formContext.setValue(`additional_costs.${index}.amount_ttc`, computedAmountTTC, {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
+    }
+  }, [computedAmountTTC, formContext, index]);
+
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.7 : 1,
+  };
+  const costTitle = `Frais de chantier ${index + 1}`;
 
   return (
     <div
@@ -402,7 +447,7 @@ const SortableAdditionalCostRow = ({
                 ? "cursor-default opacity-70"
                 : "cursor-grab hover:bg-background active:cursor-grabbing"
             }`}
-            aria-label="Réorganiser le coût supplémentaire"
+            aria-label="Réorganiser le frais de chantier"
             disabled={disabled}
             {...attributes}
             {...listeners}
@@ -422,7 +467,7 @@ const SortableAdditionalCostRow = ({
             variant="ghost"
             size="icon"
             onClick={() => remove(index)}
-            aria-label="Supprimer le coût"
+            aria-label="Supprimer le frais"
             disabled={disabled}
           >
             <Trash2 className="w-4 h-4" />
@@ -483,10 +528,10 @@ const SortableAdditionalCostRow = ({
         />
         <FormField
           control={control}
-          name={`additional_costs.${index}.taxes`}
-          render={({ field: taxesField }) => (
+          name={`additional_costs.${index}.montant_tva`}
+          render={({ field: montantTvaField }) => (
             <FormItem className="space-y-2">
-              <FormLabel>Taxes (€)</FormLabel>
+              <FormLabel>Montant TVA (€)</FormLabel>
               <FormControl>
                 <Input
                   type="number"
@@ -494,17 +539,47 @@ const SortableAdditionalCostRow = ({
                   min={0}
                   step="0.01"
                   placeholder="0,00"
-                  name={taxesField.name}
-                  ref={taxesField.ref}
+                  name={montantTvaField.name}
+                  ref={montantTvaField.ref}
                   value={
-                    taxesField.value === undefined || taxesField.value === null ? "" : taxesField.value
+                    montantTvaField.value === undefined || montantTvaField.value === null
+                      ? ""
+                      : montantTvaField.value
                   }
                   onChange={(event) => {
                     const newValue = event.target.value;
-                    taxesField.onChange(newValue === "" ? "" : Number(newValue));
+                    montantTvaField.onChange(newValue === "" ? "" : Number(newValue));
                   }}
-                  onBlur={taxesField.onBlur}
+                  onBlur={montantTvaField.onBlur}
                   disabled={disabled}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={control}
+          name={`additional_costs.${index}.amount_ttc`}
+          render={({ field: amountTTCField }) => (
+            <FormItem className="space-y-2">
+              <FormLabel>Montant TTC (€)</FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step="0.01"
+                  placeholder="0,00"
+                  name={amountTTCField.name}
+                  ref={amountTTCField.ref}
+                  value={
+                    amountTTCField.value === undefined || amountTTCField.value === null
+                      ? computedAmountTTC
+                      : amountTTCField.value
+                  }
+                  readOnly
+                  disabled
                 />
               </FormControl>
               <FormMessage />
@@ -627,12 +702,42 @@ export const SiteDialog = ({
   const mergedDefaults = useMemo(() => {
     const normalizedAdditionalCosts =
       initialValues?.additional_costs && initialValues.additional_costs.length > 0
-        ? initialValues.additional_costs.map((cost) => ({
-            label: cost.label,
-            amount_ht: Number.isFinite(cost.amount_ht) ? cost.amount_ht : 0,
-            taxes: Number.isFinite(cost.taxes) ? cost.taxes : 0,
-            attachment: cost.attachment ?? null,
-          }))
+        ? initialValues.additional_costs.map((cost) => {
+            const rawCost = cost as unknown as Record<string, unknown>;
+            const label =
+              typeof rawCost.label === "string" && rawCost.label.trim().length > 0
+                ? rawCost.label.trim()
+                : "";
+            const amountHT =
+              typeof rawCost.amount_ht === "number" && Number.isFinite(rawCost.amount_ht)
+                ? rawCost.amount_ht
+                : 0;
+            const montantTVAValue = (() => {
+              if (typeof rawCost.montant_tva === "number" && Number.isFinite(rawCost.montant_tva)) {
+                return rawCost.montant_tva;
+              }
+              if (typeof rawCost.taxes === "number" && Number.isFinite(rawCost.taxes)) {
+                return rawCost.taxes;
+              }
+              return 0;
+            })();
+            const amountTTC =
+              typeof rawCost.amount_ttc === "number" && Number.isFinite(rawCost.amount_ttc)
+                ? rawCost.amount_ttc
+                : computeAmountTTC(amountHT, montantTVAValue);
+            const attachmentValue =
+              typeof rawCost.attachment === "string" && rawCost.attachment.trim().length > 0
+                ? rawCost.attachment.trim()
+                : null;
+
+            return {
+              label,
+              amount_ht: amountHT,
+              montant_tva: montantTVAValue,
+              amount_ttc: amountTTC,
+              attachment: attachmentValue,
+            } satisfies SiteFormValues["additional_costs"][number];
+          })
         : defaultValues.additional_costs;
 
     const normalizedTeamMembers = normalizeTeamMembers(initialValues?.team_members, memberNameById);
@@ -851,10 +956,17 @@ export const SiteDialog = ({
       .filter((c) => c.label.trim().length > 0)
       .map((c) => {
         const attachment = c.attachment ? c.attachment.trim() : "";
+        const montantTVA = Number.isFinite(c.montant_tva) ? c.montant_tva : 0;
+        const amountHT = Number.isFinite(c.amount_ht) ? c.amount_ht : 0;
+        const amountTTC = Number.isFinite(c.amount_ttc)
+          ? c.amount_ttc
+          : computeAmountTTC(amountHT, montantTVA);
+
         return {
           label: c.label.trim(),
-          amount_ht: Number.isFinite(c.amount_ht) ? c.amount_ht : 0,
-          taxes: Number.isFinite(c.taxes) ? c.taxes : 0,
+          amount_ht: amountHT,
+          montant_tva: montantTVA,
+          amount_ttc: amountTTC,
           attachment: attachment.length > 0 ? attachment : null,
         };
       });
@@ -1304,7 +1416,7 @@ export const SiteDialog = ({
                 </div>
 
                 <div className="space-y-2">
-                  <FormLabel>Coûts supplémentaires</FormLabel>
+                  <FormLabel>Frais de chantier</FormLabel>
                   {costFields.length > 1 ? (
                     <p className="text-xs text-muted-foreground">Réorganisez l&apos;affichage des coûts en les faisant glisser.</p>
                   ) : null}
@@ -1338,13 +1450,14 @@ export const SiteDialog = ({
                       appendCost({
                         label: "",
                         amount_ht: undefined as unknown as number,
-                        taxes: undefined as unknown as number,
+                        montant_tva: undefined as unknown as number,
+                        amount_ttc: 0,
                         attachment: null,
                       })
                     }
                     disabled={isReadOnly}
                   >
-                    <Plus className="w-4 h-4 mr-1" /> Ajouter un coût
+                    <Plus className="w-4 h-4 mr-1" /> Ajouter un frais
                   </Button>
                 </div>
 

@@ -1012,11 +1012,17 @@ const Projects = ({
           .filter((cost) => cost.label.trim().length > 0)
           .map((cost) => {
             const attachment = cost.attachment ? cost.attachment.trim() : "";
+            const montantTVA = Number.isFinite(cost.montant_tva) ? cost.montant_tva : 0;
+            const amountHT = Number.isFinite(cost.amount_ht) ? cost.amount_ht : 0;
+            const amountTTC = Number.isFinite(cost.amount_ttc)
+              ? cost.amount_ttc
+              : Math.round((amountHT + montantTVA) * 100) / 100;
 
             return {
               label: cost.label.trim(),
-              amount_ht: Number.isFinite(cost.amount_ht) ? cost.amount_ht : 0,
-              taxes: Number.isFinite(cost.taxes) ? cost.taxes : 0,
+              amount_ht: amountHT,
+              montant_tva: montantTVA,
+              amount_ttc: amountTTC,
               attachment: attachment.length > 0 ? attachment : null,
             };
           })
