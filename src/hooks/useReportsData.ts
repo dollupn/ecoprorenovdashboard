@@ -134,6 +134,7 @@ type SiteRow = Pick<
   | "surface_facturee"
   | "montant_commission"
   | "travaux_non_subventionnes"
+  | "travaux_non_subventionnes_montant"
   | "additional_costs"
   | "product_name"
 >;
@@ -227,7 +228,7 @@ export const useReportsData = (orgId: string | null, options: QueryOptions = {})
         supabase
           .from("sites")
           .select(
-            "id, project_ref, site_ref, client_name, status, revenue, profit_margin, rentability_margin_rate, rentability_margin_total, rentability_total_costs, rentability_additional_costs_total, rentability_unit_label, cout_main_oeuvre_m2_ht, cout_isolation_m2, isolation_utilisee_m2, surface_facturee, montant_commission, travaux_non_subventionnes, additional_costs, product_name, date_debut, date_fin_prevue, created_at",
+            "id, project_ref, site_ref, client_name, status, revenue, profit_margin, rentability_margin_rate, rentability_margin_total, rentability_total_costs, rentability_additional_costs_total, rentability_unit_label, cout_main_oeuvre_m2_ht, cout_isolation_m2, isolation_utilisee_m2, surface_facturee, montant_commission, travaux_non_subventionnes, travaux_non_subventionnes_montant, additional_costs, product_name, date_debut, date_fin_prevue, created_at",
           )
           .eq("org_id", orgId)
           .gte("created_at", previousYearStart.toISOString()),
