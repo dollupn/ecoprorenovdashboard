@@ -219,15 +219,37 @@ export const sanitizeProjectStatuses = (
     return DEFAULT_PROJECT_STATUSES.map((status) => ({ ...status }));
   }
 
+  const defaultStatusById = new Map(
+    DEFAULT_PROJECT_STATUSES.map((status) => [status.id, status] as const),
+  );
+  const defaultStatusByValue = new Map(
+    DEFAULT_PROJECT_STATUSES.map((status) => [
+      normalizeStatusValue(status.value || status.id || status.label),
+      status,
+    ] as const),
+  );
+
   const mapped = statuses
-    .map((status) => ({
-      ...status,
-      color: normalizeHexColor(status.color),
-      value: normalizeStatusValue(status.value || status.id || status.label),
-      label: prettifyLabel(status.label, normalizeStatusValue(status.value || status.id || status.label)),
-      isActive: status.isActive === false ? false : true,
-      id: status.id,
-    }))
+    .map((status) => {
+      const normalizedValue = normalizeStatusValue(status.value || status.id || status.label);
+      const fallbackStatus =
+        (status.id && defaultStatusById.get(status.id)) ||
+        defaultStatusByValue.get(normalizedValue);
+
+      return {
+        ...status,
+        color: normalizeHexColor(status.color),
+        value: normalizedValue,
+        label: prettifyLabel(status.label, normalizedValue),
+        isActive:
+          status.isActive === false
+            ? false
+            : status.isActive === true
+            ? true
+            : fallbackStatus?.isActive ?? true,
+        id: status.id,
+      };
+    })
     .filter((status) => Boolean(status.value));
 
   const unique = ensureUniqueValues(mapped);
