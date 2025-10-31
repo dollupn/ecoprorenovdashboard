@@ -5202,10 +5202,11 @@ const ProjectDetails = () => {
                         : `${site.city} (${site.postal_code})`;
 
                       return (
-                        <Card
-                          key={site.id}
-                          className="border border-border/60 bg-background/60"
-                        >
+                        <>
+                          <Card
+                            key={site.id}
+                            className="border border-border/60 bg-background/60"
+                          >
                           <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                             <div>
                               <CardTitle className="text-base">{site.site_ref}</CardTitle>
@@ -5283,7 +5284,7 @@ const ProjectDetails = () => {
                               </div>
                             ) : null}
                           </CardContent>
-                          </div>
+                          </Card>
 
                           <div className="grid gap-4 lg:grid-cols-2">
                             <Card className="border border-border/60 bg-background/60">
@@ -5579,7 +5580,7 @@ const ProjectDetails = () => {
                               <Link to={`/chantiers/${site.id}`}>Voir détails</Link>
                             </Button>
                           </CardFooter>
-                        </Card>
+                        </>
                       );
 
                     })}
