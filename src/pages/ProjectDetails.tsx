@@ -2651,6 +2651,62 @@ const ProjectDetails = () => {
     enabled: Boolean(project?.id && currentOrgId),
   });
 
+  useEffect(() => {
+    if (!project?.id || !currentOrgId) {
+      return undefined;
+    }
+
+    const channel = supabase
+      .channel(`project-details-${project.id}-realtime`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "project_updates",
+          filter: `project_id=eq.${project.id}`,
+        },
+        () => {
+          void refetchProjectUpdates();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "project_notes",
+          filter: `project_id=eq.${project.id}`,
+        },
+        () => {
+          void refetchProjectNotes();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "project_media",
+          filter: `project_id=eq.${project.id}`,
+        },
+        () => {
+          void refetchProjectMedia();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [
+    project?.id,
+    currentOrgId,
+    refetchProjectUpdates,
+    refetchProjectNotes,
+    refetchProjectMedia,
+  ]);
+
   const {
     data: statusEvents = [],
     isLoading: statusEventsLoading,
