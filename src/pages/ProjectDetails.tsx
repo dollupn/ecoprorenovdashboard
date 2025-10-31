@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import {
+  Link,
   useLocation,
   useNavigate,
   useParams,
@@ -52,7 +53,6 @@ import {
   Trash2,
   Mail,
   AlertTriangle,
-  Pencil,
   Users,
   Plus,
   Loader2,
@@ -65,8 +65,6 @@ import {
   Clock,
   ChevronRight,
   NotebookPen,
-  ClipboardList,
-  Camera,
   CheckCircle2,
   Archive,
   Zap,
@@ -3904,82 +3902,6 @@ const ProjectDetails = () => {
     setQuoteDialogOpen(true);
   };
 
-  const handleEditSite = (
-    site: ProjectSite,
-    options?: {
-      readOnly?: boolean;
-      defaultTab?: "avant-chantier" | "apres-chantier";
-    },
-  ) => {
-    const { readOnly = false, defaultTab = "avant-chantier" } = options ?? {};
-
-    setSiteDialogMode("edit");
-    setSiteDialogReadOnly(readOnly);
-    setSiteDialogDefaultTab(defaultTab);
-    setActiveSite(site);
-    const rawTravauxChoice = (site.travaux_non_subventionnes ?? "NA") as
-      | TravauxNonSubventionnesValue
-      | string;
-    const isValidTravauxChoice = TRAVAUX_NON_SUBVENTIONNES_OPTIONS.some(
-      (option) => option.value === rawTravauxChoice,
-    );
-    const resolvedTravauxChoice = isValidTravauxChoice
-      ? (rawTravauxChoice as TravauxNonSubventionnesValue)
-      : "NA";
-    const travauxDescription =
-      typeof site.travaux_non_subventionnes_description === "string"
-        ? site.travaux_non_subventionnes_description.trim()
-        : "";
-    const travauxMontant =
-      typeof site.travaux_non_subventionnes_montant === "number" &&
-      Number.isFinite(site.travaux_non_subventionnes_montant)
-        ? site.travaux_non_subventionnes_montant
-        : 0;
-    const travauxFinancement = Boolean(site.travaux_non_subventionnes_financement);
-    const commissionCommercialeActive = Boolean(site.commission_commerciale_ht);
-    const commissionCommercialeMontant =
-      typeof site.commission_commerciale_ht_montant === "number" &&
-      Number.isFinite(site.commission_commerciale_ht_montant)
-        ? site.commission_commerciale_ht_montant
-        : 0;
-    setSiteInitialValues({
-      site_ref: site.site_ref,
-      project_ref: site.project_ref,
-      client_name: site.client_name,
-      product_name: site.product_name,
-      address: site.address,
-      city: site.city,
-      postal_code: site.postal_code,
-      status: (site.status as SiteStatus) ?? "PLANIFIE",
-      cofrac_status: (site.cofrac_status as CofracStatus) ?? "EN_ATTENTE",
-      date_debut: site.date_debut,
-      date_fin_prevue: site.date_fin_prevue ?? "",
-      progress_percentage: site.progress_percentage ?? 0,
-      revenue: site.revenue ?? 0,
-      profit_margin: site.profit_margin ?? 0,
-      surface_facturee: site.surface_facturee ?? 0,
-      cout_main_oeuvre_m2_ht: site.cout_main_oeuvre_m2_ht ?? 0,
-      cout_isolation_m2: site.cout_isolation_m2 ?? 0,
-      isolation_utilisee_m2: site.isolation_utilisee_m2 ?? 0,
-      montant_commission: site.montant_commission ?? 0,
-      valorisation_cee: site.valorisation_cee ?? 0,
-      travaux_non_subventionnes: resolvedTravauxChoice,
-      travaux_non_subventionnes_description: travauxDescription,
-      travaux_non_subventionnes_montant: travauxMontant,
-      travaux_non_subventionnes_financement: travauxFinancement,
-      commission_commerciale_ht: commissionCommercialeActive,
-      commission_commerciale_ht_montant: commissionCommercialeMontant,
-      notes: site.notes ?? "",
-      subcontractor_payment_confirmed: Boolean(
-        site.subcontractor_payment_confirmed,
-      ),
-      subcontractor_id: site.subcontractor_id ?? null,
-      team_members: mapTeamMembersToFormValues(site.team_members ?? []),
-      additional_costs: normalizeAdditionalCosts(site.additional_costs ?? []),
-    });
-    setSiteDialogOpen(true);
-  };
-
   const handleSubmitSite = async (values: SiteSubmitValues) => {
     if (!user || !currentOrgId || !project) return;
 
@@ -5159,44 +5081,34 @@ const ProjectDetails = () => {
                           ? site.commission_commerciale_ht_montant
                           : 0;
 
+                      const addressDisplay = site.address
+                        ? `${site.address} · ${site.postal_code} ${site.city}`
+                        : `${site.city} (${site.postal_code})`;
+
                       return (
-                        <div
+                        <Card
                           key={site.id}
-                          className="space-y-4 rounded-lg border border-border/60 bg-background/60 p-4"
+                          className="border border-border/60 bg-background/60"
                         >
-                          <div className="flex flex-wrap items-start justify-between gap-3">
+                          <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                             <div>
-                              <h3 className="text-base font-semibold text-foreground">
-                                {site.site_ref}
-                              </h3>
-                              <p className="text-sm text-muted-foreground">
-                                {site.address
-                                  ? `${site.address} · ${site.postal_code} ${site.city}`
-                                  : `${site.city} (${site.postal_code})`}
-                              </p>
+                              <CardTitle className="text-base">{site.site_ref}</CardTitle>
+                              <CardDescription>{addressDisplay}</CardDescription>
                             </div>
                             <div className="flex flex-wrap gap-2">
-                              <Badge
-                                variant="outline"
-                                className={getStatusColor(status)}
-                              >
+                              <Badge variant="outline" className={getStatusColor(status)}>
                                 {getStatusLabel(status)}
                               </Badge>
-                              <Badge variant="outline">
-                                {getCofracStatusLabel(cofracStatus)}
-                              </Badge>
+                              <Badge variant="outline">{getCofracStatusLabel(cofracStatus)}</Badge>
                             </div>
-                          </div>
-
-                          <div className="grid gap-3 text-sm text-muted-foreground md:grid-cols-2 xl:grid-cols-4">
+                          </CardHeader>
+                          <CardContent className="grid gap-3 text-sm text-muted-foreground md:grid-cols-2 xl:grid-cols-4">
                             <div className="flex items-center gap-2">
                               <Calendar className="h-4 w-4 text-primary" />
                               <span>
                                 Début :{" "}
                                 <span className="font-medium text-foreground">
-                                  {new Date(site.date_debut).toLocaleDateString(
-                                    "fr-FR",
-                                  )}
+                                  {new Date(site.date_debut).toLocaleDateString("fr-FR")}
                                 </span>
                               </span>
                             </div>
@@ -5206,9 +5118,7 @@ const ProjectDetails = () => {
                                 Fin prévue :{" "}
                                 <span className="font-medium text-foreground">
                                   {site.date_fin_prevue
-                                    ? new Date(
-                                        site.date_fin_prevue,
-                                      ).toLocaleDateString("fr-FR")
+                                    ? new Date(site.date_fin_prevue).toLocaleDateString("fr-FR")
                                     : "—"}
                                 </span>
                               </span>
@@ -5216,9 +5126,7 @@ const ProjectDetails = () => {
                             <div>
                               <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
                                 <span>Avancement</span>
-                                <span className="font-medium text-foreground">
-                                  {progressValue}%
-                                </span>
+                                <span className="font-medium text-foreground">{progressValue}%</span>
                               </div>
                               <Progress value={progressValue} />
                             </div>
@@ -5226,11 +5134,7 @@ const ProjectDetails = () => {
                               <Euro className="h-4 w-4 text-emerald-600" />
                               <span>
                                 CA :{" "}
-                                <span className="font-medium text-foreground">
-                                  {typeof site.revenue === "number"
-                                    ? formatCurrency(site.revenue)
-                                    : "—"}
-                                </span>
+                                <span className="font-medium text-foreground">{revenueDisplay}</span>
                               </span>
                             </div>
                             {typeof site.valorisation_cee === "number" ? (
@@ -5238,9 +5142,7 @@ const ProjectDetails = () => {
                                 <HandCoins className="h-4 w-4 text-amber-600" />
                                 <span>
                                   Valorisation :{" "}
-                                  <span className="font-medium text-foreground">
-                                    {formatCurrency(site.valorisation_cee)}
-                                  </span>
+                                  <span className="font-medium text-foreground">{primeDisplay}</span>
                                 </span>
                               </div>
                             ) : null}
@@ -5260,12 +5162,11 @@ const ProjectDetails = () => {
                                 <Users className="h-4 w-4 text-primary" />
                                 <span>
                                   Équipe :{" "}
-                                  <span className="font-medium text-foreground">
-                                    {teamMembersLabel}
-                                  </span>
+                                  <span className="font-medium text-foreground">{teamMembersLabel}</span>
                                 </span>
                               </div>
                             ) : null}
+                          </CardContent>
                           </div>
 
                           <div className="grid gap-4 lg:grid-cols-2">
@@ -5553,31 +5454,18 @@ const ProjectDetails = () => {
                           </div>
 
                           {hasInternalNotes ? (
-                            <p className="border-t border-border/40 pt-3 text-sm text-muted-foreground">
+                            <CardContent className="border-t border-border/40 pt-3 text-sm text-muted-foreground">
                               {internalNotes}
-                            </p>
+                            </CardContent>
                           ) : null}
-
-                          <div className="flex flex-wrap justify-end gap-2">
-                            {canManageSites ? (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="inline-flex items-center gap-2"
-                                onClick={() => {
-                                  handleEditSite(site, {
-                                    readOnly: false,
-                                    defaultTab: "avant-chantier",
-                                  });
-                                }}
-                              >
-                                <Pencil className="h-4 w-4" />
-                                Modifier
-                              </Button>
-                            ) : null}
-                          </div>
-                        </div>
+                          <CardFooter className="flex justify-end">
+                            <Button asChild variant="outline" size="sm">
+                              <Link to={`/chantiers/${site.id}`}>Voir détails</Link>
+                            </Button>
+                          </CardFooter>
+                        </Card>
                       );
+
                     })}
                   </div>
                 )}
