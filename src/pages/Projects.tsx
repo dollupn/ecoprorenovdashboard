@@ -45,6 +45,8 @@ import {
   List,
   HardHat,
   Loader2,
+  NotebookPen,
+  Images,
 } from "lucide-react";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useMembers } from "@/features/members/api";
@@ -848,9 +850,19 @@ const Projects = ({
     }
   }, []);
 
-  const handleViewProject = (projectId: string) => {
-    navigate(`/projects/${projectId}`);
-  };
+  const handleViewProject = useCallback(
+    (projectId: string) => {
+      navigate(`/projects/${projectId}`);
+    },
+    [navigate],
+  );
+
+  const handleOpenProjectTab = useCallback(
+    (projectId: string, tab: "journal" | "media") => {
+      navigate(`/projects/${projectId}?tab=${tab}`);
+    },
+    [navigate],
+  );
 
   const handleCreateQuote = (project: ProjectWithRelations) => {
     const displayedProducts = getDisplayedProducts(project.project_products);
@@ -1385,6 +1397,32 @@ const Projects = ({
                               <Eye className="h-4 w-4" />
                               <span className="sr-only">Voir</span>
                             </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="shrink-0 h-8 w-8 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleOpenProjectTab(project.id, "journal");
+                              }}
+                            >
+                              <NotebookPen className="h-4 w-4" />
+                              <span className="sr-only">Journal</span>
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="shrink-0 h-8 w-8 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleOpenProjectTab(project.id, "media");
+                              }}
+                            >
+                              <Images className="h-4 w-4" />
+                              <span className="sr-only">Médias</span>
+                            </Button>
                             <AddProjectDialog
                               mode="edit"
                               projectId={project.id}
@@ -1757,6 +1795,22 @@ const Projects = ({
                                 >
                                   <Eye className="h-4 w-4 mr-1" />
                                   Voir
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleOpenProjectTab(project.id, "journal")}
+                                >
+                                  <NotebookPen className="h-4 w-4 mr-1" />
+                                  Journal
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleOpenProjectTab(project.id, "media")}
+                                >
+                                  <Images className="h-4 w-4 mr-1" />
+                                  Médias
                                 </Button>
                                 <Button
                                   size="sm"
