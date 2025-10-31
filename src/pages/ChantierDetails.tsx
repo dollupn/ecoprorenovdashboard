@@ -302,6 +302,12 @@ const ChantierDetails = () => {
     const travauxFinancement = shouldResetTravaux ? false : Boolean(values.travaux_non_subventionnes_financement);
     const commissionActive = Boolean(values.commission_commerciale_ht);
     const commissionMontant = commissionActive ? sanitizeNumber(values.commission_commerciale_ht_montant) : 0;
+    const subcontractorId =
+      typeof values.subcontractor_id === "string"
+        ? values.subcontractor_id.trim().length > 0
+          ? values.subcontractor_id
+          : null
+        : values.subcontractor_id ?? null;
 
     const rentabilityResult = calculateRentability(
       buildRentabilityInputFromSite({
@@ -316,7 +322,7 @@ const ChantierDetails = () => {
       ...values,
       project_ref: values.project_ref?.trim() ?? chantier.project_ref ?? "",
       client_name: values.client_name?.trim() ?? chantier.client_name ?? "",
-      subcontractor_id: values.subcontractor_id ?? null,
+      subcontractor_id: subcontractorId,
       additional_costs: filteredCosts,
       notes: serializedNotes,
       travaux_non_subventionnes: travauxChoice,
