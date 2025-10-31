@@ -545,6 +545,15 @@ const cofracStatusOptions = [
   { value: "A_PLANIFIER", label: "Audit à planifier" },
 ] as const;
 
+const POST_DELIVERY_STATUS_VALUES = new Set([
+  "FACTURE_ENVOYEE",
+  "AH",
+  "AAF",
+  "CLOTURE",
+  "ANNULE",
+  "ABANDONNE",
+]);
+
 export const SiteDialog = ({
   open,
   mode,
@@ -556,7 +565,7 @@ export const SiteDialog = ({
   defaultTab = "avant-chantier",
   readOnly = false,
 }: SiteDialogProps) => {
-  const projectStatuses = useProjectStatuses();
+  const { statuses: projectStatuses } = useProjectStatuses();
   const parsedNotes = useMemo(() => parseSiteNotes(initialValues?.notes), [initialValues?.notes]);
 
   const [siteDriveFile, setSiteDriveFile] = useState<DriveFileMetadata | null>(parsedNotes.driveFile);
@@ -564,7 +573,6 @@ export const SiteDialog = ({
   const isReadOnly = Boolean(readOnly);
   const resolvedOrgId = orgId ?? initialValues?.org_id ?? null;
   const { data: members = [], isLoading: membersLoading } = useMembers(resolvedOrgId);
-  const projectStatuses = useProjectStatuses();
   const statusValues = useMemo(() => projectStatuses.map((status) => status.value), [projectStatuses]);
   const memberNameById = useMemo(() => {
     const result: Record<string, string> = {};
@@ -584,7 +592,6 @@ export const SiteDialog = ({
       })),
     [members, memberNameById],
   );
-  const statusValues = useMemo(() => projectStatuses.map((status) => status.value), [projectStatuses]);
   const resolvedStatusOptions = useMemo(
     () => (statusValues.length > 0 ? statusValues : fallbackProjectStatusValues),
     [statusValues],
@@ -648,6 +655,14 @@ export const SiteDialog = ({
     } as SiteFormValues;
 
     values.notes = parsedNotes.text;
+
+    if (
+      values.valorisation_cee === null ||
+      values.valorisation_cee === undefined ||
+      Number.isNaN(values.valorisation_cee)
+    ) {
+      values.valorisation_cee = 0;
+    }
 
     if (!resolvedStatusOptions.includes(values.status)) {
       values.status = resolvedStatusOptions[0] ?? "";
@@ -912,11 +927,30 @@ export const SiteDialog = ({
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {statusDisplayOptions.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
+                            {statusDisplayOptions.map((option) => {
+                              const showActivity = POST_DELIVERY_STATUS_VALUES.has(option.value);
+                              const isActive = option.isActive !== false;
+                              const activityLabel = isActive ? "Actif" : "Inactif";
+                              const activityClasses = isActive
+                                ? "border-emerald-500/40 text-emerald-600"
+                                : "border-destructive/40 text-destructive";
+
+                              return (
+                                <SelectItem key={option.value} value={option.value}>
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span>{option.label}</span>
+                                    {showActivity ? (
+                                      <Badge
+                                        variant="outline"
+                                        className={`text-[10px] uppercase tracking-wide ${activityClasses}`}
+                                      >
+                                        {activityLabel}
+                                      </Badge>
+                                    ) : null}
+                                  </div>
+                                </SelectItem>
+                              );
+                            })}
                           </SelectContent>
                         </Select>
                         <FormMessage />

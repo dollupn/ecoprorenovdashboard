@@ -195,9 +195,19 @@ type DelegateSummary = Pick<
   "id" | "name" | "price_eur_per_mwh"
 >;
 
+type UpcomingAppointmentDetail = {
+  id: string;
+  appointment: ProjectAppointment;
+  dateTime: Date;
+  formattedDate: string;
+  metadata: string | null;
+  notes: string | null;
+};
+
 type ProjectWithRelations = Project & {
   project_products: ProjectProduct[];
   delegate?: DelegateSummary | null;
+  lead?: Pick<Tables<"leads">, "email"> | null;
   project_appointments: ProjectAppointment[];
 };
 
@@ -1130,8 +1140,11 @@ const InformationsGeneralesTab = ({
                 </p>
               )}
               {project.siren && (
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                  SIREN : {project.siren}
+                <p className="flex items-center gap-2 font-medium">
+                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                    SIREN
+                  </span>
+                  <span>{project.siren}</span>
                 </p>
               )}
             </div>
@@ -2343,7 +2356,7 @@ const ProjectDetails = () => {
       let query = supabase
         .from("projects")
         .select(
-          "*, delegate:delegates(id, name, price_eur_per_mwh), project_products(id, product_id, quantity, dynamic_params, product:product_catalog(id, code, name, category, params_schema, cee_config, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac))), project_appointments(id, project_id, org_id, appointment_date, appointment_time, appointment_type_id, assignee_id, notes, created_at, updated_at, appointment_type:appointment_types(id, name))",
+          "*, delegate:delegates(id, name, price_eur_per_mwh), lead:leads(email), project_products(id, product_id, quantity, dynamic_params, product:product_catalog(id, code, name, category, params_schema, cee_config, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac))), project_appointments(id, project_id, org_id, appointment_date, appointment_time, appointment_type_id, assignee_id, notes, created_at, updated_at, appointment_type:appointment_types(id, name))",
         )
         .eq("id", id);
 
@@ -2475,18 +2488,17 @@ const ProjectDetails = () => {
     projectUpdatesState?.tableAvailable ?? false;
   const projectUpdatesError = projectUpdatesState?.error ?? null;
 
-  const nextAppointment = useMemo<{
-    appointment: ProjectAppointment;
-    dateTime: Date;
-  } | null>(() => {
+  const upcomingAppointmentDetails = useMemo<UpcomingAppointmentDetail[]>(() => {
     if (
       !project?.project_appointments ||
       project.project_appointments.length === 0
     ) {
-      return null;
+      return [];
     }
 
-    const withDates = project.project_appointments
+    const now = new Date().getTime();
+
+    return project.project_appointments
       .map((appointment) => {
         if (!appointment.appointment_date || !appointment.appointment_time) {
           return null;
@@ -2495,59 +2507,47 @@ const ProjectDetails = () => {
         const dateTime = new Date(
           `${appointment.appointment_date}T${appointment.appointment_time}`,
         );
-        if (Number.isNaN(dateTime.getTime())) {
+
+        if (Number.isNaN(dateTime.getTime()) || dateTime.getTime() < now) {
           return null;
         }
 
-        return { appointment, dateTime };
+        const formattedDate = dateTime.toLocaleString("fr-FR", {
+          dateStyle: "long",
+          timeStyle: "short",
+        });
+
+        const assigneeName = appointment.assignee_id
+          ? memberNameById[appointment.assignee_id] ?? null
+          : null;
+
+        const typeLabel = appointment.appointment_type?.name ?? null;
+        const rawNotes = appointment.notes?.trim() ?? "";
+
+        const metadataParts = [
+          typeLabel ?? undefined,
+          assigneeName ? `Assigné à ${assigneeName}` : undefined,
+        ].filter((value): value is string => Boolean(value));
+
+        return {
+          id: appointment.id,
+          appointment,
+          dateTime,
+          formattedDate,
+          metadata: metadataParts.length > 0 ? metadataParts.join(" • ") : null,
+          notes: rawNotes.length > 0 ? rawNotes : null,
+        } satisfies UpcomingAppointmentDetail;
       })
       .filter(
-        (value): value is { appointment: ProjectAppointment; dateTime: Date } =>
-          Boolean(value),
-      );
+        (value): value is UpcomingAppointmentDetail => Boolean(value),
+      )
+      .sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime());
+  }, [project?.project_appointments, memberNameById]);
 
-    if (withDates.length === 0) {
-      return null;
-    }
-
-    withDates.sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime());
-    const now = new Date();
-    const upcoming = withDates.find(
-      (item) => item.dateTime.getTime() >= now.getTime(),
-    );
-
-    return upcoming ?? withDates[withDates.length - 1] ?? null;
-  }, [project?.project_appointments]);
-
-  const nextAppointmentDetails = useMemo(() => {
-    if (!nextAppointment) {
-      return null;
-    }
-
-    const formattedDate = nextAppointment.dateTime.toLocaleString("fr-FR", {
-      dateStyle: "long",
-      timeStyle: "short",
-    });
-
-    const assigneeName = nextAppointment.appointment.assignee_id
-      ? (memberNameById[nextAppointment.appointment.assignee_id] ?? null)
+  const nextAppointmentDetails =
+    upcomingAppointmentDetails.length > 0
+      ? upcomingAppointmentDetails[0]
       : null;
-
-    const typeLabel =
-      nextAppointment.appointment.appointment_type?.name ?? null;
-    const rawNotes = nextAppointment.appointment.notes?.trim() ?? "";
-
-    const metadataParts = [
-      typeLabel ?? undefined,
-      assigneeName ? `Assigné à ${assigneeName}` : undefined,
-    ].filter((value): value is string => Boolean(value));
-
-    return {
-      formattedDate,
-      metadata: metadataParts.length > 0 ? metadataParts.join(" • ") : null,
-      notes: rawNotes.length > 0 ? rawNotes : null,
-    };
-  }, [nextAppointment, memberNameById]);
 
   const projectSurfaceFacturee = useMemo(() => {
     if (!project?.project_products) return 0;
@@ -2650,6 +2650,62 @@ const ProjectDetails = () => {
     },
     enabled: Boolean(project?.id && currentOrgId),
   });
+
+  useEffect(() => {
+    if (!project?.id || !currentOrgId) {
+      return undefined;
+    }
+
+    const channel = supabase
+      .channel(`project-details-${project.id}-realtime`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "project_updates",
+          filter: `project_id=eq.${project.id}`,
+        },
+        () => {
+          void refetchProjectUpdates();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "project_notes",
+          filter: `project_id=eq.${project.id}`,
+        },
+        () => {
+          void refetchProjectNotes();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "project_media",
+          filter: `project_id=eq.${project.id}`,
+        },
+        () => {
+          void refetchProjectMedia();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [
+    project?.id,
+    currentOrgId,
+    refetchProjectUpdates,
+    refetchProjectNotes,
+    refetchProjectMedia,
+  ]);
 
   const {
     data: statusEvents = [],
@@ -4151,7 +4207,28 @@ const ProjectDetails = () => {
   };
 
   const projectCostValue = project?.estimated_value ?? null;
-  const projectEmail = (project as Project & { email?: string })?.email ?? null;
+  const projectEmail = (() => {
+    if (!project) return null;
+
+    const projectWithEmails = project as Project & {
+      email?: string | null;
+      client_email?: string | null;
+    };
+
+    const candidates = [
+      projectWithEmails.email,
+      projectWithEmails.client_email,
+      project.lead?.email ?? null,
+    ];
+
+    for (const candidate of candidates) {
+      if (typeof candidate === "string" && candidate.trim().length > 0) {
+        return candidate.trim();
+      }
+    }
+
+    return null;
+  })();
   const driveFolderUrl = project
     ? ((project as Project & { drive_folder_url?: string | null })
         .drive_folder_url ?? null)
@@ -4262,6 +4339,20 @@ const ProjectDetails = () => {
                 : "Aucun code produit"}{" "}
               – {project.city} ({project.postal_code})
             </p>
+            {nextAppointmentDetails ? (
+              <Badge
+                variant="secondary"
+                className="mt-3 inline-flex w-fit items-center gap-2 border-primary/30 bg-primary/10 text-primary"
+              >
+                <Calendar className="h-3.5 w-3.5" />
+                <span className="text-xs font-semibold uppercase tracking-wide">
+                  Prochain RDV
+                </span>
+                <span className="text-sm font-medium normal-case">
+                  {nextAppointmentDetails.formattedDate}
+                </span>
+              </Badge>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
             <ProjectScheduleDialog
@@ -4390,8 +4481,11 @@ const ProjectDetails = () => {
                         </p>
                       )}
                       {project.siren && (
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                          SIREN : {project.siren}
+                        <p className="flex items-center gap-2 font-medium">
+                          <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                            SIREN
+                          </span>
+                          <span>{project.siren}</span>
                         </p>
                       )}
                     </div>
@@ -4710,32 +4804,58 @@ const ProjectDetails = () => {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4 text-sm">
-                    {nextAppointmentDetails ? (
-                      <div className="flex items-start gap-3 rounded-lg border border-border/40 bg-background/60 p-3">
-                        <Calendar className="w-4 h-4 text-primary mt-1" />
-                        <div className="space-y-1">
-                          <p className="font-medium">Prochain RDV</p>
-                          <p className="text-muted-foreground leading-tight">
-                            {nextAppointmentDetails.formattedDate}
-                          </p>
-                          {nextAppointmentDetails.metadata ? (
-                            <p className="text-xs text-muted-foreground leading-tight">
-                              {nextAppointmentDetails.metadata}
-                            </p>
-                          ) : null}
-                          {nextAppointmentDetails.notes ? (
-                            <p className="text-xs text-muted-foreground italic leading-tight">
-                              {nextAppointmentDetails.notes}
-                            </p>
-                          ) : null}
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                        <Calendar className="w-4 h-4 text-primary" />
+                        RDV à venir
+                      </div>
+                      {upcomingAppointmentDetails.length > 0 ? (
+                        <div className="space-y-2">
+                          {upcomingAppointmentDetails.map((appointment, index) => {
+                            const isNext = index === 0;
+                            return (
+                              <div
+                                key={appointment.id}
+                                className={`rounded-lg border p-3 transition ${
+                                  isNext
+                                    ? "border-primary/50 bg-primary/5 shadow-sm"
+                                    : "border-border/40 bg-background/60"
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-3">
+                                  <p className="text-sm font-medium leading-tight text-foreground">
+                                    {appointment.formattedDate}
+                                  </p>
+                                  {isNext ? (
+                                    <Badge
+                                      variant="secondary"
+                                      className="border-transparent bg-primary/15 text-xs font-semibold text-primary"
+                                    >
+                                      Prochain RDV
+                                    </Badge>
+                                  ) : null}
+                                </div>
+                                {appointment.metadata ? (
+                                  <p className="text-xs text-muted-foreground leading-tight">
+                                    {appointment.metadata}
+                                  </p>
+                                ) : null}
+                                {appointment.notes ? (
+                                  <p className="text-xs text-muted-foreground italic leading-tight">
+                                    {appointment.notes}
+                                  </p>
+                                ) : null}
+                              </div>
+                            );
+                          })}
                         </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 rounded-lg border border-border/40 bg-background/60 p-3 text-muted-foreground">
-                        <Calendar className="w-4 h-4" />
-                        <span>Aucun RDV planifié</span>
-                      </div>
-                    )}
+                      ) : (
+                        <div className="flex items-center gap-2 rounded-lg border border-border/40 bg-background/60 p-3 text-muted-foreground">
+                          <Calendar className="w-4 h-4" />
+                          <span>Aucun RDV planifié</span>
+                        </div>
+                      )}
+                    </div>
 
                     <div className="space-y-2">
                       <Button

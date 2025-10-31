@@ -3,7 +3,28 @@ import type { Tables } from "@/integrations/supabase/types";
 
 type LeadRow = Tables<"leads">;
 type ProjectRow = Tables<"projects">;
+type ProjectAppointmentRow = Tables<"project_appointments">;
 type AppointmentTypeRow = Tables<"appointment_types">;
+
+type ProjectAppointmentProject = Pick<
+  ProjectRow,
+  | "id"
+  | "project_ref"
+  | "status"
+  | "assigned_to"
+  | "address"
+  | "city"
+  | "postal_code"
+  | "client_name"
+  | "client_first_name"
+  | "client_last_name"
+  | "lead_id"
+>;
+
+type ProjectAppointmentJoinedRow = ProjectAppointmentRow & {
+  appointment_type: Pick<AppointmentTypeRow, "id" | "name"> | null;
+  project: ProjectAppointmentProject | null;
+};
 
 type ExtraFieldsRecord = Record<string, unknown>;
 
@@ -33,9 +54,17 @@ export type ScheduledAppointmentRecord = {
     projectRef: NullableString;
     status: NullableString;
     assignedTo: NullableString;
+    leadId?: NullableString;
+    address?: NullableString;
+    city?: NullableString;
+    postalCode?: NullableString;
+    clientName?: NullableString;
   } | null;
   appointmentType: AppointmentTypeInfo;
   source: "crm" | "google";
+  entityType: "lead" | "project";
+  leadId: string | null;
+  projectId: string | null;
 };
 
 const isRecord = (value: unknown): value is ExtraFieldsRecord =>
@@ -58,6 +87,11 @@ const getNumber = (value: unknown): number | null => {
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
+};
+
+const looksLikeUuid = (value: string | null): boolean => {
+  if (!value) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 };
 
 const normalizeSource = (value: string | null): "crm" | "google" => {
@@ -149,6 +183,69 @@ const deriveSource = (extra: ExtraFieldsRecord | null): "crm" | "google" =>
     getString(extra?.["calendar_source"] ?? extra?.["source"] ?? null),
   );
 
+const deriveProjectLocation = (
+  project: ProjectAppointmentProject | null,
+): string | null => {
+  if (!project) return null;
+
+  const parts = [project.address, project.postal_code, project.city]
+    .map((value) => getString(value))
+    .filter((value): value is string => Boolean(value));
+
+  return parts.length > 0 ? parts.join(" ") : null;
+};
+
+const deriveProjectClientName = (
+  project: ProjectAppointmentProject | null,
+): string | null => {
+  if (!project) return null;
+
+  const direct = getString(project.client_name);
+  if (direct) return direct;
+
+  const segments = [
+    getString(project.client_first_name),
+    getString(project.client_last_name),
+  ].filter((value): value is string => Boolean(value));
+
+  return segments.length > 0 ? segments.join(" ") : null;
+};
+
+const getRecordTimestamp = (record: ScheduledAppointmentRecord): number => {
+  if (!record.date) return Number.POSITIVE_INFINITY;
+
+  const [yearStr, monthStr, dayStr] = record.date.split("-");
+  const year = Number.parseInt(yearStr ?? "", 10);
+  const month = Number.parseInt(monthStr ?? "", 10) - 1;
+  const day = Number.parseInt(dayStr ?? "", 10);
+
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  let hours = 0;
+  let minutes = 0;
+
+  if (record.time) {
+    const [hoursStr, minutesStr] = record.time.split(":");
+    const parsedHours = Number.parseInt(hoursStr ?? "", 10);
+    const parsedMinutes = Number.parseInt(minutesStr ?? "", 10);
+
+    if (Number.isFinite(parsedHours)) {
+      hours = parsedHours;
+    }
+
+    if (Number.isFinite(parsedMinutes)) {
+      minutes = parsedMinutes;
+    }
+  }
+
+  const result = new Date(year, month, day, hours, minutes, 0, 0);
+  const timestamp = result.getTime();
+
+  return Number.isNaN(timestamp) ? Number.POSITIVE_INFINITY : timestamp;
+};
+
 const buildProjectLookup = (projects: ProjectRow[] | null) => {
   const lookup = new Map<string, ProjectRow>();
   if (!projects) return lookup;
@@ -177,23 +274,39 @@ export const fetchScheduledAppointments = async (
 
   const leadIds = leads?.map((lead) => lead.id).filter(Boolean) ?? [];
 
-  const [{ data: appointmentTypes, error: appointmentTypesError }, { data: projects, error: projectsError }] =
-    await Promise.all([
-      supabase
-        .from("appointment_types")
-        .select("*")
-        .eq("org_id", orgId)
-        .eq("is_active", true),
-      leadIds.length > 0
-        ? supabase
-            .from("projects")
-            .select("id, lead_id, project_ref, status, assigned_to")
-            .in("lead_id", leadIds)
-        : Promise.resolve({ data: null, error: null }),
-    ]);
+  const projectAppointmentsPromise = supabase
+    .from("project_appointments")
+    .select(
+      `id, project_id, appointment_date, appointment_time, appointment_type_id, assignee_id, notes,
+        appointment_type:appointment_types(id, name),
+        project:projects(id, project_ref, status, assigned_to, address, city, postal_code, client_name, client_first_name, client_last_name, lead_id)`
+    )
+    .eq("org_id", orgId)
+    .order("appointment_date", { ascending: true })
+    .order("appointment_time", { ascending: true });
+
+  const [
+    { data: appointmentTypes, error: appointmentTypesError },
+    { data: projects, error: projectsError },
+    { data: projectAppointments, error: projectAppointmentsError },
+  ] = await Promise.all([
+    supabase
+      .from("appointment_types")
+      .select("*")
+      .eq("org_id", orgId)
+      .eq("is_active", true),
+    leadIds.length > 0
+      ? supabase
+          .from("projects")
+          .select("id, lead_id, project_ref, status, assigned_to")
+          .in("lead_id", leadIds)
+      : Promise.resolve({ data: null, error: null }),
+    projectAppointmentsPromise,
+  ]);
 
   if (appointmentTypesError) throw appointmentTypesError;
   if (projectsError) throw projectsError;
+  if (projectAppointmentsError) throw projectAppointmentsError;
 
   const appointmentTypesById = new Map<string, AppointmentTypeRow>();
   const appointmentTypesByName = new Map<string, AppointmentTypeRow>();
@@ -205,7 +318,7 @@ export const fetchScheduledAppointments = async (
 
   const projectLookup = buildProjectLookup(projects);
 
-  return (leads ?? []).map((lead) => {
+  const leadRecords = (leads ?? []).map((lead) => {
     const extra = isRecord(lead.extra_fields) ? lead.extra_fields : null;
 
     const project = lead.id ? projectLookup.get(lead.id) ?? null : null;
@@ -242,11 +355,82 @@ export const fetchScheduledAppointments = async (
             projectRef: getString(project.project_ref),
             status: getString(project.status),
             assignedTo: getString(project.assigned_to),
+            leadId: getString(project.lead_id),
           }
         : null,
       appointmentType,
       source,
+      entityType: "lead",
+      leadId: lead.id ?? null,
+      projectId: project?.id ?? null,
     };
   });
+
+  const projectAppointmentRows = (projectAppointments ?? []) as ProjectAppointmentJoinedRow[];
+
+  const projectAppointmentRecords = projectAppointmentRows.map((appointment) => {
+    const project = appointment.project;
+
+    let appointmentType: AppointmentTypeInfo = null;
+    if (appointment.appointment_type) {
+      appointmentType = {
+        id: getString(appointment.appointment_type.id),
+        name: getString(appointment.appointment_type.name),
+      };
+    } else if (appointment.appointment_type_id) {
+      const mapped = appointmentTypesById.get(appointment.appointment_type_id);
+      appointmentType = mapped
+        ? { id: mapped.id, name: mapped.name ?? null }
+        : { id: appointment.appointment_type_id, name: null };
+    }
+
+    const location = deriveProjectLocation(project);
+    const projectAssignedTo = getString(project?.assigned_to);
+    const appointmentAssignee = getString(appointment.assignee_id);
+    const assignedTo = projectAssignedTo ?? (looksLikeUuid(appointmentAssignee) ? null : appointmentAssignee);
+
+    const fullName =
+      deriveProjectClientName(project) ?? getString(project?.project_ref) ?? "Projet";
+
+    return {
+      id: appointment.id,
+      fullName,
+      date: getString(appointment.appointment_date),
+      time: getString(appointment.appointment_time),
+      address: null,
+      city: getString(project?.city ?? null),
+      postalCode: getString(project?.postal_code ?? null),
+      commentaire: getString(appointment.notes),
+      status: "confirmed",
+      assignedTo,
+      productName: null,
+      location: location ?? "Adresse à confirmer",
+      durationMinutes: null,
+      project: project
+        ? {
+            id: project.id,
+            projectRef: getString(project.project_ref),
+            status: getString(project.status),
+            assignedTo: projectAssignedTo,
+            leadId: getString(project.lead_id),
+            address: getString(project.address),
+            city: getString(project.city),
+            postalCode: getString(project.postal_code),
+            clientName: deriveProjectClientName(project),
+          }
+        : null,
+      appointmentType,
+      source: "crm",
+      entityType: "project",
+      leadId: getString(project?.lead_id ?? null),
+      projectId: project?.id ?? null,
+    } satisfies ScheduledAppointmentRecord;
+  });
+
+  const combinedRecords = [...leadRecords, ...projectAppointmentRecords];
+
+  return combinedRecords.sort(
+    (a, b) => getRecordTimestamp(a) - getRecordTimestamp(b),
+  );
 };
 
