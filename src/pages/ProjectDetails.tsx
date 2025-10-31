@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ChangeEvent, CSSProperties } from "react";
+import type { ChangeEvent } from "react";
 import {
   useLocation,
   useNavigate,
@@ -118,6 +118,12 @@ import {
 } from "@/components/ui/tooltip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -964,161 +970,6 @@ const avantChantierSchema = z.object({
 });
 
 type AvantChantierFormValues = z.infer<typeof avantChantierSchema>;
-
-type ProjectHeaderProps = {
-  project: ProjectWithRelations;
-  statusOptions: ProjectStatusSetting[];
-  badgeStyle: CSSProperties;
-  statusLabel: string;
-  onBack: () => void;
-  onStatusChange: (status: string) => void;
-  isStatusUpdating: boolean;
-  projectStatusesBusy: boolean;
-  onOpenQuote: () => void;
-  onDelete: () => void;
-  onShare: () => void;
-  onOpenDocuments: () => void;
-  canDelete: boolean;
-  isDeleting: boolean;
-  progressValue: number;
-  productCodes: string[];
-};
-
-const ProjectHeader = ({
-  project,
-  statusOptions,
-  badgeStyle,
-  statusLabel,
-  onBack,
-  onStatusChange,
-  isStatusUpdating,
-  onOpenQuote,
-  onDelete,
-  onShare,
-  onOpenDocuments,
-  canDelete,
-  isDeleting,
-  progressValue,
-  productCodes,
-  projectStatusesBusy,
-}: ProjectHeaderProps) => {
-  return (
-    <Card className="shadow-card bg-gradient-card border-0">
-      <CardContent className="p-6 sm:p-8 space-y-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <Button variant="ghost" onClick={onBack} className="px-2">
-                <ArrowLeft className="w-4 h-4 mr-1" />
-                Retour
-              </Button>
-              <Badge
-                variant="outline"
-                style={badgeStyle}
-                className="font-semibold"
-              >
-                {statusLabel}
-              </Badge>
-              <Select
-                onValueChange={(value) => onStatusChange(value)}
-                value={project.status ?? undefined}
-                disabled={
-                  isStatusUpdating || (projectStatusesBusy && statusOptions.length === 0)
-                }
-              >
-                <SelectTrigger className="w-[180px] bg-background/80">
-                  <SelectValue
-                    placeholder={
-                      projectStatusesBusy && statusOptions.length === 0
-                        ? "Chargement des statuts..."
-                        : "Changer le statut"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {statusOptions
-                    .filter((status) => status != null)
-                    .map((status) => (
-                      <SelectItem key={status.value} value={status.value}>
-                        {status.label}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="rounded-full bg-primary/10 p-3 text-primary">
-                <Hammer className="h-6 w-6" />
-              </div>
-              <div>
-                <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
-                  {project.project_ref}
-                </h1>
-                <p className="text-muted-foreground text-sm sm:text-base">
-                  {productCodes.length > 0
-                    ? productCodes.join(", ")
-                    : "Aucun code produit"}{" "}
-                  · {project.city} ({project.postal_code})
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs uppercase tracking-wide text-muted-foreground">
-                <span>Progression</span>
-                <span>{Math.round(progressValue)}%</span>
-              </div>
-              <Progress value={progressValue} className="h-2" />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-            <Button
-              variant="outline"
-              onClick={onOpenQuote}
-              className="justify-start sm:justify-center"
-            >
-              <FileText className="w-4 h-4 mr-2" />
-              Générer un devis
-            </Button>
-            <Button
-              variant="secondary"
-              className="justify-start sm:justify-center"
-              onClick={onShare}
-            >
-              <Share2 className="w-4 h-4 mr-2" />
-              Partager le projet
-            </Button>
-            <Button
-              variant="outline"
-              className="justify-start sm:justify-center"
-              onClick={onOpenDocuments}
-            >
-              <FolderOpen className="w-4 h-4 mr-2" />
-              Voir les documents
-            </Button>
-            {canDelete ? (
-              <Button
-                variant="destructive"
-                onClick={onDelete}
-                disabled={isDeleting}
-                className="justify-start sm:justify-center"
-              >
-                {isDeleting ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Trash2 className="w-4 h-4 mr-2" />
-                )}
-                {isDeleting ? "Suppression..." : "Supprimer"}
-              </Button>
-            ) : null}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-};
 
 type AvantChantierFormProps = {
   project: ProjectWithRelations;
@@ -2397,6 +2248,7 @@ const ProjectDetails = () => {
   >("avant-chantier");
   const [siteDialogReadOnly, setSiteDialogReadOnly] = useState(false);
   const [lightboxImage, setLightboxImage] = useState<ProductImage | null>(null);
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
 
   const focusJournalFeed = useCallback(() => {
     setTimeout(() => {
@@ -2976,6 +2828,63 @@ const ProjectDetails = () => {
     [addNoteMutation],
   );
 
+  const handleStatusSelect = useCallback(
+    async (value: string) => {
+      if (!project) {
+        return;
+      }
+
+      const trimmed = typeof value === "string" ? value.trim() : "";
+      if (trimmed.length === 0) {
+        setStatusMenuOpen(false);
+        return;
+      }
+
+      const normalized = trimmed.toUpperCase();
+      const currentStatus =
+        typeof project.status === "string" ? project.status.toUpperCase() : "";
+
+      if (normalized === currentStatus) {
+        setStatusMenuOpen(false);
+        return;
+      }
+
+      setStatusMenuOpen(false);
+
+      try {
+        const newStatus = await updateProjectStatusMutation.mutateAsync(trimmed);
+        const nextStatusConfig =
+          projectStatuses.find((status) => status?.value === newStatus) ?? null;
+        const nextLabel = nextStatusConfig?.label ?? newStatus;
+
+        toast({
+          title: "Statut mis à jour",
+          description: `Le projet est maintenant ${nextLabel.toLowerCase()}.`,
+        });
+
+        await Promise.all([refetch(), refetchStatusEvents()]);
+      } catch (mutationError) {
+        const message =
+          mutationError instanceof Error
+            ? mutationError.message
+            : "Impossible de mettre à jour le statut pour le moment.";
+        toast({
+          title: "Mise à jour du statut échouée",
+          description: message,
+          variant: "destructive",
+        });
+      }
+    },
+    [
+      project,
+      projectStatuses,
+      toast,
+      updateProjectStatusMutation,
+      refetch,
+      refetchStatusEvents,
+    ],
+  );
+
   useEffect(() => {
     const tabParam = searchParams.get("tab");
     if (!tabParam) {
@@ -3224,6 +3133,62 @@ const ProjectDetails = () => {
   const statusProgress = statusValue
     ? computeStatusProgress(statusValue, projectStatuses)
     : 0;
+
+  const updateProjectStatusMutation = useMutation({
+    mutationKey: ["project-status-update", project?.id],
+    mutationFn: async (nextStatus: string) => {
+      if (!project) {
+        throw new Error("Le projet n'est plus disponible.");
+      }
+
+      const trimmed = typeof nextStatus === "string" ? nextStatus.trim() : "";
+      if (trimmed.length === 0) {
+        throw new Error("Statut invalide.");
+      }
+
+      const normalized = trimmed.toUpperCase();
+
+      let updateQuery = supabase
+        .from("projects")
+        .update({ status: normalized })
+        .eq("id", project.id);
+
+      if (currentOrgId) {
+        updateQuery = updateQuery.eq("org_id", currentOrgId);
+      }
+
+      const { error: updateError } = await updateQuery;
+      if (updateError) {
+        throw updateError;
+      }
+
+      const statusEventPayload: Record<string, unknown> = {
+        project_id: project.id,
+        status: normalized,
+        changed_at: new Date().toISOString(),
+      };
+
+      if (currentOrgId) {
+        statusEventPayload.org_id = currentOrgId;
+      }
+
+      if (user?.id) {
+        statusEventPayload.changed_by = user.id;
+      }
+
+      const { error: eventError } = await supabase
+        .from("project_status_events")
+        .insert([statusEventPayload]);
+
+      if (eventError && !isTableUnavailableError(eventError)) {
+        throw eventError;
+      }
+
+      return normalized;
+    },
+  });
+
+  const isStatusUpdating = updateProjectStatusMutation.isPending;
 
   const fallbackLatestUpdateText = (() => {
     const candidates = [
@@ -4225,15 +4190,68 @@ const ProjectDetails = () => {
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Retour
               </Button>
-              <Badge variant="outline" style={badgeStyle}>
-                {statusLabel}
-              </Badge>
-              {projectStatusesBusy ? (
-                <span className="flex items-center gap-2 rounded-full border border-border/60 bg-background/80 px-3 py-1 text-xs text-muted-foreground">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  Mise à jour…
-                </span>
-              ) : null}
+              <DropdownMenu
+                open={statusMenuOpen}
+                onOpenChange={(open) => {
+                  if (isStatusUpdating && open) {
+                    return;
+                  }
+                  setStatusMenuOpen(open);
+                }}
+              >
+                <DropdownMenuTrigger asChild disabled={isStatusUpdating}>
+                  <button
+                    type="button"
+                    className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
+                    aria-label="Changer le statut du projet"
+                  >
+                    <Badge
+                      variant="outline"
+                      style={badgeStyle}
+                      className={`font-semibold transition ${
+                        isStatusUpdating
+                          ? "cursor-not-allowed opacity-70"
+                          : "cursor-pointer hover:shadow"
+                      } ${statusMenuOpen ? "ring-2 ring-primary/30" : ""}`}
+                    >
+                      {isStatusUpdating ? (
+                        <>
+                          <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                          Mise à jour...
+                        </>
+                      ) : (
+                        statusLabel
+                      )}
+                    </Badge>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-64">
+                  <div className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Changer le statut
+                  </div>
+                  {projectStatuses
+                    .filter((status) => status != null)
+                    .map((status) => {
+                      const isActive =
+                        status?.value === (project.status ?? "");
+                      return (
+                        <DropdownMenuItem
+                          key={status.value}
+                          onClick={() => {
+                            void handleStatusSelect(status.value);
+                          }}
+                          disabled={isActive || isStatusUpdating}
+                          className="flex items-center justify-between gap-2"
+                        >
+                          <span>{status.label}</span>
+                          {isActive ? (
+                            <CheckCircle2 className="h-4 w-4 text-primary" />
+                          ) : null}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             <h1 className="mt-2 text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
               {project.project_ref}
