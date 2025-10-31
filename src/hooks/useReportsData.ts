@@ -9,6 +9,11 @@ import {
   subYears,
 } from "date-fns";
 import { aggregateEnergyByCategory, type EnergyBreakdownEntry, type ProjectWithProducts } from "@/lib/energy";
+import {
+  calculateRentability,
+  buildRentabilityInputFromSite,
+  type RentabilityInput,
+} from "@/lib/rentability";
 import { withDefaultProductCeeConfig } from "@/lib/prime-cee-unified";
 import { DEFAULT_PROJECT_STATUSES } from "@/lib/projects";
 
@@ -73,7 +78,8 @@ export interface TopProjectSummary {
   siteRef: string | null;
   clientName: string | null;
   revenue: number;
-  profitMargin: number | null;
+  marginRate: number | null;
+  marginTotal: number | null;
   status: string | null;
   statusLabel: string | null;
 }
@@ -114,9 +120,22 @@ type SiteRow = Pick<
   | "status"
   | "revenue"
   | "profit_margin"
+  | "rentability_margin_rate"
+  | "rentability_margin_total"
+  | "rentability_total_costs"
+  | "rentability_additional_costs_total"
+  | "rentability_unit_label"
   | "date_debut"
   | "date_fin_prevue"
   | "created_at"
+  | "cout_main_oeuvre_m2_ht"
+  | "cout_isolation_m2"
+  | "isolation_utilisee_m2"
+  | "surface_facturee"
+  | "montant_commission"
+  | "travaux_non_subventionnes"
+  | "additional_costs"
+  | "product_name"
 >;
 
 const normalizeStatus = (value: string | null | undefined) =>
@@ -126,6 +145,62 @@ const normalizeStatus = (value: string | null | undefined) =>
         .replace(/[^\p{L}\p{N}]+/gu, "")
         .toUpperCase()
     : null;
+
+const resolveSiteRentability = (site: SiteRow) => {
+  const additionalCosts = Array.isArray(site.additional_costs)
+    ? (site.additional_costs as RentabilityInput["additionalCosts"])
+    : [];
+
+  const computed = calculateRentability(
+    buildRentabilityInputFromSite({
+      revenue: site.revenue,
+      cout_main_oeuvre_m2_ht: site.cout_main_oeuvre_m2_ht,
+      cout_isolation_m2: site.cout_isolation_m2,
+      isolation_utilisee_m2: site.isolation_utilisee_m2,
+      surface_facturee: site.surface_facturee,
+      montant_commission: site.montant_commission,
+      travaux_non_subventionnes: site.travaux_non_subventionnes,
+      additional_costs: additionalCosts ?? [],
+      product_name: site.product_name,
+    }),
+  );
+
+  const marginRate =
+    typeof site.rentability_margin_rate === "number" && Number.isFinite(site.rentability_margin_rate)
+      ? site.rentability_margin_rate
+      : typeof site.profit_margin === "number" && Number.isFinite(site.profit_margin)
+        ? site.profit_margin
+        : computed.marginRate;
+
+  const marginTotal =
+    typeof site.rentability_margin_total === "number" && Number.isFinite(site.rentability_margin_total)
+      ? site.rentability_margin_total
+      : computed.marginTotal;
+
+  const totalCosts =
+    typeof site.rentability_total_costs === "number" && Number.isFinite(site.rentability_total_costs)
+      ? site.rentability_total_costs
+      : computed.totalCosts;
+
+  const additionalCostsTotal =
+    typeof site.rentability_additional_costs_total === "number" &&
+    Number.isFinite(site.rentability_additional_costs_total)
+      ? site.rentability_additional_costs_total
+      : computed.additionalCostsTotal;
+
+  const unitLabel =
+    typeof site.rentability_unit_label === "string" && site.rentability_unit_label.trim().length > 0
+      ? site.rentability_unit_label
+      : computed.unitLabel;
+
+  return {
+    marginRate,
+    marginTotal,
+    totalCosts,
+    additionalCostsTotal,
+    unitLabel,
+  };
+};
 
 export const useReportsData = (orgId: string | null, options: QueryOptions = {}) => {
   const { enabled = true } = options;
@@ -151,7 +226,7 @@ export const useReportsData = (orgId: string | null, options: QueryOptions = {})
         supabase
           .from("sites")
           .select(
-            "id, project_ref, site_ref, client_name, status, revenue, profit_margin, date_debut, date_fin_prevue, created_at",
+            "id, project_ref, site_ref, client_name, status, revenue, profit_margin, rentability_margin_rate, rentability_margin_total, rentability_total_costs, rentability_additional_costs_total, rentability_unit_label, cout_main_oeuvre_m2_ht, cout_isolation_m2, isolation_utilisee_m2, surface_facturee, montant_commission, travaux_non_subventionnes, additional_costs, product_name, date_debut, date_fin_prevue, created_at",
           )
           .eq("org_id", orgId)
           .gte("created_at", previousYearStart.toISOString()),
@@ -212,7 +287,10 @@ export const useReportsData = (orgId: string | null, options: QueryOptions = {})
         .sort((a, b) => b.leads - a.leads);
 
       const marginValues = sites
-        .map((site) => (typeof site.profit_margin === "number" ? site.profit_margin : null))
+        .map((site) => {
+          const rentability = resolveSiteRentability(site);
+          return Number.isFinite(rentability.marginRate) ? rentability.marginRate : null;
+        })
         .filter((value): value is number => value !== null);
 
       const averageMargin =
@@ -263,22 +341,27 @@ export const useReportsData = (orgId: string | null, options: QueryOptions = {})
         .filter((site) => typeof site.revenue === "number" && site.revenue !== null)
         .sort((a, b) => (b.revenue ?? 0) - (a.revenue ?? 0))
         .slice(0, 5)
-        .map((site) => ({
-          id: site.id,
-          projectRef: site.project_ref,
-          siteRef: site.site_ref,
-          clientName: site.client_name,
-          revenue: site.revenue ?? 0,
-          profitMargin: typeof site.profit_margin === "number" ? site.profit_margin : null,
-          status: site.status,
-          statusLabel: (() => {
-            const status = toSiteStatus(site.status);
-            if (status) {
-              return SITE_STATUS_LABELS[status];
-            }
-            return site.status ?? null;
-          })(),
-        }));
+        .map((site) => {
+          const rentability = resolveSiteRentability(site);
+
+          return {
+            id: site.id,
+            projectRef: site.project_ref,
+            siteRef: site.site_ref,
+            clientName: site.client_name,
+            revenue: site.revenue ?? 0,
+            marginRate: Number.isFinite(rentability.marginRate) ? rentability.marginRate : null,
+            marginTotal: Number.isFinite(rentability.marginTotal) ? rentability.marginTotal : null,
+            status: site.status,
+            statusLabel: (() => {
+              const status = toSiteStatus(site.status);
+              if (status) {
+                return SITE_STATUS_LABELS[status];
+              }
+              return site.status ?? null;
+            })(),
+          } satisfies TopProjectSummary;
+        });
 
       return {
         conversion: {

@@ -256,7 +256,7 @@ const Reports = () => {
   ) as string[];
 
   const getProjectEmoji = (project: TopProjectSummary) => {
-    const marginRate = project.profitMargin ?? 0;
+    const marginRate = project.marginRate ?? 0;
     if (project.revenue >= 40000 && marginRate >= 0.3) {
       return "🏆";
     }
@@ -714,9 +714,13 @@ const Reports = () => {
                     </TableRow>
                   ) : (
                     topProjects.map((project) => {
-                      const marginRate = project.profitMargin ?? 0;
+                      const marginRate = project.marginRate ?? 0;
                       const marginValue =
-                        project.profitMargin !== null ? project.revenue * project.profitMargin : null;
+                        project.marginTotal !== null
+                          ? project.marginTotal
+                          : project.marginRate !== null
+                            ? project.revenue * project.marginRate
+                            : null;
                       const nameParts = [project.projectRef, project.clientName].filter(Boolean);
                       const displayName = nameParts.length > 0 ? nameParts.join(" • ") : "Projet";
 
@@ -735,7 +739,7 @@ const Reports = () => {
                             {marginValue !== null ? formatCurrency(marginValue) : "—"}
                           </TableCell>
                           <TableCell className="text-right">
-                            {project.profitMargin !== null ? formatPercent(marginRate) : "—"}
+                            {project.marginRate !== null ? formatPercent(marginRate) : "—"}
                           </TableCell>
                           <TableCell className="text-right">
                             <Badge variant="outline" className="gap-1">

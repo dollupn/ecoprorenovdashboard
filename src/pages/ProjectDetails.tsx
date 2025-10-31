@@ -82,6 +82,7 @@ import {
   SiteDialog,
   type SiteFormValues,
   type SiteProjectOption,
+  type SiteSubmitValues,
 } from "@/components/sites/SiteDialog";
 import {
   getDynamicFieldEntries,
@@ -89,6 +90,7 @@ import {
   formatDynamicFieldValue,
 } from "@/lib/product-params";
 import { parseSiteNotes } from "@/lib/sites";
+import { calculateRentability, buildRentabilityInputFromSite } from "@/lib/rentability";
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 import { useOrganizationPrimeSettings } from "@/features/organizations/useOrganizationPrimeSettings";
 import {
@@ -229,6 +231,12 @@ const decimalFormatter = new Intl.NumberFormat("fr-FR", {
 
 const formatCurrency = (value: number) => currencyFormatter.format(value);
 const formatDecimal = (value: number) => decimalFormatter.format(value);
+const percentFormatter = new Intl.NumberFormat("fr-FR", {
+  style: "percent",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 1,
+});
+const formatPercent = (value: number) => percentFormatter.format(value);
 
 const SURFACE_FACTUREE_TARGETS = [
   "surface_facturee",
@@ -3914,6 +3922,7 @@ const ProjectDetails = () => {
       cout_isolation_m2: 0,
       isolation_utilisee_m2: 0,
       montant_commission: 0,
+      travaux_non_subventionnes: 0,
       valorisation_cee: valorisationEur ?? 0,
       subcontractor_id: null,
       team_members: [],
@@ -3977,6 +3986,7 @@ const ProjectDetails = () => {
       cout_isolation_m2: site.cout_isolation_m2 ?? 0,
       isolation_utilisee_m2: site.isolation_utilisee_m2 ?? 0,
       montant_commission: site.montant_commission ?? 0,
+      travaux_non_subventionnes: site.travaux_non_subventionnes ?? 0,
       valorisation_cee: site.valorisation_cee ?? 0,
       notes: site.notes ?? "",
       subcontractor_payment_confirmed: Boolean(
@@ -3989,7 +3999,7 @@ const ProjectDetails = () => {
     setSiteDialogOpen(true);
   };
 
-  const handleSubmitSite = async (values: SiteFormValues) => {
+  const handleSubmitSite = async (values: SiteSubmitValues) => {
     if (!user || !currentOrgId || !project) return;
 
     const sanitizedTeam = Array.from(
@@ -4062,12 +4072,13 @@ const ProjectDetails = () => {
       date_fin_prevue: values.date_fin_prevue || null,
       progress_percentage: values.progress_percentage,
       revenue: values.revenue,
-      profit_margin: values.profit_margin,
+      profit_margin: values.rentability_margin_rate,
       surface_facturee: values.surface_facturee,
       cout_main_oeuvre_m2_ht: values.cout_main_oeuvre_m2_ht,
       cout_isolation_m2: values.cout_isolation_m2,
       isolation_utilisee_m2: values.isolation_utilisee_m2,
       montant_commission: values.montant_commission,
+      travaux_non_subventionnes: values.travaux_non_subventionnes,
       valorisation_cee: values.valorisation_cee,
       subcontractor_payment_confirmed: values.subcontractor_payment_confirmed,
       notes: values.notes?.trim() || null,
@@ -4077,6 +4088,13 @@ const ProjectDetails = () => {
       user_id: user.id,
       org_id: currentOrgId,
       project_id: resolvedProjectId,
+      rentability_total_costs: values.rentability_total_costs,
+      rentability_margin_total: values.rentability_margin_total,
+      rentability_margin_per_unit: values.rentability_margin_per_unit,
+      rentability_margin_rate: values.rentability_margin_rate,
+      rentability_unit_label: values.rentability_unit_label,
+      rentability_unit_count: values.rentability_unit_count,
+      rentability_additional_costs_total: values.rentability_additional_costs_total,
     };
 
     try {
@@ -4998,6 +5016,71 @@ const ProjectDetails = () => {
                         typeof site.valorisation_cee === "number"
                           ? formatCurrency(site.valorisation_cee)
                           : "—";
+                      const rentabilityInput = buildRentabilityInputFromSite({
+                        revenue: site.revenue,
+                        cout_main_oeuvre_m2_ht: site.cout_main_oeuvre_m2_ht,
+                        cout_isolation_m2: site.cout_isolation_m2,
+                        isolation_utilisee_m2: site.isolation_utilisee_m2,
+                        surface_facturee: site.surface_facturee,
+                        montant_commission: site.montant_commission,
+                        travaux_non_subventionnes: site.travaux_non_subventionnes,
+                        additional_costs: Array.isArray(site.additional_costs)
+                          ? (site.additional_costs as SiteFormValues["additional_costs"])
+                          : [],
+                        product_name: site.product_name,
+                      });
+                      const computedRentability = calculateRentability(rentabilityInput);
+                      const rentabilityUnitLabel =
+                        typeof site.rentability_unit_label === "string" &&
+                        site.rentability_unit_label.trim().length > 0
+                          ? site.rentability_unit_label
+                          : computedRentability.unitLabel;
+                      const rentabilityMetrics = {
+                        additionalCostsTotal:
+                          typeof site.rentability_additional_costs_total === "number"
+                            ? site.rentability_additional_costs_total
+                            : computedRentability.additionalCostsTotal,
+                        totalCosts:
+                          typeof site.rentability_total_costs === "number"
+                            ? site.rentability_total_costs
+                            : computedRentability.totalCosts,
+                        marginPerUnit:
+                          typeof site.rentability_margin_per_unit === "number"
+                            ? site.rentability_margin_per_unit
+                            : computedRentability.marginPerUnit,
+                        marginTotal:
+                          typeof site.rentability_margin_total === "number"
+                            ? site.rentability_margin_total
+                            : computedRentability.marginTotal,
+                        marginRate:
+                          typeof site.rentability_margin_rate === "number"
+                            ? site.rentability_margin_rate
+                            : computedRentability.marginRate,
+                        unitLabel: rentabilityUnitLabel,
+                      };
+                      const rentabilityMarginPerUnitLabel =
+                        rentabilityMetrics.unitLabel === "luminaire"
+                          ? "Marge (€ / luminaire)"
+                          : "Marge (€ / m²)";
+                      const rentabilityAdditionalCostsDisplay = formatCurrency(
+                        rentabilityMetrics.additionalCostsTotal,
+                      );
+                      const rentabilityTotalCostsDisplay = formatCurrency(
+                        rentabilityMetrics.totalCosts,
+                      );
+                      const rentabilityMarginTotalDisplay = formatCurrency(
+                        rentabilityMetrics.marginTotal,
+                      );
+                      const rentabilityMarginRateDisplay = Number.isFinite(
+                        rentabilityMetrics.marginRate,
+                      )
+                        ? formatPercent(rentabilityMetrics.marginRate)
+                        : "—";
+                      const rentabilityMarginPerUnitDisplay = Number.isFinite(
+                        rentabilityMetrics.marginPerUnit,
+                      )
+                        ? `${formatDecimal(rentabilityMetrics.marginPerUnit)} € / ${rentabilityMetrics.unitLabel}`
+                        : `— / ${rentabilityMetrics.unitLabel}`;
 
                       return (
                         <div
@@ -5252,6 +5335,45 @@ const ProjectDetails = () => {
                                   <span className="font-medium text-foreground">
                                     {additionalCostCount}
                                   </span>
+                                </div>
+                                <div className="w-full">
+                                  <div className="rounded-md border border-primary/30 bg-primary/5 p-3">
+                                    <div className="text-xs font-semibold uppercase tracking-wide text-primary">
+                                      Rentabilité
+                                    </div>
+                                    <dl className="mt-2 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+                                      <div className="flex flex-col">
+                                        <dt>Frais de chantier (HT+TVA)</dt>
+                                        <dd className="text-sm font-semibold text-foreground">
+                                          {rentabilityAdditionalCostsDisplay}
+                                        </dd>
+                                      </div>
+                                      <div className="flex flex-col">
+                                        <dt>Coûts totaux</dt>
+                                        <dd className="text-sm font-semibold text-foreground">
+                                          {rentabilityTotalCostsDisplay}
+                                        </dd>
+                                      </div>
+                                      <div className="flex flex-col">
+                                        <dt>{rentabilityMarginPerUnitLabel}</dt>
+                                        <dd className="text-sm font-semibold text-foreground">
+                                          {rentabilityMarginPerUnitDisplay}
+                                        </dd>
+                                      </div>
+                                      <div className="flex flex-col">
+                                        <dt>Marge totale (€)</dt>
+                                        <dd className="text-sm font-semibold text-foreground">
+                                          {rentabilityMarginTotalDisplay}
+                                        </dd>
+                                      </div>
+                                      <div className="flex flex-col">
+                                        <dt>Marge (%)</dt>
+                                        <dd className="text-sm font-semibold text-foreground">
+                                          {rentabilityMarginRateDisplay}
+                                        </dd>
+                                      </div>
+                                    </dl>
+                                  </div>
                                 </div>
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="text-muted-foreground">

@@ -13,9 +13,10 @@ import {
   AddQuoteDialog,
   type QuoteFormValues,
 } from "@/components/quotes/AddQuoteDialog";
-import { 
-  SiteDialog, 
-  type SiteFormValues 
+import {
+  SiteDialog,
+  type SiteFormValues,
+  type SiteSubmitValues,
 } from "@/components/sites/SiteDialog";
 import { toast as showToast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
@@ -952,6 +953,7 @@ const Projects = ({
       cout_isolation_m2: 0,
       isolation_utilisee_m2: 0,
       montant_commission: 0,
+      travaux_non_subventionnes: 0,
       valorisation_cee: valorisationTotalEur,
       subcontractor_id: null,
       team_members: [],
@@ -980,7 +982,7 @@ const Projects = ({
     });
   }, [processedProjects]);
 
-  const handleSubmitSite = useCallback(async (values: SiteFormValues) => {
+  const handleSubmitSite = useCallback(async (values: SiteSubmitValues) => {
     if (!user || !currentOrgId) return;
 
     const sanitizedTeam = Array.from(
@@ -1043,12 +1045,13 @@ const Projects = ({
       date_fin_prevue: values.date_fin_prevue || null,
       progress_percentage: values.progress_percentage,
       revenue: values.revenue,
-      profit_margin: values.profit_margin,
+      profit_margin: values.rentability_margin_rate,
       surface_facturee: values.surface_facturee,
       cout_main_oeuvre_m2_ht: values.cout_main_oeuvre_m2_ht,
       cout_isolation_m2: values.cout_isolation_m2,
       isolation_utilisee_m2: values.isolation_utilisee_m2,
       montant_commission: values.montant_commission,
+      travaux_non_subventionnes: values.travaux_non_subventionnes,
       valorisation_cee: values.valorisation_cee,
       subcontractor_payment_confirmed: values.subcontractor_payment_confirmed,
       notes: values.notes?.trim() || null,
@@ -1058,6 +1061,13 @@ const Projects = ({
       user_id: user.id,
       org_id: currentOrgId,
       project_id: projectId,
+      rentability_total_costs: values.rentability_total_costs,
+      rentability_margin_total: values.rentability_margin_total,
+      rentability_margin_per_unit: values.rentability_margin_per_unit,
+      rentability_margin_rate: values.rentability_margin_rate,
+      rentability_unit_label: values.rentability_unit_label,
+      rentability_unit_count: values.rentability_unit_count,
+      rentability_additional_costs_total: values.rentability_additional_costs_total,
     };
 
     try {
