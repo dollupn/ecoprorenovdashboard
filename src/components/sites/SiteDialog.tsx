@@ -190,9 +190,6 @@ const createBaseSiteSchema = (statusOptions: readonly string[]) => {
     cout_isolation_m2: z.coerce.number({ invalid_type_error: "Coût invalide" }).min(0),
     isolation_utilisee_m2: z.coerce.number({ invalid_type_error: "Quantité invalide" }).min(0),
     montant_commission: z.coerce.number({ invalid_type_error: "Montant invalide" }).min(0),
-    travaux_non_subventionnes: z.coerce
-      .number({ invalid_type_error: "Montant invalide" })
-      .min(0, "Le montant doit être positif"),
     valorisation_cee: z.coerce.number({ invalid_type_error: "Montant invalide" }).min(0),
     travaux_non_subventionnes: z.enum(
       TRAVAUX_NON_SUBVENTIONNES_OPTIONS.map((option) => option.value) as [
@@ -313,7 +310,6 @@ const defaultValues: SiteFormValues = {
   cout_isolation_m2: 0,
   isolation_utilisee_m2: 0,
   montant_commission: 0,
-  travaux_non_subventionnes: 0,
   valorisation_cee: 0,
   travaux_non_subventionnes: "NA",
   travaux_non_subventionnes_description: "",
@@ -954,7 +950,7 @@ export const SiteDialog = ({
   const watchedIsolationUsed = form.watch("isolation_utilisee_m2");
   const watchedSurfaceFacturee = form.watch("surface_facturee");
   const watchedCommission = form.watch("montant_commission");
-  const watchedNonSubsidized = form.watch("travaux_non_subventionnes");
+  const watchedNonSubsidizedAmount = form.watch("travaux_non_subventionnes_montant");
   const watchedAdditionalCosts = form.watch("additional_costs");
   const watchedProductName = form.watch("product_name");
 
@@ -968,7 +964,7 @@ export const SiteDialog = ({
           isolation_utilisee_m2: watchedIsolationUsed,
           surface_facturee: watchedSurfaceFacturee,
           montant_commission: watchedCommission,
-          travaux_non_subventionnes: watchedNonSubsidized,
+          travaux_non_subventionnes_montant: watchedNonSubsidizedAmount,
           additional_costs: watchedAdditionalCosts ?? [],
           product_name: watchedProductName,
         }),
@@ -978,7 +974,7 @@ export const SiteDialog = ({
       watchedCommission,
       watchedLaborCost,
       watchedMaterialCost,
-      watchedNonSubsidized,
+      watchedNonSubsidizedAmount,
       watchedProductName,
       watchedRevenue,
       watchedIsolationUsed,
