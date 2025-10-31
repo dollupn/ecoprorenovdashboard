@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
   useForm,
   useFieldArray,
@@ -46,7 +46,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
 import { getProjectClientName } from "@/lib/projects";
 import { parseSiteNotes, serializeSiteNotes } from "@/lib/sites";
 import {
@@ -59,70 +58,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { DriveFileUploader } from "@/components/integrations/DriveFileUploader";
 import type { DriveFileMetadata } from "@/integrations/googleDrive";
-import { GripVertical, Plus, Trash2, Upload, X } from "lucide-react";
+import { GripVertical, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useMembers } from "@/features/members/api";
-
-const teamMemberSchema = z.object({
-  id: z.string().min(1, "Sélection invalide"),
-  name: z.string().optional().nullable(),
-});
-
-type TeamMemberFormValue = z.infer<typeof teamMemberSchema>;
-
-const normalizeTeamMembers = (
-  rawTeamMembers: unknown,
-  nameLookup: Record<string, string>,
-): TeamMemberFormValue[] => {
-  if (!Array.isArray(rawTeamMembers)) {
-    return [];
-  }
-
-  const uniqueMembers = new Map<string, TeamMemberFormValue>();
-
-  for (const rawMember of rawTeamMembers) {
-    if (!rawMember) continue;
-
-    if (typeof rawMember === "string") {
-      const trimmed = rawMember.trim();
-      if (trimmed.length === 0) continue;
-
-      if (!uniqueMembers.has(trimmed)) {
-        uniqueMembers.set(trimmed, {
-          id: trimmed,
-          name: nameLookup[trimmed] ?? trimmed,
-        });
-      }
-      continue;
-    }
-
-    if (typeof rawMember === "object") {
-      const candidate = rawMember as Record<string, unknown>;
-      const rawId = typeof candidate.id === "string" ? candidate.id.trim() : "";
-      const rawName = typeof candidate.name === "string" ? candidate.name.trim() : "";
-      const fallbackName = rawName.length > 0 ? rawName : nameLookup[rawId] ?? rawId;
-
-      if (rawId.length > 0) {
-        if (!uniqueMembers.has(rawId)) {
-          uniqueMembers.set(rawId, {
-            id: rawId,
-            name: fallbackName.length > 0 ? fallbackName : undefined,
-          });
-        }
-        continue;
-      }
-
-      if (rawName.length > 0 && !uniqueMembers.has(rawName)) {
-        uniqueMembers.set(rawName, {
-          id: rawName,
-          name: rawName,
-        });
-      }
-    }
-  }
-
-  return Array.from(uniqueMembers.values());
-};
 
 const additionalCostSchema = z.object({
   label: z.string().min(1, "Intitulé requis"),
@@ -167,7 +104,6 @@ const baseSiteSchema = z.object({
     .uuid("Sélection invalide")
     .optional()
     .nullable(),
-  team_members: z.array(teamMemberSchema).optional().default([]),
   additional_costs: z.array(additionalCostSchema).optional().default([]),
   subcontractor_payment_confirmed: z.boolean().default(false),
 });
@@ -251,7 +187,6 @@ const defaultValues: SiteFormValues = {
   valorisation_cee: 0,
   notes: "",
   subcontractor_id: null,
-  team_members: [],
   additional_costs: [],
   subcontractor_payment_confirmed: false,
 };
@@ -562,25 +497,6 @@ export const SiteDialog = ({
   const [activeTab, setActiveTab] = useState<"avant-chantier" | "apres-chantier">(defaultTab);
   const isReadOnly = Boolean(readOnly);
   const resolvedOrgId = orgId ?? initialValues?.org_id ?? null;
-  const { data: members = [], isLoading: membersLoading } = useMembers(resolvedOrgId);
-  const memberNameById = useMemo(() => {
-    const result: Record<string, string> = {};
-    members.forEach((member) => {
-      const name = member.profiles?.full_name?.trim();
-      if (member.user_id) {
-        result[member.user_id] = name && name.length > 0 ? name : "Utilisateur";
-      }
-    });
-    return result;
-  }, [members]);
-  const memberOptions = useMemo(
-    () =>
-      members.map((member) => ({
-        id: member.user_id,
-        name: memberNameById[member.user_id] ?? "Utilisateur",
-      })),
-    [members, memberNameById],
-  );
   useEffect(() => {
     if (open) {
       setActiveTab(defaultTab);
@@ -617,8 +533,6 @@ export const SiteDialog = ({
           }))
         : defaultValues.additional_costs;
 
-    const normalizedTeamMembers = normalizeTeamMembers(initialValues?.team_members, memberNameById);
-
     const values: SiteFormValues = {
       ...defaultValues,
       ...initialValues,
@@ -626,14 +540,13 @@ export const SiteDialog = ({
         typeof initialValues?.subcontractor_id === "string" && initialValues.subcontractor_id.length > 0
           ? initialValues.subcontractor_id
           : null,
-      team_members: normalizedTeamMembers,
       additional_costs: normalizedAdditionalCosts,
     } as SiteFormValues;
 
     values.notes = parsedNotes.text;
 
     return values;
-  }, [initialValues, parsedNotes.text, memberNameById]);
+  }, [initialValues, parsedNotes.text]);
 
   const availableProjects = useMemo<SiteProjectOption[]>(() => {
     const base = [...(projects ?? [])];
@@ -812,23 +725,6 @@ export const SiteDialog = ({
       return;
     }
 
-    const seenMemberIds = new Set<string>();
-    const filteredTeamMembers = (values.team_members ?? []).reduce<TeamMemberFormValue[]>((acc, member) => {
-      if (!member || typeof member.id !== "string") {
-        return acc;
-      }
-
-      const trimmedId = member.id.trim();
-      if (trimmedId.length === 0 || seenMemberIds.has(trimmedId)) {
-        return acc;
-      }
-
-      seenMemberIds.add(trimmedId);
-      const displayName = member.name?.trim() || memberNameById[trimmedId] || undefined;
-      acc.push({ id: trimmedId, name: displayName });
-      return acc;
-    }, []);
-
     const filteredCosts = (values.additional_costs ?? [])
       .filter((c) => c.label.trim().length > 0)
       .map((c) => {
@@ -851,7 +747,6 @@ export const SiteDialog = ({
       project_ref: projectRef,
       client_name: clientName,
       subcontractor_id: values.subcontractor_id ?? null,
-      team_members: filteredTeamMembers,
       additional_costs: filteredCosts,
       notes: serializedNotes,
     });
@@ -1108,136 +1003,31 @@ export const SiteDialog = ({
                       <FormMessage />
                     </FormItem>
                   )}
-                />
+                  />
 
-                <FormField
-                  control={form.control}
-                  name="team_members"
-                  render={({ field }) => {
-                    const selectedMembers: TeamMemberFormValue[] = Array.isArray(field.value)
-                      ? field.value
-                      : [];
-                    const selectedIds = new Set(selectedMembers.map((member) => member.id));
-
-                    const handleToggleMember = (memberId: string, memberName: string, checked: boolean) => {
-                      if (isReadOnly) return;
-
-                      const nextMembers = [...selectedMembers];
-
-                      if (checked) {
-                        if (!selectedIds.has(memberId)) {
-                          nextMembers.push({ id: memberId, name: memberName });
-                        }
-                      } else {
-                        const index = nextMembers.findIndex((member) => member.id === memberId);
-                        if (index !== -1) {
-                          nextMembers.splice(index, 1);
-                        }
-                      }
-
-                      field.onChange(nextMembers);
-                    };
-
-                    const handleRemoveMember = (memberId: string) => {
-                      if (isReadOnly) return;
-
-                      const nextMembers = selectedMembers.filter((member) => member.id !== memberId);
-                      field.onChange(nextMembers);
-                    };
-
-                    return (
+                  <FormField
+                    control={form.control}
+                    name="notes"
+                    render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Équipe chantier</FormLabel>
-                        <div className="space-y-2">
-                          <div className="flex flex-wrap gap-2 rounded-md border border-dashed border-muted-foreground/40 bg-muted/30 p-2">
-                            {selectedMembers.length === 0 ? (
-                              <span className="text-sm text-muted-foreground">
-                                Sélectionnez les membres responsables de ce chantier.
-                              </span>
-                            ) : (
-                              selectedMembers.map((member) => (
-                                <Badge key={member.id} variant="secondary" className="flex items-center gap-1">
-                                  <span>{member.name ?? member.id}</span>
-                                  <button
-                                    type="button"
-                                    className={`inline-flex h-4 w-4 items-center justify-center rounded-full border border-transparent text-muted-foreground transition ${
-                                      isReadOnly
-                                        ? "opacity-60 cursor-not-allowed"
-                                        : "hover:border-muted-foreground hover:text-foreground"
-                                    }`}
-                                    onClick={() => handleRemoveMember(member.id)}
-                                    aria-label={`Retirer ${member.name ?? member.id} de l'équipe`}
-                                    disabled={isReadOnly}
-                                  >
-                                    <X className="h-3 w-3" />
-                                  </button>
-                                </Badge>
-                              ))
-                            )}
-                          </div>
-
-                          <div className="rounded-md border">
-                            {membersLoading ? (
-                              <p className="p-3 text-sm text-muted-foreground">Chargement des membres...</p>
-                            ) : memberOptions.length === 0 ? (
-                              <p className="p-3 text-sm text-muted-foreground">
-                                Aucun membre actif trouvé pour cette organisation.
-                              </p>
-                            ) : (
-                              <div className="max-h-48 overflow-y-auto divide-y">
-                                {memberOptions.map((member) => {
-                                  const isSelected = selectedIds.has(member.id);
-                                  return (
-                                    <label
-                                      key={member.id}
-                                      className={`flex items-center gap-2 p-2 text-sm ${
-                                        isReadOnly ? "opacity-80" : "hover:bg-muted"
-                                      }`}
-                                    >
-                                      <Checkbox
-                                        checked={isSelected}
-                                        onCheckedChange={(checked) =>
-                                          handleToggleMember(member.id, member.name ?? member.id, checked === true)
-                                        }
-                                        disabled={isReadOnly}
-                                      />
-                                      <span>{member.name ?? member.id}</span>
-                                    </label>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                        <FormLabel>Notes internes</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Informations complémentaires"
+                            {...field}
+                            readOnly={isReadOnly}
+                            disabled={isReadOnly}
+                          />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
-                    );
-                  }}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="notes"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Notes internes</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Informations complémentaires"
-                          {...field}
-                          readOnly={isReadOnly}
-                          disabled={isReadOnly}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                    )}
+                  />
                 </fieldset>
               </TabsContent>
 
-              <TabsContent value="apres-chantier" className="space-y-6 mt-6">
-                <fieldset disabled={isReadOnly} className="space-y-6">
+                <TabsContent value="apres-chantier" className="space-y-6 mt-6">
+                  <fieldset disabled={isReadOnly} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
