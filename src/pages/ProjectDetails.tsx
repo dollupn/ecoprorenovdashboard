@@ -2811,10 +2811,12 @@ const ProjectDetails = () => {
         project.project_ref ??
         null;
 
+      const normalizedExpectedEndDate = values.expectedEndDate?.trim() || null;
+
       const payload = {
         siteRef: values.siteRef?.trim() ?? undefined,
         dateDebut: values.startDate,
-        dateFinPrevue: values.expectedEndDate ?? null,
+        dateFinPrevue: normalizedExpectedEndDate,
         notes: values.notes?.trim() ? values.notes.trim() : null,
         productName: resolvedProductName,
         address:
