@@ -1052,7 +1052,7 @@ const Projects = ({
       valorisation_cee: values.valorisation_cee,
       subcontractor_payment_confirmed: values.subcontractor_payment_confirmed,
       notes: values.notes?.trim() || null,
-      team_members: sanitizedTeam.length > 0 ? sanitizedTeam : null,
+      team_members: (sanitizedTeam.length > 0 ? sanitizedTeam : []) as string[],
       additional_costs: sanitizedCosts.length > 0 ? sanitizedCosts : [],
       subcontractor_id: values.subcontractor_id ?? null,
       user_id: user.id,

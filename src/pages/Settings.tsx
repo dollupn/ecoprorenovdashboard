@@ -2146,11 +2146,11 @@ export default function Settings() {
           updated_at: new Date().toISOString(),
         };
 
-        const { error } = await supabase
-          .from<{ statuts_projets: ProjectStatusSetting[] | null }>(SETTINGS_TABLE)
+        const { error } = (await supabase
+          .from("settings" as any)
           .upsert(payload, { onConflict: "org_id" })
           .select("statuts_projets")
-          .single();
+          .single()) as { error: any };
 
         if (error) {
           throw error;

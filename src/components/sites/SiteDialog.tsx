@@ -145,7 +145,6 @@ const fallbackProjectStatusValues = DEFAULT_PROJECT_STATUSES.map((status) => sta
 
 const createBaseSiteSchema = (statusOptions: readonly string[]) => {
   const allowedStatuses = statusOptions.length > 0 ? [...statusOptions] : fallbackProjectStatusValues;
-  const statusSet = new Set(allowedStatuses);
 
   return z.object({
     site_ref: z.string().min(3, "Référence requise"),
@@ -155,7 +154,7 @@ const createBaseSiteSchema = (statusOptions: readonly string[]) => {
     address: z.string().min(3, "Adresse requise"),
     city: z.string().min(2, "Ville requise"),
     postal_code: z.string().min(4, "Code postal invalide"),
-    status: statusSchema,
+    status: z.enum(allowedStatuses as [string, ...string[]]),
     cofrac_status: z.enum(["EN_ATTENTE", "CONFORME", "NON_CONFORME", "A_PLANIFIER"]),
     date_debut: z.string().min(1, "Date de début requise"),
     date_fin_prevue: z.string().optional(),
@@ -180,12 +179,12 @@ const createBaseSiteSchema = (statusOptions: readonly string[]) => {
   });
 };
 
-type SiteFormSchema = ReturnType<typeof createSiteBaseSchema>;
+type SiteFormSchema = ReturnType<typeof createBaseSiteSchema>;
 
 export type SiteFormValues = z.infer<SiteFormSchema>;
 
 const createSiteSchema = (statusValues: readonly string[], requiresProjectAssociation: boolean) =>
-  createSiteBaseSchema(statusValues).superRefine((data, ctx) => {
+  createBaseSiteSchema(statusValues).superRefine((data, ctx) => {
     const projectRef = data.project_ref?.trim?.() ?? "";
     const clientName = data.client_name?.trim?.() ?? "";
 

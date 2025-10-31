@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import type { Database, Tables } from "@/integrations/supabase/types";
+import type { Database, Tables, ProjectStatus } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import {
   getProjectClientName,
@@ -2884,6 +2884,55 @@ const ProjectDetails = () => {
     [addNoteMutation],
   );
 
+  const updateProjectStatusMutation = useMutation({
+    mutationKey: ["project-status-update", project?.id],
+    mutationFn: async (nextStatus: string) => {
+      if (!project) {
+        throw new Error("Le projet n'est plus disponible.");
+      }
+
+      const trimmed = typeof nextStatus === "string" ? nextStatus.trim() : "";
+      if (trimmed.length === 0) {
+        throw new Error("Statut invalide.");
+      }
+
+      const normalized = trimmed.toUpperCase();
+
+      let updateQuery = supabase
+        .from("projects")
+        .update({ status: normalized as ProjectStatus })
+        .eq("id", project.id);
+
+      if (currentOrgId) {
+        updateQuery = updateQuery.eq("org_id", currentOrgId);
+      }
+
+      const { error: updateError } = await updateQuery;
+      if (updateError) {
+        throw updateError;
+      }
+
+      const statusEventPayload = {
+        project_id: project.id,
+        org_id: currentOrgId ?? "",
+        status: normalized as ProjectStatus,
+        changed_at: new Date().toISOString(),
+        changed_by: user?.id ?? null,
+        notes: null,
+      };
+
+      const { error: eventError } = await supabase
+        .from("project_status_events")
+        .insert([statusEventPayload]);
+
+      if (eventError && !isTableUnavailableError(eventError)) {
+        throw eventError;
+      }
+
+      return normalized;
+    },
+  });
+
   const handleStatusSelect = useCallback(
     async (value: string) => {
       if (!project) {
@@ -3189,60 +3238,6 @@ const ProjectDetails = () => {
   const statusProgress = statusValue
     ? computeStatusProgress(statusValue, projectStatuses)
     : 0;
-
-  const updateProjectStatusMutation = useMutation({
-    mutationKey: ["project-status-update", project?.id],
-    mutationFn: async (nextStatus: string) => {
-      if (!project) {
-        throw new Error("Le projet n'est plus disponible.");
-      }
-
-      const trimmed = typeof nextStatus === "string" ? nextStatus.trim() : "";
-      if (trimmed.length === 0) {
-        throw new Error("Statut invalide.");
-      }
-
-      const normalized = trimmed.toUpperCase();
-
-      let updateQuery = supabase
-        .from("projects")
-        .update({ status: normalized })
-        .eq("id", project.id);
-
-      if (currentOrgId) {
-        updateQuery = updateQuery.eq("org_id", currentOrgId);
-      }
-
-      const { error: updateError } = await updateQuery;
-      if (updateError) {
-        throw updateError;
-      }
-
-      const statusEventPayload: Record<string, unknown> = {
-        project_id: project.id,
-        status: normalized,
-        changed_at: new Date().toISOString(),
-      };
-
-      if (currentOrgId) {
-        statusEventPayload.org_id = currentOrgId;
-      }
-
-      if (user?.id) {
-        statusEventPayload.changed_by = user.id;
-      }
-
-      const { error: eventError } = await supabase
-        .from("project_status_events")
-        .insert([statusEventPayload]);
-
-      if (eventError && !isTableUnavailableError(eventError)) {
-        throw eventError;
-      }
-
-      return normalized;
-    },
-  });
 
   const isStatusUpdating = updateProjectStatusMutation.isPending;
 
@@ -4076,7 +4071,7 @@ const ProjectDetails = () => {
       valorisation_cee: values.valorisation_cee,
       subcontractor_payment_confirmed: values.subcontractor_payment_confirmed,
       notes: values.notes?.trim() || null,
-      team_members: sanitizedTeam.length > 0 ? sanitizedTeam : null,
+      team_members: (sanitizedTeam.length > 0 ? sanitizedTeam : []) as string[],
       additional_costs: sanitizedCosts.length > 0 ? sanitizedCosts : [],
       subcontractor_id: values.subcontractor_id ?? null,
       user_id: user.id,

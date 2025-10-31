@@ -360,7 +360,7 @@ export const fetchScheduledAppointments = async (
         : null,
       appointmentType,
       source,
-      entityType: "lead",
+      entityType: "lead" as const,
       leadId: lead.id ?? null,
       projectId: project?.id ?? null,
     };
@@ -421,7 +421,7 @@ export const fetchScheduledAppointments = async (
         : null,
       appointmentType,
       source: "crm",
-      entityType: "project",
+      entityType: "project" as const,
       leadId: getString(project?.lead_id ?? null),
       projectId: project?.id ?? null,
     } satisfies ScheduledAppointmentRecord;

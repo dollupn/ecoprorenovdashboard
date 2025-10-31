@@ -28,11 +28,11 @@ const fetchProjectStatuses = async (
     return getProjectStatusSettings();
   }
 
-  const { data, error } = await supabase
-    .from<SettingsRow>(SETTINGS_TABLE)
+  const { data, error } = (await supabase
+    .from("settings" as any)
     .select("statuts_projets")
     .eq("org_id", orgId)
-    .maybeSingle();
+    .maybeSingle()) as { data: { statuts_projets: ProjectStatusSetting[] | null } | null; error: any };
 
   if (error && error.code !== "PGRST116") {
     throw error;
