@@ -4,6 +4,7 @@ import { fr } from "date-fns/locale";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Calendar as CalendarIcon,
@@ -59,6 +60,7 @@ const startChantierSchema = z.object({
     .string({ required_error: "La date de début est requise" })
     .min(1, "La date de début est requise"),
   endDate: z.string().optional(),
+  status: z.string().min(1, "Le statut est requis"),
   subcontractorId: z.string().uuid().optional().nullable(),
   notes: z.string().max(5000, "La note interne est trop longue").optional(),
 });
@@ -122,6 +124,7 @@ export const StartChantierDialog = ({
   const { currentOrgId } = useOrg();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { statuses } = useProjectStatuses();
 
   const [selectedPhotos, setSelectedPhotos] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
@@ -130,11 +133,15 @@ export const StartChantierDialog = ({
   const driveConnection = useDriveConnectionStatus(currentOrgId ?? null);
   const driveUpload = useDriveUpload();
 
+  const activeStatuses = statuses.filter(s => s.isActive);
+  const defaultStatus = activeStatuses.find(s => s.value === "CHANTIER_PLANIFIE") ?? activeStatuses[0];
+
   const form = useForm<StartChantierFormValues>({
     resolver: zodResolver(startChantierSchema),
     defaultValues: {
       startDate: format(new Date(), "yyyy-MM-dd"),
       endDate: "",
+      status: defaultStatus?.value ?? "NOUVEAU",
       subcontractorId: null,
       notes: "",
     },
@@ -145,6 +152,7 @@ export const StartChantierDialog = ({
       form.reset({
         startDate: format(new Date(), "yyyy-MM-dd"),
         endDate: "",
+        status: defaultStatus?.value ?? "NOUVEAU",
         subcontractorId: null,
         notes: "",
       });
@@ -152,7 +160,7 @@ export const StartChantierDialog = ({
       setPhotoPreviews([]);
       setIsSubmitting(false);
     }
-  }, [open, form]);
+  }, [open, form, defaultStatus]);
 
   useEffect(() => {
     const nextPreviews = selectedPhotos.map((file) => URL.createObjectURL(file));
@@ -226,31 +234,55 @@ export const StartChantierDialog = ({
 
   const creationMutation = useMutation<StartChantierResponse, Error, StartChantierFormValues>({
     mutationFn: async (values) => {
-      const payload = {
-        dateDebut: values.startDate,
-        dateFinPrevue: values.endDate?.trim() ? values.endDate : null,
-        subcontractorId: values.subcontractorId ?? null,
-        notes: serializeSiteNotes(values.notes, null, []),
-      };
-
-      const response = await fetch(`/api/chantiers/${projectId}/start`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        credentials: "include",
-      });
-
-      if (!response.ok) {
-        const message = await response.text();
-        throw new Error(message || "Impossible de créer le chantier");
+      if (!currentOrgId) {
+        throw new Error("Organisation non trouvée");
       }
 
-      const result = (await response.json()) as StartChantierResponse;
-      if (!result?.chantier?.id) {
-        throw new Error("Réponse invalide du serveur chantier");
+      // Fetch project data
+      const { data: project, error: projectError } = await supabase
+        .from("projects")
+        .select("*")
+        .eq("id", projectId)
+        .eq("org_id", currentOrgId)
+        .single();
+
+      if (projectError || !project) {
+        throw new Error("Projet introuvable");
       }
 
-      return result;
+      // Create chantier directly
+      const siteRef = `${project.project_ref}-CHANTIER`;
+      
+      const { data: chantier, error: chantierError } = await supabase
+        .from("sites")
+        .insert([{
+          project_id: project.id,
+          org_id: project.org_id,
+          user_id: project.user_id,
+          project_ref: project.project_ref,
+          site_ref: siteRef,
+          client_name: project.client_name,
+          client_first_name: project.client_first_name,
+          client_last_name: project.client_last_name,
+          product_name: project.product_name,
+          address: project.address || "",
+          city: project.city,
+          postal_code: project.postal_code,
+          date_debut: values.startDate,
+          date_fin_prevue: values.endDate?.trim() || null,
+          status: values.status,
+          subcontractor_id: values.subcontractorId,
+          notes: serializeSiteNotes(values.notes, null, []),
+          team_members: [],
+        }])
+        .select()
+        .single();
+
+      if (chantierError || !chantier) {
+        throw new Error(chantierError?.message || "Impossible de créer le chantier");
+      }
+
+      return { chantier, project };
     },
   });
 
@@ -356,22 +388,6 @@ export const StartChantierDialog = ({
     }
   });
 
-  const statusBadge = (
-    <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/40 p-3">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-          <Check className="h-5 w-5" />
-        </div>
-        <div>
-          <p className="text-sm font-medium text-foreground">Statut initial</p>
-          <p className="text-xs text-muted-foreground">Ce chantier sera créé avec le statut "Planifié".</p>
-        </div>
-      </div>
-      <Badge variant="secondary" className="bg-blue-500/10 text-blue-700">
-        Planifié
-      </Badge>
-    </div>
-  );
 
   const remainingPhotos = MAX_PHOTO_COUNT - selectedPhotos.length;
 
@@ -388,8 +404,6 @@ export const StartChantierDialog = ({
 
         <Form {...form}>
           <form onSubmit={onSubmit} className="space-y-6">
-            {statusBadge}
-
             <div className="grid gap-4 md:grid-cols-2">
               <FormField
                 control={form.control}
@@ -508,11 +522,36 @@ export const StartChantierDialog = ({
                     </SelectContent>
                   </Select>
                   <FormMessage />
-                </FormItem>
-              )}
-            />
+              </FormItem>
+            )}
+          />
 
-            <FormField
+          <FormField
+            control={form.control}
+            name="status"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Statut initial</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sélectionner un statut" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {activeStatuses.map((status) => (
+                      <SelectItem key={status.value} value={status.value}>
+                        {status.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
               control={form.control}
               name="notes"
               render={({ field }) => (

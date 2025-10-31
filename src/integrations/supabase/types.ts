@@ -1115,6 +1115,35 @@ export type Database = {
           },
         ]
       }
+      settings: {
+        Row: {
+          created_at: string
+          org_id: string
+          statuts_projets: Json | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          org_id: string
+          statuts_projets?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          org_id?: string
+          statuts_projets?: Json | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "settings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sites: {
         Row: {
           additional_costs: Json | null

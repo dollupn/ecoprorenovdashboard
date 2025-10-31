@@ -22,13 +22,8 @@ export type ProjectStatus =
   | "ANNULE"
   | "ABANDONNE";
 
-export type ChantierStatus =
-  | "PLANIFIE"
-  | "EN_PREPARATION"
-  | "EN_COURS"
-  | "SUSPENDU"
-  | "TERMINE"
-  | "LIVRE";
+// Unified status system - chantiers use the same statuses as projects
+export type ChantierStatus = ProjectStatus;
 
 const PROJECT_STATUS_ORDER: ProjectStatus[] = [
   "NOUVEAU",
@@ -50,24 +45,6 @@ const PROJECT_STATUS_ORDER: ProjectStatus[] = [
   "ANNULE",
   "ABANDONNE",
 ];
-
-const CHANTIER_STATUS_FLOW: Record<ChantierStatus, ChantierStatus[]> = {
-  PLANIFIE: ["PLANIFIE", "EN_PREPARATION", "EN_COURS"],
-  EN_PREPARATION: ["EN_PREPARATION", "EN_COURS"],
-  EN_COURS: ["EN_COURS", "SUSPENDU", "TERMINE"],
-  SUSPENDU: ["SUSPENDU", "EN_COURS", "TERMINE"],
-  TERMINE: ["TERMINE", "LIVRE"],
-  LIVRE: ["LIVRE"],
-};
-
-const CHANTIER_TO_PROJECT_STATUS: Partial<Record<ChantierStatus, ProjectStatus>> = {
-  PLANIFIE: "CHANTIER_PLANIFIE",
-  EN_PREPARATION: "CHANTIER_PLANIFIE",
-  EN_COURS: "CHANTIER_EN_COURS",
-  SUSPENDU: "CHANTIER_EN_COURS",
-  TERMINE: "CHANTIER_TERMINE",
-  LIVRE: "LIVRE",
-};
 
 const getProjectStatusIndex = (status: string): number => {
   const index = PROJECT_STATUS_ORDER.indexOf(status as ProjectStatus);
@@ -99,37 +76,22 @@ export const ensureProjectStatusTransition = (current: string, next: string) => 
   }
 };
 
+// Unified status system - chantiers use same validation as projects
 export const ensureChantierStatusTransition = (current: string, next: string) => {
-  if (!(next in CHANTIER_TO_PROJECT_STATUS || next === "PLANIFIE" || next === "EN_PREPARATION")) {
-    throw new ValidationError(`Statut chantier inconnu: ${next}`);
-  }
-
-  if (!current) {
-    return;
-  }
-
-  if (!(current in CHANTIER_STATUS_FLOW)) {
-    throw new ValidationError(`Statut chantier actuel inconnu: ${current}`);
-  }
-
-  const allowed = CHANTIER_STATUS_FLOW[current as ChantierStatus];
-  if (!allowed.includes(next as ChantierStatus)) {
-    throw new ValidationError(`Transition chantier interdite: ${current} -> ${next}`);
-  }
+  ensureProjectStatusTransition(current, next);
 };
 
+// Unified status system - chantiers have their own status directly
 const deriveProjectStatusFromChantiers = (chantiers: SiteRow[]): ProjectStatus | null => {
-  const candidateStatuses = chantiers
-    .map((chantier) => CHANTIER_TO_PROJECT_STATUS[chantier.status as ChantierStatus])
-    .filter((status): status is ProjectStatus => Boolean(status));
-
-  if (candidateStatuses.length === 0) {
+  if (chantiers.length === 0) {
     return null;
   }
 
-  return candidateStatuses.reduce<ProjectStatus>((acc, status) => {
-    return getProjectStatusIndex(status) > getProjectStatusIndex(acc) ? status : acc;
-  }, candidateStatuses[0]);
+  // Return the most advanced status among all chantiers
+  return chantiers.reduce<ProjectStatus>((acc, chantier) => {
+    const chantierStatus = chantier.status as ProjectStatus;
+    return getProjectStatusIndex(chantierStatus) > getProjectStatusIndex(acc) ? chantierStatus : acc;
+  }, chantiers[0].status as ProjectStatus);
 };
 
 export const ensureProjectStatusNotBehindChantiers = (status: string, chantiers: SiteRow[]) => {
