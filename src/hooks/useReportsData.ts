@@ -177,8 +177,13 @@ const resolveSiteRentability = (site: SiteRow) => {
       additional_costs: additionalCosts ?? [],
       product_name: site.product_name,
       valorisation_cee: site.valorisation_cee,
-      commission_commerciale_ht: site.commission_commerciale_ht,
-      commission_commerciale_ht_montant: site.commission_commerciale_ht_montant,
+      commission_eur_per_m2_enabled:
+        site.commission_eur_per_m2_enabled ??
+        (site as unknown as { commission_commerciale_ht?: unknown }).commission_commerciale_ht,
+      commission_eur_per_m2:
+        site.commission_eur_per_m2 ??
+        (site as unknown as { commission_commerciale_ht_montant?: unknown })
+          .commission_commerciale_ht_montant,
       subcontractor_payment_confirmed: site.subcontractor_payment_confirmed,
       project_category: site.product_name,
     }),
