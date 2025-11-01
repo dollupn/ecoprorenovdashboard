@@ -202,7 +202,16 @@ export const normalizeAdditionalCostValue = (
     }
     return 0;
   })();
-  const tvaRate = resolveAdditionalCostTvaRate(cost.tva_rate, amountHT, rawTaxes, fallbackRate);
+
+  const effectiveFallbackRate: AdditionalCostTvaRate =
+    amountHT > 0 && rawTaxes <= 0 ? 0 : fallbackRate;
+
+  const tvaRate = resolveAdditionalCostTvaRate(
+    cost.tva_rate,
+    amountHT,
+    rawTaxes,
+    effectiveFallbackRate,
+  );
   const amountTTC = computeAdditionalCostTTC(amountHT, tvaRate);
   const attachment =
     typeof cost.attachment === "string" && cost.attachment.trim().length > 0
