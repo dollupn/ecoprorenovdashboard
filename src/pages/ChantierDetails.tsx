@@ -123,7 +123,10 @@ const ChantierDetails = () => {
     [statusOptions],
   );
 
-  const resolver = useMemo(() => zodResolver(createSiteSchema(projectStatusValues, false)), [projectStatusValues]);
+  const resolver = useMemo(
+    () => zodResolver(createSiteSchema(projectStatusValues, false, { statusOptional: true })),
+    [projectStatusValues],
+  );
 
   const form = useForm<SiteFormValues>({
     resolver,
