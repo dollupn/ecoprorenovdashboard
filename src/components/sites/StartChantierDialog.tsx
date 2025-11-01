@@ -1,15 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Calendar as CalendarIcon,
   Camera,
-  Check,
   FileImage,
   Loader2,
   Trash2,
@@ -41,7 +39,6 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -60,7 +57,6 @@ const startChantierSchema = z.object({
     .string({ required_error: "La date de début est requise" })
     .min(1, "La date de début est requise"),
   endDate: z.string().optional(),
-  status: z.string().min(1, "Le statut est requis"),
   subcontractorId: z.string().uuid().optional().nullable(),
   notes: z.string().max(5000, "La note interne est trop longue").optional(),
 });
@@ -124,8 +120,6 @@ export const StartChantierDialog = ({
   const { currentOrgId } = useOrg();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { statuses } = useProjectStatuses();
-
   const [selectedPhotos, setSelectedPhotos] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -133,25 +127,11 @@ export const StartChantierDialog = ({
   const driveConnection = useDriveConnectionStatus(currentOrgId ?? null);
   const driveUpload = useDriveUpload();
 
-  const activeStatuses = useMemo(
-    () => statuses.filter((s) => s.isActive),
-    [statuses],
-  );
-
-  const defaultStatus = useMemo(() => {
-    if (activeStatuses.length === 0) {
-      return "NOUVEAU";
-    }
-    const firstActive = activeStatuses.find((s) => s.value === "CHANTIER_PLANIFIE");
-    return firstActive?.value ?? activeStatuses[0]?.value ?? "NOUVEAU";
-  }, [activeStatuses]);
-
   const form = useForm<StartChantierFormValues>({
     resolver: zodResolver(startChantierSchema),
     defaultValues: {
       startDate: format(new Date(), "yyyy-MM-dd"),
       endDate: "",
-      status: defaultStatus,
       subcontractorId: null,
       notes: "",
     },
@@ -162,7 +142,6 @@ export const StartChantierDialog = ({
       form.reset({
         startDate: format(new Date(), "yyyy-MM-dd"),
         endDate: "",
-        status: defaultStatus,
         subcontractorId: null,
         notes: "",
       });
@@ -170,7 +149,7 @@ export const StartChantierDialog = ({
       setPhotoPreviews([]);
       setIsSubmitting(false);
     }
-  }, [open, form, defaultStatus]);
+  }, [open, form]);
 
   useEffect(() => {
     const nextPreviews = selectedPhotos.map((file) => URL.createObjectURL(file));
@@ -280,7 +259,6 @@ export const StartChantierDialog = ({
           postal_code: project.postal_code,
           date_debut: values.startDate,
           date_fin_prevue: values.endDate?.trim() || null,
-          status: values.status,
           subcontractor_id: values.subcontractorId,
           notes: serializeSiteNotes(values.notes, null, []),
           team_members: [],
@@ -296,7 +274,7 @@ export const StartChantierDialog = ({
     },
   });
 
-  const canSubmit = activeStatuses.length > 0 && !creationMutation.isPending && !isSubmitting;
+  const canSubmit = !creationMutation.isPending && !isSubmitting;
 
   const uploadPhotos = useCallback(
     async (chantier: StartChantierResponse["chantier"], internalNotes: string | undefined) => {
@@ -539,31 +517,6 @@ export const StartChantierDialog = ({
           />
 
           <FormField
-            control={form.control}
-            name="status"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Statut initial</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sélectionner un statut" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {activeStatuses.map((status) => (
-                      <SelectItem key={status.value} value={status.value}>
-                        {status.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
               control={form.control}
               name="notes"
               render={({ field }) => (
@@ -644,11 +597,6 @@ export const StartChantierDialog = ({
             </div>
 
             <div className="flex flex-col gap-3">
-              {activeStatuses.length === 0 && (
-                <div className="rounded-md bg-yellow-50 dark:bg-yellow-950 p-3 text-sm text-yellow-800 dark:text-yellow-200 border border-yellow-200 dark:border-yellow-800">
-                  Aucun statut actif disponible. Veuillez configurer les statuts dans les paramètres.
-                </div>
-              )}
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
                   Annuler
