@@ -83,7 +83,7 @@ import {
 } from "./siteFormSchema";
 import {
   TRAVAUX_NON_SUBVENTIONNES_OPTIONS,
-  type TravauxNonSubventionnesValue,
+  normalizeTravauxNonSubventionnesValue,
 } from "./travauxNonSubventionnes";
 
 // Re-export types for other components
@@ -583,6 +583,10 @@ export const SiteDialog = ({
 
     values.notes = parsedNotes.text;
 
+    values.travaux_non_subventionnes = normalizeTravauxNonSubventionnesValue(
+      values.travaux_non_subventionnes,
+      defaultSiteFormValues.travaux_non_subventionnes,
+    );
     const parseNumeric = (value: unknown): number | null => {
       if (typeof value === "number" && Number.isFinite(value)) {
         return value;
