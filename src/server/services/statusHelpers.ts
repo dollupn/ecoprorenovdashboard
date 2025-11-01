@@ -1,5 +1,3 @@
-import type { ProjectRow, SiteRow } from "../repositories/projectRepository";
-import { updateProjectStatus, fetchChantiersForProject } from "../repositories/projectRepository";
 import { ValidationError } from "../errors";
 
 export type ProjectStatus =
@@ -21,9 +19,6 @@ export type ProjectStatus =
   | "CLOTURE"
   | "ANNULE"
   | "ABANDONNE";
-
-// Unified status system - chantiers use the same statuses as projects
-export type ChantierStatus = ProjectStatus;
 
 const PROJECT_STATUS_ORDER: ProjectStatus[] = [
   "NOUVEAU",
@@ -76,52 +71,3 @@ export const ensureProjectStatusTransition = (current: string, next: string) => 
   }
 };
 
-// Unified status system - chantiers use same validation as projects
-export const ensureChantierStatusTransition = (current: string, next: string) => {
-  ensureProjectStatusTransition(current, next);
-};
-
-// Unified status system - chantiers have their own status directly
-const deriveProjectStatusFromChantiers = (chantiers: SiteRow[]): ProjectStatus | null => {
-  if (chantiers.length === 0) {
-    return null;
-  }
-
-  // Return the most advanced status among all chantiers
-  return chantiers.reduce<ProjectStatus>((acc, chantier) => {
-    const chantierStatus = chantier.status as ProjectStatus;
-    return getProjectStatusIndex(chantierStatus) > getProjectStatusIndex(acc) ? chantierStatus : acc;
-  }, chantiers[0].status as ProjectStatus);
-};
-
-export const ensureProjectStatusNotBehindChantiers = (status: string, chantiers: SiteRow[]) => {
-  if (!status) {
-    return;
-  }
-
-  const derived = deriveProjectStatusFromChantiers(chantiers);
-  if (!derived) {
-    return;
-  }
-
-  if (getProjectStatusIndex(status) < getProjectStatusIndex(derived)) {
-    throw new ValidationError(
-      `Le statut projet doit être au moins '${derived}' en fonction de l'avancement des chantiers`,
-    );
-  }
-};
-
-export const syncProjectStatusWithChantiers = async (project: ProjectRow, orgId: string) => {
-  const chantiers = await fetchChantiersForProject(project.id, orgId);
-  const derived = deriveProjectStatusFromChantiers(chantiers);
-
-  if (!derived) {
-    return project;
-  }
-
-  if (getProjectStatusIndex(derived) > getProjectStatusIndex(project.status)) {
-    return updateProjectStatus(project.id, orgId, derived);
-  }
-
-  return project;
-};

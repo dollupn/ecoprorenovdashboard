@@ -3,16 +3,11 @@ import {
   fetchInvoicesForProject,
   fetchProjectById,
   fetchQuotesForProject,
-  updateChantiersStatusForProject,
   updateProjectStatus,
   type ProjectRow,
 } from "../repositories/projectRepository";
 import { NotFoundError, ValidationError } from "../errors";
-import {
-  ensureProjectStatusNotBehindChantiers,
-  ensureProjectStatusTransition,
-  type ProjectStatus,
-} from "./statusHelpers";
+import { ensureProjectStatusTransition, type ProjectStatus } from "./statusHelpers";
 
 export const getProjectDetails = async (orgId: string, projectId: string) => {
   const project = await fetchProjectById(projectId, orgId);
@@ -56,23 +51,9 @@ export const updateProjectStatusService = async (orgId: string, projectId: strin
 
   ensureProjectStatusTransition(project.status, normalizedNextStatus);
 
-  const chantiers = await fetchChantiersForProject(projectId, orgId);
-  ensureProjectStatusNotBehindChantiers(normalizedNextStatus, chantiers);
-
   const previousStatus = project.status;
 
   const updatedProject: ProjectRow = await updateProjectStatus(projectId, orgId, normalizedNextStatus);
-
-  try {
-    await updateChantiersStatusForProject(projectId, orgId, normalizedNextStatus);
-  } catch (error) {
-    try {
-      await updateProjectStatus(projectId, orgId, previousStatus);
-    } catch (rollbackError) {
-      console.error("Échec lors du rollback du statut projet", rollbackError);
-    }
-    throw error;
-  }
 
   return {
     project: updatedProject,

@@ -34,7 +34,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database, Tables } from "@/integrations/supabase/types";
 import type { ProjectStatus } from "@/lib/projects";
-import { startChantier, updateChantierStatus } from "@/integrations/chantiers";
+import { startChantier } from "@/integrations/chantiers";
 import { useAuth } from "@/hooks/useAuth";
 import {
   getProjectClientName,
@@ -4115,8 +4115,8 @@ const ProjectDetails = () => {
       rentability_additional_costs_total: values.rentability_additional_costs_total,
     };
 
-    const { status: nextStatus, ...siteUpdateData } = baseSiteData;
-    const normalizedNextStatus = typeof nextStatus === "string" ? nextStatus : null;
+    const normalizedNextStatus =
+      typeof baseSiteData.status === "string" ? baseSiteData.status : null;
     const statusChanged =
       siteDialogMode === "edit" &&
       activeSite &&
@@ -4127,14 +4127,10 @@ const ProjectDetails = () => {
       if (siteDialogMode === "edit" && activeSite) {
         const { error } = await supabase
           .from("sites")
-          .update(siteUpdateData as any)
+          .update(baseSiteData as any)
           .eq("id", activeSite.id);
 
         if (error) throw error;
-
-        if (statusChanged) {
-          await updateChantierStatus(activeSite.id, normalizedNextStatus);
-        }
 
         toast({
           title: "Chantier mis à jour",
