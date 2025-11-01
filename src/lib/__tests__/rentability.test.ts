@@ -84,10 +84,10 @@ describe("calculateRentability", () => {
     expect(marginResult.totalCosts).toBe(amount);
     expect(marginResult.marginTotal).toBe(2800);
 
-    const moitiéResult = run("MOITIE");
-    expect(moitiéResult.travauxRevenue).toBe(amount / 2);
-    expect(moitiéResult.travauxCost).toBe(amount / 2);
-    expect(moitiéResult.ca).toBe(4600);
+    const partageResult = run("PARTAGE");
+    expect(partageResult.travauxRevenue).toBe(amount / 2);
+    expect(partageResult.travauxCost).toBe(amount / 2);
+    expect(partageResult.ca).toBe(4600);
 
     const defaultResult = run("NA");
     expect(defaultResult.travauxRevenue).toBe(0);

@@ -17,7 +17,11 @@ import {
   type SiteFormValues,
   type SiteSubmitValues,
 } from "@/components/sites/siteFormSchema";
-import { TRAVAUX_NON_SUBVENTIONNES_OPTIONS, TRAVAUX_NON_SUBVENTIONNES_LABELS, type TravauxNonSubventionnesValue } from "@/components/sites/travauxNonSubventionnes";
+import {
+  TRAVAUX_NON_SUBVENTIONNES_OPTIONS,
+  TRAVAUX_NON_SUBVENTIONNES_LABELS,
+  normalizeTravauxNonSubventionnesValue,
+} from "@/components/sites/travauxNonSubventionnes";
 import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import {
@@ -146,8 +150,8 @@ const ChantierDetails = () => {
       "product_name",
       "additional_costs",
       "valorisation_cee",
-      "commission_commerciale_ht",
-      "commission_commerciale_ht_montant",
+      "commission_eur_per_m2_enabled",
+      "commission_eur_per_m2",
       "subcontractor_id",
       "subcontractor_payment_confirmed",
     ],
@@ -264,9 +268,22 @@ const ChantierDetails = () => {
       montant_commission: sanitizeNumber(chantier.montant_commission),
       valorisation_cee: sanitizeNumber(chantier.valorisation_cee),
       subcontractor_id: chantier.subcontractor_id ?? null,
-      travaux_non_subventionnes: (String(chantier.travaux_non_subventionnes) as SiteFormValues["travaux_non_subventionnes"]) || "NA",
+      travaux_non_subventionnes: normalizeTravauxNonSubventionnesValue(
+        chantier.travaux_non_subventionnes,
+      ),
       travaux_non_subventionnes_montant: sanitizeNumber(chantier.travaux_non_subventionnes_montant),
-      commission_commerciale_ht_montant: sanitizeNumber(chantier.commission_commerciale_ht_montant),
+      commission_eur_per_m2_enabled:
+        typeof chantier.commission_eur_per_m2_enabled === "boolean"
+          ? chantier.commission_eur_per_m2_enabled
+          : Boolean(
+              (chantier as unknown as { commission_commerciale_ht?: unknown })
+                .commission_commerciale_ht,
+            ),
+      commission_eur_per_m2: sanitizeNumber(
+        chantier.commission_eur_per_m2 ??
+          (chantier as unknown as { commission_commerciale_ht_montant?: unknown })
+            .commission_commerciale_ht_montant,
+      ),
       notes: parsedNotes.text ?? "",
       additional_costs: normalizeAdditionalCostsArray(chantier.additional_costs ?? []),
     };
@@ -287,8 +304,8 @@ const ChantierDetails = () => {
       productName,
       additionalCosts,
       valorisationCee,
-      commissionCommercialeActive,
-      commissionCommercialeMontant,
+      commissionPerM2Enabled,
+      commissionPerM2,
       subcontractorId,
       subcontractorPaymentConfirmed,
     ] = (rentabilityWatch ?? []) as [
@@ -351,8 +368,8 @@ const ChantierDetails = () => {
       additional_costs: normalizedAdditionalCosts,
       product_name: productName,
       valorisation_cee: sanitizeNumber(valorisationCee),
-      commission_commerciale_ht: commissionCommercialeActive,
-      commission_commerciale_ht_montant: sanitizeNumber(commissionCommercialeMontant),
+      commission_eur_per_m2_enabled: commissionPerM2Enabled,
+      commission_eur_per_m2: sanitizeNumber(commissionPerM2),
       subcontractor_pricing_details: subcontractorRate,
       subcontractor_payment_confirmed: Boolean(subcontractorPaymentConfirmed),
       project_prime_cee: project?.prime_cee ?? undefined,
@@ -412,8 +429,10 @@ const ChantierDetails = () => {
     const travauxDescription = shouldResetTravaux ? "" : values.travaux_non_subventionnes_description?.trim() ?? "";
     const travauxMontant = shouldResetTravaux ? 0 : sanitizeNumber(values.travaux_non_subventionnes_montant);
     const travauxFinancement = shouldResetTravaux ? false : Boolean(values.travaux_non_subventionnes_financement);
-    const commissionActive = Boolean(values.commission_commerciale_ht);
-    const commissionMontant = commissionActive ? sanitizeNumber(values.commission_commerciale_ht_montant) : 0;
+    const commissionPerM2Enabled = Boolean(values.commission_eur_per_m2_enabled);
+    const commissionPerM2Value = commissionPerM2Enabled
+      ? sanitizeNumber(values.commission_eur_per_m2)
+      : 0;
 
     const selectedSubcontractor = (subcontractorsQuery.data ?? []).find(
       (option) => option.id === values.subcontractor_id,
@@ -455,8 +474,8 @@ const ChantierDetails = () => {
       travaux_non_subventionnes_description: travauxDescription,
       travaux_non_subventionnes_montant: travauxMontant,
       travaux_non_subventionnes_financement: travauxFinancement,
-      commission_commerciale_ht: commissionActive,
-      commission_commerciale_ht_montant: commissionMontant,
+      commission_eur_per_m2_enabled: commissionPerM2Enabled,
+      commission_eur_per_m2: commissionPerM2Value,
       profit_margin: rentabilityResult.marginRate,
       rentability_total_costs: rentabilityResult.totalCosts,
       rentability_margin_total: rentabilityResult.marginTotal,
@@ -873,7 +892,7 @@ const ChantierDetails = () => {
                     />
                     <FormField
                       control={control}
-                      name="commission_commerciale_ht"
+                      name="commission_eur_per_m2_enabled"
                       render={({ field }) => (
                         <FormItem className="col-span-full">
                           <div className="flex items-start gap-3 rounded-lg border border-dashed p-3">
@@ -886,20 +905,21 @@ const ChantierDetails = () => {
                               disabled={disableInputs}
                             />
                             <div className="space-y-2">
-                              <FormLabel>Commission HT active</FormLabel>
+                              <FormLabel>Commission commerciale (€/m²)</FormLabel>
                               <p className="text-xs text-muted-foreground">
-                                Activez si une commission HT est due. Renseignez le montant correspondant.
+                                Activez pour ajouter une commission calculée par mètre carré facturé.
                               </p>
                               <FormField
                                 control={control}
-                                name="commission_commerciale_ht_montant"
+                                name="commission_eur_per_m2"
                                 render={({ field: amountField }) => (
                                   <FormItem>
-                                    <FormLabel>Montant commission HT (€)</FormLabel>
+                                    <FormLabel>Montant commission (€/m²)</FormLabel>
                                     <FormControl>
                                       <Input
                                         type="number"
-                                        step="0.01"
+                                        step="0.1"
+                                        min="0"
                                         {...amountField}
                                         onBlur={(event) => {
                                           amountField.onBlur();

@@ -1,6 +1,6 @@
 export type RentabilityMeasurementMode = "surface" | "luminaire";
 
-export type RentabilityTravauxOption = "NA" | "CLIENT" | "MARGE" | "MOITIE";
+export type RentabilityTravauxOption = "NA" | "CLIENT" | "MARGE" | "PARTAGE";
 
 export interface RentabilityAdditionalCostInput {
   amount_ht?: number | null;
@@ -95,8 +95,9 @@ const normalizeTravauxOption = (
       return "CLIENT";
     case "MARGE":
       return "MARGE";
+    case "PARTAGE":
     case "MOITIE":
-      return "MOITIE";
+      return "PARTAGE";
     default:
       return "NA";
   }
@@ -146,7 +147,7 @@ export const calculateRentability = (input: RentabilityInput): RentabilityResult
       case "MARGE":
         travauxCost = travauxAmount;
         break;
-      case "MOITIE":
+      case "PARTAGE":
         travauxRevenue = travauxAmount / 2;
         travauxCost = travauxAmount / 2;
         break;
@@ -255,8 +256,10 @@ export interface SiteRentabilitySource {
   valorisation_cee?: number | null;
   project_prime_cee?: number | null;
   project_prime_cee_total_cents?: number | null;
+  commission_eur_per_m2_enabled?: string | boolean | null;
+  commission_eur_per_m2?: number | string | null;
   commission_commerciale_ht?: string | boolean | null;
-  commission_commerciale_ht_montant?: number | null;
+  commission_commerciale_ht_montant?: number | string | null;
   frais_tva_percentage?: number | null;
   subcontractor_pricing_details?: string | number | null;
   subcontractor_payment_confirmed?: boolean | null;
@@ -298,8 +301,12 @@ export const buildRentabilityInputFromSite = (
     return value > 0 ? value : result;
   }, 0);
 
-  const commissionPerUnitActive = toBoolean(values.commission_commerciale_ht);
-  const commissionPerUnit = sanitizeNumber(values.commission_commerciale_ht_montant);
+  const commissionPerUnitActive = toBoolean(
+    values.commission_eur_per_m2_enabled ?? values.commission_commerciale_ht,
+  );
+  const commissionPerUnit = sanitizeNumber(
+    values.commission_eur_per_m2 ?? values.commission_commerciale_ht_montant,
+  );
 
   const subcontractorRate = sanitizeNumber(values.subcontractor_pricing_details);
   const subcontractorBaseUnits = sanitizeNumber(values.subcontractor_base_units);

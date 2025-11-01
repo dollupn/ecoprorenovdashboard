@@ -86,7 +86,7 @@ import {
 } from "./siteFormSchema";
 import {
   TRAVAUX_NON_SUBVENTIONNES_OPTIONS,
-  type TravauxNonSubventionnesValue,
+  normalizeTravauxNonSubventionnesValue,
 } from "./travauxNonSubventionnes";
 
 // Re-export types for other components
@@ -562,6 +562,23 @@ export const SiteDialog = ({
 
     values.notes = parsedNotes.text;
 
+    values.travaux_non_subventionnes = normalizeTravauxNonSubventionnesValue(
+      values.travaux_non_subventionnes,
+      defaultSiteFormValues.travaux_non_subventionnes,
+    );
+    const parseNumeric = (value: unknown): number | null => {
+      if (typeof value === "number" && Number.isFinite(value)) {
+        return value;
+      }
+      if (typeof value === "string") {
+        const normalized = value.replace(/,/g, ".").trim();
+        if (normalized.length === 0) return null;
+        const parsed = Number.parseFloat(normalized);
+        return Number.isFinite(parsed) ? parsed : null;
+      }
+      return null;
+    };
+
     const allowedTravauxValues = TRAVAUX_NON_SUBVENTIONNES_OPTIONS.map(
       (option) => option.value,
     );
@@ -582,15 +599,23 @@ export const SiteDialog = ({
     values.travaux_non_subventionnes_financement = Boolean(
       values.travaux_non_subventionnes_financement,
     );
-    values.commission_commerciale_ht = Boolean(values.commission_commerciale_ht);
 
-    if (
-      values.commission_commerciale_ht_montant === null ||
-      values.commission_commerciale_ht_montant === undefined ||
-      Number.isNaN(values.commission_commerciale_ht_montant)
-    ) {
-      values.commission_commerciale_ht_montant = 0;
+    const legacyCommissionEnabled = Boolean(
+      (initialValues as Record<string, unknown> | undefined)?.commission_commerciale_ht,
+    );
+    const legacyCommissionRate = parseNumeric(
+      (initialValues as Record<string, unknown> | undefined)?.commission_commerciale_ht_montant,
+    );
+
+    if (typeof values.commission_eur_per_m2_enabled !== "boolean") {
+      values.commission_eur_per_m2_enabled = legacyCommissionEnabled;
     }
+
+    values.commission_eur_per_m2_enabled = Boolean(values.commission_eur_per_m2_enabled);
+
+    const normalizedCommissionRate = parseNumeric(values.commission_eur_per_m2);
+    values.commission_eur_per_m2 =
+      normalizedCommissionRate ?? legacyCommissionRate ?? defaultSiteFormValues.commission_eur_per_m2;
 
     if (
       values.valorisation_cee === null ||
@@ -686,8 +711,8 @@ export const SiteDialog = ({
   const watchedProductName = form.watch("product_name");
   const watchedValorisationCee = form.watch("valorisation_cee");
   const watchedTravauxChoice = form.watch("travaux_non_subventionnes");
-  const watchedCommissionCommerciale = form.watch("commission_commerciale_ht");
-  const watchedCommissionCommercialeMontant = form.watch("commission_commerciale_ht_montant");
+  const watchedCommissionPerM2Enabled = form.watch("commission_eur_per_m2_enabled");
+  const watchedCommissionPerM2 = form.watch("commission_eur_per_m2");
   const watchedSubcontractorId = form.watch("subcontractor_id");
   const watchedSubcontractorPaymentConfirmed = form.watch("subcontractor_payment_confirmed");
 
@@ -706,8 +731,8 @@ export const SiteDialog = ({
           additional_costs: watchedAdditionalCosts ?? [],
           product_name: watchedProductName,
           valorisation_cee: watchedValorisationCee,
-          commission_commerciale_ht: watchedCommissionCommerciale,
-          commission_commerciale_ht_montant: watchedCommissionCommercialeMontant,
+          commission_eur_per_m2_enabled: watchedCommissionPerM2Enabled,
+          commission_eur_per_m2: watchedCommissionPerM2,
           subcontractor_pricing_details: (() => {
             if (!watchedSubcontractorId) return undefined;
             const option = subcontractors.find((candidate) => candidate.id === watchedSubcontractorId);
@@ -736,8 +761,8 @@ export const SiteDialog = ({
       watchedSurfaceFacturee,
       watchedValorisationCee,
       watchedTravauxChoice,
-      watchedCommissionCommerciale,
-      watchedCommissionCommercialeMontant,
+      watchedCommissionPerM2,
+      watchedCommissionPerM2Enabled,
       watchedSubcontractorId,
       watchedSubcontractorPaymentConfirmed,
       subcontractors,
@@ -758,11 +783,8 @@ export const SiteDialog = ({
   const formattedMarginPerUnit = Number.isFinite(rentability.marginPerUnit)
     ? `${decimalFormatter.format(rentability.marginPerUnit)} € / ${rentability.unitLabel}`
     : `— / ${rentability.unitLabel}`;
-  const watchedTravauxChoice = form.watch("travaux_non_subventionnes");
-  const watchedCommissionCommerciale = form.watch("commission_commerciale_ht");
-  const shouldShowTravauxDetails =
-    (watchedTravauxChoice ?? "NA") !== "NA";
-  const commissionCommercialeActive = watchedCommissionCommerciale === true;
+  const shouldShowTravauxDetails = (watchedTravauxChoice ?? "NA") !== "NA";
+  const commissionPerM2Enabled = watchedCommissionPerM2Enabled === true;
 
   useEffect(() => {
     const currentProgress = form.getValues("progress_percentage");
@@ -918,10 +940,10 @@ export const SiteDialog = ({
     const travauxFinancement = shouldResetTravaux
       ? false
       : Boolean(values.travaux_non_subventionnes_financement);
-    const commissionActive = Boolean(values.commission_commerciale_ht);
-    const commissionMontant = commissionActive
-      ? Number.isFinite(values.commission_commerciale_ht_montant)
-        ? values.commission_commerciale_ht_montant
+    const commissionPerM2Enabled = Boolean(values.commission_eur_per_m2_enabled);
+    const commissionPerM2 = commissionPerM2Enabled
+      ? Number.isFinite(values.commission_eur_per_m2)
+        ? values.commission_eur_per_m2
         : 0
       : 0;
 
@@ -951,8 +973,8 @@ export const SiteDialog = ({
       travaux_non_subventionnes_description: travauxDescription,
       travaux_non_subventionnes_montant: travauxMontant,
       travaux_non_subventionnes_financement: travauxFinancement,
-      commission_commerciale_ht: commissionActive,
-      commission_commerciale_ht_montant: commissionMontant,
+      commission_eur_per_m2_enabled: commissionPerM2Enabled,
+      commission_eur_per_m2: commissionPerM2,
     });
   };
 
@@ -1346,7 +1368,7 @@ export const SiteDialog = ({
 
                 <FormField
                   control={form.control}
-                  name="commission_commerciale_ht"
+                  name="commission_eur_per_m2_enabled"
                   render={({ field }) => (
                     <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
                       <FormControl>
@@ -1357,9 +1379,9 @@ export const SiteDialog = ({
                         />
                       </FormControl>
                       <div className="space-y-1 leading-none">
-                        <FormLabel>Commission commerciale (HT)</FormLabel>
+                        <FormLabel>Commission commerciale (€/m²)</FormLabel>
                         <p className="text-sm text-muted-foreground">
-                          Indique si une commission commerciale HT est à prévoir.
+                          Active le calcul d'une commission commerciale par mètre carré.
                         </p>
                       </div>
                     </FormItem>
@@ -1473,15 +1495,15 @@ export const SiteDialog = ({
                       </FormItem>
                     )}
                   />
-                  {commissionCommercialeActive ? (
+                  {commissionPerM2Enabled ? (
                     <FormField
                       control={form.control}
-                      name="commission_commerciale_ht_montant"
+                      name="commission_eur_per_m2"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Montant commission commerciale HT (€)</FormLabel>
+                          <FormLabel>Montant commission commerciale (€/m²)</FormLabel>
                           <FormControl>
-                            <Input type="number" min={0} step={50} {...field} disabled={isReadOnly} />
+                            <Input type="number" min={0} step={0.1} {...field} disabled={isReadOnly} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
