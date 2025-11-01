@@ -13,11 +13,7 @@ import {
   AddQuoteDialog,
   type QuoteFormValues,
 } from "@/components/quotes/AddQuoteDialog";
-import {
-  SiteDialog,
-  type SiteFormValues,
-  type SiteSubmitValues,
-} from "@/components/sites/SiteDialog";
+import { StartChantierDialog } from "@/components/sites/StartChantierDialog";
 import { toast as showToast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import type { ProjectStatus } from "@/lib/projects";
@@ -52,8 +48,6 @@ import {
 } from "lucide-react";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useMembers } from "@/features/members/api";
-import { useToast } from "@/hooks/use-toast";
-import type { SiteProjectOption } from "@/components/sites/SiteDialog";
 import {
   Select,
   SelectContent,
@@ -271,9 +265,6 @@ const DEFAULT_CATEGORY_METADATA = {
   srLabel: "Catégorie inconnue",
 } as const;
 
-const isUuid = (value: string) =>
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim());
-
 const Projects = ({
   title = "Gestion des Projets",
   description = "Suivi et gestion de vos projets de rénovation énergétique",
@@ -366,30 +357,6 @@ const Projects = ({
     ARCHIVED_STATUS_VALUES.forEach((status) => inactiveValues.add(status));
     return inactiveValues;
   }, [projectStatuses]);
-
-  const memberNameById = useMemo(() => {
-    const result: Record<string, string> = {};
-    members.forEach((member) => {
-      if (!member?.user_id) {
-        return;
-      }
-
-      const fullName = member.profiles?.full_name?.trim();
-      result[member.user_id] = fullName && fullName.length > 0 ? fullName : "Utilisateur";
-    });
-    return result;
-  }, [members]);
-
-  const memberIdByName = useMemo(() => {
-    const result: Record<string, string> = {};
-    Object.entries(memberNameById).forEach(([id, name]) => {
-      const normalized = name.trim().toLowerCase();
-      if (normalized.length > 0 && !result[normalized]) {
-        result[normalized] = id;
-      }
-    });
-    return result;
-  }, [memberNameById]);
 
   const { data: projects = [], isLoading, refetch } = useQuery<ProjectWithRelations[]>({
     queryKey: [
@@ -891,245 +858,12 @@ const Projects = ({
     setQuoteDialogOpen(true);
   };
 
-  const [siteDialogOpen, setSiteDialogOpen] = useState(false);
-  const [siteInitialValues, setSiteInitialValues] = useState<Partial<SiteFormValues>>();
+  const [selectedProjectForChantier, setSelectedProjectForChantier] =
+    useState<ProjectWithRelations | null>(null);
 
-  const handleCreateSite = async (project: ProjectWithRelations) => {
-    const clientName = getProjectClientName(project);
-    const displayedProducts = getDisplayedProducts(project.project_products);
-    const firstProduct = displayedProducts[0]?.product ?? project.project_products?.[0]?.product;
-    const productLabel = firstProduct?.code || project.product_name || "";
-    const address = (project as Project & { address?: string | null }).address ?? "";
-
-    const valorisationSummary = projectValorisationSummaries[project.id];
-    const valorisationProductEntries = valorisationSummary?.valorisationProductEntries ?? [];
-    const fallbackValorisation = valorisationSummary?.fallbackProductEntry;
-    const selectedValorisation = valorisationProductEntries[0] ?? fallbackValorisation;
-    const valorisationTotalEur =
-      selectedValorisation?.valorisationTotalEur ?? selectedValorisation?.totalPrime ?? 0;
-    const primeEntries = valorisationSummary?.displayedPrimeEntries ?? [];
-    const fallbackPrimeEntries = valorisationSummary?.fallbackPrimeEntries ?? [];
-    const selectedPrimeValorisation = (primeEntries.length ? primeEntries : fallbackPrimeEntries)[0];
-    const valorisationMwh = selectedPrimeValorisation?.valorisationTotalMwh ?? 0;
-    const valorisationBase = selectedPrimeValorisation?.valorisationPerUnitEur ?? 0;
-    const surfaceFacturee = surfaceFactureeByProject[project.id] ?? 0;
-
-    // Generate unique site ref
-    const today = new Date();
-    const datePrefix = `SITE-${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(today.getDate()).padStart(2, "0")}`;
-    
-    const { data: existingSites } = await supabase
-      .from("sites")
-      .select("site_ref")
-      .eq("org_id", currentOrgId)
-      .like("site_ref", `${datePrefix}-%`)
-      .order("created_at", { ascending: false })
-      .limit(1);
-
-    let nextNumber = 1;
-    if (existingSites && existingSites.length > 0) {
-      const lastRef = existingSites[0].site_ref;
-      const lastNumber = parseInt(lastRef.split("-").pop() || "0");
-      nextNumber = lastNumber + 1;
-    }
-
-    const site_ref = `${datePrefix}-${String(nextNumber).padStart(3, "0")}`;
-
-    setSiteInitialValues({
-      site_ref,
-      project_ref: project.project_ref ?? "",
-      client_name: clientName,
-      product_name: productLabel,
-      address,
-      city: project.city ?? "",
-      postal_code: project.postal_code ?? "",
-      date_debut: new Date().toISOString().slice(0, 10),
-      status: "PLANIFIE",
-      cofrac_status: "EN_ATTENTE",
-      progress_percentage: 0,
-      revenue: 0,
-      profit_margin: 0,
-      surface_facturee: surfaceFacturee,
-      cout_main_oeuvre_m2_ht: 0,
-      cout_isolation_m2: 0,
-      isolation_utilisee_m2: 0,
-      montant_commission: 0,
-      valorisation_cee: valorisationTotalEur,
-      travaux_non_subventionnes: "NA",
-      travaux_non_subventionnes_description: "",
-      travaux_non_subventionnes_montant: 0,
-      travaux_non_subventionnes_financement: false,
-      commission_commerciale_ht: false,
-      commission_commerciale_ht_montant: 0,
-      subcontractor_id: null,
-      team_members: [],
-      additional_costs: [],
-      subcontractor_payment_confirmed: false,
-    });
-    setSiteDialogOpen(true);
-  };
-
-  const projectOptions = useMemo<SiteProjectOption[]>(() => {
-    return processedProjects.map(({ project, displayedProducts, clientName, surfaceFacturee }) => {
-      const firstProduct = displayedProducts[0]?.product ?? project.project_products?.[0]?.product;
-      const productLabel = firstProduct?.code || project.product_name || "";
-      const address = (project as Project & { address?: string | null }).address ?? "";
-
-      return {
-        id: project.id,
-        project_ref: project.project_ref ?? "",
-        client_name: clientName,
-        product_name: productLabel,
-        address,
-        city: project.city ?? "",
-        postal_code: project.postal_code ?? "",
-        surface_facturee: surfaceFacturee > 0 ? surfaceFacturee : undefined,
-      } satisfies SiteProjectOption;
-    });
-  }, [processedProjects]);
-
-  const handleSubmitSite = useCallback(async (values: SiteSubmitValues) => {
-    if (!user || !currentOrgId) return;
-
-    const sanitizedTeam = Array.from(
-      new Set(
-        (values.team_members ?? [])
-          .map((member) => {
-            if (!member) return null;
-
-            const rawId = typeof member.id === "string" ? member.id.trim() : "";
-            if (rawId && (isUuid(rawId) || memberNameById[rawId])) {
-              return rawId;
-            }
-
-            const rawName = typeof member.name === "string" ? member.name.trim() : "";
-            if (rawName.length > 0) {
-              const matchedId = memberIdByName[rawName.toLowerCase()];
-              if (matchedId) {
-                return matchedId;
-              }
-            }
-
-            return null;
-          })
-          .filter((value): value is string => Boolean(value)),
-      ),
-    );
-    const sanitizedCosts = values.additional_costs
-      ? values.additional_costs
-          .filter((cost) => cost.label.trim().length > 0)
-          .map((cost) => {
-            const attachment = cost.attachment ? cost.attachment.trim() : "";
-            const montantTVA = Number.isFinite(cost.montant_tva) ? cost.montant_tva : 0;
-            const amountHT = Number.isFinite(cost.amount_ht) ? cost.amount_ht : 0;
-            const amountTTC = Number.isFinite(cost.amount_ttc)
-              ? cost.amount_ttc
-              : Math.round((amountHT + montantTVA) * 100) / 100;
-
-            return {
-              label: cost.label.trim(),
-              amount_ht: amountHT,
-              montant_tva: montantTVA,
-              amount_ttc: amountTTC,
-              attachment: attachment.length > 0 ? attachment : null,
-            };
-          })
-      : [];
-
-    const projectRef = values.project_ref?.trim?.() ?? "";
-    const clientName = values.client_name?.trim?.() ?? "";
-    const travauxChoice = values.travaux_non_subventionnes ?? "NA";
-    const shouldResetTravaux = travauxChoice === "NA";
-    const travauxDescription = shouldResetTravaux
-      ? ""
-      : values.travaux_non_subventionnes_description?.trim() ?? "";
-    const travauxMontant = shouldResetTravaux
-      ? 0
-      : Number.isFinite(values.travaux_non_subventionnes_montant)
-        ? values.travaux_non_subventionnes_montant
-        : 0;
-    const travauxFinancement = shouldResetTravaux
-      ? false
-      : Boolean(values.travaux_non_subventionnes_financement);
-    const commissionActive = Boolean(values.commission_commerciale_ht);
-    const commissionMontant = commissionActive
-      ? Number.isFinite(values.commission_commerciale_ht_montant)
-        ? values.commission_commerciale_ht_montant
-        : 0
-      : 0;
-    const matchedProject = projectOptions.find(
-      (option) => option.project_ref === projectRef,
-    );
-    const projectId = typeof matchedProject?.id === "string" ? matchedProject.id : null;
-
-    const siteData = {
-      site_ref: values.site_ref,
-      project_ref: projectRef,
-      client_name: clientName,
-      product_name: values.product_name?.trim() || "",
-      address: values.address,
-      city: values.city,
-      postal_code: values.postal_code,
-      status: values.status,
-      cofrac_status: values.cofrac_status,
-      date_debut: values.date_debut,
-      date_fin_prevue: values.date_fin_prevue || null,
-      progress_percentage: values.progress_percentage,
-      revenue: values.revenue,
-      profit_margin: values.rentability_margin_rate,
-      surface_facturee: values.surface_facturee,
-      cout_main_oeuvre_m2_ht: values.cout_main_oeuvre_m2_ht,
-      cout_isolation_m2: values.cout_isolation_m2,
-      isolation_utilisee_m2: values.isolation_utilisee_m2,
-      montant_commission: values.montant_commission,
-      valorisation_cee: values.valorisation_cee,
-      subcontractor_payment_confirmed: values.subcontractor_payment_confirmed,
-      travaux_non_subventionnes: travauxChoice,
-      travaux_non_subventionnes_description: travauxDescription,
-      travaux_non_subventionnes_montant: travauxMontant,
-      travaux_non_subventionnes_financement: travauxFinancement,
-      commission_commerciale_ht: commissionActive,
-      commission_commerciale_ht_montant: commissionMontant,
-      notes: values.notes?.trim() || null,
-      team_members: (sanitizedTeam.length > 0 ? sanitizedTeam : []) as string[],
-      additional_costs: sanitizedCosts.length > 0 ? sanitizedCosts : [],
-      subcontractor_id: values.subcontractor_id ?? null,
-      user_id: user.id,
-      org_id: currentOrgId,
-      project_id: projectId,
-      rentability_total_costs: values.rentability_total_costs,
-      rentability_margin_total: values.rentability_margin_total,
-      rentability_margin_per_unit: values.rentability_margin_per_unit,
-      rentability_margin_rate: values.rentability_margin_rate,
-      rentability_unit_label: values.rentability_unit_label,
-      rentability_unit_count: values.rentability_unit_count,
-      rentability_additional_costs_total: values.rentability_additional_costs_total,
-    };
-
-    try {
-      const { error } = await supabase.from("sites").insert([siteData as any]);
-
-      if (error) throw error;
-
-      showToast("Chantier créé", {
-        description: `${siteData.site_ref} a été ajouté à la liste des chantiers.`,
-      });
-
-      setSiteDialogOpen(false);
-      setSiteInitialValues(undefined);
-    } catch (error) {
-      console.error("Error saving site:", error);
-      showToast("Erreur", {
-        description: "Impossible de créer le chantier.",
-      });
-    }
-  }, [
-    user,
-    currentOrgId,
-    projectOptions,
-    memberIdByName,
-    memberNameById,
-  ]);
+  const handleStartChantier = useCallback((project: ProjectWithRelations) => {
+    setSelectedProjectForChantier(project);
+  }, []);
 
   if (isLoading || membersLoading || isRestrictionLoading || restrictionNotReady) {
     return (
@@ -1734,7 +1468,7 @@ const Projects = ({
                               className="flex-1 h-9 text-xs font-medium shadow-sm hover:shadow-md transition-all"
                               onClick={(event) => {
                                 event.stopPropagation();
-                                handleCreateSite(project);
+                                handleStartChantier(project);
                               }}
                             >
                               <HardHat className="mr-1.5 h-4 w-4" />
@@ -1968,7 +1702,7 @@ const Projects = ({
                                 <Button
                                   size="sm"
                                   variant="secondary"
-                                  onClick={() => handleCreateSite(project)}
+                                  onClick={() => handleStartChantier(project)}
                                 >
                                   <Hammer className="h-4 w-4 mr-1" />
                                   Chantier
@@ -2005,20 +1739,22 @@ const Projects = ({
         }}
         initialValues={quoteInitialValues}
       />
-      <SiteDialog
-        open={siteDialogOpen}
-        mode="create"
-        onOpenChange={(open) => {
-          setSiteDialogOpen(open);
-          if (!open) {
-            setSiteInitialValues(undefined);
-          }
-        }}
-        onSubmit={handleSubmitSite}
-        initialValues={siteInitialValues}
-        orgId={currentOrgId}
-        projects={projectOptions}
-      />
+      {selectedProjectForChantier ? (
+        <StartChantierDialog
+          projectId={selectedProjectForChantier.id}
+          projectRef={selectedProjectForChantier.project_ref ?? null}
+          projectName={getProjectClientName(selectedProjectForChantier)}
+          open={Boolean(selectedProjectForChantier)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setSelectedProjectForChantier(null);
+            }
+          }}
+          onChantierStarted={() => {
+            void refetch();
+          }}
+        />
+      ) : null}
     </Layout>
   );
 };
