@@ -342,6 +342,7 @@ const createProjectSchema = (
     client_last_name: z.string().min(2, "Le nom du client est requis"),
     company: z.string().optional(),
     phone: z.string().optional(),
+    email: z.string().email("Email invalide").optional().or(z.literal("")),
     hq_address: z.string().min(3, "L'adresse du siège est requise"),
     hq_city: z.string().min(2, "La ville du siège est requise"),
     hq_postal_code: z.string().min(5, "Code postal du siège invalide"),
@@ -397,6 +398,7 @@ const baseDefaultValues: Partial<ProjectFormValues> = {
   client_last_name: "",
   company: "",
   phone: "",
+  email: "",
   hq_address: "",
   hq_city: "",
   hq_postal_code: "",
@@ -1392,6 +1394,7 @@ export const AddProjectDialog = ({
         source: data.source || undefined,
         company: data.company || undefined,
         phone: data.phone || undefined,
+        email: data.email || undefined,
         siren: normalizedSiren && normalizedSiren.length > 0 ? normalizedSiren : null,
         building_type: data.building_type || undefined,
         usage: data.usage || undefined,
@@ -1702,6 +1705,19 @@ export const AddProjectDialog = ({
                     <FormLabel>Téléphone</FormLabel>
                     <FormControl>
                       <Input type="tel" placeholder="+33 6 12 34 56 78" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input type="email" placeholder="client@example.com" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

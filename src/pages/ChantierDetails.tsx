@@ -280,7 +280,6 @@ const ChantierDetails = () => {
       subcontractor_payment_units: sanitizeNumber(chantier.subcontractor_payment_units),
       subcontractor_payment_unit_label: chantier.subcontractor_payment_unit_label?.trim() ?? "",
       subcontractor_payment_rate: sanitizeNumber(chantier.subcontractor_payment_rate),
-      travaux_non_subventionnes: (String(chantier.travaux_non_subventionnes) as SiteFormValues["travaux_non_subventionnes"]) || "NA",
       travaux_non_subventionnes: normalizeTravauxNonSubventionnesValue(
         chantier.travaux_non_subventionnes,
       ),

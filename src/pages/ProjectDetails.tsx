@@ -5371,27 +5371,6 @@ const ProjectDetails = () => {
                         attachments.length > 1
                           ? `${attachments.length} documents`
                           : attachments[0]?.title ?? primaryAttachment?.name ?? "Document chantier";
-                      const additionalCostCount = Array.isArray(
-                        site.additional_costs,
-                      )
-                        ? site.additional_costs.length
-                        : 0;
-                      const additionalCostTotal = Array.isArray(site.additional_costs)
-                        ? site.additional_costs.reduce((total, rawCost) => {
-                            if (!rawCost || typeof rawCost !== "object") {
-                              return total;
-                            }
-
-                            const cost = rawCost as Record<string, unknown>;
-                            const amountHT = parseNumber(cost.amount_ht) ?? 0;
-                            const montantTVA =
-                              parseNumber(cost.montant_tva) ?? parseNumber(cost.taxes) ?? 0;
-                            const amountTTC = typeof cost.amount_ttc === 'number' ? cost.amount_ttc : (amountHT + montantTVA);
-
-                            return (total as number) + amountTTC;
-                          }, 0)
-                        : 0;
-                          : primaryAttachment?.name ?? "Document chantier";
                       const normalizedAdditionalCosts = normalizeAdditionalCostsArray(
                         site.additional_costs ?? [],
                       );

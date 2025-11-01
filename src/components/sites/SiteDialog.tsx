@@ -58,6 +58,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { DriveFileUploader } from "@/components/integrations/DriveFileUploader";
 import { DriveMultiFileUploader } from "@/components/integrations/DriveMultiFileUploader";
 import type { DriveFileMetadata } from "@/integrations/googleDrive";
 import type { SiteNoteAttachment } from "@/lib/sites";
