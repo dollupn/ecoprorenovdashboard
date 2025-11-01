@@ -1,31 +1,63 @@
 export type RentabilityMeasurementMode = "surface" | "luminaire";
 
+export type RentabilityTravauxOption = "NA" | "CLIENT" | "MARGE" | "MOITIE";
+
+export interface RentabilityAdditionalCostInput {
+  amount_ht?: number | null;
+  taxes?: number | null;
+}
+
 export interface RentabilityInput {
   revenue?: number | null;
+  primeCee?: number | null;
   laborCostPerUnit?: number | null;
   materialCostPerUnit?: number | null;
   unitsUsed?: number | null;
   billedUnits?: number | null;
   commission?: number | null;
-  nonSubsidizedWork?: number | null;
-  additionalCosts?: ReadonlyArray<{
-    amount_ht?: number | null;
-    taxes?: number | null;
-  }> | null;
+  commissionPerUnit?: number | null;
+  commissionPerUnitActive?: boolean | null;
+  travauxOption?: RentabilityTravauxOption | null;
+  travauxAmount?: number | null;
+  additionalCosts?: ReadonlyArray<RentabilityAdditionalCostInput | null | undefined> | null;
+  fraisTvaPercentage?: number | null;
+  subcontractorRatePerUnit?: number | null;
+  subcontractorBaseUnits?: number | null;
+  subcontractorPaymentConfirmed?: boolean | null;
   measurementMode?: RentabilityMeasurementMode;
   unitLabel?: string | null;
+  projectCategory?: string | null;
+  originalRevenue?: number | null;
+}
+
+export interface RentabilityCostBreakdown {
+  labor: number;
+  material: number;
+  commission: number;
+  commissionPerUnit: number;
+  subcontractor: number;
+  additional: number;
+  travaux: number;
 }
 
 export interface RentabilityResult {
+  ca: number;
   revenue: number;
+  originalRevenue: number;
+  primeCee: number;
+  travauxRevenue: number;
+  travauxCost: number;
   totalCosts: number;
   additionalCostsTotal: number;
+  fraisTotalTtc: number;
   marginTotal: number;
   marginPerUnit: number;
   marginRate: number;
   unitsUsed: number;
+  baseUnits: number;
   unitLabel: string;
   measurementMode: RentabilityMeasurementMode;
+  costBreakdown: RentabilityCostBreakdown;
 }
 
 const sanitizeNumber = (value: unknown): number => {
@@ -44,8 +76,44 @@ const roundZero = (value: number): number => {
   return Math.abs(rounded) < 1e-6 ? 0 : rounded;
 };
 
+const clampPercentage = (value: number): number => {
+  if (!Number.isFinite(value)) return 0;
+  if (value < 0) return 0;
+  if (value > 100) return 100;
+  return value;
+};
+
+const normalizeTravauxOption = (
+  value: RentabilityInput["travauxOption"],
+): RentabilityTravauxOption => {
+  if (!value) return "NA";
+  const normalized = `${value}`.trim().toUpperCase();
+  switch (normalized) {
+    case "CLIENT":
+      return "CLIENT";
+    case "MARGE":
+      return "MARGE";
+    case "MOITIE":
+      return "MOITIE";
+    default:
+      return "NA";
+  }
+};
+
+const toBoolean = (value: unknown): boolean => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized.length === 0) return false;
+    return ["true", "t", "1", "oui", "yes", "on"].includes(normalized);
+  }
+  return false;
+};
+
 export const calculateRentability = (input: RentabilityInput): RentabilityResult => {
-  const revenue = Math.max(0, sanitizeNumber(input.revenue));
+  const originalRevenue = Math.max(0, sanitizeNumber(input.originalRevenue ?? input.revenue));
+  const primeCee = Math.max(0, sanitizeNumber(input.primeCee));
   const laborCostPerUnit = Math.max(0, sanitizeNumber(input.laborCostPerUnit));
   const materialCostPerUnit = Math.max(0, sanitizeNumber(input.materialCostPerUnit));
   const measurementMode = input.measurementMode ?? "surface";
@@ -54,45 +122,106 @@ export const calculateRentability = (input: RentabilityInput): RentabilityResult
   const trimmedUnitLabel = rawUnitLabel.trim();
   const unitLabel = trimmedUnitLabel.length > 0 ? trimmedUnitLabel : defaultLabel;
 
-  const unitsCandidates = [input.unitsUsed, input.billedUnits];
-  let unitsUsed = 0;
-  for (const candidate of unitsCandidates) {
-    const numeric = sanitizeNumber(candidate);
-    if (numeric > 0) {
-      unitsUsed = numeric;
-      break;
+  const billedUnits = Math.max(0, sanitizeNumber(input.billedUnits));
+  const executedUnits = Math.max(0, sanitizeNumber(input.unitsUsed));
+  const projectCategory = (input.projectCategory ?? "").trim().toLowerCase();
+  const isLightingCategory = projectCategory.includes("eclair") || measurementMode === "luminaire";
+  const baseUnits = isLightingCategory
+    ? billedUnits || executedUnits
+    : executedUnits || billedUnits;
+  const normalizedBaseUnits = baseUnits > 0 ? baseUnits : Math.max(billedUnits, executedUnits);
+  const effectiveUnits = normalizedBaseUnits > 0 ? normalizedBaseUnits : 0;
+
+  const travauxOption = normalizeTravauxOption(input.travauxOption);
+  const travauxAmount = Math.max(0, sanitizeNumber(input.travauxAmount));
+  let travauxRevenue = 0;
+  let travauxCost = 0;
+  if (travauxAmount > 0) {
+    switch (travauxOption) {
+      case "CLIENT":
+        travauxRevenue = travauxAmount;
+        break;
+      case "MARGE":
+        travauxCost = travauxAmount;
+        break;
+      case "MOITIE":
+        travauxRevenue = travauxAmount / 2;
+        travauxCost = travauxAmount / 2;
+        break;
+      default:
+        break;
     }
   }
 
-  const additionalCostsTotal = (input.additionalCosts ?? []).reduce((sum, cost) => {
-    if (!cost) return sum;
+  const additionalCostsTotal = (input.additionalCosts ?? []).reduce((sum, rawCost) => {
+    if (!rawCost) return sum;
+    const cost = rawCost as RentabilityAdditionalCostInput;
     const amount = Math.max(0, sanitizeNumber(cost.amount_ht));
-    const taxes = Math.max(0, sanitizeNumber(cost.taxes));
+    const taxesRaw = cost.taxes;
+    if (Number.isFinite(taxesRaw as number)) {
+      const taxes = Math.max(0, sanitizeNumber(taxesRaw));
+      return sum + amount + taxes;
+    }
+    const rate = clampPercentage(Math.max(0, sanitizeNumber(input.fraisTvaPercentage)));
+    const taxes = rate > 0 ? amount * (rate / 100) : 0;
     return sum + amount + taxes;
   }, 0);
 
-  const commission = Math.max(0, sanitizeNumber(input.commission));
-  const nonSubsidized = Math.max(0, sanitizeNumber(input.nonSubsidizedWork));
+  const commissionFixed = Math.max(0, sanitizeNumber(input.commission));
+  const commissionPerUnitRate = Math.max(0, sanitizeNumber(input.commissionPerUnit));
+  const commissionPerUnitActive = toBoolean(input.commissionPerUnitActive);
+  const commissionPerUnitTotal = commissionPerUnitActive ? commissionPerUnitRate * effectiveUnits : 0;
 
-  const variableCostBase = unitsUsed > 0 ? unitsUsed : sanitizeNumber(input.unitsUsed);
-  const variableCostPerUnit = laborCostPerUnit + materialCostPerUnit;
-  const variableCosts = Math.max(0, variableCostBase) * Math.max(0, variableCostPerUnit);
+  const subcontractorRate = Math.max(0, sanitizeNumber(input.subcontractorRatePerUnit));
+  const subcontractorUnitsCandidate = Math.max(0, sanitizeNumber(input.subcontractorBaseUnits));
+  const subcontractorUnits = subcontractorUnitsCandidate > 0 ? subcontractorUnitsCandidate : effectiveUnits;
+  const subcontractorPaymentConfirmed = toBoolean(input.subcontractorPaymentConfirmed);
+  const subcontractorCost = subcontractorPaymentConfirmed ? subcontractorUnits * subcontractorRate : 0;
 
-  const totalCosts = variableCosts + additionalCostsTotal + commission + nonSubsidized;
-  const marginTotal = revenue - totalCosts;
-  const marginRate = revenue > 0 ? marginTotal / revenue : 0;
-  const marginPerUnit = unitsUsed > 0 ? marginTotal / unitsUsed : 0;
+  const laborCostTotal = effectiveUnits * laborCostPerUnit;
+  const materialCostTotal = effectiveUnits * materialCostPerUnit;
+
+  const totalRevenue = originalRevenue + primeCee + travauxRevenue;
+
+  const totalCosts =
+    laborCostTotal +
+    materialCostTotal +
+    additionalCostsTotal +
+    commissionFixed +
+    commissionPerUnitTotal +
+    subcontractorCost +
+    travauxCost;
+
+  const marginTotal = totalRevenue - totalCosts;
+  const marginRate = totalRevenue > 0 ? marginTotal / totalRevenue : 0;
+  const marginPerUnit = effectiveUnits > 0 ? marginTotal / effectiveUnits : 0;
 
   return {
-    revenue,
+    ca: roundZero(totalRevenue),
+    revenue: roundZero(totalRevenue),
+    originalRevenue: roundZero(originalRevenue),
+    primeCee: roundZero(primeCee),
+    travauxRevenue: roundZero(travauxRevenue),
+    travauxCost: roundZero(travauxCost),
     totalCosts: roundZero(totalCosts),
     additionalCostsTotal: roundZero(additionalCostsTotal),
+    fraisTotalTtc: roundZero(additionalCostsTotal),
     marginTotal: roundZero(marginTotal),
     marginPerUnit: roundZero(marginPerUnit),
     marginRate: roundZero(marginRate),
-    unitsUsed: roundZero(unitsUsed),
+    unitsUsed: roundZero(effectiveUnits),
+    baseUnits: roundZero(effectiveUnits),
     unitLabel,
     measurementMode,
+    costBreakdown: {
+      labor: roundZero(laborCostTotal),
+      material: roundZero(materialCostTotal),
+      commission: roundZero(commissionFixed),
+      commissionPerUnit: roundZero(commissionPerUnitTotal),
+      subcontractor: roundZero(subcontractorCost),
+      additional: roundZero(additionalCostsTotal),
+      travaux: roundZero(travauxCost),
+    },
   };
 };
 
@@ -112,6 +241,16 @@ export interface SiteRentabilitySource {
   montant_commission?: number | null;
   travaux_non_subventionnes?: string | number | null;
   travaux_non_subventionnes_montant?: number | null;
+  valorisation_cee?: number | null;
+  project_prime_cee?: number | null;
+  project_prime_cee_total_cents?: number | null;
+  commission_commerciale_ht?: string | boolean | null;
+  commission_commerciale_ht_montant?: number | null;
+  frais_tva_percentage?: number | null;
+  subcontractor_pricing_details?: string | number | null;
+  subcontractor_payment_confirmed?: boolean | null;
+  subcontractor_base_units?: number | null;
+  project_category?: string | null;
   additional_costs?: ReadonlyArray<{
     amount_ht?: number | null;
     taxes?: number | null;
@@ -122,24 +261,56 @@ export interface SiteRentabilitySource {
 export const buildRentabilityInputFromSite = (
   values: SiteRentabilitySource,
 ): RentabilityInput => {
-  const led = isLedProduct(values.product_name);
-  const unitsUsed = values.isolation_utilisee_m2;
-  const billedUnits = led ? values.surface_facturee : values.isolation_utilisee_m2;
-  const rawNonSubsidized =
+  const ledProduct = isLedProduct(values.product_name);
+  const projectCategory = values.project_category ?? (ledProduct ? "eclairage" : null);
+  const measurementMode = ledProduct ? "luminaire" : "surface";
+  const unitLabel = ledProduct ? "luminaire" : "m²";
+
+  const executedUnits = sanitizeNumber(values.isolation_utilisee_m2);
+  const billedUnits = sanitizeNumber(values.surface_facturee);
+
+  const travauxAmountCandidate =
     typeof values.travaux_non_subventionnes_montant === "number"
       ? values.travaux_non_subventionnes_montant
-      : values.travaux_non_subventionnes;
+      : typeof values.travaux_non_subventionnes === "number"
+        ? values.travaux_non_subventionnes
+        : null;
+
+  const primeCandidates = [values.valorisation_cee, values.project_prime_cee];
+  if (typeof values.project_prime_cee_total_cents === "number") {
+    primeCandidates.push(values.project_prime_cee_total_cents / 100);
+  }
+  const primeCee = primeCandidates.reduce((result, candidate) => {
+    const value = sanitizeNumber(candidate);
+    return value > 0 ? value : result;
+  }, 0);
+
+  const commissionPerUnitActive = toBoolean(values.commission_commerciale_ht);
+  const commissionPerUnit = sanitizeNumber(values.commission_commerciale_ht_montant);
+
+  const subcontractorRate = sanitizeNumber(values.subcontractor_pricing_details);
+  const subcontractorBaseUnits = sanitizeNumber(values.subcontractor_base_units);
 
   return {
     revenue: values.revenue,
+    originalRevenue: values.revenue,
+    primeCee,
     laborCostPerUnit: values.cout_main_oeuvre_m2_ht,
     materialCostPerUnit: values.cout_isolation_m2,
-    unitsUsed,
+    unitsUsed: executedUnits,
     billedUnits,
     commission: values.montant_commission,
-    nonSubsidizedWork: typeof rawNonSubsidized === 'number' ? rawNonSubsidized : 0,
+    commissionPerUnit,
+    commissionPerUnitActive,
+    travauxOption: (values.travaux_non_subventionnes as RentabilityTravauxOption | null | undefined) ?? null,
+    travauxAmount: travauxAmountCandidate,
     additionalCosts: values.additional_costs,
-    measurementMode: led ? "luminaire" : "surface",
-    unitLabel: led ? "luminaire" : "m²",
+    fraisTvaPercentage: values.frais_tva_percentage,
+    subcontractorRatePerUnit: subcontractorRate,
+    subcontractorBaseUnits,
+    subcontractorPaymentConfirmed: values.subcontractor_payment_confirmed,
+    measurementMode,
+    unitLabel,
+    projectCategory,
   };
 };

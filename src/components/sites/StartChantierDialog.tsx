@@ -66,6 +66,7 @@ type StartChantierFormValues = z.infer<typeof startChantierSchema>;
 type SubcontractorOption = {
   id: string;
   name: string;
+  pricing_details: string | null;
 };
 
 type StartChantierDialogProps = {
@@ -212,7 +213,7 @@ export const StartChantierDialog = ({
 
       const { data, error } = await supabase
         .from("subcontractors")
-        .select("id, name")
+        .select("id, name, pricing_details")
         .eq("org_id", currentOrgId)
         .eq("is_active", true)
         .order("name");
