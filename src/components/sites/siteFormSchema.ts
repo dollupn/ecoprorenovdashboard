@@ -95,11 +95,26 @@ export const computeAdditionalCostTTC = (
   return Math.round(total * 100) / 100;
 };
 
-export const createBaseSiteSchema = (statusOptions: readonly string[]) => {
-  const statusSchema =
+type SiteSchemaOptions = {
+  statusOptional?: boolean;
+};
+
+export const createBaseSiteSchema = (
+  statusOptions: readonly string[],
+  options?: SiteSchemaOptions,
+) => {
+  const baseStatusSchema =
     statusOptions.length > 0
       ? z.enum(statusOptions as [string, ...string[]])
       : z.string().min(1, "Statut requis");
+
+  const statusSchema = options?.statusOptional
+    ? z
+        .string()
+        .optional()
+        .nullable()
+        .transform((value) => value ?? "")
+    : baseStatusSchema;
 
   return z.object({
     site_ref: z.string().min(3, "Référence requise"),
@@ -207,8 +222,9 @@ export const defaultSiteFormValues: SiteFormValues = {
 export const createSiteSchema = (
   statusValues: readonly string[],
   requiresProjectAssociation: boolean,
+  options?: SiteSchemaOptions,
 ) =>
-  createBaseSiteSchema(statusValues).superRefine((data, ctx) => {
+  createBaseSiteSchema(statusValues, options).superRefine((data, ctx) => {
     const projectRef = data.project_ref?.trim?.() ?? "";
     const clientName = data.client_name?.trim?.() ?? "";
 
