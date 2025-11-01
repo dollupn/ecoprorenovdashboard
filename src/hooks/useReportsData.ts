@@ -14,6 +14,7 @@ import {
   buildRentabilityInputFromSite,
   type RentabilityInput,
 } from "@/lib/rentability";
+import { normalizeTravauxNonSubventionnesValue } from "@/components/sites/travauxNonSubventionnes";
 import { withDefaultProductCeeConfig } from "@/lib/prime-cee-unified";
 import { DEFAULT_PROJECT_STATUSES } from "@/lib/projects";
 
@@ -151,6 +152,18 @@ const resolveSiteRentability = (site: SiteRow) => {
     ? (site.additional_costs as RentabilityInput["additionalCosts"])
     : [];
 
+  const travauxChoice = normalizeTravauxNonSubventionnesValue(
+    site.travaux_non_subventionnes,
+  );
+  const travauxMontant =
+    typeof site.travaux_non_subventionnes_montant === "number" &&
+    Number.isFinite(site.travaux_non_subventionnes_montant)
+      ? site.travaux_non_subventionnes_montant
+      : typeof site.travaux_non_subventionnes === "number" &&
+          Number.isFinite(site.travaux_non_subventionnes)
+        ? site.travaux_non_subventionnes
+        : 0;
+
   const computed = calculateRentability(
     buildRentabilityInputFromSite({
       revenue: site.revenue,
@@ -159,13 +172,18 @@ const resolveSiteRentability = (site: SiteRow) => {
       isolation_utilisee_m2: site.isolation_utilisee_m2,
       surface_facturee: site.surface_facturee,
       montant_commission: site.montant_commission,
-      travaux_non_subventionnes: typeof site.travaux_non_subventionnes === 'string' ? site.travaux_non_subventionnes : 'NA',
-      travaux_non_subventionnes_montant: typeof site.travaux_non_subventionnes === 'number' ? site.travaux_non_subventionnes : 0,
+      travaux_non_subventionnes: travauxChoice,
+      travaux_non_subventionnes_montant: travauxMontant,
       additional_costs: additionalCosts ?? [],
       product_name: site.product_name,
       valorisation_cee: site.valorisation_cee,
-      commission_commerciale_ht: site.commission_commerciale_ht,
-      commission_commerciale_ht_montant: site.commission_commerciale_ht_montant,
+      commission_eur_per_m2_enabled:
+        site.commission_eur_per_m2_enabled ??
+        (site as unknown as { commission_commerciale_ht?: unknown }).commission_commerciale_ht,
+      commission_eur_per_m2:
+        site.commission_eur_per_m2 ??
+        (site as unknown as { commission_commerciale_ht_montant?: unknown })
+          .commission_commerciale_ht_montant,
       subcontractor_payment_confirmed: site.subcontractor_payment_confirmed,
       project_category: site.product_name,
     }),

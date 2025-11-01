@@ -89,8 +89,7 @@ import {
 import { StartChantierDialog } from "@/components/sites/StartChantierDialog";
 import {
   TRAVAUX_NON_SUBVENTIONNES_LABELS,
-  TRAVAUX_NON_SUBVENTIONNES_OPTIONS,
-  type TravauxNonSubventionnesValue,
+  normalizeTravauxNonSubventionnesValue,
 } from "@/components/sites/travauxNonSubventionnes";
 import {
   getDynamicFieldEntries,
@@ -4257,10 +4256,10 @@ const ProjectDetails = () => {
     const travauxFinancement = shouldResetTravaux
       ? false
       : Boolean(values.travaux_non_subventionnes_financement);
-    const commissionActive = Boolean(values.commission_commerciale_ht);
-    const commissionMontant = commissionActive
-      ? Number.isFinite(values.commission_commerciale_ht_montant)
-        ? values.commission_commerciale_ht_montant
+    const commissionPerM2Enabled = Boolean(values.commission_eur_per_m2_enabled);
+    const commissionPerM2Value = commissionPerM2Enabled
+      ? Number.isFinite(values.commission_eur_per_m2)
+        ? values.commission_eur_per_m2
         : 0
       : 0;
     const matchedProject = projectSiteOptions.find(
@@ -4307,8 +4306,8 @@ const ProjectDetails = () => {
       travaux_non_subventionnes_description: travauxDescription,
       travaux_non_subventionnes_montant: travauxMontant,
       travaux_non_subventionnes_financement: travauxFinancement,
-      commission_commerciale_ht: commissionActive,
-      commission_commerciale_ht_montant: commissionMontant,
+      commission_eur_per_m2_enabled: commissionPerM2Enabled,
+      commission_eur_per_m2: commissionPerM2Value,
       notes: values.notes?.trim() || null,
       team_members: (sanitizedTeam.length > 0 ? sanitizedTeam : []) as string[],
       additional_costs: sanitizedCosts.length > 0 ? sanitizedCosts : [],
@@ -5422,8 +5421,14 @@ const ProjectDetails = () => {
                           : [],
                         product_name: site.product_name,
                         valorisation_cee: site.valorisation_cee,
-                        commission_commerciale_ht: site.commission_commerciale_ht,
-                        commission_commerciale_ht_montant: site.commission_commerciale_ht_montant,
+                        commission_eur_per_m2_enabled:
+                          site.commission_eur_per_m2_enabled ??
+                          (site as unknown as { commission_commerciale_ht?: unknown })
+                            .commission_commerciale_ht,
+                        commission_eur_per_m2:
+                          site.commission_eur_per_m2 ??
+                          (site as unknown as { commission_commerciale_ht_montant?: unknown })
+                            .commission_commerciale_ht_montant,
                         subcontractor_pricing_details: site.subcontractor?.pricing_details ?? null,
                         subcontractor_payment_confirmed: site.subcontractor_payment_confirmed,
                         project_prime_cee: project?.prime_cee ?? undefined,
@@ -5485,15 +5490,9 @@ const ProjectDetails = () => {
                       )
                         ? `${formatDecimal(rentabilityMetrics.marginPerUnit)} € / ${rentabilityMetrics.unitLabel}`
                         : `— / ${rentabilityMetrics.unitLabel}`;
-                      const rawTravauxChoice = (site.travaux_non_subventionnes ?? "NA") as
-                        | TravauxNonSubventionnesValue
-                        | string;
-                      const isValidTravauxChoice = TRAVAUX_NON_SUBVENTIONNES_OPTIONS.some(
-                        (option) => option.value === rawTravauxChoice,
+                      const travauxChoice = normalizeTravauxNonSubventionnesValue(
+                        site.travaux_non_subventionnes,
                       );
-                      const travauxChoice = isValidTravauxChoice
-                        ? (rawTravauxChoice as TravauxNonSubventionnesValue)
-                        : "NA";
                       const travauxLabel =
                         TRAVAUX_NON_SUBVENTIONNES_LABELS[travauxChoice] ?? "N/A";
                       const hasTravauxDetails = travauxChoice !== "NA";
@@ -5502,14 +5501,17 @@ const ProjectDetails = () => {
                         Number.isFinite(site.travaux_non_subventionnes_montant)
                           ? site.travaux_non_subventionnes_montant
                           : 0;
-                      const commissionCommercialeActive = Boolean(
-                        site.commission_commerciale_ht,
+                      const commissionPerM2Enabled = Boolean(
+                        site.commission_eur_per_m2_enabled ??
+                          (site as unknown as { commission_commerciale_ht?: unknown }).commission_commerciale_ht,
                       );
-                      const commissionCommercialeMontant =
-                        typeof site.commission_commerciale_ht_montant === "number" &&
-                        Number.isFinite(site.commission_commerciale_ht_montant)
-                          ? site.commission_commerciale_ht_montant
-                          : 0;
+                      const commissionPerM2Value =
+                        parseNumber(site.commission_eur_per_m2) ??
+                        parseNumber(
+                          (site as unknown as { commission_commerciale_ht_montant?: unknown })
+                            .commission_commerciale_ht_montant,
+                        ) ??
+                        0;
 
                       const addressDisplay = site.address
                         ? `${site.address} · ${site.postal_code} ${site.city}`
@@ -5764,17 +5766,17 @@ const ProjectDetails = () => {
                                 ) : null}
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="text-muted-foreground">
-                                    Commission commerciale HT
+                                    Commission commerciale (€/m²)
                                   </span>
                                   <span
                                     className={`font-medium ${
-                                      commissionCommercialeActive
+                                      commissionPerM2Enabled
                                         ? "text-foreground"
                                         : "text-muted-foreground"
                                     }`}
                                   >
-                                    {commissionCommercialeActive
-                                      ? formatCurrency(commissionCommercialeMontant)
+                                    {commissionPerM2Enabled
+                                      ? `${formatCurrency(commissionPerM2Value)} / m²`
                                       : "Non"}
                                   </span>
                                 </div>

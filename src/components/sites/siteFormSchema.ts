@@ -134,8 +134,8 @@ export const createBaseSiteSchema = () => {
       .number({ invalid_type_error: "Montant invalide" })
       .min(0),
     travaux_non_subventionnes_financement: z.boolean().default(false),
-    commission_commerciale_ht: z.boolean().default(false),
-    commission_commerciale_ht_montant: z.coerce
+    commission_eur_per_m2_enabled: z.boolean().default(false),
+    commission_eur_per_m2: z.coerce
       .number({ invalid_type_error: "Montant invalide" })
       .min(0),
     notes: z.string().optional(),
@@ -215,8 +215,8 @@ export const defaultSiteFormValues: SiteFormValues = {
   travaux_non_subventionnes_description: "",
   travaux_non_subventionnes_montant: 0,
   travaux_non_subventionnes_financement: false,
-  commission_commerciale_ht: false,
-  commission_commerciale_ht_montant: 0,
+  commission_eur_per_m2_enabled: false,
+  commission_eur_per_m2: 0,
   notes: "",
   subcontractor_id: null,
   additional_costs: [],
