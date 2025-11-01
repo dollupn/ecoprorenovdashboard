@@ -247,4 +247,5 @@ export type SiteProjectOption = {
 export type SubcontractorOption = {
   id: string;
   name: string;
+  pricing_details: string | null;
 };

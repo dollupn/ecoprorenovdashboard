@@ -146,6 +146,11 @@ const ChantierDetails = () => {
       "travaux_non_subventionnes_montant",
       "product_name",
       "additional_costs",
+      "valorisation_cee",
+      "commission_commerciale_ht",
+      "commission_commerciale_ht_montant",
+      "subcontractor_id",
+      "subcontractor_payment_confirmed",
     ],
   });
 
@@ -163,7 +168,7 @@ const ChantierDetails = () => {
       let query = supabase
         .from("sites")
         .select(
-          `*, project:projects(*, lead:leads(id,email,phone_raw)), subcontractor:subcontractors(id,name)`,
+          `*, project:projects(*, lead:leads(id,email,phone_raw)), subcontractor:subcontractors(id,name,pricing_details)`,
         )
         .eq("id", id);
 
@@ -178,14 +183,14 @@ const ChantierDetails = () => {
     },
   });
 
-  const subcontractorsQuery = useQuery<{ id: string; name: string }[]>({
+  const subcontractorsQuery = useQuery<{ id: string; name: string; pricing_details: string | null }[]>({
     queryKey: ["subcontractors", currentOrgId],
     enabled: Boolean(currentOrgId),
     queryFn: async () => {
       if (!currentOrgId) return [];
       const { data, error } = await supabase
         .from("subcontractors")
-        .select("id,name")
+        .select("id,name,pricing_details")
         .eq("org_id", currentOrgId)
         .eq("is_active", true)
         .order("name", { ascending: true });
@@ -260,6 +265,11 @@ const ChantierDetails = () => {
       travauxMontant,
       productName,
       additionalCosts,
+      valorisationCee,
+      commissionCommercialeActive,
+      commissionCommercialeMontant,
+      subcontractorId,
+      subcontractorPaymentConfirmed,
     ] = (rentabilityWatch ?? []) as [
       number | undefined,
       number | undefined,
@@ -271,6 +281,11 @@ const ChantierDetails = () => {
       number | undefined,
       string | undefined,
       SiteFormValues["additional_costs"] | undefined,
+      number | undefined,
+      boolean | undefined,
+      number | undefined,
+      string | undefined,
+      boolean | undefined,
     ];
 
     const normalizedAdditionalCosts = Array.isArray(additionalCosts)
@@ -279,6 +294,21 @@ const ChantierDetails = () => {
           taxes: sanitizeNumber(cost?.montant_tva),
         }))
       : [];
+
+    const selectedSubcontractor = (subcontractorsQuery.data ?? []).find(
+      (option) => option.id === (subcontractorId ?? form.getValues("subcontractor_id")),
+    );
+    const subcontractorRate = (() => {
+      if (!selectedSubcontractor) return undefined;
+      const raw = selectedSubcontractor.pricing_details;
+      if (typeof raw === "number") return raw;
+      if (typeof raw === "string") {
+        const normalized = raw.replace(/,/g, ".").trim();
+        const parsed = Number.parseFloat(normalized);
+        return Number.isFinite(parsed) ? parsed : undefined;
+      }
+      return undefined;
+    })();
 
     const rentabilityInput = buildRentabilityInputFromSite({
       revenue: sanitizeNumber(revenue),
@@ -291,10 +321,18 @@ const ChantierDetails = () => {
       travaux_non_subventionnes_montant: sanitizeNumber(travauxMontant),
       additional_costs: normalizedAdditionalCosts,
       product_name: productName,
+      valorisation_cee: sanitizeNumber(valorisationCee),
+      commission_commerciale_ht: commissionCommercialeActive,
+      commission_commerciale_ht_montant: sanitizeNumber(commissionCommercialeMontant),
+      subcontractor_pricing_details: subcontractorRate,
+      subcontractor_payment_confirmed: Boolean(subcontractorPaymentConfirmed),
+      project_prime_cee: project?.prime_cee ?? undefined,
+      project_prime_cee_total_cents: project?.prime_cee_total_cents ?? undefined,
+      project_category: project?.product_name ?? chantier?.product_name ?? undefined,
     });
 
     return calculateRentability(rentabilityInput);
-  }, [rentabilityWatch]);
+  }, [rentabilityWatch, subcontractorsQuery.data, project?.prime_cee, project?.prime_cee_total_cents, project?.product_name, chantier?.product_name, form]);
 
   const updateMutation = useMutation({
     mutationFn: async (payload: Omit<SiteSubmitValues, "status">) => {
@@ -338,10 +376,30 @@ const ChantierDetails = () => {
     const commissionActive = Boolean(values.commission_commerciale_ht);
     const commissionMontant = commissionActive ? sanitizeNumber(values.commission_commerciale_ht_montant) : 0;
 
+    const selectedSubcontractor = (subcontractorsQuery.data ?? []).find(
+      (option) => option.id === values.subcontractor_id,
+    );
+    const subcontractorRate = (() => {
+      if (!selectedSubcontractor) return undefined;
+      const raw = selectedSubcontractor.pricing_details;
+      if (typeof raw === "number") return raw;
+      if (typeof raw === "string") {
+        const normalized = raw.replace(/,/g, ".").trim();
+        const parsed = Number.parseFloat(normalized);
+        return Number.isFinite(parsed) ? parsed : undefined;
+      }
+      return undefined;
+    })();
+
     const rentabilityResult = calculateRentability(
       buildRentabilityInputFromSite({
         ...values,
+        valorisation_cee: values.valorisation_cee,
         additional_costs: filteredCosts,
+        project_prime_cee: project?.prime_cee ?? undefined,
+        project_prime_cee_total_cents: project?.prime_cee_total_cents ?? undefined,
+        project_category: project?.product_name ?? values.product_name ?? undefined,
+        subcontractor_pricing_details: subcontractorRate,
       }),
     );
 

@@ -2748,7 +2748,7 @@ const ProjectDetails = () => {
 
       let query = supabase
         .from("sites")
-        .select("*, subcontractor:subcontractors(id, name)")
+        .select("*, subcontractor:subcontractors(id, name, pricing_details)")
         .eq("org_id", currentOrgId)
         .order("created_at", { ascending: false });
 
@@ -5416,6 +5416,14 @@ const ProjectDetails = () => {
                           ? (site.additional_costs as SiteFormValues["additional_costs"])
                           : [],
                         product_name: site.product_name,
+                        valorisation_cee: site.valorisation_cee,
+                        commission_commerciale_ht: site.commission_commerciale_ht,
+                        commission_commerciale_ht_montant: site.commission_commerciale_ht_montant,
+                        subcontractor_pricing_details: site.subcontractor?.pricing_details ?? null,
+                        subcontractor_payment_confirmed: site.subcontractor_payment_confirmed,
+                        project_prime_cee: project?.prime_cee ?? undefined,
+                        project_prime_cee_total_cents: project?.prime_cee_total_cents ?? undefined,
+                        project_category: project?.product_name ?? site.product_name ?? undefined,
                       });
                       const computedRentability = calculateRentability(rentabilityInput);
                       const rentabilityUnitLabel =
@@ -5424,6 +5432,8 @@ const ProjectDetails = () => {
                           ? site.rentability_unit_label
                           : computedRentability.unitLabel;
                       const rentabilityMetrics = {
+                        ca: computedRentability.ca,
+                        baseUnits: computedRentability.baseUnits,
                         additionalCostsTotal:
                           typeof site.rentability_additional_costs_total === "number"
                             ? site.rentability_additional_costs_total
@@ -5445,6 +5455,7 @@ const ProjectDetails = () => {
                             ? site.rentability_margin_rate
                             : computedRentability.marginRate,
                         unitLabel: rentabilityUnitLabel,
+                        primeCee: computedRentability.primeCee,
                       };
                       const rentabilityMarginPerUnitLabel =
                         rentabilityMetrics.unitLabel === "luminaire"

@@ -540,7 +540,7 @@ export const SiteDialog = ({
 
       const { data, error } = await supabase
         .from("subcontractors")
-        .select("id, name")
+        .select("id, name, pricing_details")
         .eq("org_id", resolvedOrgId)
         .eq("is_active", true)
         .order("name");
@@ -743,6 +743,12 @@ export const SiteDialog = ({
   const watchedNonSubsidizedAmount = form.watch("travaux_non_subventionnes_montant");
   const watchedAdditionalCosts = form.watch("additional_costs");
   const watchedProductName = form.watch("product_name");
+  const watchedValorisationCee = form.watch("valorisation_cee");
+  const watchedTravauxChoice = form.watch("travaux_non_subventionnes");
+  const watchedCommissionCommerciale = form.watch("commission_commerciale_ht");
+  const watchedCommissionCommercialeMontant = form.watch("commission_commerciale_ht_montant");
+  const watchedSubcontractorId = form.watch("subcontractor_id");
+  const watchedSubcontractorPaymentConfirmed = form.watch("subcontractor_payment_confirmed");
 
   const rentability = useMemo(
     () =>
@@ -754,9 +760,27 @@ export const SiteDialog = ({
           isolation_utilisee_m2: watchedIsolationUsed,
           surface_facturee: watchedSurfaceFacturee,
           montant_commission: watchedCommission,
+          travaux_non_subventionnes: (watchedTravauxChoice ?? "NA") as SiteFormValues["travaux_non_subventionnes"],
           travaux_non_subventionnes_montant: watchedNonSubsidizedAmount,
           additional_costs: watchedAdditionalCosts ?? [],
           product_name: watchedProductName,
+          valorisation_cee: watchedValorisationCee,
+          commission_commerciale_ht: watchedCommissionCommerciale,
+          commission_commerciale_ht_montant: watchedCommissionCommercialeMontant,
+          subcontractor_pricing_details: (() => {
+            if (!watchedSubcontractorId) return undefined;
+            const option = subcontractors.find((candidate) => candidate.id === watchedSubcontractorId);
+            if (!option) return undefined;
+            const raw = option.pricing_details;
+            if (typeof raw === "number") return raw;
+            if (typeof raw === "string") {
+              const normalized = raw.replace(/,/g, ".").trim();
+              const parsed = Number.parseFloat(normalized);
+              return Number.isFinite(parsed) ? parsed : undefined;
+            }
+            return undefined;
+          })(),
+          subcontractor_payment_confirmed: watchedSubcontractorPaymentConfirmed,
         }),
       ),
     [
@@ -769,6 +793,13 @@ export const SiteDialog = ({
       watchedRevenue,
       watchedIsolationUsed,
       watchedSurfaceFacturee,
+      watchedValorisationCee,
+      watchedTravauxChoice,
+      watchedCommissionCommerciale,
+      watchedCommissionCommercialeMontant,
+      watchedSubcontractorId,
+      watchedSubcontractorPaymentConfirmed,
+      subcontractors,
     ],
   );
 
