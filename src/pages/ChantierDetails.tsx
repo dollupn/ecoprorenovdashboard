@@ -349,9 +349,15 @@ const ChantierDetails = () => {
   const updateMutation = useMutation({
     mutationFn: async (payload: SiteSubmitValues) => {
       if (!chantier || !user?.id) return;
+      
+      const updatePayload: Partial<Tables<"sites">> = {
+        ...payload,
+        team_members: payload.team_members?.map(m => m.id) ?? [],
+      };
+      
       const { error } = await supabase
         .from("sites")
-        .update(payload as Partial<Tables<"sites">>)
+        .update(updatePayload)
         .eq("id", chantier.id);
       if (error) throw error;
     },

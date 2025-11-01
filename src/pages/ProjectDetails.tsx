@@ -250,8 +250,45 @@ const SURFACE_FACTUREE_TARGETS = [
   "surface facturée",
 ] as const;
 
-const ARCHIVED_STATUS_VALUES = new Set(["ARCHIVE", "ARCHIVED"]);
+const ARCHIVED_STATUS_VALUES = new Set(["ARCHIVED"]);
 const ARCHIVED_STATUS_VALUE = "ARCHIVED";
+
+// Utility functions
+const resolveStringField = (
+  record: Record<string, unknown>,
+  fieldNames: readonly string[]
+): string | null => {
+  for (const fieldName of fieldNames) {
+    const value = record[fieldName];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return null;
+};
+
+const getFirstValidDate = (...dates: Array<string | null | undefined>): Date | null => {
+  for (const date of dates) {
+    if (date && date.trim()) {
+      try {
+        const parsed = new Date(date);
+        if (!isNaN(parsed.getTime())) {
+          return parsed;
+        }
+      } catch {
+        continue;
+      }
+    }
+  }
+  return null;
+};
+
+const clampNumber = (value: number | null | undefined, min: number, max: number): number => {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return min;
+  }
+  return Math.max(min, Math.min(max, value));
+};
 
 type CofracStatus = "EN_ATTENTE" | "CONFORME" | "NON_CONFORME" | "A_PLANIFIER";
 
@@ -3367,7 +3404,7 @@ const ProjectDetails = () => {
     const siteEndCandidates: unknown[] = [];
 
     projectSites.forEach((site) => {
-      siteStartCandidates.push(site.date_debut, site.date_debut_prevue);
+      siteStartCandidates.push(site.date_debut);
       siteEndCandidates.push(site.date_fin_prevue);
 
       const siteRecord = site as unknown as Record<string, unknown>;
@@ -3375,14 +3412,14 @@ const ProjectDetails = () => {
       siteEndCandidates.push(resolveStringField(siteRecord, endKeys));
     });
 
-    const resolvedStart = getFirstValidDate([
-      ...projectStartCandidates,
-      ...siteStartCandidates,
-    ]);
-    const resolvedEnd = getFirstValidDate([
-      ...projectEndCandidates,
-      ...siteEndCandidates,
-    ]);
+    const resolvedStart = getFirstValidDate(
+      ...(projectStartCandidates as Array<string | null | undefined>),
+      ...(siteStartCandidates as Array<string | null | undefined>)
+    );
+    const resolvedEnd = getFirstValidDate(
+      ...(projectEndCandidates as Array<string | null | undefined>),
+      ...(siteEndCandidates as Array<string | null | undefined>)
+    );
 
     if (
       typeof projectStatusText === "string" &&
@@ -3537,10 +3574,6 @@ const ProjectDetails = () => {
     return null;
   }, [projectRecord, projectSites]);
 
-  const primeValueLabel =
-    typeof displayedPrimeValue === "number"
-      ? formatCurrency(displayedPrimeValue)
-      : null;
   const clientName = getProjectClientName(project);
   const headerBadgeClassName =
     "gap-1.5 rounded-full border-border/60 bg-muted/30 px-3 py-1 text-xs font-medium text-muted-foreground";
@@ -4283,7 +4316,7 @@ const ProjectDetails = () => {
       address: values.address,
       city: values.city,
       postal_code: values.postal_code,
-      status: values.status,
+      status: (values as any).status,
       cofrac_status: values.cofrac_status,
       date_debut: values.date_debut,
       date_fin_prevue: values.date_fin_prevue || null,
@@ -4419,7 +4452,7 @@ const ProjectDetails = () => {
 
       let query = supabase
         .from("projects")
-        .update({ status: ARCHIVED_STATUS_VALUE, archived_at: archivedAt })
+        .update({ status: ARCHIVED_STATUS_VALUE as any, archived_at: archivedAt })
         .eq("id", project.id);
 
       if (currentOrgId) {
@@ -4499,6 +4532,11 @@ const ProjectDetails = () => {
 
     return null;
   })();
+
+  const primeValueLabel =
+    typeof displayedPrimeValue === "number"
+      ? formatCurrency(displayedPrimeValue)
+      : null;
 
   const isProjectArchived = project
     ? ARCHIVED_STATUS_VALUES.has(project.status ?? "")
@@ -5417,14 +5455,10 @@ const ProjectDetails = () => {
                         product_name: site.product_name,
                         valorisation_cee: site.valorisation_cee,
                         commission_eur_per_m2_enabled:
-                          site.commission_eur_per_m2_enabled ??
-                          (site as unknown as { commission_commerciale_ht?: unknown })
-                            .commission_commerciale_ht,
+                          (site.commission_eur_per_m2_enabled ?? false) as boolean,
                         commission_eur_per_m2:
-                          site.commission_eur_per_m2 ??
-                          (site as unknown as { commission_commerciale_ht_montant?: unknown })
-                            .commission_commerciale_ht_montant,
-                        subcontractor_pricing_details: site.subcontractor?.pricing_details ?? null,
+                          (site.commission_eur_per_m2 ?? 0) as number,
+                        subcontractor_pricing_details: (site.subcontractor as any)?.pricing_details ?? null,
                         subcontractor_payment_confirmed: site.subcontractor_payment_confirmed,
                         project_prime_cee: project?.prime_cee ?? undefined,
                         project_prime_cee_total_cents: project?.prime_cee_total_cents ?? undefined,
