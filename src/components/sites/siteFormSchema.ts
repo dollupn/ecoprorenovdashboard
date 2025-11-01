@@ -1,5 +1,4 @@
 import * as z from "zod";
-import { DEFAULT_PROJECT_STATUSES } from "@/lib/projects";
 import {
   TRAVAUX_NON_SUBVENTIONNES_OPTIONS,
   type TravauxNonSubventionnesValue,
@@ -96,10 +95,11 @@ export const computeAdditionalCostTTC = (
   return Math.round(total * 100) / 100;
 };
 
-const fallbackProjectStatusValues = DEFAULT_PROJECT_STATUSES.map((status) => status.value);
-
 export const createBaseSiteSchema = (statusOptions: readonly string[]) => {
-  const allowedStatuses = statusOptions.length > 0 ? [...statusOptions] : fallbackProjectStatusValues;
+  const statusSchema =
+    statusOptions.length > 0
+      ? z.enum(statusOptions as [string, ...string[]])
+      : z.string().min(1, "Statut requis");
 
   return z.object({
     site_ref: z.string().min(3, "Référence requise"),
@@ -109,7 +109,7 @@ export const createBaseSiteSchema = (statusOptions: readonly string[]) => {
     address: z.string().min(3, "Adresse requise"),
     city: z.string().min(2, "Ville requise"),
     postal_code: z.string().min(4, "Code postal invalide"),
-    status: z.enum(allowedStatuses as [string, ...string[]]),
+    status: statusSchema,
     cofrac_status: z.enum(["EN_ATTENTE", "CONFORME", "NON_CONFORME", "A_PLANIFIER"]),
     date_debut: z.string().min(1, "Date de début requise"),
     date_fin_prevue: z.string().optional(),
@@ -178,7 +178,7 @@ export const defaultSiteFormValues: SiteFormValues = {
   address: "",
   city: "",
   postal_code: "",
-  status: fallbackProjectStatusValues[0] ?? "",
+  status: "",
   cofrac_status: "EN_ATTENTE",
   date_debut: "",
   date_fin_prevue: "",
