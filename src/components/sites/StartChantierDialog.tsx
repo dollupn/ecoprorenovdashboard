@@ -48,7 +48,7 @@ import {
   useDriveUpload,
   type DriveUploadResult,
 } from "@/integrations/googleDrive";
-import { serializeSiteNotes } from "@/lib/sites";
+import { createSiteNoteAttachment, serializeSiteNotes } from "@/lib/sites";
 
 const MAX_PHOTO_COUNT = 12;
 
@@ -325,7 +325,14 @@ export const StartChantierDialog = ({
 
       if (uploads.length > 0) {
         const normalized = normalizeDriveMetadata(uploads);
-        const serializedNotes = serializeSiteNotes(internalNotes, normalized[0] ?? null, normalized);
+        const attachments = normalized.map((file) =>
+          createSiteNoteAttachment(file, { thumbnailUrl: file.thumbnailLink ?? null }),
+        );
+        const serializedNotes = serializeSiteNotes(
+          internalNotes,
+          attachments[0]?.file ?? null,
+          attachments,
+        );
         const { error } = await supabase
           .from("sites")
           .update({ notes: serializedNotes })

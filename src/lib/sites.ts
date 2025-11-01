@@ -1,15 +1,51 @@
 import type { DriveFileMetadata } from "@/integrations/googleDrive";
 
+export interface SiteNoteAttachment {
+  id: string;
+  title: string;
+  tags: string[];
+  thumbnailUrl?: string | null;
+  file: DriveFileMetadata;
+}
+
 export type ParsedSiteNotes = {
   text: string;
   driveFile: DriveFileMetadata | null;
-  attachments: DriveFileMetadata[];
+  attachments: SiteNoteAttachment[];
 };
 
 const DEFAULT_PARSED_NOTES: ParsedSiteNotes = {
   text: "",
   driveFile: null,
   attachments: [],
+};
+
+const randomId = () =>
+  typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `att-${Math.random().toString(36).slice(2, 10)}`;
+
+const normalizeString = (value: unknown): string | null => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const parseTags = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => normalizeString(item))
+      .filter((item): item is string => Boolean(item));
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((token) => token.trim())
+      .filter((token) => token.length > 0);
+  }
+
+  return [];
 };
 
 const toDriveFileMetadata = (value: unknown): DriveFileMetadata | null => {
@@ -61,7 +97,9 @@ const toDriveFileMetadata = (value: unknown): DriveFileMetadata | null => {
       ? record.thumbnailLink
       : typeof record.thumbnail_url === "string"
         ? record.thumbnail_url
-        : undefined;
+        : typeof record.thumbnailUrl === "string"
+          ? record.thumbnailUrl
+          : undefined;
 
   if (!id && !webViewLink && !name) {
     return null;
@@ -78,28 +116,130 @@ const toDriveFileMetadata = (value: unknown): DriveFileMetadata | null => {
   };
 };
 
-const parseAttachments = (value: unknown): DriveFileMetadata[] => {
+export const createSiteNoteAttachment = (
+  file: DriveFileMetadata,
+  overrides?: Partial<Omit<SiteNoteAttachment, "file" | "tags">> & { tags?: string[] },
+): SiteNoteAttachment => {
+  const normalizedTitle = normalizeString(overrides?.title) ?? file.name ?? "Document chantier";
+  const normalizedTags = Array.isArray(overrides?.tags)
+    ? overrides!.tags
+        .map((tag) => normalizeString(tag))
+        .filter((tag): tag is string => Boolean(tag))
+    : [];
+  const normalizedThumbnail =
+    normalizeString(overrides?.thumbnailUrl) ?? file.thumbnailLink ?? file.iconLink ?? null;
+
+  const identifier =
+    normalizeString(overrides?.id) ??
+    file.id ??
+    file.webViewLink ??
+    file.webContentLink ??
+    file.name ??
+    randomId();
+
+  return {
+    id: identifier,
+    title: normalizedTitle,
+    tags: normalizedTags,
+    thumbnailUrl: normalizedThumbnail,
+    file: {
+      ...file,
+      thumbnailLink: normalizedThumbnail ?? file.thumbnailLink,
+    },
+  };
+};
+
+const parseAttachments = (value: unknown): SiteNoteAttachment[] => {
   if (!Array.isArray(value)) {
     return [];
   }
 
   const seen = new Set<string>();
-  const attachments: DriveFileMetadata[] = [];
+  const attachments: SiteNoteAttachment[] = [];
 
   value.forEach((entry) => {
     const metadata = toDriveFileMetadata(entry);
     if (!metadata) return;
 
-    const key = metadata.id ?? metadata.webViewLink ?? metadata.webContentLink ?? metadata.name;
-    if (!key || seen.has(key)) {
+    const record = (entry && typeof entry === "object" ? (entry as Record<string, unknown>) : {}) ?? {};
+
+    const titleCandidate =
+      normalizeString(record.title) ??
+      normalizeString(record.display_name) ??
+      normalizeString(record.description) ??
+      metadata.name ??
+      "Document chantier";
+
+    const thumbnailCandidate =
+      normalizeString(record.thumbnailUrl) ??
+      normalizeString(record.thumbnail_link) ??
+      normalizeString(record.thumbnailURL) ??
+      metadata.thumbnailLink ??
+      metadata.iconLink ??
+      null;
+
+    const tagsCandidate = parseTags(record.tags ?? record.labels ?? record.tag_list ?? null);
+
+    const attachmentId =
+      normalizeString(record.attachmentId) ??
+      normalizeString(record.id) ??
+      metadata.id ??
+      metadata.webViewLink ??
+      metadata.webContentLink ??
+      metadata.name ??
+      randomId();
+
+    if (seen.has(attachmentId)) {
       return;
     }
 
-    seen.add(key);
-    attachments.push(metadata);
+    seen.add(attachmentId);
+    attachments.push(
+      createSiteNoteAttachment(
+        {
+          ...metadata,
+          thumbnailLink: thumbnailCandidate ?? metadata.thumbnailLink,
+        },
+        {
+          id: attachmentId,
+          title: titleCandidate,
+          tags: tagsCandidate,
+          thumbnailUrl: thumbnailCandidate,
+        },
+      ),
+    );
   });
 
   return attachments;
+};
+
+const mergeAttachments = (
+  directAttachment: DriveFileMetadata | null,
+  attachments: SiteNoteAttachment[],
+): SiteNoteAttachment[] => {
+  const normalized = [...attachments];
+
+  if (directAttachment) {
+    const directKey =
+      directAttachment.id ??
+      directAttachment.webViewLink ??
+      directAttachment.webContentLink ??
+      directAttachment.name;
+    const alreadyPresent = normalized.some((attachment) => {
+      const attachmentKey =
+        attachment.file.id ??
+        attachment.file.webViewLink ??
+        attachment.file.webContentLink ??
+        attachment.file.name;
+      return Boolean(directKey) && attachmentKey === directKey;
+    });
+
+    if (!alreadyPresent) {
+      normalized.unshift(createSiteNoteAttachment(directAttachment));
+    }
+  }
+
+  return normalized;
 };
 
 export const parseSiteNotes = (rawNotes: string | null | undefined): ParsedSiteNotes => {
@@ -125,31 +265,13 @@ export const parseSiteNotes = (rawNotes: string | null | undefined): ParsedSiteN
           }
         : null;
 
-      const attachmentsSource =
-        record.driveFiles ?? record.attachments ?? record.files ?? record.documents ?? [];
-      const attachments = parseAttachments(attachmentsSource);
+      const attachmentsSource = record.attachments ?? record.driveFiles ?? record.files ?? record.documents ?? [];
+      const parsedAttachments = parseAttachments(attachmentsSource);
 
-      const normalizedAttachments = (() => {
-        const seen = new Set<string>();
-        const list: DriveFileMetadata[] = [];
+      const normalizedAttachments = mergeAttachments(directDriveFile, parsedAttachments);
 
-        const addFile = (file: DriveFileMetadata | null | undefined) => {
-          if (!file) return;
-          const key = file.id ?? file.webViewLink ?? file.webContentLink ?? file.name;
-          if (!key || seen.has(key)) {
-            return;
-          }
-          seen.add(key);
-          list.push(file);
-        };
-
-        attachments.forEach(addFile);
-        addFile(directDriveFile);
-
-        return list;
-      })();
-
-      const primaryAttachment = normalizedAttachments[0] ?? directDriveFile ?? null;
+      const primaryAttachment =
+        normalizedAttachments.length > 0 ? normalizedAttachments[0].file : directDriveFile ?? null;
 
       return {
         text,
@@ -164,19 +286,35 @@ export const parseSiteNotes = (rawNotes: string | null | undefined): ParsedSiteN
   return { text: rawNotes ?? "", driveFile: null, attachments: [] };
 };
 
-const normalizeAttachmentInput = (attachments: DriveFileMetadata[] | null | undefined) => {
+const normalizeAttachmentInput = (attachments: SiteNoteAttachment[] | null | undefined) => {
   if (!attachments || attachments.length === 0) return [];
   const seen = new Set<string>();
-  const normalized: DriveFileMetadata[] = [];
+  const normalized: SiteNoteAttachment[] = [];
 
-  attachments.forEach((file) => {
-    if (!file) return;
-    const key = file.id ?? file.webViewLink ?? file.webContentLink ?? file.name;
+  attachments.forEach((attachment) => {
+    if (!attachment) return;
+    const fileMetadata = toDriveFileMetadata(attachment.file ?? attachment);
+    if (!fileMetadata) return;
+
+    const prepared = createSiteNoteAttachment(fileMetadata, {
+      id: attachment.id,
+      title: attachment.title,
+      tags: attachment.tags,
+      thumbnailUrl: attachment.thumbnailUrl,
+    });
+
+    const key =
+      prepared.id ??
+      prepared.file.id ??
+      prepared.file.webViewLink ??
+      prepared.file.webContentLink ??
+      prepared.file.name;
     if (!key || seen.has(key)) {
       return;
     }
+
     seen.add(key);
-    normalized.push(file);
+    normalized.push({ ...prepared, id: key });
   });
 
   return normalized;
@@ -185,7 +323,7 @@ const normalizeAttachmentInput = (attachments: DriveFileMetadata[] | null | unde
 export const serializeSiteNotes = (
   text: string | null | undefined,
   driveFile: DriveFileMetadata | null,
-  attachments?: DriveFileMetadata[] | null,
+  attachments?: SiteNoteAttachment[] | null,
 ): string => {
   const metadata: Record<string, unknown> = {};
 
@@ -196,6 +334,33 @@ export const serializeSiteNotes = (
 
   const normalizedDriveFile = driveFile ? toDriveFileMetadata(driveFile) : null;
   const normalizedAttachments = normalizeAttachmentInput(attachments ?? []);
+
+  const combinedAttachments = (() => {
+    if (!normalizedDriveFile) return normalizedAttachments;
+
+    const primaryKey =
+      normalizedDriveFile.id ??
+      normalizedDriveFile.webViewLink ??
+      normalizedDriveFile.webContentLink ??
+      normalizedDriveFile.name;
+
+    if (!primaryKey) return normalizedAttachments;
+
+    const hasPrimary = normalizedAttachments.some((attachment) => {
+      const attachmentKey =
+        attachment.file.id ??
+        attachment.file.webViewLink ??
+        attachment.file.webContentLink ??
+        attachment.file.name;
+      return attachmentKey === primaryKey;
+    });
+
+    if (hasPrimary) {
+      return normalizedAttachments;
+    }
+
+    return [createSiteNoteAttachment(normalizedDriveFile), ...normalizedAttachments];
+  })();
 
   if (normalizedDriveFile) {
     const driveUrl =
@@ -211,23 +376,34 @@ export const serializeSiteNotes = (
     }
   }
 
-  const allAttachments = (() => {
-    const combined = [...normalizedAttachments];
-    if (normalizedDriveFile) {
-      combined.unshift(normalizedDriveFile);
-    }
-    return normalizeAttachmentInput(combined);
-  })();
+  if (combinedAttachments.length > 0) {
+    metadata.attachments = combinedAttachments.map((attachment) => ({
+      id: attachment.id ?? null,
+      title: attachment.title ?? null,
+      tags: attachment.tags ?? [],
+      thumbnailUrl: attachment.thumbnailUrl ?? attachment.file.thumbnailLink ?? null,
+      driveFile: {
+        id: attachment.file.id ?? null,
+        name: attachment.file.name ?? null,
+        webViewLink: attachment.file.webViewLink ?? null,
+        webContentLink: attachment.file.webContentLink ?? null,
+        mimeType: attachment.file.mimeType ?? null,
+        iconLink: attachment.file.iconLink ?? null,
+        thumbnailLink: attachment.file.thumbnailLink ?? null,
+      },
+    }));
 
-  if (allAttachments.length > 0) {
-    metadata.driveFiles = allAttachments.map((file) => ({
-      id: file.id ?? null,
-      name: file.name ?? null,
-      webViewLink: file.webViewLink ?? null,
-      webContentLink: file.webContentLink ?? null,
-      mimeType: file.mimeType ?? null,
-      iconLink: file.iconLink ?? null,
-      thumbnailLink: (file as { thumbnailLink?: string }).thumbnailLink ?? null,
+    metadata.driveFiles = combinedAttachments.map((attachment) => ({
+      id: attachment.file.id ?? null,
+      name: attachment.file.name ?? attachment.title ?? null,
+      webViewLink: attachment.file.webViewLink ?? null,
+      webContentLink: attachment.file.webContentLink ?? null,
+      mimeType: attachment.file.mimeType ?? null,
+      iconLink: attachment.file.iconLink ?? null,
+      thumbnailLink: attachment.file.thumbnailLink ?? null,
+      title: attachment.title ?? null,
+      tags: attachment.tags ?? [],
+      attachmentId: attachment.id ?? null,
     }));
   }
 

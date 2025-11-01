@@ -5361,7 +5361,7 @@ const ProjectDetails = () => {
                       const internalNotes = parsedSiteNotes.text?.trim() ?? "";
                       const hasInternalNotes = internalNotes.length > 0;
                       const attachments = parsedSiteNotes.attachments;
-                      const primaryAttachment = attachments[0] ?? parsedSiteNotes.driveFile;
+                      const primaryAttachment = attachments[0]?.file ?? parsedSiteNotes.driveFile;
                       const driveLink =
                         primaryAttachment?.webViewLink ?? primaryAttachment?.webContentLink ?? null;
                       const hasDriveFile = Boolean(driveLink) || attachments.length > 0;
@@ -5369,7 +5369,7 @@ const ProjectDetails = () => {
                       const driveLabel =
                         attachments.length > 1
                           ? `${attachments.length} documents`
-                          : primaryAttachment?.name ?? "Document chantier";
+                          : attachments[0]?.title ?? primaryAttachment?.name ?? "Document chantier";
                       const additionalCostCount = Array.isArray(
                         site.additional_costs,
                       )

@@ -58,8 +58,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { DriveFileUploader } from "@/components/integrations/DriveFileUploader";
+import { DriveMultiFileUploader } from "@/components/integrations/DriveMultiFileUploader";
 import type { DriveFileMetadata } from "@/integrations/googleDrive";
+import type { SiteNoteAttachment } from "@/lib/sites";
 import { GripVertical, Info, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMembers } from "@/features/members/api";
@@ -90,9 +91,6 @@ import {
 export type { SiteFormValues, SiteProjectOption, SiteSubmitValues };
 
 // Helper to get Drive file key
-const getDriveFileKey = (file: DriveFileMetadata | null | undefined) =>
-  file?.id ?? file?.webViewLink ?? file?.webContentLink ?? file?.name ?? null;
-
 interface SiteDialogProps {
   open: boolean;
   mode: "create" | "edit";
@@ -477,10 +475,7 @@ export const SiteDialog = ({
 }: SiteDialogProps) => {
   const parsedNotes = useMemo(() => parseSiteNotes(initialValues?.notes), [initialValues?.notes]);
 
-  const [siteDriveFile, setSiteDriveFile] = useState<DriveFileMetadata | null>(parsedNotes.driveFile);
-  const [siteDriveAttachments, setSiteDriveAttachments] = useState<DriveFileMetadata[]>(
-    parsedNotes.attachments,
-  );
+  const [siteAttachments, setSiteAttachments] = useState<SiteNoteAttachment[]>(parsedNotes.attachments);
   const [activeTab, setActiveTab] = useState<"avant-chantier" | "apres-chantier">(defaultTab);
   const isReadOnly = Boolean(readOnly);
   const resolvedOrgId = orgId ?? initialValues?.org_id ?? null;
@@ -851,26 +846,11 @@ export const SiteDialog = ({
 
   useEffect(() => {
     if (open) {
-      setSiteDriveFile(parsedNotes.driveFile);
-      setSiteDriveAttachments(parsedNotes.attachments);
+      setSiteAttachments(parsedNotes.attachments);
     } else {
-      setSiteDriveFile(null);
-      setSiteDriveAttachments([]);
+      setSiteAttachments([]);
     }
-  }, [open, parsedNotes.attachments, parsedNotes.driveFile]);
-
-  const handleSiteDriveFileChange = useCallback((file: DriveFileMetadata | null) => {
-    setSiteDriveFile(file);
-    setSiteDriveAttachments((current) => {
-      if (!file) {
-        return current.slice(1);
-      }
-
-      const nextKey = getDriveFileKey(file);
-      const filtered = current.filter((existing) => getDriveFileKey(existing) !== nextKey);
-      return [file, ...filtered];
-    });
-  }, []);
+  }, [open, parsedNotes.attachments]);
 
   const {
     fields: costFields,
@@ -922,7 +902,7 @@ export const SiteDialog = ({
         };
       });
 
-    const serializedNotes = serializeSiteNotes(values.notes, siteDriveFile, siteDriveAttachments);
+    const serializedNotes = serializeSiteNotes(values.notes, siteAttachments[0]?.file ?? null, siteAttachments);
 
     const projectRef = values.project_ref?.trim?.() ?? "";
     const clientName = values.client_name?.trim?.() ?? "";
@@ -1604,10 +1584,10 @@ export const SiteDialog = ({
 
                 <div className="space-y-2">
                   <FormLabel>Documents chantier</FormLabel>
-                  <DriveFileUploader
+                  <DriveMultiFileUploader
                     orgId={orgId ?? initialValues?.org_id ?? null}
-                    value={siteDriveFile}
-                    onChange={handleSiteDriveFileChange}
+                    value={siteAttachments}
+                    onChange={setSiteAttachments}
                     accept="application/pdf,image/*"
                     maxSizeMb={35}
                     entityType="site"
