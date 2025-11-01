@@ -79,22 +79,4 @@ export const startChantier = async (
   });
 };
 
-export const updateChantierStatus = async (
-  chantierId: string,
-  status: string,
-): Promise<ChantierResponse> => {
-  if (!chantierId) {
-    throw new Error("Identifiant du chantier requis");
-  }
-
-  if (!status || status.trim().length === 0) {
-    throw new Error("Nouveau statut chantier requis");
-  }
-
-  return await fetchJson<ChantierResponse>(`${API_BASE_PATH}/${chantierId}/status`, {
-    method: "PATCH",
-    body: JSON.stringify({ status }),
-  });
-};
-
 export type { StartChantierPayload, ChantierResponse };

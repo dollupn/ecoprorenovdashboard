@@ -1,4 +1,4 @@
-import type { PostgrestResponse, PostgrestSingleResponse } from "@supabase/supabase-js";
+import type { PostgrestSingleResponse } from "@supabase/supabase-js";
 
 import type { Database } from "../../integrations/supabase/types";
 import { getServiceSupabaseClient } from "./supabaseClient";
@@ -107,25 +107,6 @@ export const updateProjectStatus = async (
   return response.data;
 };
 
-export const updateChantiersStatusForProject = async (
-  projectId: string,
-  orgId: string,
-  status: SiteRow["status"],
-): Promise<SiteRow[]> => {
-  const response: PostgrestResponse<SiteRow> = await client()
-    .from("sites")
-    .update({ status })
-    .eq("project_id", projectId)
-    .eq("org_id", orgId)
-    .select("*");
-
-  if (response.error) {
-    throw response.error;
-  }
-
-  return response.data ?? [];
-};
-
 export const fetchChantierById = async (
   chantierId: string,
   orgId: string,
@@ -147,29 +128,9 @@ export const fetchChantierById = async (
   return response.data;
 };
 
-export const updateChantierStatus = async (
-  chantierId: string,
-  orgId: string,
-  status: SiteRow["status"],
-): Promise<SiteRow> => {
-  const response: PostgrestSingleResponse<SiteRow> = await client()
-    .from("sites")
-    .update({ status })
-    .eq("id", chantierId)
-    .eq("org_id", orgId)
-    .select("*")
-    .single();
-
-  if (response.error) {
-    throw response.error;
-  }
-
-  return response.data;
-};
-
 export const createChantier = async (
   values: Partial<SiteRow> &
-    Pick<SiteRow, "project_id" | "project_ref" | "site_ref" | "client_name" | "address" | "city" | "postal_code" | "status" | "date_debut" | "user_id" | "org_id">,
+    Pick<SiteRow, "project_id" | "project_ref" | "site_ref" | "client_name" | "address" | "city" | "postal_code" | "date_debut" | "user_id" | "org_id">,
 ): Promise<SiteRow> => {
   const response: PostgrestSingleResponse<SiteRow> = await client()
     .from("sites")

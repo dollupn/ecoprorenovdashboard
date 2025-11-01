@@ -1,16 +1,5 @@
-import {
-  createChantier,
-  fetchChantierById,
-  fetchProjectById,
-  updateChantierStatus,
-  type ProjectRow,
-  type SiteRow,
-} from "../repositories/projectRepository";
+import { createChantier, fetchProjectById, type ProjectRow } from "../repositories/projectRepository";
 import { NotFoundError, ValidationError } from "../errors";
-import {
-  ensureChantierStatusTransition,
-  syncProjectStatusWithChantiers,
-} from "./statusHelpers";
 
 type StartChantierInput = {
   siteRef?: string;
@@ -136,7 +125,6 @@ export const startChantierService = async (orgId: string, projectId: string, inp
     address,
     city,
     postal_code: postalCode,
-    status: "PLANIFIE",
     date_debut: dateDebut,
     date_fin_prevue: dateFinPrevue,
     team_members: normaliseTeamMembers(input.teamMembers),
@@ -149,35 +137,5 @@ export const startChantierService = async (orgId: string, projectId: string, inp
         : null,
   });
 
-  const syncedProject = await syncProjectStatusWithChantiers(project, orgId);
-
-  return { chantier, project: syncedProject };
-};
-
-export const updateChantierStatusService = async (orgId: string, chantierId: string, nextStatus: string) => {
-  const chantier = await fetchChantierById(chantierId, orgId);
-
-  if (!chantier) {
-    throw new NotFoundError("Chantier introuvable");
-  }
-
-  const normalizedStatus = (nextStatus ?? "").toUpperCase();
-  if (!normalizedStatus) {
-    throw new ValidationError("Statut chantier manquant");
-  }
-
-  ensureChantierStatusTransition(chantier.status, normalizedStatus);
-
-  const updatedChantier: SiteRow = await updateChantierStatus(chantierId, orgId, normalizedStatus as SiteRow["status"]);
-
-  let updatedProject: ProjectRow | null = null;
-
-  if (chantier.project_id) {
-    const project = await fetchProjectById(chantier.project_id, orgId);
-    if (project) {
-      updatedProject = await syncProjectStatusWithChantiers(project, orgId);
-    }
-  }
-
-  return { chantier: updatedChantier, project: updatedProject };
+  return { chantier, project };
 };
