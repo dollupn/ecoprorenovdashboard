@@ -5,6 +5,8 @@ export type RentabilityTravauxOption = "NA" | "CLIENT" | "MARGE" | "PARTAGE";
 export interface RentabilityAdditionalCostInput {
   amount_ht?: number | null;
   taxes?: number | null;
+  amount_ttc?: number | null;
+  tva_rate?: number | null;
 }
 
 export interface RentabilityInput {
@@ -158,9 +160,18 @@ export const calculateRentability = (input: RentabilityInput): RentabilityResult
     if (!rawCost) return sum;
     const cost = rawCost as RentabilityAdditionalCostInput;
     const amount = Math.max(0, sanitizeNumber(cost.amount_ht));
+    const explicitTtc = sanitizeNumber(cost.amount_ttc);
+    if (explicitTtc > 0) {
+      return sum + Math.max(amount, explicitTtc);
+    }
     const taxesRaw = cost.taxes;
     if (Number.isFinite(taxesRaw as number)) {
       const taxes = Math.max(0, sanitizeNumber(taxesRaw));
+      return sum + amount + taxes;
+    }
+    const rateCandidate = clampPercentage(Math.max(0, sanitizeNumber(cost.tva_rate)));
+    if (rateCandidate > 0) {
+      const taxes = amount * (rateCandidate / 100);
       return sum + amount + taxes;
     }
     const rate = clampPercentage(Math.max(0, sanitizeNumber(input.fraisTvaPercentage)));
@@ -257,6 +268,8 @@ export interface SiteRentabilitySource {
   additional_costs?: ReadonlyArray<{
     amount_ht?: number | null;
     taxes?: number | null;
+    amount_ttc?: number | null;
+    tva_rate?: number | null;
   }> | null;
   product_name?: string | null;
 }
@@ -311,7 +324,7 @@ export const buildRentabilityInputFromSite = (
     commissionPerUnitActive,
     travauxOption: (values.travaux_non_subventionnes as RentabilityTravauxOption | null | undefined) ?? null,
     travauxAmount: travauxAmountCandidate,
-    additionalCosts: values.additional_costs,
+    additionalCosts: Array.isArray(values.additional_costs) ? values.additional_costs : [],
     fraisTvaPercentage: values.frais_tva_percentage,
     subcontractorRatePerUnit: subcontractorRate,
     subcontractorBaseUnits,

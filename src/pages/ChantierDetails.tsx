@@ -8,8 +8,12 @@ import {
   useWatch,
 } from "react-hook-form";
 import {
+  ADDITIONAL_COST_TVA_RATES,
+  computeAdditionalCostTTC,
   createSiteSchema,
   defaultSiteFormValues,
+  normalizeAdditionalCostTvaRate,
+  normalizeAdditionalCostsArray,
   type SiteFormValues,
   type SiteSubmitValues,
 } from "@/components/sites/siteFormSchema";
@@ -152,11 +156,35 @@ const ChantierDetails = () => {
       "subcontractor_payment_confirmed",
     ],
   });
+  const watchedAdditionalCosts = useWatch({ control, name: "additional_costs" });
 
   const { fields: costFields, append: appendCost, remove: removeCost } = useFieldArray({
     control,
     name: "additional_costs",
   });
+
+  useEffect(() => {
+    if (!Array.isArray(watchedAdditionalCosts)) return;
+
+    watchedAdditionalCosts.forEach((cost, index) => {
+      const amountHT =
+        cost && typeof cost.amount_ht === "number" && Number.isFinite(cost.amount_ht)
+          ? cost.amount_ht
+          : 0;
+      const tvaRate = normalizeAdditionalCostTvaRate(cost?.tva_rate, 20);
+      const computedTTC = computeAdditionalCostTTC(amountHT, tvaRate);
+      const currentValue = form.getValues(`additional_costs.${index}.amount_ttc`);
+      const normalizedCurrent =
+        typeof currentValue === "number" && Number.isFinite(currentValue) ? currentValue : 0;
+
+      if (Math.abs(normalizedCurrent - computedTTC) > 0.005) {
+        form.setValue(`additional_costs.${index}.amount_ttc`, computedTTC, {
+          shouldDirty: true,
+          shouldValidate: false,
+        });
+      }
+    });
+  }, [form, watchedAdditionalCosts]);
 
   const chantierQuery = useQuery<ChantierQueryResult | null>({
     queryKey: ["chantier", id, currentOrgId],
@@ -257,9 +285,7 @@ const ChantierDetails = () => {
             .commission_commerciale_ht_montant,
       ),
       notes: parsedNotes.text ?? "",
-      additional_costs: Array.isArray(chantier.additional_costs)
-        ? (chantier.additional_costs as SiteFormValues["additional_costs"])
-        : [],
+      additional_costs: normalizeAdditionalCostsArray(chantier.additional_costs ?? []),
     };
     reset(defaults, { keepDefaultValues: false });
     setSiteDriveFile(parsedNotes.driveFile ?? null);
@@ -301,10 +327,18 @@ const ChantierDetails = () => {
     ];
 
     const normalizedAdditionalCosts = Array.isArray(additionalCosts)
-      ? additionalCosts.map((cost) => ({
-          amount_ht: sanitizeNumber(cost?.amount_ht),
-          taxes: sanitizeNumber(cost?.montant_tva),
-        }))
+      ? additionalCosts.map((cost) => {
+          const amountHT = sanitizeNumber(cost?.amount_ht);
+          const tvaRate = normalizeAdditionalCostTvaRate(cost?.tva_rate, 20);
+          const amountTTC = computeAdditionalCostTTC(amountHT, tvaRate);
+          const taxes = Math.max(0, amountTTC - amountHT);
+          return {
+            amount_ht: amountHT,
+            taxes,
+            tva_rate: tvaRate,
+            amount_ttc: amountTTC,
+          };
+        })
       : [];
 
     const selectedSubcontractor = (subcontractorsQuery.data ?? []).find(
@@ -381,18 +415,20 @@ const ChantierDetails = () => {
       const filteredCosts = (values.additional_costs ?? [])
         .filter((cost) => cost.label.trim().length > 0)
         .map((cost) => {
-        const amountHT = sanitizeNumber(cost.amount_ht);
-        const montantTVA = sanitizeNumber(cost.montant_tva);
-        const amountTTC = sanitizeNumber(cost.amount_ttc, amountHT + montantTVA);
-        const attachment = cost.attachment?.trim() ?? "";
-        return {
-          label: cost.label.trim(),
-          amount_ht: amountHT,
-          montant_tva: montantTVA,
-          amount_ttc: amountTTC,
-          attachment: attachment.length > 0 ? attachment : null,
-        };
-      });
+          const amountHT = sanitizeNumber(cost.amount_ht);
+          const tvaRate = normalizeAdditionalCostTvaRate(cost.tva_rate, 20);
+          const amountTTC = computeAdditionalCostTTC(amountHT, tvaRate);
+          const montantTVA = Math.max(0, amountTTC - amountHT);
+          const attachment = cost.attachment?.trim() ?? "";
+          return {
+            label: cost.label.trim(),
+            amount_ht: amountHT,
+            tva_rate: tvaRate,
+            montant_tva: montantTVA,
+            amount_ttc: amountTTC,
+            attachment: attachment.length > 0 ? attachment : null,
+          };
+        });
 
     const travauxChoice = values.travaux_non_subventionnes ?? "NA";
     const shouldResetTravaux = travauxChoice === "NA";
@@ -1029,82 +1065,52 @@ const ChantierDetails = () => {
                       </p>
                     ) : (
                       <div className="space-y-4">
-                        {costFields.map((field, index) => (
-                          <div key={field.id} className="grid gap-4 rounded-lg border border-border/60 p-4 md:grid-cols-4">
-                            <FormField
-                              control={control}
-                              name={`additional_costs.${index}.label` as const}
-                              render={({ field }) => (
-                                <FormItem className="md:col-span-2">
-                                  <FormLabel>Intitulé</FormLabel>
-                                  <FormControl>
-                                    <Input
-                                      {...field}
-                                      onBlur={(event) => {
-                                        field.onBlur();
-                                        handleBlurSave();
-                                      }}
-                                      disabled={disableInputs}
-                                      readOnly={isEditingLocked}
-                                    />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={control}
-                              name={`additional_costs.${index}.amount_ht` as const}
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Montant HT</FormLabel>
-                                  <FormControl>
-                                    <Input
-                                      type="number"
-                                      step="0.01"
-                                      {...field}
-                                      onBlur={(event) => {
-                                        field.onBlur();
-                                        handleBlurSave();
-                                      }}
-                                      disabled={disableInputs}
-                                      readOnly={isEditingLocked}
-                                    />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={control}
-                              name={`additional_costs.${index}.montant_tva` as const}
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>TVA</FormLabel>
-                                  <FormControl>
-                                    <Input
-                                      type="number"
-                                      step="0.01"
-                                      {...field}
-                                      onBlur={(event) => {
-                                        field.onBlur();
-                                        handleBlurSave();
-                                      }}
-                                      disabled={disableInputs}
-                                      readOnly={isEditingLocked}
-                                    />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <div className="md:col-span-4 space-y-2">
+                        {costFields.map((field, index) => {
+                          const costValue = Array.isArray(watchedAdditionalCosts)
+                            ? watchedAdditionalCosts[index]
+                            : undefined;
+                          const amountHTValue =
+                            costValue &&
+                            typeof costValue.amount_ht === "number" &&
+                            Number.isFinite(costValue.amount_ht)
+                              ? costValue.amount_ht
+                              : 0;
+                          const tvaRateValue = normalizeAdditionalCostTvaRate(costValue?.tva_rate, 20);
+                          const computedTTC = computeAdditionalCostTTC(amountHTValue, tvaRateValue);
+                          const computedTaxes = Math.max(0, computedTTC - amountHTValue);
+
+                          return (
+                            <div
+                              key={field.id}
+                              className="grid gap-4 rounded-lg border border-border/60 p-4 md:grid-cols-4"
+                            >
                               <FormField
                                 control={control}
-                                name={`additional_costs.${index}.amount_ttc` as const}
+                                name={`additional_costs.${index}.label` as const}
+                                render={({ field }) => (
+                                  <FormItem className="md:col-span-2">
+                                    <FormLabel>Intitulé</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        {...field}
+                                        onBlur={(event) => {
+                                          field.onBlur();
+                                          handleBlurSave();
+                                        }}
+                                        disabled={disableInputs}
+                                        readOnly={isEditingLocked}
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={control}
+                                name={`additional_costs.${index}.amount_ht` as const}
                                 render={({ field }) => (
                                   <FormItem>
-                                    <FormLabel>Montant TTC</FormLabel>
+                                    <FormLabel>Montant HT</FormLabel>
                                     <FormControl>
                                       <Input
                                         type="number"
@@ -1124,42 +1130,106 @@ const ChantierDetails = () => {
                               />
                               <FormField
                                 control={control}
-                                name={`additional_costs.${index}.attachment` as const}
+                                name={`additional_costs.${index}.tva_rate` as const}
                                 render={({ field }) => (
                                   <FormItem>
-                                    <FormLabel>Preuve (Drive)</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        placeholder="URL ou ID du fichier"
-                                        {...field}
-                                        onBlur={(event) => {
-                                          field.onBlur();
-                                          handleBlurSave();
-                                        }}
-                                        disabled={disableInputs}
-                                        readOnly={isEditingLocked}
-                                      />
-                                    </FormControl>
+                                    <FormLabel>Taux de TVA</FormLabel>
+                                    <Select
+                                      value={
+                                        field.value === undefined || field.value === null
+                                          ? String(tvaRateValue)
+                                          : String(field.value)
+                                      }
+                                      onValueChange={(next) => {
+                                        const parsed = Number.parseFloat(next);
+                                        field.onChange(Number.isFinite(parsed) ? parsed : tvaRateValue);
+                                        handleBlurSave();
+                                      }}
+                                      disabled={disableInputs || isEditingLocked}
+                                    >
+                                      <FormControl>
+                                        <SelectTrigger>
+                                          <SelectValue placeholder="Sélectionner" />
+                                        </SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent>
+                                        {ADDITIONAL_COST_TVA_RATES.map((rate) => (
+                                          <SelectItem key={rate} value={String(rate)}>
+                                            {rate}%
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                    <p className="text-xs text-muted-foreground">
+                                      TVA calculée : {Math.round(computedTaxes * 100) / 100} €
+                                    </p>
                                     <FormMessage />
                                   </FormItem>
                                 )}
                               />
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  removeCost(index);
-                                  handleBlurSave();
-                                }}
-                                className="text-destructive"
-                                disabled={disableInputs}
-                              >
-                                Supprimer
-                              </Button>
+                              <div className="md:col-span-4 space-y-2">
+                                <FormField
+                                  control={control}
+                                  name={`additional_costs.${index}.amount_ttc` as const}
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormLabel>Montant TTC</FormLabel>
+                                      <FormControl>
+                                        <Input
+                                          type="number"
+                                          step="0.01"
+                                          value={
+                                            field.value === undefined || field.value === null
+                                              ? computedTTC
+                                              : field.value
+                                          }
+                                          readOnly
+                                          disabled
+                                        />
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={control}
+                                  name={`additional_costs.${index}.attachment` as const}
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormLabel>Preuve (Drive)</FormLabel>
+                                      <FormControl>
+                                        <Input
+                                          placeholder="URL ou ID du fichier"
+                                          {...field}
+                                          onBlur={(event) => {
+                                            field.onBlur();
+                                            handleBlurSave();
+                                          }}
+                                          disabled={disableInputs}
+                                          readOnly={isEditingLocked}
+                                        />
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    removeCost(index);
+                                    handleBlurSave();
+                                  }}
+                                  className="text-destructive"
+                                  disabled={disableInputs}
+                                >
+                                  Supprimer
+                                </Button>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                     <Button
@@ -1170,7 +1240,7 @@ const ChantierDetails = () => {
                         appendCost({
                           label: "",
                           amount_ht: 0,
-                          montant_tva: 0,
+                          tva_rate: 20,
                           amount_ttc: 0,
                           attachment: null,
                         })

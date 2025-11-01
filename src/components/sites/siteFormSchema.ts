@@ -65,14 +65,56 @@ export const normalizeTeamMembers = (
   return Array.from(uniqueMembers.values());
 };
 
+export const ADDITIONAL_COST_TVA_RATES = [0, 5.5, 10, 20] as const;
+
+export type AdditionalCostTvaRate = (typeof ADDITIONAL_COST_TVA_RATES)[number];
+
+const isAllowedTvaRate = (value: number): value is AdditionalCostTvaRate =>
+  ADDITIONAL_COST_TVA_RATES.includes(value as AdditionalCostTvaRate);
+
+const findClosestAllowedTvaRate = (rate: number): AdditionalCostTvaRate => {
+  let closest: AdditionalCostTvaRate = ADDITIONAL_COST_TVA_RATES[0];
+  let smallestDiff = Number.POSITIVE_INFINITY;
+
+  for (const candidate of ADDITIONAL_COST_TVA_RATES) {
+    const diff = Math.abs(candidate - rate);
+    if (diff < smallestDiff) {
+      closest = candidate;
+      smallestDiff = diff;
+    }
+  }
+
+  return closest;
+};
+
+export const normalizeAdditionalCostTvaRate = (
+  value: unknown,
+  fallback: AdditionalCostTvaRate = 20,
+): AdditionalCostTvaRate => {
+  if (typeof value === "number" && Number.isFinite(value) && isAllowedTvaRate(value)) {
+    return value as AdditionalCostTvaRate;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value.replace(",", "."));
+    if (Number.isFinite(parsed) && isAllowedTvaRate(parsed)) {
+      return parsed as AdditionalCostTvaRate;
+    }
+  }
+
+  return fallback;
+};
+
 export const additionalCostSchema = z.object({
   label: z.string().min(1, "Intitulé requis"),
   amount_ht: z.coerce
     .number({ invalid_type_error: "Montant HT invalide" })
     .min(0, "Le montant HT doit être positif"),
-  montant_tva: z.coerce
-    .number({ invalid_type_error: "Montant TVA invalide" })
-    .min(0, "Le montant de TVA doit être positif"),
+  tva_rate: z.coerce
+    .number({ invalid_type_error: "TVA invalide" })
+    .refine((value) => isAllowedTvaRate(value), {
+      message: "Taux de TVA invalide",
+    }),
   amount_ttc: z.coerce
     .number({ invalid_type_error: "Montant TTC invalide" })
     .min(0, "Le montant TTC doit être positif"),
@@ -84,15 +126,107 @@ export const additionalCostSchema = z.object({
     .transform((value) => (value && value.length > 0 ? value : null)),
 });
 
-export const computeAdditionalCostTTC = (
-  amountHT: unknown,
-  montantTVA: unknown,
-) => {
-  const ht = typeof amountHT === "number" && Number.isFinite(amountHT) ? amountHT : 0;
-  const tva = typeof montantTVA === "number" && Number.isFinite(montantTVA) ? montantTVA : 0;
+export type AdditionalCostFormValue = z.infer<typeof additionalCostSchema>;
 
-  const total = ht + tva;
+export const computeAdditionalCostTTC = (amountHT: unknown, tvaRate: unknown) => {
+  const ht = typeof amountHT === "number" && Number.isFinite(amountHT) ? amountHT : 0;
+  const normalizedRate = normalizeAdditionalCostTvaRate(tvaRate, 0);
+  const taxes = ht * (normalizedRate / 100);
+  const total = ht + taxes;
   return Math.round(total * 100) / 100;
+};
+
+export const resolveAdditionalCostTvaRate = (
+  rawRate: unknown,
+  amountHT: unknown,
+  taxAmount: unknown,
+  fallback: AdditionalCostTvaRate = 0,
+): AdditionalCostTvaRate => {
+  const normalized = normalizeAdditionalCostTvaRate(rawRate, fallback);
+  if (normalized !== fallback) {
+    return normalized;
+  }
+
+  const ht = typeof amountHT === "number" && Number.isFinite(amountHT) ? amountHT : 0;
+  const taxes = typeof taxAmount === "number" && Number.isFinite(taxAmount) ? taxAmount : 0;
+
+  if (ht <= 0 || taxes <= 0) {
+    return fallback;
+  }
+
+  const computedRate = (taxes / ht) * 100;
+  return findClosestAllowedTvaRate(computedRate);
+};
+
+const toPositiveNumber = (value: unknown): number => {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value.replace(",", "."));
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      return parsed;
+    }
+  }
+  return 0;
+};
+
+export const normalizeAdditionalCostValue = (
+  rawCost: unknown,
+  fallbackRate: AdditionalCostTvaRate = 20,
+): AdditionalCostFormValue => {
+  const cost = (rawCost ?? {}) as Record<string, unknown>;
+  const label = typeof cost.label === "string" ? cost.label.trim() : "";
+  const amountHT = (() => {
+    const candidates: unknown[] = [cost.amount_ht, cost.amount, cost.total_ht, cost.ht];
+    for (const candidate of candidates) {
+      const value = toPositiveNumber(candidate);
+      if (value > 0) {
+        return value;
+      }
+    }
+
+    const totalCandidate = toPositiveNumber(cost.amount_ttc);
+    return totalCandidate > 0 ? totalCandidate : 0;
+  })();
+  const rawTaxes = (() => {
+    if (typeof cost.montant_tva === "number" && Number.isFinite(cost.montant_tva)) {
+      return cost.montant_tva;
+    }
+    if (typeof cost.taxes === "number" && Number.isFinite(cost.taxes)) {
+      return cost.taxes;
+    }
+    if (typeof cost.amount_ttc === "number" && Number.isFinite(cost.amount_ttc)) {
+      const diff = cost.amount_ttc - amountHT;
+      return Number.isFinite(diff) && diff > 0 ? diff : 0;
+    }
+    return 0;
+  })();
+  const tvaRate = resolveAdditionalCostTvaRate(cost.tva_rate, amountHT, rawTaxes, fallbackRate);
+  const amountTTC = computeAdditionalCostTTC(amountHT, tvaRate);
+  const attachment =
+    typeof cost.attachment === "string" && cost.attachment.trim().length > 0
+      ? cost.attachment.trim()
+      : null;
+
+  return {
+    label,
+    amount_ht: amountHT,
+    tva_rate: tvaRate,
+    amount_ttc: amountTTC,
+    attachment,
+  };
+};
+
+export const normalizeAdditionalCostsArray = (
+  rawCosts: unknown,
+  fallbackRate: AdditionalCostTvaRate = 20,
+): AdditionalCostFormValue[] => {
+  if (!Array.isArray(rawCosts)) {
+    return [];
+  }
+
+  return rawCosts.map((cost) => normalizeAdditionalCostValue(cost, fallbackRate));
 };
 
 export const createBaseSiteSchema = () => {

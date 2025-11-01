@@ -71,10 +71,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
+  ADDITIONAL_COST_TVA_RATES,
   additionalCostSchema,
   computeAdditionalCostTTC,
   createSiteSchema,
   defaultSiteFormValues,
+  normalizeAdditionalCostTvaRate,
+  normalizeAdditionalCostsArray,
   normalizeTeamMembers,
   type SiteFormValues,
   type SiteProjectOption,
@@ -242,14 +245,20 @@ const SortableAdditionalCostRow = ({
     control,
     name: `additional_costs.${index}.amount_ht`,
   });
-  const watchedMontantTVA = useWatch({
+  const watchedTvaRate = useWatch({
     control,
-    name: `additional_costs.${index}.montant_tva`,
+    name: `additional_costs.${index}.tva_rate`,
   });
   const computedAmountTTC = useMemo(
-    () => computeAdditionalCostTTC(watchedAmountHT, watchedMontantTVA),
-    [watchedAmountHT, watchedMontantTVA],
+    () => computeAdditionalCostTTC(watchedAmountHT, watchedTvaRate),
+    [watchedAmountHT, watchedTvaRate],
   );
+  const normalizedAmountHT =
+    typeof watchedAmountHT === "number" && Number.isFinite(watchedAmountHT)
+      ? watchedAmountHT
+      : 0;
+  const normalizedTvaRate = normalizeAdditionalCostTvaRate(watchedTvaRate, 20);
+  const computedTaxes = Math.max(0, computedAmountTTC - normalizedAmountHT);
 
   useEffect(() => {
     if (!formContext) return;
@@ -373,32 +382,38 @@ const SortableAdditionalCostRow = ({
         />
         <FormField
           control={control}
-          name={`additional_costs.${index}.montant_tva`}
-          render={({ field: montantTvaField }) => (
+          name={`additional_costs.${index}.tva_rate`}
+          render={({ field: tvaRateField }) => (
             <FormItem className="space-y-2">
-              <FormLabel>Montant TVA (€)</FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  step="0.01"
-                  placeholder="0,00"
-                  name={montantTvaField.name}
-                  ref={montantTvaField.ref}
-                  value={
-                    montantTvaField.value === undefined || montantTvaField.value === null
-                      ? ""
-                      : montantTvaField.value
-                  }
-                  onChange={(event) => {
-                    const newValue = event.target.value;
-                    montantTvaField.onChange(newValue === "" ? "" : Number(newValue));
-                  }}
-                  onBlur={montantTvaField.onBlur}
-                  disabled={disabled}
-                />
-              </FormControl>
+              <FormLabel>Taux de TVA</FormLabel>
+              <Select
+                value={
+                  tvaRateField.value === undefined || tvaRateField.value === null
+                    ? String(normalizedTvaRate)
+                    : String(tvaRateField.value)
+                }
+                onValueChange={(next) => {
+                  const parsed = Number.parseFloat(next);
+                  tvaRateField.onChange(Number.isFinite(parsed) ? parsed : normalizedTvaRate);
+                }}
+                disabled={disabled}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner un taux" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {ADDITIONAL_COST_TVA_RATES.map((rate) => (
+                    <SelectItem key={rate} value={String(rate)}>
+                      {rate}%
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                TVA calculée automatiquement : {Math.round(computedTaxes * 100) / 100} €
+              </p>
               <FormMessage />
             </FormItem>
           )}
@@ -529,45 +544,9 @@ export const SiteDialog = ({
   });
 
   const mergedDefaults = useMemo(() => {
-    const normalizedAdditionalCosts =
-      initialValues?.additional_costs && initialValues.additional_costs.length > 0
-        ? initialValues.additional_costs.map((cost) => {
-            const rawCost = cost as unknown as Record<string, unknown>;
-            const label =
-              typeof rawCost.label === "string" && rawCost.label.trim().length > 0
-                ? rawCost.label.trim()
-                : "";
-            const amountHT =
-              typeof rawCost.amount_ht === "number" && Number.isFinite(rawCost.amount_ht)
-                ? rawCost.amount_ht
-                : 0;
-            const montantTVAValue = (() => {
-              if (typeof rawCost.montant_tva === "number" && Number.isFinite(rawCost.montant_tva)) {
-                return rawCost.montant_tva;
-              }
-              if (typeof rawCost.taxes === "number" && Number.isFinite(rawCost.taxes)) {
-                return rawCost.taxes;
-              }
-              return 0;
-            })();
-            const amountTTC =
-              typeof rawCost.amount_ttc === "number" && Number.isFinite(rawCost.amount_ttc)
-                ? rawCost.amount_ttc
-                : computeAdditionalCostTTC(amountHT, montantTVAValue);
-            const attachmentValue =
-              typeof rawCost.attachment === "string" && rawCost.attachment.trim().length > 0
-                ? rawCost.attachment.trim()
-                : null;
-
-            return {
-              label,
-              amount_ht: amountHT,
-              montant_tva: montantTVAValue,
-              amount_ttc: amountTTC,
-              attachment: attachmentValue,
-            } satisfies SiteFormValues["additional_costs"][number];
-          })
-        : defaultSiteFormValues.additional_costs;
+    const normalizedAdditionalCosts = normalizeAdditionalCostsArray(
+      initialValues?.additional_costs ?? [],
+    );
 
     const normalizedTeamMembers = normalizeTeamMembers(initialValues?.team_members, memberNameById);
 
@@ -929,15 +908,15 @@ export const SiteDialog = ({
       .filter((c) => c.label.trim().length > 0)
       .map((c) => {
         const attachment = c.attachment ? c.attachment.trim() : "";
-        const montantTVA = Number.isFinite(c.montant_tva) ? c.montant_tva : 0;
         const amountHT = Number.isFinite(c.amount_ht) ? c.amount_ht : 0;
-        const amountTTC = Number.isFinite(c.amount_ttc)
-          ? c.amount_ttc
-          : computeAdditionalCostTTC(amountHT, montantTVA);
+        const tvaRate = normalizeAdditionalCostTvaRate(c.tva_rate, 20);
+        const amountTTC = computeAdditionalCostTTC(amountHT, tvaRate);
+        const montantTVA = Math.max(0, amountTTC - amountHT);
 
         return {
           label: c.label.trim(),
           amount_ht: amountHT,
+          tva_rate: tvaRate,
           montant_tva: montantTVA,
           amount_ttc: amountTTC,
           attachment: attachment.length > 0 ? attachment : null,
@@ -1613,7 +1592,7 @@ export const SiteDialog = ({
                       appendCost({
                         label: "",
                         amount_ht: undefined as unknown as number,
-                        montant_tva: undefined as unknown as number,
+                        tva_rate: 20,
                         amount_ttc: 0,
                         attachment: null,
                       })
