@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -48,7 +48,7 @@ import { calculateRentability, buildRentabilityInputFromSite } from "@/lib/renta
 import { getProjectStatusBadgeStyle } from "@/lib/projects";
 import { parseSiteNotes, serializeSiteNotes } from "@/lib/sites";
 import { cn } from "@/lib/utils";
-import { ClipboardList, HandCoins, Loader2, MapPin, UserRound, ArrowLeft, Building2 } from "lucide-react";
+import { ClipboardList, HandCoins, Loader2, MapPin, UserRound, ArrowLeft, Building2, Lock } from "lucide-react";
 import type { DriveFileMetadata } from "@/integrations/googleDrive";
 import { format } from "date-fns";
 
@@ -118,12 +118,7 @@ const ChantierDetails = () => {
   const { statuses: statusOptions } = useProjectStatuses();
   const [siteDriveFile, setSiteDriveFile] = useState<DriveFileMetadata | null>(null);
 
-  const projectStatusValues = useMemo(
-    () => statusOptions.map((option) => option.value),
-    [statusOptions],
-  );
-
-  const resolver = useMemo(() => zodResolver(createSiteSchema(projectStatusValues, false)), [projectStatusValues]);
+  const resolver = useMemo(() => zodResolver(createSiteSchema(false)), []);
 
   const form = useForm<SiteFormValues>({
     resolver,
@@ -202,6 +197,7 @@ const ChantierDetails = () => {
   const chantier = chantierQuery.data?.site ?? null;
   const project = chantier?.project ?? null;
   const projectStatusValue = project?.status ?? null;
+  const isEditingLocked = projectStatusValue !== "CHANTIER_TERMINE";
   const projectStatusConfig = useMemo(
     () =>
       projectStatusValue
@@ -227,7 +223,6 @@ const ChantierDetails = () => {
       address: chantier.address,
       city: chantier.city,
       postal_code: chantier.postal_code,
-      status: chantier.status,
       cofrac_status: chantier.cofrac_status as "EN_ATTENTE" | "CONFORME" | "NON_CONFORME" | "A_PLANIFIER",
       date_debut: chantier.date_debut,
       date_fin_prevue: chantier.date_fin_prevue ?? "",
@@ -335,9 +330,12 @@ const ChantierDetails = () => {
   }, [rentabilityWatch, subcontractorsQuery.data, project?.prime_cee, project?.prime_cee_total_cents, project?.product_name, chantier?.product_name, form]);
 
   const updateMutation = useMutation({
-    mutationFn: async (payload: Omit<SiteSubmitValues, "status">) => {
+    mutationFn: async (payload: SiteSubmitValues) => {
       if (!chantier || !user?.id) return;
-      const { error } = await supabase.from("sites").update(payload as any).eq("id", chantier.id);
+      const { error } = await supabase
+        .from("sites")
+        .update(payload as Partial<Tables<"sites">>)
+        .eq("id", chantier.id);
       if (error) throw error;
     },
     onSuccess: async () => {
@@ -349,12 +347,17 @@ const ChantierDetails = () => {
       toast({ title: "Mise à jour impossible", description: "Veuillez vérifier le formulaire.", variant: "destructive" });
     },
   });
+  const { mutate: mutateSite, isPending: isUpdating } = updateMutation;
 
-  const handleFormSubmit = (values: SiteFormValues) => {
-    if (!chantier || !user?.id) return;
-    const filteredCosts = (values.additional_costs ?? [])
-      .filter((cost) => cost.label.trim().length > 0)
-      .map((cost) => {
+  const handleFormSubmit = useCallback(
+    (values: SiteFormValues) => {
+      if (!chantier || !user?.id) return;
+      if (isEditingLocked) return;
+      if (isUpdating) return;
+      if (!formState.isDirty) return;
+      const filteredCosts = (values.additional_costs ?? [])
+        .filter((cost) => cost.label.trim().length > 0)
+        .map((cost) => {
         const amountHT = sanitizeNumber(cost.amount_ht);
         const montantTVA = sanitizeNumber(cost.montant_tva);
         const amountTTC = sanitizeNumber(cost.amount_ttc, amountHT + montantTVA);
@@ -403,15 +406,13 @@ const ChantierDetails = () => {
       }),
     );
 
-    const serializedNotes = serializeSiteNotes(values.notes, siteDriveFile);
+      const serializedNotes = serializeSiteNotes(values.notes, siteDriveFile);
 
-    const { status: _ignoredStatus, ...valuesWithoutStatus } = values;
-
-    const payload: Omit<SiteSubmitValues, "status"> = {
-      ...valuesWithoutStatus,
-      project_ref: values.project_ref?.trim() ?? chantier.project_ref ?? "",
-      client_name: values.client_name?.trim() ?? chantier.client_name ?? "",
-      subcontractor_id: values.subcontractor_id ?? null,
+      const payload: SiteSubmitValues = {
+        ...values,
+        project_ref: values.project_ref?.trim() ?? chantier.project_ref ?? "",
+        client_name: values.client_name?.trim() ?? chantier.client_name ?? "",
+        subcontractor_id: values.subcontractor_id ?? null,
       additional_costs: filteredCosts,
       notes: serializedNotes,
       travaux_non_subventionnes: travauxChoice,
@@ -430,8 +431,25 @@ const ChantierDetails = () => {
       rentability_additional_costs_total: rentabilityResult.additionalCostsTotal,
     };
 
-    updateMutation.mutate(payload);
-  };
+      mutateSite(payload);
+    },
+    [
+      chantier,
+      formState.isDirty,
+      isEditingLocked,
+      isUpdating,
+      siteDriveFile,
+      mutateSite,
+      user?.id,
+    ],
+  );
+
+  const handleBlurSave = useCallback(() => {
+    if (isEditingLocked) return;
+    void form.handleSubmit(handleFormSubmit)();
+  }, [form, handleFormSubmit, isEditingLocked]);
+
+  const disableInputs = isEditingLocked || isUpdating;
 
   if (chantierQuery.isLoading) {
     return (
@@ -580,6 +598,23 @@ const ChantierDetails = () => {
           <Form {...form}>
             <form onSubmit={handleSubmit(handleFormSubmit)} className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
               <div className="space-y-6">
+                {isEditingLocked ? (
+                  <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    <Lock className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div className="space-y-1">
+                      <p className="font-medium">Modifications verrouillées</p>
+                      <p className="text-xs">
+                        Passez le projet au statut «&nbsp;CHANTIER_TERMINE&nbsp;» depuis l'onglet Projet pour activer la mise à jour du chantier.
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+                {!isEditingLocked && isUpdating ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span>Enregistrement en cours…</span>
+                  </div>
+                ) : null}
                 <Card className="border border-dashed">
                   <CardHeader>
                     <CardTitle>Statut & conformité</CardTitle>
@@ -606,9 +641,16 @@ const ChantierDetails = () => {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>COFRAC</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
+                          <Select
+                            onValueChange={(value) => {
+                              field.onChange(value);
+                              handleBlurSave();
+                            }}
+                            value={field.value}
+                            disabled={disableInputs}
+                          >
                             <FormControl>
-                              <SelectTrigger>
+                              <SelectTrigger disabled={disableInputs}>
                                 <SelectValue placeholder="Sélectionner" />
                               </SelectTrigger>
                             </FormControl>
@@ -639,7 +681,17 @@ const ChantierDetails = () => {
                         <FormItem>
                           <FormLabel>Chiffre d'affaires (€)</FormLabel>
                           <FormControl>
-                            <Input type="number" step="0.01" {...field} />
+                            <Input
+                              type="number"
+                              step="0.01"
+                              {...field}
+                              onBlur={(event) => {
+                                field.onBlur();
+                                handleBlurSave();
+                              }}
+                              disabled={disableInputs}
+                              readOnly={isEditingLocked}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -652,7 +704,17 @@ const ChantierDetails = () => {
                         <FormItem>
                           <FormLabel>Valorisation CEE (€)</FormLabel>
                           <FormControl>
-                            <Input type="number" step="0.01" {...field} />
+                            <Input
+                              type="number"
+                              step="0.01"
+                              {...field}
+                              onBlur={(event) => {
+                                field.onBlur();
+                                handleBlurSave();
+                              }}
+                              disabled={disableInputs}
+                              readOnly={isEditingLocked}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -665,7 +727,17 @@ const ChantierDetails = () => {
                         <FormItem>
                           <FormLabel>Commission commerciale (€)</FormLabel>
                           <FormControl>
-                            <Input type="number" step="0.01" {...field} />
+                            <Input
+                              type="number"
+                              step="0.01"
+                              {...field}
+                              onBlur={(event) => {
+                                field.onBlur();
+                                handleBlurSave();
+                              }}
+                              disabled={disableInputs}
+                              readOnly={isEditingLocked}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -678,7 +750,17 @@ const ChantierDetails = () => {
                         <FormItem>
                           <FormLabel>Surface facturée (m²)</FormLabel>
                           <FormControl>
-                            <Input type="number" step="0.1" {...field} />
+                            <Input
+                              type="number"
+                              step="0.1"
+                              {...field}
+                              onBlur={(event) => {
+                                field.onBlur();
+                                handleBlurSave();
+                              }}
+                              disabled={disableInputs}
+                              readOnly={isEditingLocked}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -691,7 +773,17 @@ const ChantierDetails = () => {
                         <FormItem>
                           <FormLabel>Coût main d'œuvre / m² (€)</FormLabel>
                           <FormControl>
-                            <Input type="number" step="0.01" {...field} />
+                            <Input
+                              type="number"
+                              step="0.01"
+                              {...field}
+                              onBlur={(event) => {
+                                field.onBlur();
+                                handleBlurSave();
+                              }}
+                              disabled={disableInputs}
+                              readOnly={isEditingLocked}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -704,7 +796,17 @@ const ChantierDetails = () => {
                         <FormItem>
                           <FormLabel>Coût matériaux / m² (€)</FormLabel>
                           <FormControl>
-                            <Input type="number" step="0.01" {...field} />
+                            <Input
+                              type="number"
+                              step="0.01"
+                              {...field}
+                              onBlur={(event) => {
+                                field.onBlur();
+                                handleBlurSave();
+                              }}
+                              disabled={disableInputs}
+                              readOnly={isEditingLocked}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -717,7 +819,17 @@ const ChantierDetails = () => {
                         <FormItem>
                           <FormLabel>Surface posée (m²)</FormLabel>
                           <FormControl>
-                            <Input type="number" step="0.1" {...field} />
+                            <Input
+                              type="number"
+                              step="0.1"
+                              {...field}
+                              onBlur={(event) => {
+                                field.onBlur();
+                                handleBlurSave();
+                              }}
+                              disabled={disableInputs}
+                              readOnly={isEditingLocked}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -729,7 +841,14 @@ const ChantierDetails = () => {
                       render={({ field }) => (
                         <FormItem className="col-span-full">
                           <div className="flex items-start gap-3 rounded-lg border border-dashed p-3">
-                            <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={(checked) => {
+                                field.onChange(checked);
+                                handleBlurSave();
+                              }}
+                              disabled={disableInputs}
+                            />
                             <div className="space-y-2">
                               <FormLabel>Commission HT active</FormLabel>
                               <p className="text-xs text-muted-foreground">
@@ -742,7 +861,17 @@ const ChantierDetails = () => {
                                   <FormItem>
                                     <FormLabel>Montant commission HT (€)</FormLabel>
                                     <FormControl>
-                                      <Input type="number" step="0.01" {...amountField} disabled={!field.value} />
+                                      <Input
+                                        type="number"
+                                        step="0.01"
+                                        {...amountField}
+                                        onBlur={(event) => {
+                                          amountField.onBlur();
+                                          handleBlurSave();
+                                        }}
+                                        disabled={!field.value || disableInputs}
+                                        readOnly={isEditingLocked}
+                                      />
                                     </FormControl>
                                     <FormMessage />
                                   </FormItem>
@@ -768,9 +897,16 @@ const ChantierDetails = () => {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Type de travaux</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
+                          <Select
+                            onValueChange={(value) => {
+                              field.onChange(value);
+                              handleBlurSave();
+                            }}
+                            value={field.value}
+                            disabled={disableInputs}
+                          >
                             <FormControl>
-                              <SelectTrigger>
+                              <SelectTrigger disabled={disableInputs}>
                                 <SelectValue placeholder="Sélectionner" />
                               </SelectTrigger>
                             </FormControl>
@@ -795,7 +931,16 @@ const ChantierDetails = () => {
                             <FormItem className="md:col-span-2">
                               <FormLabel>Description</FormLabel>
                               <FormControl>
-                                <Textarea rows={3} {...field} />
+                                <Textarea
+                                  rows={3}
+                                  {...field}
+                                  onBlur={(event) => {
+                                    field.onBlur();
+                                    handleBlurSave();
+                                  }}
+                                  disabled={disableInputs}
+                                  readOnly={isEditingLocked}
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -808,7 +953,17 @@ const ChantierDetails = () => {
                             <FormItem>
                               <FormLabel>Montant (€)</FormLabel>
                               <FormControl>
-                                <Input type="number" step="0.01" {...field} />
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  {...field}
+                                  onBlur={(event) => {
+                                    field.onBlur();
+                                    handleBlurSave();
+                                  }}
+                                  disabled={disableInputs}
+                                  readOnly={isEditingLocked}
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -819,7 +974,14 @@ const ChantierDetails = () => {
                           name="travaux_non_subventionnes_financement"
                           render={({ field }) => (
                             <FormItem className="flex items-center gap-2">
-                              <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={(checked) => {
+                                  field.onChange(checked);
+                                  handleBlurSave();
+                                }}
+                                disabled={disableInputs}
+                              />
                               <FormLabel className="font-normal">Financement externe confirmé</FormLabel>
                             </FormItem>
                           )}
@@ -850,7 +1012,15 @@ const ChantierDetails = () => {
                                 <FormItem className="md:col-span-2">
                                   <FormLabel>Intitulé</FormLabel>
                                   <FormControl>
-                                    <Input {...field} />
+                                    <Input
+                                      {...field}
+                                      onBlur={(event) => {
+                                        field.onBlur();
+                                        handleBlurSave();
+                                      }}
+                                      disabled={disableInputs}
+                                      readOnly={isEditingLocked}
+                                    />
                                   </FormControl>
                                   <FormMessage />
                                 </FormItem>
@@ -863,7 +1033,17 @@ const ChantierDetails = () => {
                                 <FormItem>
                                   <FormLabel>Montant HT</FormLabel>
                                   <FormControl>
-                                    <Input type="number" step="0.01" {...field} />
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      {...field}
+                                      onBlur={(event) => {
+                                        field.onBlur();
+                                        handleBlurSave();
+                                      }}
+                                      disabled={disableInputs}
+                                      readOnly={isEditingLocked}
+                                    />
                                   </FormControl>
                                   <FormMessage />
                                 </FormItem>
@@ -876,7 +1056,17 @@ const ChantierDetails = () => {
                                 <FormItem>
                                   <FormLabel>TVA</FormLabel>
                                   <FormControl>
-                                    <Input type="number" step="0.01" {...field} />
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      {...field}
+                                      onBlur={(event) => {
+                                        field.onBlur();
+                                        handleBlurSave();
+                                      }}
+                                      disabled={disableInputs}
+                                      readOnly={isEditingLocked}
+                                    />
                                   </FormControl>
                                   <FormMessage />
                                 </FormItem>
@@ -890,7 +1080,17 @@ const ChantierDetails = () => {
                                   <FormItem>
                                     <FormLabel>Montant TTC</FormLabel>
                                     <FormControl>
-                                      <Input type="number" step="0.01" {...field} />
+                                      <Input
+                                        type="number"
+                                        step="0.01"
+                                        {...field}
+                                        onBlur={(event) => {
+                                          field.onBlur();
+                                          handleBlurSave();
+                                        }}
+                                        disabled={disableInputs}
+                                        readOnly={isEditingLocked}
+                                      />
                                     </FormControl>
                                     <FormMessage />
                                   </FormItem>
@@ -903,7 +1103,16 @@ const ChantierDetails = () => {
                                   <FormItem>
                                     <FormLabel>Preuve (Drive)</FormLabel>
                                     <FormControl>
-                                      <Input placeholder="URL ou ID du fichier" {...field} />
+                                      <Input
+                                        placeholder="URL ou ID du fichier"
+                                        {...field}
+                                        onBlur={(event) => {
+                                          field.onBlur();
+                                          handleBlurSave();
+                                        }}
+                                        disabled={disableInputs}
+                                        readOnly={isEditingLocked}
+                                      />
                                     </FormControl>
                                     <FormMessage />
                                   </FormItem>
@@ -913,8 +1122,12 @@ const ChantierDetails = () => {
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => removeCost(index)}
+                                onClick={() => {
+                                  removeCost(index);
+                                  handleBlurSave();
+                                }}
                                 className="text-destructive"
+                                disabled={disableInputs}
                               >
                                 Supprimer
                               </Button>
@@ -936,6 +1149,7 @@ const ChantierDetails = () => {
                           attachment: null,
                         })
                       }
+                      disabled={disableInputs}
                     >
                       Ajouter un frais
                     </Button>
@@ -954,9 +1168,16 @@ const ChantierDetails = () => {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Sous-traitant</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                          <Select
+                            onValueChange={(value) => {
+                              field.onChange(value);
+                              handleBlurSave();
+                            }}
+                            value={field.value ?? ""}
+                            disabled={disableInputs}
+                          >
                             <FormControl>
-                              <SelectTrigger>
+                              <SelectTrigger disabled={disableInputs}>
                                 <SelectValue placeholder="Sélectionner" />
                               </SelectTrigger>
                             </FormControl>
@@ -978,7 +1199,14 @@ const ChantierDetails = () => {
                       name="subcontractor_payment_confirmed"
                       render={({ field }) => (
                         <FormItem className="flex items-center gap-3">
-                          <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={(checked) => {
+                              field.onChange(checked);
+                              handleBlurSave();
+                            }}
+                            disabled={disableInputs}
+                          />
                           <div className="space-y-1">
                             <FormLabel className="font-medium">Paiement sous-traitant confirmé</FormLabel>
                             <p className="text-xs text-muted-foreground">
@@ -995,10 +1223,16 @@ const ChantierDetails = () => {
                         entityType="site"
                         entityId={chantier.site_ref}
                         value={siteDriveFile}
-                        onChange={setSiteDriveFile}
+                        onChange={(file) => {
+                          setSiteDriveFile(file);
+                          if (!isEditingLocked) {
+                            handleBlurSave();
+                          }
+                        }}
                         maxSizeMb={35}
                         description="Importer des photos ou documents Drive"
                         helperText="Prise en charge PDF et images"
+                        disabled={disableInputs}
                       />
                     </div>
                     <FormField
@@ -1008,7 +1242,16 @@ const ChantierDetails = () => {
                         <FormItem>
                           <FormLabel>Notes internes</FormLabel>
                           <FormControl>
-                            <Textarea rows={4} {...field} />
+                            <Textarea
+                              rows={4}
+                              {...field}
+                              onBlur={(event) => {
+                                field.onBlur();
+                                handleBlurSave();
+                              }}
+                              disabled={disableInputs}
+                              readOnly={isEditingLocked}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -1097,14 +1340,6 @@ const ChantierDetails = () => {
                   </CardContent>
                 </Card>
 
-                <div className="flex flex-col gap-3">
-                  <Button type="submit" disabled={updateMutation.isPending || !formState.isDirty}>
-                    {updateMutation.isPending ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : null}
-                    Enregistrer les modifications
-                  </Button>
-                </div>
               </div>
             </form>
           </Form>
