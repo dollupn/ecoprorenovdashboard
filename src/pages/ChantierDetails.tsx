@@ -92,6 +92,8 @@ const sanitizeNumber = (value: unknown, fallback = 0) => {
   return fallback;
 };
 
+const numbersAreClose = (a: number, b: number) => Math.abs(a - b) < 0.005;
+
 const getStatusGradient = (marginRate: number) => {
   if (marginRate >= 0) {
     return "border-emerald-500/60 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent";
@@ -146,6 +148,11 @@ const ChantierDetails = () => {
       "commission_commerciale_ht_montant",
       "subcontractor_id",
       "subcontractor_payment_confirmed",
+      "subcontractor_base_units",
+      "subcontractor_payment_amount",
+      "subcontractor_payment_units",
+      "subcontractor_payment_rate",
+      "subcontractor_payment_unit_label",
     ],
   });
 
@@ -236,6 +243,12 @@ const ChantierDetails = () => {
       montant_commission: sanitizeNumber(chantier.montant_commission),
       valorisation_cee: sanitizeNumber(chantier.valorisation_cee),
       subcontractor_id: chantier.subcontractor_id ?? null,
+      subcontractor_payment_confirmed: Boolean(chantier.subcontractor_payment_confirmed),
+      subcontractor_base_units: sanitizeNumber(chantier.subcontractor_base_units),
+      subcontractor_payment_amount: sanitizeNumber(chantier.subcontractor_payment_amount),
+      subcontractor_payment_units: sanitizeNumber(chantier.subcontractor_payment_units),
+      subcontractor_payment_unit_label: chantier.subcontractor_payment_unit_label?.trim() ?? "",
+      subcontractor_payment_rate: sanitizeNumber(chantier.subcontractor_payment_rate),
       travaux_non_subventionnes: (String(chantier.travaux_non_subventionnes) as SiteFormValues["travaux_non_subventionnes"]) || "NA",
       travaux_non_subventionnes_montant: sanitizeNumber(chantier.travaux_non_subventionnes_montant),
       commission_commerciale_ht_montant: sanitizeNumber(chantier.commission_commerciale_ht_montant),
@@ -265,6 +278,11 @@ const ChantierDetails = () => {
       commissionCommercialeMontant,
       subcontractorId,
       subcontractorPaymentConfirmed,
+      subcontractorBaseUnits,
+      subcontractorPaymentAmount,
+      subcontractorPaymentUnits,
+      subcontractorPaymentRate,
+      subcontractorPaymentUnitLabel,
     ] = (rentabilityWatch ?? []) as [
       number | undefined,
       number | undefined,
@@ -281,6 +299,11 @@ const ChantierDetails = () => {
       number | undefined,
       string | undefined,
       boolean | undefined,
+      number | undefined,
+      number | undefined,
+      number | undefined,
+      number | undefined,
+      string | undefined,
     ];
 
     const normalizedAdditionalCosts = Array.isArray(additionalCosts)
@@ -321,6 +344,11 @@ const ChantierDetails = () => {
       commission_commerciale_ht_montant: sanitizeNumber(commissionCommercialeMontant),
       subcontractor_pricing_details: subcontractorRate,
       subcontractor_payment_confirmed: Boolean(subcontractorPaymentConfirmed),
+      subcontractor_base_units: sanitizeNumber(subcontractorBaseUnits),
+      subcontractor_payment_amount: sanitizeNumber(subcontractorPaymentAmount),
+      subcontractor_payment_units: sanitizeNumber(subcontractorPaymentUnits),
+      subcontractor_payment_rate: sanitizeNumber(subcontractorPaymentRate),
+      subcontractor_payment_unit_label: subcontractorPaymentUnitLabel,
       project_prime_cee: project?.prime_cee ?? undefined,
       project_prime_cee_total_cents: project?.prime_cee_total_cents ?? undefined,
       project_category: project?.product_name ?? chantier?.product_name ?? undefined,
@@ -328,6 +356,46 @@ const ChantierDetails = () => {
 
     return calculateRentability(rentabilityInput);
   }, [rentabilityWatch, subcontractorsQuery.data, project?.prime_cee, project?.prime_cee_total_cents, project?.product_name, chantier?.product_name, form]);
+
+  const subcontractorAmountDisplay = rentabilityMetrics.subcontractorEstimatedCost > 0
+    ? formatCurrency(rentabilityMetrics.subcontractorEstimatedCost)
+    : "—";
+  const subcontractorUnitsDisplay = rentabilityMetrics.subcontractorBaseUnits > 0
+    ? `${formatDecimal(rentabilityMetrics.subcontractorBaseUnits)} ${rentabilityMetrics.unitLabel}`
+    : `— ${rentabilityMetrics.unitLabel}`;
+  const subcontractorRateDisplay = rentabilityMetrics.subcontractorRate > 0
+    ? `${formatCurrency(rentabilityMetrics.subcontractorRate)} / ${rentabilityMetrics.unitLabel}`
+    : null;
+
+  useEffect(() => {
+    const updateNumericField = (
+      name:
+        | "subcontractor_base_units"
+        | "subcontractor_payment_units"
+        | "subcontractor_payment_amount"
+        | "subcontractor_payment_rate",
+      value: number,
+    ) => {
+      const current = sanitizeNumber(form.getValues(name));
+      if (!numbersAreClose(current, value)) {
+        form.setValue(name, value, { shouldDirty: true, shouldValidate: false });
+      }
+    };
+
+    updateNumericField("subcontractor_base_units", rentabilityMetrics.subcontractorBaseUnits);
+    updateNumericField("subcontractor_payment_units", rentabilityMetrics.subcontractorBaseUnits);
+    updateNumericField("subcontractor_payment_amount", rentabilityMetrics.subcontractorEstimatedCost);
+    updateNumericField("subcontractor_payment_rate", rentabilityMetrics.subcontractorRate);
+
+    const currentLabel = form.getValues("subcontractor_payment_unit_label") ?? "";
+    const nextLabel = rentabilityMetrics.unitLabel ?? "";
+    if (typeof currentLabel !== "string" || currentLabel.trim() !== nextLabel) {
+      form.setValue("subcontractor_payment_unit_label", nextLabel, {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
+    }
+  }, [form, rentabilityMetrics]);
 
   const updateMutation = useMutation({
     mutationFn: async (payload: SiteSubmitValues) => {
@@ -429,6 +497,11 @@ const ChantierDetails = () => {
       rentability_unit_label: rentabilityResult.unitLabel,
       rentability_unit_count: rentabilityResult.unitsUsed,
       rentability_additional_costs_total: rentabilityResult.additionalCostsTotal,
+      subcontractor_payment_amount: rentabilityResult.subcontractorEstimatedCost,
+      subcontractor_payment_units: rentabilityResult.subcontractorBaseUnits,
+      subcontractor_payment_unit_label: rentabilityResult.unitLabel,
+      subcontractor_payment_rate: rentabilityResult.subcontractorRate,
+      subcontractor_base_units: rentabilityResult.subcontractorBaseUnits,
     };
 
       mutateSite(payload);
@@ -1198,19 +1271,29 @@ const ChantierDetails = () => {
                       control={control}
                       name="subcontractor_payment_confirmed"
                       render={({ field }) => (
-                        <FormItem className="flex items-center gap-3">
-                          <Checkbox
-                            checked={field.value}
-                            onCheckedChange={(checked) => {
-                              field.onChange(checked);
-                              handleBlurSave();
-                            }}
-                            disabled={disableInputs}
-                          />
-                          <div className="space-y-1">
-                            <FormLabel className="font-medium">Paiement sous-traitant confirmé</FormLabel>
+                        <FormItem className="flex flex-col gap-3 rounded-md border p-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex items-start gap-3">
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={(checked) => {
+                                field.onChange(checked);
+                                handleBlurSave();
+                              }}
+                              disabled={disableInputs}
+                            />
+                            <div className="space-y-1">
+                              <FormLabel className="font-medium">Paiement sous-traitant confirmé</FormLabel>
+                              <p className="text-xs text-muted-foreground">
+                                Indiquez si le règlement du sous-traitant a été effectué.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right text-sm">
+                            <p className="font-semibold text-foreground">{subcontractorAmountDisplay}</p>
                             <p className="text-xs text-muted-foreground">
-                              Indiquez si le règlement du sous-traitant a été effectué.
+                              {subcontractorRateDisplay
+                                ? `${subcontractorUnitsDisplay} · ${subcontractorRateDisplay}`
+                                : subcontractorUnitsDisplay}
                             </p>
                           </div>
                         </FormItem>

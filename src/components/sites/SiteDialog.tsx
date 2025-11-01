@@ -122,6 +122,8 @@ const percentFormatter = new Intl.NumberFormat("fr-FR", {
   maximumFractionDigits: 1,
 });
 
+const numbersAreClose = (a: number, b: number) => Math.abs(a - b) < 0.005;
+
 interface SortableAdditionalCostRowProps {
   field: FieldArrayWithId<SiteFormValues, "additional_costs">;
   index: number;
@@ -620,6 +622,25 @@ export const SiteDialog = ({
     ) {
       values.valorisation_cee = 0;
     }
+
+    if (!Number.isFinite(values.subcontractor_base_units)) {
+      values.subcontractor_base_units = 0;
+    }
+    if (!Number.isFinite(values.subcontractor_payment_units)) {
+      values.subcontractor_payment_units = values.subcontractor_base_units;
+    }
+    if (!Number.isFinite(values.subcontractor_payment_amount)) {
+      values.subcontractor_payment_amount = 0;
+    }
+    if (!Number.isFinite(values.subcontractor_payment_rate)) {
+      values.subcontractor_payment_rate = 0;
+    }
+    values.subcontractor_payment_unit_label =
+      typeof values.subcontractor_payment_unit_label === "string"
+        ? values.subcontractor_payment_unit_label.trim()
+        : "";
+    values.subcontractor_payment_confirmed = Boolean(values.subcontractor_payment_confirmed);
+
     return values;
   }, [initialValues, parsedNotes.text]);
 
@@ -711,6 +732,11 @@ export const SiteDialog = ({
   const watchedCommissionCommercialeMontant = form.watch("commission_commerciale_ht_montant");
   const watchedSubcontractorId = form.watch("subcontractor_id");
   const watchedSubcontractorPaymentConfirmed = form.watch("subcontractor_payment_confirmed");
+  const watchedSubcontractorBaseUnits = form.watch("subcontractor_base_units");
+  const watchedSubcontractorPaymentAmount = form.watch("subcontractor_payment_amount");
+  const watchedSubcontractorPaymentUnits = form.watch("subcontractor_payment_units");
+  const watchedSubcontractorPaymentRate = form.watch("subcontractor_payment_rate");
+  const watchedSubcontractorUnitLabel = form.watch("subcontractor_payment_unit_label");
 
   const rentability = useMemo(
     () =>
@@ -743,6 +769,11 @@ export const SiteDialog = ({
             return undefined;
           })(),
           subcontractor_payment_confirmed: watchedSubcontractorPaymentConfirmed,
+          subcontractor_base_units: watchedSubcontractorBaseUnits,
+          subcontractor_payment_amount: watchedSubcontractorPaymentAmount,
+          subcontractor_payment_units: watchedSubcontractorPaymentUnits,
+          subcontractor_payment_rate: watchedSubcontractorPaymentRate,
+          subcontractor_payment_unit_label: watchedSubcontractorUnitLabel,
         }),
       ),
     [
@@ -761,14 +792,59 @@ export const SiteDialog = ({
       watchedCommissionCommercialeMontant,
       watchedSubcontractorId,
       watchedSubcontractorPaymentConfirmed,
+      watchedSubcontractorBaseUnits,
+      watchedSubcontractorPaymentAmount,
+      watchedSubcontractorPaymentUnits,
+      watchedSubcontractorPaymentRate,
+      watchedSubcontractorUnitLabel,
       subcontractors,
     ],
   );
+
+  useEffect(() => {
+    const updateNumericField = (
+      name:
+        | "subcontractor_base_units"
+        | "subcontractor_payment_units"
+        | "subcontractor_payment_amount"
+        | "subcontractor_payment_rate",
+      value: number,
+    ) => {
+      const current = form.getValues(name) ?? 0;
+      if (!numbersAreClose(Number(current), value)) {
+        form.setValue(name, value, { shouldDirty: true });
+      }
+    };
+
+    updateNumericField("subcontractor_base_units", rentability.subcontractorBaseUnits);
+    updateNumericField("subcontractor_payment_units", rentability.subcontractorBaseUnits);
+    updateNumericField("subcontractor_payment_amount", rentability.subcontractorEstimatedCost);
+    updateNumericField("subcontractor_payment_rate", rentability.subcontractorRate);
+
+    const currentLabel = form.getValues("subcontractor_payment_unit_label") ?? "";
+    const nextLabel = rentability.unitLabel ?? "";
+    if (typeof currentLabel !== "string" || currentLabel.trim() !== nextLabel) {
+      form.setValue("subcontractor_payment_unit_label", nextLabel, { shouldDirty: true });
+    }
+  }, [form, rentability]);
 
   const rentabilityMarginPerUnitLabel =
     rentability.measurementMode === "luminaire"
       ? "Marge (€ / luminaire)"
       : "Marge (€ / m²)";
+
+  const subcontractorAmountDisplay =
+    rentability.subcontractorEstimatedCost > 0
+      ? currencyFormatter.format(rentability.subcontractorEstimatedCost)
+      : "—";
+  const subcontractorUnitsDisplay =
+    rentability.subcontractorBaseUnits > 0
+      ? `${decimalFormatter.format(rentability.subcontractorBaseUnits)} ${rentability.unitLabel}`
+      : `— ${rentability.unitLabel}`;
+  const subcontractorRateDisplay =
+    rentability.subcontractorRate > 0
+      ? `${currencyFormatter.format(rentability.subcontractorRate)} / ${rentability.unitLabel}`
+      : null;
 
   const formattedAdditionalCosts = currencyFormatter.format(rentability.additionalCostsTotal);
   const formattedTotalCosts = currencyFormatter.format(rentability.totalCosts);
@@ -968,6 +1044,11 @@ export const SiteDialog = ({
       rentability_unit_label: rentabilityResult.unitLabel,
       rentability_unit_count: rentabilityResult.unitsUsed,
       rentability_additional_costs_total: rentabilityResult.additionalCostsTotal,
+      subcontractor_payment_amount: rentabilityResult.subcontractorEstimatedCost,
+      subcontractor_payment_units: rentabilityResult.subcontractorBaseUnits,
+      subcontractor_payment_unit_label: rentabilityResult.unitLabel,
+      subcontractor_payment_rate: rentabilityResult.subcontractorRate,
+      subcontractor_base_units: rentabilityResult.subcontractorBaseUnits,
       travaux_non_subventionnes: travauxChoice,
       travaux_non_subventionnes_description: travauxDescription,
       travaux_non_subventionnes_montant: travauxMontant,
@@ -1257,18 +1338,28 @@ export const SiteDialog = ({
                   control={form.control}
                   name="subcontractor_payment_confirmed"
                   render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={(checked) => field.onChange(checked === true)}
-                          disabled={isReadOnly}
-                        />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel>Paiement sous-traitant effectué</FormLabel>
-                        <p className="text-sm text-muted-foreground">
-                          Confirme que le sous-traitant a bien été réglé.
+                    <FormItem className="flex flex-col gap-3 rounded-md border p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-start gap-3">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={(checked) => field.onChange(checked === true)}
+                            disabled={isReadOnly}
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel>Paiement sous-traitant effectué</FormLabel>
+                          <p className="text-sm text-muted-foreground">
+                            Confirme que le sous-traitant a bien été réglé.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right text-sm">
+                        <p className="font-semibold text-foreground">{subcontractorAmountDisplay}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {subcontractorRateDisplay
+                            ? `${subcontractorUnitsDisplay} · ${subcontractorRateDisplay}`
+                            : subcontractorUnitsDisplay}
                         </p>
                       </div>
                     </FormItem>
