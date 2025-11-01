@@ -2,7 +2,7 @@ export const TRAVAUX_NON_SUBVENTIONNES_OPTIONS = [
   { value: "NA", label: "N/A" },
   { value: "CLIENT", label: "Client" },
   { value: "MARGE", label: "Marge" },
-  { value: "MOITIE", label: "Moitié" },
+  { value: "PARTAGE", label: "Partagé" },
 ] as const;
 
 export type TravauxNonSubventionnesValue =
@@ -18,3 +18,26 @@ export const TRAVAUX_NON_SUBVENTIONNES_LABELS: Record<
   },
   {} as Record<TravauxNonSubventionnesValue, string>,
 );
+
+export const normalizeTravauxNonSubventionnesValue = (
+  rawValue: unknown,
+  fallback: TravauxNonSubventionnesValue = "NA",
+): TravauxNonSubventionnesValue => {
+  if (typeof rawValue === "string") {
+    const normalized = rawValue.trim().toUpperCase();
+    switch (normalized) {
+      case "CLIENT":
+      case "MARGE":
+      case "PARTAGE":
+        return normalized as TravauxNonSubventionnesValue;
+      case "MOITIE":
+        return "PARTAGE";
+      case "NA":
+        return "NA";
+      default:
+        return fallback;
+    }
+  }
+
+  return fallback;
+};

@@ -1,10 +1,12 @@
 export type RentabilityMeasurementMode = "surface" | "luminaire";
 
-export type RentabilityTravauxOption = "NA" | "CLIENT" | "MARGE" | "MOITIE";
+export type RentabilityTravauxOption = "NA" | "CLIENT" | "MARGE" | "PARTAGE";
 
 export interface RentabilityAdditionalCostInput {
   amount_ht?: number | null;
   taxes?: number | null;
+  amount_ttc?: number | null;
+  tva_rate?: number | null;
 }
 
 export interface RentabilityInput {
@@ -58,6 +60,10 @@ export interface RentabilityResult {
   unitLabel: string;
   measurementMode: RentabilityMeasurementMode;
   costBreakdown: RentabilityCostBreakdown;
+  subcontractorRate: number;
+  subcontractorBaseUnits: number;
+  subcontractorEstimatedCost: number;
+  subcontractorPaymentConfirmed: boolean;
 }
 
 const sanitizeNumber = (value: unknown): number => {
@@ -93,8 +99,9 @@ const normalizeTravauxOption = (
       return "CLIENT";
     case "MARGE":
       return "MARGE";
+    case "PARTAGE":
     case "MOITIE":
-      return "MOITIE";
+      return "PARTAGE";
     default:
       return "NA";
   }
@@ -144,7 +151,7 @@ export const calculateRentability = (input: RentabilityInput): RentabilityResult
       case "MARGE":
         travauxCost = travauxAmount;
         break;
-      case "MOITIE":
+      case "PARTAGE":
         travauxRevenue = travauxAmount / 2;
         travauxCost = travauxAmount / 2;
         break;
@@ -157,9 +164,18 @@ export const calculateRentability = (input: RentabilityInput): RentabilityResult
     if (!rawCost) return sum;
     const cost = rawCost as RentabilityAdditionalCostInput;
     const amount = Math.max(0, sanitizeNumber(cost.amount_ht));
+    const explicitTtc = sanitizeNumber(cost.amount_ttc);
+    if (explicitTtc > 0) {
+      return sum + Math.max(amount, explicitTtc);
+    }
     const taxesRaw = cost.taxes;
     if (Number.isFinite(taxesRaw as number)) {
       const taxes = Math.max(0, sanitizeNumber(taxesRaw));
+      return sum + amount + taxes;
+    }
+    const rateCandidate = clampPercentage(Math.max(0, sanitizeNumber(cost.tva_rate)));
+    if (rateCandidate > 0) {
+      const taxes = amount * (rateCandidate / 100);
       return sum + amount + taxes;
     }
     const rate = clampPercentage(Math.max(0, sanitizeNumber(input.fraisTvaPercentage)));
@@ -174,9 +190,11 @@ export const calculateRentability = (input: RentabilityInput): RentabilityResult
 
   const subcontractorRate = Math.max(0, sanitizeNumber(input.subcontractorRatePerUnit));
   const subcontractorUnitsCandidate = Math.max(0, sanitizeNumber(input.subcontractorBaseUnits));
-  const subcontractorUnits = subcontractorUnitsCandidate > 0 ? subcontractorUnitsCandidate : effectiveUnits;
+  const subcontractorUnits = subcontractorUnitsCandidate > 0 ? subcontractorUnitsCandidate : normalizedBaseUnits;
+  const normalizedSubcontractorUnits = subcontractorUnits > 0 ? subcontractorUnits : 0;
   const subcontractorPaymentConfirmed = toBoolean(input.subcontractorPaymentConfirmed);
-  const subcontractorCost = subcontractorPaymentConfirmed ? subcontractorUnits * subcontractorRate : 0;
+  const subcontractorEstimatedCost = normalizedSubcontractorUnits * subcontractorRate;
+  const subcontractorCost = subcontractorPaymentConfirmed ? subcontractorEstimatedCost : 0;
 
   const laborCostTotal = effectiveUnits * laborCostPerUnit;
   const materialCostTotal = effectiveUnits * materialCostPerUnit;
@@ -210,7 +228,7 @@ export const calculateRentability = (input: RentabilityInput): RentabilityResult
     marginPerUnit: roundZero(marginPerUnit),
     marginRate: roundZero(marginRate),
     unitsUsed: roundZero(effectiveUnits),
-    baseUnits: roundZero(effectiveUnits),
+    baseUnits: roundZero(normalizedBaseUnits),
     unitLabel,
     measurementMode,
     costBreakdown: {
@@ -222,6 +240,10 @@ export const calculateRentability = (input: RentabilityInput): RentabilityResult
       additional: roundZero(additionalCostsTotal),
       travaux: roundZero(travauxCost),
     },
+    subcontractorRate: roundZero(subcontractorRate),
+    subcontractorBaseUnits: roundZero(normalizedSubcontractorUnits),
+    subcontractorEstimatedCost: roundZero(subcontractorEstimatedCost),
+    subcontractorPaymentConfirmed,
   };
 };
 
@@ -244,16 +266,24 @@ export interface SiteRentabilitySource {
   valorisation_cee?: number | null;
   project_prime_cee?: number | null;
   project_prime_cee_total_cents?: number | null;
+  commission_eur_per_m2_enabled?: string | boolean | null;
+  commission_eur_per_m2?: number | string | null;
   commission_commerciale_ht?: string | boolean | null;
-  commission_commerciale_ht_montant?: number | null;
+  commission_commerciale_ht_montant?: number | string | null;
   frais_tva_percentage?: number | null;
   subcontractor_pricing_details?: string | number | null;
   subcontractor_payment_confirmed?: boolean | null;
   subcontractor_base_units?: number | null;
+  subcontractor_payment_amount?: number | null;
+  subcontractor_payment_units?: number | null;
+  subcontractor_payment_rate?: number | null;
+  subcontractor_payment_unit_label?: string | null;
   project_category?: string | null;
   additional_costs?: ReadonlyArray<{
     amount_ht?: number | null;
     taxes?: number | null;
+    amount_ttc?: number | null;
+    tva_rate?: number | null;
   }> | null;
   product_name?: string | null;
 }
@@ -285,11 +315,30 @@ export const buildRentabilityInputFromSite = (
     return value > 0 ? value : result;
   }, 0);
 
-  const commissionPerUnitActive = toBoolean(values.commission_commerciale_ht);
-  const commissionPerUnit = sanitizeNumber(values.commission_commerciale_ht_montant);
+  const commissionPerUnitActive = toBoolean(
+    values.commission_eur_per_m2_enabled ?? values.commission_commerciale_ht,
+  );
+  const commissionPerUnit = sanitizeNumber(
+    values.commission_eur_per_m2 ?? values.commission_commerciale_ht_montant,
+  );
 
-  const subcontractorRate = sanitizeNumber(values.subcontractor_pricing_details);
-  const subcontractorBaseUnits = sanitizeNumber(values.subcontractor_base_units);
+  const rawSubcontractorBaseUnits = sanitizeNumber(values.subcontractor_base_units);
+  const storedSubcontractorUnits = sanitizeNumber(values.subcontractor_payment_units);
+  const subcontractorBaseUnits =
+    rawSubcontractorBaseUnits > 0 ? rawSubcontractorBaseUnits : storedSubcontractorUnits;
+
+  const storedSubcontractorAmount = sanitizeNumber(values.subcontractor_payment_amount);
+  const storedSubcontractorRate = sanitizeNumber(values.subcontractor_payment_rate);
+
+  let subcontractorRate = sanitizeNumber(values.subcontractor_pricing_details);
+  if (subcontractorRate <= 0) {
+    if (storedSubcontractorRate > 0) {
+      subcontractorRate = storedSubcontractorRate;
+    } else if (subcontractorBaseUnits > 0 && storedSubcontractorAmount > 0) {
+      subcontractorRate = storedSubcontractorAmount / subcontractorBaseUnits;
+    }
+  }
+  subcontractorRate = subcontractorRate > 0 ? subcontractorRate : 0;
 
   return {
     revenue: values.revenue,
@@ -304,7 +353,7 @@ export const buildRentabilityInputFromSite = (
     commissionPerUnitActive,
     travauxOption: (values.travaux_non_subventionnes as RentabilityTravauxOption | null | undefined) ?? null,
     travauxAmount: travauxAmountCandidate,
-    additionalCosts: values.additional_costs,
+    additionalCosts: Array.isArray(values.additional_costs) ? values.additional_costs : [],
     fraisTvaPercentage: values.frais_tva_percentage,
     subcontractorRatePerUnit: subcontractorRate,
     subcontractorBaseUnits,

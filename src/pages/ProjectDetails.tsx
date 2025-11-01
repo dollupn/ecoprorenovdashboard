@@ -88,9 +88,13 @@ import {
 } from "@/components/sites/SiteDialog";
 import { StartChantierDialog } from "@/components/sites/StartChantierDialog";
 import {
+  computeAdditionalCostTTC,
+  normalizeAdditionalCostTvaRate,
+  normalizeAdditionalCostsArray,
+} from "@/components/sites/siteFormSchema";
+import {
   TRAVAUX_NON_SUBVENTIONNES_LABELS,
-  TRAVAUX_NON_SUBVENTIONNES_OPTIONS,
-  type TravauxNonSubventionnesValue,
+  normalizeTravauxNonSubventionnesValue,
 } from "@/components/sites/travauxNonSubventionnes";
 import {
   getDynamicFieldEntries,
@@ -251,8 +255,45 @@ const SURFACE_FACTUREE_TARGETS = [
   "surface facturée",
 ] as const;
 
-const ARCHIVED_STATUS_VALUES = new Set(["ARCHIVE", "ARCHIVED"]);
+const ARCHIVED_STATUS_VALUES = new Set(["ARCHIVED"]);
 const ARCHIVED_STATUS_VALUE = "ARCHIVED";
+
+// Utility functions
+const resolveStringField = (
+  record: Record<string, unknown>,
+  fieldNames: readonly string[]
+): string | null => {
+  for (const fieldName of fieldNames) {
+    const value = record[fieldName];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return null;
+};
+
+const getFirstValidDate = (...dates: Array<string | null | undefined>): Date | null => {
+  for (const date of dates) {
+    if (date && date.trim()) {
+      try {
+        const parsed = new Date(date);
+        if (!isNaN(parsed.getTime())) {
+          return parsed;
+        }
+      } catch {
+        continue;
+      }
+    }
+  }
+  return null;
+};
+
+const clampNumber = (value: number | null | undefined, min: number, max: number): number => {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return min;
+  }
+  return Math.max(min, Math.min(max, value));
+};
 
 type CofracStatus = "EN_ATTENTE" | "CONFORME" | "NON_CONFORME" | "A_PLANIFIER";
 
@@ -341,13 +382,10 @@ const isUuid = (value: string) =>
 const createEmptyAdditionalCost = (): SiteAdditionalCostFormValue => ({
   label: "",
   amount_ht: 0,
-  montant_tva: 0,
+  tva_rate: 20,
   amount_ttc: 0,
   attachment: null,
 });
-
-const computeAdditionalCostTTC = (amountHT: number, montantTVA: number) =>
-  Math.round((amountHT + montantTVA) * 100) / 100;
 
 const parseNumber = (value: unknown): number | null => {
   if (typeof value === "number") {
@@ -530,51 +568,8 @@ const getProductValorisationFormula = (
   return null;
 };
 
-const normalizeAdditionalCosts = (
-  costs: unknown,
-): SiteAdditionalCostFormValue[] => {
-  if (!Array.isArray(costs)) {
-    return [createEmptyAdditionalCost()];
-  }
-
-  const normalized = costs
-    .map((cost) => {
-      if (!cost || typeof cost !== "object") {
-        return null;
-      }
-
-      const raw = cost as Record<string, unknown>;
-      const label = typeof raw.label === "string" ? raw.label : "";
-
-      const amountHTValue =
-        parseNumber(raw.amount_ht) ??
-        parseNumber(raw.amount) ??
-        parseNumber(raw.amount_ttc) ??
-        0;
-      const montantTvaValue =
-        parseNumber(raw.montant_tva) ??
-        parseNumber(raw.taxes) ??
-        0;
-      const amountTTCValue =
-        parseNumber(raw.amount_ttc) ??
-        parseNumber(raw.total_ttc) ??
-        parseNumber(raw.amount) ??
-        computeAdditionalCostTTC(amountHTValue, montantTvaValue);
-      const attachmentValue =
-        typeof raw.attachment === "string" && raw.attachment.trim().length > 0
-          ? raw.attachment.trim()
-          : null;
-
-      return {
-        label,
-        amount_ht: amountHTValue,
-        montant_tva: montantTvaValue,
-        amount_ttc: amountTTCValue,
-        attachment: attachmentValue,
-      } as SiteAdditionalCostFormValue;
-    })
-    .filter((cost) => cost !== null) as SiteAdditionalCostFormValue[];
-
+const normalizeAdditionalCosts = (costs: unknown): SiteAdditionalCostFormValue[] => {
+  const normalized = normalizeAdditionalCostsArray(costs ?? []);
   return normalized.length > 0 ? normalized : [createEmptyAdditionalCost()];
 };
 
@@ -3368,7 +3363,7 @@ const ProjectDetails = () => {
     const siteEndCandidates: unknown[] = [];
 
     projectSites.forEach((site) => {
-      siteStartCandidates.push(site.date_debut, site.date_debut_prevue);
+      siteStartCandidates.push(site.date_debut);
       siteEndCandidates.push(site.date_fin_prevue);
 
       const siteRecord = site as unknown as Record<string, unknown>;
@@ -3376,14 +3371,14 @@ const ProjectDetails = () => {
       siteEndCandidates.push(resolveStringField(siteRecord, endKeys));
     });
 
-    const resolvedStart = getFirstValidDate([
-      ...projectStartCandidates,
-      ...siteStartCandidates,
-    ]);
-    const resolvedEnd = getFirstValidDate([
-      ...projectEndCandidates,
-      ...siteEndCandidates,
-    ]);
+    const resolvedStart = getFirstValidDate(
+      ...(projectStartCandidates as Array<string | null | undefined>),
+      ...(siteStartCandidates as Array<string | null | undefined>)
+    );
+    const resolvedEnd = getFirstValidDate(
+      ...(projectEndCandidates as Array<string | null | undefined>),
+      ...(siteEndCandidates as Array<string | null | undefined>)
+    );
 
     if (
       typeof projectStatusText === "string" &&
@@ -3538,10 +3533,6 @@ const ProjectDetails = () => {
     return null;
   }, [projectRecord, projectSites]);
 
-  const primeValueLabel =
-    typeof displayedPrimeValue === "number"
-      ? formatCurrency(displayedPrimeValue)
-      : null;
   const clientName = getProjectClientName(project);
   const headerBadgeClassName =
     "gap-1.5 rounded-full border-border/60 bg-muted/30 px-3 py-1 text-xs font-medium text-muted-foreground";
@@ -4226,15 +4217,15 @@ const ProjectDetails = () => {
           .filter((cost) => cost.label.trim().length > 0)
           .map((cost) => {
             const attachment = cost.attachment ? cost.attachment.trim() : "";
-            const montantTVA = Number.isFinite(cost.montant_tva) ? cost.montant_tva : 0;
             const amountHT = Number.isFinite(cost.amount_ht) ? cost.amount_ht : 0;
-            const amountTTC = Number.isFinite(cost.amount_ttc)
-              ? cost.amount_ttc
-              : computeAdditionalCostTTC(amountHT, montantTVA);
+            const tvaRate = normalizeAdditionalCostTvaRate(cost.tva_rate, 20);
+            const amountTTC = computeAdditionalCostTTC(amountHT, tvaRate);
+            const montantTVA = Math.max(0, amountTTC - amountHT);
 
             return {
               label: cost.label.trim(),
               amount_ht: amountHT,
+              tva_rate: tvaRate,
               montant_tva: montantTVA,
               amount_ttc: amountTTC,
               attachment: attachment.length > 0 ? attachment : null,
@@ -4257,10 +4248,10 @@ const ProjectDetails = () => {
     const travauxFinancement = shouldResetTravaux
       ? false
       : Boolean(values.travaux_non_subventionnes_financement);
-    const commissionActive = Boolean(values.commission_commerciale_ht);
-    const commissionMontant = commissionActive
-      ? Number.isFinite(values.commission_commerciale_ht_montant)
-        ? values.commission_commerciale_ht_montant
+    const commissionPerM2Enabled = Boolean(values.commission_eur_per_m2_enabled);
+    const commissionPerM2Value = commissionPerM2Enabled
+      ? Number.isFinite(values.commission_eur_per_m2)
+        ? values.commission_eur_per_m2
         : 0
       : 0;
     const matchedProject = projectSiteOptions.find(
@@ -4284,7 +4275,7 @@ const ProjectDetails = () => {
       address: values.address,
       city: values.city,
       postal_code: values.postal_code,
-      status: values.status,
+      status: (values as any).status,
       cofrac_status: values.cofrac_status,
       date_debut: values.date_debut,
       date_fin_prevue: values.date_fin_prevue || null,
@@ -4298,12 +4289,17 @@ const ProjectDetails = () => {
       montant_commission: values.montant_commission,
       valorisation_cee: values.valorisation_cee,
       subcontractor_payment_confirmed: values.subcontractor_payment_confirmed,
+      subcontractor_payment_amount: values.subcontractor_payment_amount,
+      subcontractor_payment_units: values.subcontractor_payment_units,
+      subcontractor_payment_unit_label: values.subcontractor_payment_unit_label,
+      subcontractor_payment_rate: values.subcontractor_payment_rate,
+      subcontractor_base_units: values.subcontractor_base_units,
       travaux_non_subventionnes: travauxChoice,
       travaux_non_subventionnes_description: travauxDescription,
       travaux_non_subventionnes_montant: travauxMontant,
       travaux_non_subventionnes_financement: travauxFinancement,
-      commission_commerciale_ht: commissionActive,
-      commission_commerciale_ht_montant: commissionMontant,
+      commission_eur_per_m2_enabled: commissionPerM2Enabled,
+      commission_eur_per_m2: commissionPerM2Value,
       notes: values.notes?.trim() || null,
       team_members: (sanitizedTeam.length > 0 ? sanitizedTeam : []) as string[],
       additional_costs: sanitizedCosts.length > 0 ? sanitizedCosts : [],
@@ -4420,7 +4416,7 @@ const ProjectDetails = () => {
 
       let query = supabase
         .from("projects")
-        .update({ status: ARCHIVED_STATUS_VALUE, archived_at: archivedAt })
+        .update({ status: ARCHIVED_STATUS_VALUE as any, archived_at: archivedAt })
         .eq("id", project.id);
 
       if (currentOrgId) {
@@ -4500,6 +4496,11 @@ const ProjectDetails = () => {
 
     return null;
   })();
+
+  const primeValueLabel =
+    typeof displayedPrimeValue === "number"
+      ? formatCurrency(displayedPrimeValue)
+      : null;
 
   const isProjectArchived = project
     ? ARCHIVED_STATUS_VALUES.has(project.status ?? "")
@@ -5390,6 +5391,15 @@ const ProjectDetails = () => {
                             return (total as number) + amountTTC;
                           }, 0)
                         : 0;
+                          : primaryAttachment?.name ?? "Document chantier";
+                      const normalizedAdditionalCosts = normalizeAdditionalCostsArray(
+                        site.additional_costs ?? [],
+                      );
+                      const additionalCostCount = normalizedAdditionalCosts.length;
+                      const additionalCostTotal = normalizedAdditionalCosts.reduce(
+                        (total, cost) => total + cost.amount_ttc,
+                        0,
+                      );
                       const additionalCostDisplay =
                         additionalCostCount > 0
                           ? `${formatCurrency(Number(additionalCostTotal))} (${additionalCostCount})`
@@ -5412,14 +5422,14 @@ const ProjectDetails = () => {
                         travaux_non_subventionnes: site.travaux_non_subventionnes,
                         travaux_non_subventionnes_montant:
                           site.travaux_non_subventionnes_montant,
-                        additional_costs: Array.isArray(site.additional_costs)
-                          ? (site.additional_costs as SiteFormValues["additional_costs"])
-                          : [],
+                        additional_costs: normalizeAdditionalCostsArray(site.additional_costs ?? []),
                         product_name: site.product_name,
                         valorisation_cee: site.valorisation_cee,
-                        commission_commerciale_ht: site.commission_commerciale_ht,
-                        commission_commerciale_ht_montant: site.commission_commerciale_ht_montant,
-                        subcontractor_pricing_details: site.subcontractor?.pricing_details ?? null,
+                        commission_eur_per_m2_enabled:
+                          (site.commission_eur_per_m2_enabled ?? false) as boolean,
+                        commission_eur_per_m2:
+                          (site.commission_eur_per_m2 ?? 0) as number,
+                        subcontractor_pricing_details: (site.subcontractor as any)?.pricing_details ?? null,
                         subcontractor_payment_confirmed: site.subcontractor_payment_confirmed,
                         project_prime_cee: project?.prime_cee ?? undefined,
                         project_prime_cee_total_cents: project?.prime_cee_total_cents ?? undefined,
@@ -5480,15 +5490,9 @@ const ProjectDetails = () => {
                       )
                         ? `${formatDecimal(rentabilityMetrics.marginPerUnit)} € / ${rentabilityMetrics.unitLabel}`
                         : `— / ${rentabilityMetrics.unitLabel}`;
-                      const rawTravauxChoice = (site.travaux_non_subventionnes ?? "NA") as
-                        | TravauxNonSubventionnesValue
-                        | string;
-                      const isValidTravauxChoice = TRAVAUX_NON_SUBVENTIONNES_OPTIONS.some(
-                        (option) => option.value === rawTravauxChoice,
+                      const travauxChoice = normalizeTravauxNonSubventionnesValue(
+                        site.travaux_non_subventionnes,
                       );
-                      const travauxChoice = isValidTravauxChoice
-                        ? (rawTravauxChoice as TravauxNonSubventionnesValue)
-                        : "NA";
                       const travauxLabel =
                         TRAVAUX_NON_SUBVENTIONNES_LABELS[travauxChoice] ?? "N/A";
                       const hasTravauxDetails = travauxChoice !== "NA";
@@ -5497,14 +5501,17 @@ const ProjectDetails = () => {
                         Number.isFinite(site.travaux_non_subventionnes_montant)
                           ? site.travaux_non_subventionnes_montant
                           : 0;
-                      const commissionCommercialeActive = Boolean(
-                        site.commission_commerciale_ht,
+                      const commissionPerM2Enabled = Boolean(
+                        site.commission_eur_per_m2_enabled ??
+                          (site as unknown as { commission_commerciale_ht?: unknown }).commission_commerciale_ht,
                       );
-                      const commissionCommercialeMontant =
-                        typeof site.commission_commerciale_ht_montant === "number" &&
-                        Number.isFinite(site.commission_commerciale_ht_montant)
-                          ? site.commission_commerciale_ht_montant
-                          : 0;
+                      const commissionPerM2Value =
+                        parseNumber(site.commission_eur_per_m2) ??
+                        parseNumber(
+                          (site as unknown as { commission_commerciale_ht_montant?: unknown })
+                            .commission_commerciale_ht_montant,
+                        ) ??
+                        0;
 
                       const addressDisplay = site.address
                         ? `${site.address} · ${site.postal_code} ${site.city}`
@@ -5759,17 +5766,17 @@ const ProjectDetails = () => {
                                 ) : null}
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="text-muted-foreground">
-                                    Commission commerciale HT
+                                    Commission commerciale (€/m²)
                                   </span>
                                   <span
                                     className={`font-medium ${
-                                      commissionCommercialeActive
+                                      commissionPerM2Enabled
                                         ? "text-foreground"
                                         : "text-muted-foreground"
                                     }`}
                                   >
-                                    {commissionCommercialeActive
-                                      ? formatCurrency(commissionCommercialeMontant)
+                                    {commissionPerM2Enabled
+                                      ? `${formatCurrency(commissionPerM2Value)} / m²`
                                       : "Non"}
                                   </span>
                                 </div>

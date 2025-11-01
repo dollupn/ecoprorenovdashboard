@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildRentabilityInputFromSite,
   calculateRentability,
   type RentabilityInput,
   type RentabilityTravauxOption,
@@ -37,6 +38,10 @@ describe("calculateRentability", () => {
     expect(result.unitsUsed).toBe(100);
     expect(result.costBreakdown.commissionPerUnit).toBeCloseTo(200);
     expect(result.costBreakdown.subcontractor).toBeCloseTo(5000);
+    expect(result.subcontractorBaseUnits).toBe(100);
+    expect(result.subcontractorRate).toBe(50);
+    expect(result.subcontractorEstimatedCost).toBeCloseTo(5000);
+    expect(result.subcontractorPaymentConfirmed).toBe(true);
   });
 
   it("uses billed luminaires as base units for lighting projects", () => {
@@ -61,6 +66,8 @@ describe("calculateRentability", () => {
     expect(result.marginTotal).toBeCloseTo(2360);
     expect(result.marginPerUnit).toBeCloseTo(39.3333, 4);
     expect(result.measurementMode).toBe("luminaire");
+    expect(result.subcontractorBaseUnits).toBe(60);
+    expect(result.subcontractorEstimatedCost).toBeCloseTo(1200);
   });
 
   it("splits travaux amount according to option", () => {
@@ -84,14 +91,30 @@ describe("calculateRentability", () => {
     expect(marginResult.totalCosts).toBe(amount);
     expect(marginResult.marginTotal).toBe(2800);
 
-    const moitiéResult = run("MOITIE");
-    expect(moitiéResult.travauxRevenue).toBe(amount / 2);
-    expect(moitiéResult.travauxCost).toBe(amount / 2);
-    expect(moitiéResult.ca).toBe(4600);
+    const partageResult = run("PARTAGE");
+    expect(partageResult.travauxRevenue).toBe(amount / 2);
+    expect(partageResult.travauxCost).toBe(amount / 2);
+    expect(partageResult.ca).toBe(4600);
 
     const defaultResult = run("NA");
     expect(defaultResult.travauxRevenue).toBe(0);
     expect(defaultResult.travauxCost).toBe(0);
     expect(defaultResult.ca).toBe(4000);
+  });
+
+  it("reuses stored subcontractor payment metadata when pricing is missing", () => {
+    const input = buildRentabilityInputFromSite({
+      revenue: 1000,
+      isolation_utilisee_m2: 20,
+      surface_facturee: 20,
+      subcontractor_pricing_details: null,
+      subcontractor_payment_amount: 600,
+      subcontractor_payment_units: 20,
+      subcontractor_payment_rate: null,
+      subcontractor_payment_confirmed: true,
+    });
+
+    expect(input.subcontractorRatePerUnit).toBeCloseTo(30);
+    expect(input.subcontractorBaseUnits).toBe(20);
   });
 });

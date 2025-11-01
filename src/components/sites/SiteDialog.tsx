@@ -72,10 +72,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
+  ADDITIONAL_COST_TVA_RATES,
   additionalCostSchema,
   computeAdditionalCostTTC,
   createSiteSchema,
   defaultSiteFormValues,
+  normalizeAdditionalCostTvaRate,
+  normalizeAdditionalCostsArray,
   normalizeTeamMembers,
   type SiteFormValues,
   type SiteProjectOption,
@@ -84,7 +87,7 @@ import {
 } from "./siteFormSchema";
 import {
   TRAVAUX_NON_SUBVENTIONNES_OPTIONS,
-  type TravauxNonSubventionnesValue,
+  normalizeTravauxNonSubventionnesValue,
 } from "./travauxNonSubventionnes";
 
 // Re-export types for other components
@@ -119,6 +122,8 @@ const percentFormatter = new Intl.NumberFormat("fr-FR", {
   minimumFractionDigits: 0,
   maximumFractionDigits: 1,
 });
+
+const numbersAreClose = (a: number, b: number) => Math.abs(a - b) < 0.005;
 
 interface SortableAdditionalCostRowProps {
   field: FieldArrayWithId<SiteFormValues, "additional_costs">;
@@ -240,14 +245,20 @@ const SortableAdditionalCostRow = ({
     control,
     name: `additional_costs.${index}.amount_ht`,
   });
-  const watchedMontantTVA = useWatch({
+  const watchedTvaRate = useWatch({
     control,
-    name: `additional_costs.${index}.montant_tva`,
+    name: `additional_costs.${index}.tva_rate`,
   });
   const computedAmountTTC = useMemo(
-    () => computeAdditionalCostTTC(watchedAmountHT, watchedMontantTVA),
-    [watchedAmountHT, watchedMontantTVA],
+    () => computeAdditionalCostTTC(watchedAmountHT, watchedTvaRate),
+    [watchedAmountHT, watchedTvaRate],
   );
+  const normalizedAmountHT =
+    typeof watchedAmountHT === "number" && Number.isFinite(watchedAmountHT)
+      ? watchedAmountHT
+      : 0;
+  const normalizedTvaRate = normalizeAdditionalCostTvaRate(watchedTvaRate, 20);
+  const computedTaxes = Math.max(0, computedAmountTTC - normalizedAmountHT);
 
   useEffect(() => {
     if (!formContext) return;
@@ -371,32 +382,38 @@ const SortableAdditionalCostRow = ({
         />
         <FormField
           control={control}
-          name={`additional_costs.${index}.montant_tva`}
-          render={({ field: montantTvaField }) => (
+          name={`additional_costs.${index}.tva_rate`}
+          render={({ field: tvaRateField }) => (
             <FormItem className="space-y-2">
-              <FormLabel>Montant TVA (€)</FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  step="0.01"
-                  placeholder="0,00"
-                  name={montantTvaField.name}
-                  ref={montantTvaField.ref}
-                  value={
-                    montantTvaField.value === undefined || montantTvaField.value === null
-                      ? ""
-                      : montantTvaField.value
-                  }
-                  onChange={(event) => {
-                    const newValue = event.target.value;
-                    montantTvaField.onChange(newValue === "" ? "" : Number(newValue));
-                  }}
-                  onBlur={montantTvaField.onBlur}
-                  disabled={disabled}
-                />
-              </FormControl>
+              <FormLabel>Taux de TVA</FormLabel>
+              <Select
+                value={
+                  tvaRateField.value === undefined || tvaRateField.value === null
+                    ? String(normalizedTvaRate)
+                    : String(tvaRateField.value)
+                }
+                onValueChange={(next) => {
+                  const parsed = Number.parseFloat(next);
+                  tvaRateField.onChange(Number.isFinite(parsed) ? parsed : normalizedTvaRate);
+                }}
+                disabled={disabled}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner un taux" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {ADDITIONAL_COST_TVA_RATES.map((rate) => (
+                    <SelectItem key={rate} value={String(rate)}>
+                      {rate}%
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                TVA calculée automatiquement : {Math.round(computedTaxes * 100) / 100} €
+              </p>
               <FormMessage />
             </FormItem>
           )}
@@ -524,45 +541,9 @@ export const SiteDialog = ({
   });
 
   const mergedDefaults = useMemo(() => {
-    const normalizedAdditionalCosts =
-      initialValues?.additional_costs && initialValues.additional_costs.length > 0
-        ? initialValues.additional_costs.map((cost) => {
-            const rawCost = cost as unknown as Record<string, unknown>;
-            const label =
-              typeof rawCost.label === "string" && rawCost.label.trim().length > 0
-                ? rawCost.label.trim()
-                : "";
-            const amountHT =
-              typeof rawCost.amount_ht === "number" && Number.isFinite(rawCost.amount_ht)
-                ? rawCost.amount_ht
-                : 0;
-            const montantTVAValue = (() => {
-              if (typeof rawCost.montant_tva === "number" && Number.isFinite(rawCost.montant_tva)) {
-                return rawCost.montant_tva;
-              }
-              if (typeof rawCost.taxes === "number" && Number.isFinite(rawCost.taxes)) {
-                return rawCost.taxes;
-              }
-              return 0;
-            })();
-            const amountTTC =
-              typeof rawCost.amount_ttc === "number" && Number.isFinite(rawCost.amount_ttc)
-                ? rawCost.amount_ttc
-                : computeAdditionalCostTTC(amountHT, montantTVAValue);
-            const attachmentValue =
-              typeof rawCost.attachment === "string" && rawCost.attachment.trim().length > 0
-                ? rawCost.attachment.trim()
-                : null;
-
-            return {
-              label,
-              amount_ht: amountHT,
-              montant_tva: montantTVAValue,
-              amount_ttc: amountTTC,
-              attachment: attachmentValue,
-            } satisfies SiteFormValues["additional_costs"][number];
-          })
-        : defaultSiteFormValues.additional_costs;
+    const normalizedAdditionalCosts = normalizeAdditionalCostsArray(
+      initialValues?.additional_costs ?? [],
+    );
 
     const normalizedTeamMembers = normalizeTeamMembers(initialValues?.team_members, memberNameById);
 
@@ -577,6 +558,23 @@ export const SiteDialog = ({
     } as SiteFormValues;
 
     values.notes = parsedNotes.text;
+
+    values.travaux_non_subventionnes = normalizeTravauxNonSubventionnesValue(
+      values.travaux_non_subventionnes,
+      defaultSiteFormValues.travaux_non_subventionnes,
+    );
+    const parseNumeric = (value: unknown): number | null => {
+      if (typeof value === "number" && Number.isFinite(value)) {
+        return value;
+      }
+      if (typeof value === "string") {
+        const normalized = value.replace(/,/g, ".").trim();
+        if (normalized.length === 0) return null;
+        const parsed = Number.parseFloat(normalized);
+        return Number.isFinite(parsed) ? parsed : null;
+      }
+      return null;
+    };
 
     const allowedTravauxValues = TRAVAUX_NON_SUBVENTIONNES_OPTIONS.map(
       (option) => option.value,
@@ -598,15 +596,23 @@ export const SiteDialog = ({
     values.travaux_non_subventionnes_financement = Boolean(
       values.travaux_non_subventionnes_financement,
     );
-    values.commission_commerciale_ht = Boolean(values.commission_commerciale_ht);
 
-    if (
-      values.commission_commerciale_ht_montant === null ||
-      values.commission_commerciale_ht_montant === undefined ||
-      Number.isNaN(values.commission_commerciale_ht_montant)
-    ) {
-      values.commission_commerciale_ht_montant = 0;
+    const legacyCommissionEnabled = Boolean(
+      (initialValues as Record<string, unknown> | undefined)?.commission_commerciale_ht,
+    );
+    const legacyCommissionRate = parseNumeric(
+      (initialValues as Record<string, unknown> | undefined)?.commission_commerciale_ht_montant,
+    );
+
+    if (typeof values.commission_eur_per_m2_enabled !== "boolean") {
+      values.commission_eur_per_m2_enabled = legacyCommissionEnabled;
     }
+
+    values.commission_eur_per_m2_enabled = Boolean(values.commission_eur_per_m2_enabled);
+
+    const normalizedCommissionRate = parseNumeric(values.commission_eur_per_m2);
+    values.commission_eur_per_m2 =
+      normalizedCommissionRate ?? legacyCommissionRate ?? defaultSiteFormValues.commission_eur_per_m2;
 
     if (
       values.valorisation_cee === null ||
@@ -615,6 +621,25 @@ export const SiteDialog = ({
     ) {
       values.valorisation_cee = 0;
     }
+
+    if (!Number.isFinite(values.subcontractor_base_units)) {
+      values.subcontractor_base_units = 0;
+    }
+    if (!Number.isFinite(values.subcontractor_payment_units)) {
+      values.subcontractor_payment_units = values.subcontractor_base_units;
+    }
+    if (!Number.isFinite(values.subcontractor_payment_amount)) {
+      values.subcontractor_payment_amount = 0;
+    }
+    if (!Number.isFinite(values.subcontractor_payment_rate)) {
+      values.subcontractor_payment_rate = 0;
+    }
+    values.subcontractor_payment_unit_label =
+      typeof values.subcontractor_payment_unit_label === "string"
+        ? values.subcontractor_payment_unit_label.trim()
+        : "";
+    values.subcontractor_payment_confirmed = Boolean(values.subcontractor_payment_confirmed);
+
     return values;
   }, [initialValues, parsedNotes.text]);
 
@@ -702,10 +727,15 @@ export const SiteDialog = ({
   const watchedProductName = form.watch("product_name");
   const watchedValorisationCee = form.watch("valorisation_cee");
   const watchedTravauxChoice = form.watch("travaux_non_subventionnes");
-  const watchedCommissionCommerciale = form.watch("commission_commerciale_ht");
-  const watchedCommissionCommercialeMontant = form.watch("commission_commerciale_ht_montant");
+  const watchedCommissionPerM2Enabled = form.watch("commission_eur_per_m2_enabled");
+  const watchedCommissionPerM2 = form.watch("commission_eur_per_m2");
   const watchedSubcontractorId = form.watch("subcontractor_id");
   const watchedSubcontractorPaymentConfirmed = form.watch("subcontractor_payment_confirmed");
+  const watchedSubcontractorBaseUnits = form.watch("subcontractor_base_units");
+  const watchedSubcontractorPaymentAmount = form.watch("subcontractor_payment_amount");
+  const watchedSubcontractorPaymentUnits = form.watch("subcontractor_payment_units");
+  const watchedSubcontractorPaymentRate = form.watch("subcontractor_payment_rate");
+  const watchedSubcontractorUnitLabel = form.watch("subcontractor_payment_unit_label");
 
   const rentability = useMemo(
     () =>
@@ -722,8 +752,8 @@ export const SiteDialog = ({
           additional_costs: watchedAdditionalCosts ?? [],
           product_name: watchedProductName,
           valorisation_cee: watchedValorisationCee,
-          commission_commerciale_ht: watchedCommissionCommerciale,
-          commission_commerciale_ht_montant: watchedCommissionCommercialeMontant,
+          commission_eur_per_m2_enabled: watchedCommissionPerM2Enabled,
+          commission_eur_per_m2: watchedCommissionPerM2,
           subcontractor_pricing_details: (() => {
             if (!watchedSubcontractorId) return undefined;
             const option = subcontractors.find((candidate) => candidate.id === watchedSubcontractorId);
@@ -738,6 +768,11 @@ export const SiteDialog = ({
             return undefined;
           })(),
           subcontractor_payment_confirmed: watchedSubcontractorPaymentConfirmed,
+          subcontractor_base_units: watchedSubcontractorBaseUnits,
+          subcontractor_payment_amount: watchedSubcontractorPaymentAmount,
+          subcontractor_payment_units: watchedSubcontractorPaymentUnits,
+          subcontractor_payment_rate: watchedSubcontractorPaymentRate,
+          subcontractor_payment_unit_label: watchedSubcontractorUnitLabel,
         }),
       ),
     [
@@ -752,18 +787,63 @@ export const SiteDialog = ({
       watchedSurfaceFacturee,
       watchedValorisationCee,
       watchedTravauxChoice,
-      watchedCommissionCommerciale,
-      watchedCommissionCommercialeMontant,
+      watchedCommissionPerM2,
+      watchedCommissionPerM2Enabled,
       watchedSubcontractorId,
       watchedSubcontractorPaymentConfirmed,
+      watchedSubcontractorBaseUnits,
+      watchedSubcontractorPaymentAmount,
+      watchedSubcontractorPaymentUnits,
+      watchedSubcontractorPaymentRate,
+      watchedSubcontractorUnitLabel,
       subcontractors,
     ],
   );
+
+  useEffect(() => {
+    const updateNumericField = (
+      name:
+        | "subcontractor_base_units"
+        | "subcontractor_payment_units"
+        | "subcontractor_payment_amount"
+        | "subcontractor_payment_rate",
+      value: number,
+    ) => {
+      const current = form.getValues(name) ?? 0;
+      if (!numbersAreClose(Number(current), value)) {
+        form.setValue(name, value, { shouldDirty: true });
+      }
+    };
+
+    updateNumericField("subcontractor_base_units", rentability.subcontractorBaseUnits);
+    updateNumericField("subcontractor_payment_units", rentability.subcontractorBaseUnits);
+    updateNumericField("subcontractor_payment_amount", rentability.subcontractorEstimatedCost);
+    updateNumericField("subcontractor_payment_rate", rentability.subcontractorRate);
+
+    const currentLabel = form.getValues("subcontractor_payment_unit_label") ?? "";
+    const nextLabel = rentability.unitLabel ?? "";
+    if (typeof currentLabel !== "string" || currentLabel.trim() !== nextLabel) {
+      form.setValue("subcontractor_payment_unit_label", nextLabel, { shouldDirty: true });
+    }
+  }, [form, rentability]);
 
   const rentabilityMarginPerUnitLabel =
     rentability.measurementMode === "luminaire"
       ? "Marge (€ / luminaire)"
       : "Marge (€ / m²)";
+
+  const subcontractorAmountDisplay =
+    rentability.subcontractorEstimatedCost > 0
+      ? currencyFormatter.format(rentability.subcontractorEstimatedCost)
+      : "—";
+  const subcontractorUnitsDisplay =
+    rentability.subcontractorBaseUnits > 0
+      ? `${decimalFormatter.format(rentability.subcontractorBaseUnits)} ${rentability.unitLabel}`
+      : `— ${rentability.unitLabel}`;
+  const subcontractorRateDisplay =
+    rentability.subcontractorRate > 0
+      ? `${currencyFormatter.format(rentability.subcontractorRate)} / ${rentability.unitLabel}`
+      : null;
 
   const formattedAdditionalCosts = currencyFormatter.format(rentability.additionalCostsTotal);
   const formattedTotalCosts = currencyFormatter.format(rentability.totalCosts);
@@ -774,11 +854,8 @@ export const SiteDialog = ({
   const formattedMarginPerUnit = Number.isFinite(rentability.marginPerUnit)
     ? `${decimalFormatter.format(rentability.marginPerUnit)} € / ${rentability.unitLabel}`
     : `— / ${rentability.unitLabel}`;
-  const watchedTravauxChoice = form.watch("travaux_non_subventionnes");
-  const watchedCommissionCommerciale = form.watch("commission_commerciale_ht");
-  const shouldShowTravauxDetails =
-    (watchedTravauxChoice ?? "NA") !== "NA";
-  const commissionCommercialeActive = watchedCommissionCommerciale === true;
+  const shouldShowTravauxDetails = (watchedTravauxChoice ?? "NA") !== "NA";
+  const commissionPerM2Enabled = watchedCommissionPerM2Enabled === true;
 
   useEffect(() => {
     const currentProgress = form.getValues("progress_percentage");
@@ -887,15 +964,15 @@ export const SiteDialog = ({
       .filter((c) => c.label.trim().length > 0)
       .map((c) => {
         const attachment = c.attachment ? c.attachment.trim() : "";
-        const montantTVA = Number.isFinite(c.montant_tva) ? c.montant_tva : 0;
         const amountHT = Number.isFinite(c.amount_ht) ? c.amount_ht : 0;
-        const amountTTC = Number.isFinite(c.amount_ttc)
-          ? c.amount_ttc
-          : computeAdditionalCostTTC(amountHT, montantTVA);
+        const tvaRate = normalizeAdditionalCostTvaRate(c.tva_rate, 20);
+        const amountTTC = computeAdditionalCostTTC(amountHT, tvaRate);
+        const montantTVA = Math.max(0, amountTTC - amountHT);
 
         return {
           label: c.label.trim(),
           amount_ht: amountHT,
+          tva_rate: tvaRate,
           montant_tva: montantTVA,
           amount_ttc: amountTTC,
           attachment: attachment.length > 0 ? attachment : null,
@@ -919,10 +996,10 @@ export const SiteDialog = ({
     const travauxFinancement = shouldResetTravaux
       ? false
       : Boolean(values.travaux_non_subventionnes_financement);
-    const commissionActive = Boolean(values.commission_commerciale_ht);
-    const commissionMontant = commissionActive
-      ? Number.isFinite(values.commission_commerciale_ht_montant)
-        ? values.commission_commerciale_ht_montant
+    const commissionPerM2Enabled = Boolean(values.commission_eur_per_m2_enabled);
+    const commissionPerM2 = commissionPerM2Enabled
+      ? Number.isFinite(values.commission_eur_per_m2)
+        ? values.commission_eur_per_m2
         : 0
       : 0;
 
@@ -948,12 +1025,17 @@ export const SiteDialog = ({
       rentability_unit_label: rentabilityResult.unitLabel,
       rentability_unit_count: rentabilityResult.unitsUsed,
       rentability_additional_costs_total: rentabilityResult.additionalCostsTotal,
+      subcontractor_payment_amount: rentabilityResult.subcontractorEstimatedCost,
+      subcontractor_payment_units: rentabilityResult.subcontractorBaseUnits,
+      subcontractor_payment_unit_label: rentabilityResult.unitLabel,
+      subcontractor_payment_rate: rentabilityResult.subcontractorRate,
+      subcontractor_base_units: rentabilityResult.subcontractorBaseUnits,
       travaux_non_subventionnes: travauxChoice,
       travaux_non_subventionnes_description: travauxDescription,
       travaux_non_subventionnes_montant: travauxMontant,
       travaux_non_subventionnes_financement: travauxFinancement,
-      commission_commerciale_ht: commissionActive,
-      commission_commerciale_ht_montant: commissionMontant,
+      commission_eur_per_m2_enabled: commissionPerM2Enabled,
+      commission_eur_per_m2: commissionPerM2,
     });
   };
 
@@ -1237,18 +1319,28 @@ export const SiteDialog = ({
                   control={form.control}
                   name="subcontractor_payment_confirmed"
                   render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={(checked) => field.onChange(checked === true)}
-                          disabled={isReadOnly}
-                        />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel>Paiement sous-traitant effectué</FormLabel>
-                        <p className="text-sm text-muted-foreground">
-                          Confirme que le sous-traitant a bien été réglé.
+                    <FormItem className="flex flex-col gap-3 rounded-md border p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-start gap-3">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={(checked) => field.onChange(checked === true)}
+                            disabled={isReadOnly}
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel>Paiement sous-traitant effectué</FormLabel>
+                          <p className="text-sm text-muted-foreground">
+                            Confirme que le sous-traitant a bien été réglé.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right text-sm">
+                        <p className="font-semibold text-foreground">{subcontractorAmountDisplay}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {subcontractorRateDisplay
+                            ? `${subcontractorUnitsDisplay} · ${subcontractorRateDisplay}`
+                            : subcontractorUnitsDisplay}
                         </p>
                       </div>
                     </FormItem>
@@ -1347,7 +1439,7 @@ export const SiteDialog = ({
 
                 <FormField
                   control={form.control}
-                  name="commission_commerciale_ht"
+                  name="commission_eur_per_m2_enabled"
                   render={({ field }) => (
                     <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
                       <FormControl>
@@ -1358,9 +1450,9 @@ export const SiteDialog = ({
                         />
                       </FormControl>
                       <div className="space-y-1 leading-none">
-                        <FormLabel>Commission commerciale (HT)</FormLabel>
+                        <FormLabel>Commission commerciale (€/m²)</FormLabel>
                         <p className="text-sm text-muted-foreground">
-                          Indique si une commission commerciale HT est à prévoir.
+                          Active le calcul d'une commission commerciale par mètre carré.
                         </p>
                       </div>
                     </FormItem>
@@ -1474,15 +1566,15 @@ export const SiteDialog = ({
                       </FormItem>
                     )}
                   />
-                  {commissionCommercialeActive ? (
+                  {commissionPerM2Enabled ? (
                     <FormField
                       control={form.control}
-                      name="commission_commerciale_ht_montant"
+                      name="commission_eur_per_m2"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Montant commission commerciale HT (€)</FormLabel>
+                          <FormLabel>Montant commission commerciale (€/m²)</FormLabel>
                           <FormControl>
-                            <Input type="number" min={0} step={50} {...field} disabled={isReadOnly} />
+                            <Input type="number" min={0} step={0.1} {...field} disabled={isReadOnly} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -1571,7 +1663,7 @@ export const SiteDialog = ({
                       appendCost({
                         label: "",
                         amount_ht: undefined as unknown as number,
-                        montant_tva: undefined as unknown as number,
+                        tva_rate: 20,
                         amount_ttc: 0,
                         attachment: null,
                       })

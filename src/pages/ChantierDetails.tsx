@@ -8,12 +8,20 @@ import {
   useWatch,
 } from "react-hook-form";
 import {
+  ADDITIONAL_COST_TVA_RATES,
+  computeAdditionalCostTTC,
   createSiteSchema,
   defaultSiteFormValues,
+  normalizeAdditionalCostTvaRate,
+  normalizeAdditionalCostsArray,
   type SiteFormValues,
   type SiteSubmitValues,
 } from "@/components/sites/siteFormSchema";
-import { TRAVAUX_NON_SUBVENTIONNES_OPTIONS, TRAVAUX_NON_SUBVENTIONNES_LABELS, type TravauxNonSubventionnesValue } from "@/components/sites/travauxNonSubventionnes";
+import {
+  TRAVAUX_NON_SUBVENTIONNES_OPTIONS,
+  TRAVAUX_NON_SUBVENTIONNES_LABELS,
+  normalizeTravauxNonSubventionnesValue,
+} from "@/components/sites/travauxNonSubventionnes";
 import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import {
@@ -91,6 +99,8 @@ const sanitizeNumber = (value: unknown, fallback = 0) => {
   return fallback;
 };
 
+const numbersAreClose = (a: number, b: number) => Math.abs(a - b) < 0.005;
+
 const getStatusGradient = (marginRate: number) => {
   if (marginRate >= 0) {
     return "border-emerald-500/60 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent";
@@ -141,17 +151,46 @@ const ChantierDetails = () => {
       "product_name",
       "additional_costs",
       "valorisation_cee",
-      "commission_commerciale_ht",
-      "commission_commerciale_ht_montant",
+      "commission_eur_per_m2_enabled",
+      "commission_eur_per_m2",
       "subcontractor_id",
       "subcontractor_payment_confirmed",
+      "subcontractor_base_units",
+      "subcontractor_payment_amount",
+      "subcontractor_payment_units",
+      "subcontractor_payment_rate",
+      "subcontractor_payment_unit_label",
     ],
   });
+  const watchedAdditionalCosts = useWatch({ control, name: "additional_costs" });
 
   const { fields: costFields, append: appendCost, remove: removeCost } = useFieldArray({
     control,
     name: "additional_costs",
   });
+
+  useEffect(() => {
+    if (!Array.isArray(watchedAdditionalCosts)) return;
+
+    watchedAdditionalCosts.forEach((cost, index) => {
+      const amountHT =
+        cost && typeof cost.amount_ht === "number" && Number.isFinite(cost.amount_ht)
+          ? cost.amount_ht
+          : 0;
+      const tvaRate = normalizeAdditionalCostTvaRate(cost?.tva_rate, 20);
+      const computedTTC = computeAdditionalCostTTC(amountHT, tvaRate);
+      const currentValue = form.getValues(`additional_costs.${index}.amount_ttc`);
+      const normalizedCurrent =
+        typeof currentValue === "number" && Number.isFinite(currentValue) ? currentValue : 0;
+
+      if (Math.abs(normalizedCurrent - computedTTC) > 0.005) {
+        form.setValue(`additional_costs.${index}.amount_ttc`, computedTTC, {
+          shouldDirty: true,
+          shouldValidate: false,
+        });
+      }
+    });
+  }, [form, watchedAdditionalCosts]);
 
   const chantierQuery = useQuery<ChantierQueryResult | null>({
     queryKey: ["chantier", id, currentOrgId],
@@ -235,13 +274,31 @@ const ChantierDetails = () => {
       montant_commission: sanitizeNumber(chantier.montant_commission),
       valorisation_cee: sanitizeNumber(chantier.valorisation_cee),
       subcontractor_id: chantier.subcontractor_id ?? null,
+      subcontractor_payment_confirmed: Boolean(chantier.subcontractor_payment_confirmed),
+      subcontractor_base_units: sanitizeNumber(chantier.subcontractor_base_units),
+      subcontractor_payment_amount: sanitizeNumber(chantier.subcontractor_payment_amount),
+      subcontractor_payment_units: sanitizeNumber(chantier.subcontractor_payment_units),
+      subcontractor_payment_unit_label: chantier.subcontractor_payment_unit_label?.trim() ?? "",
+      subcontractor_payment_rate: sanitizeNumber(chantier.subcontractor_payment_rate),
       travaux_non_subventionnes: (String(chantier.travaux_non_subventionnes) as SiteFormValues["travaux_non_subventionnes"]) || "NA",
+      travaux_non_subventionnes: normalizeTravauxNonSubventionnesValue(
+        chantier.travaux_non_subventionnes,
+      ),
       travaux_non_subventionnes_montant: sanitizeNumber(chantier.travaux_non_subventionnes_montant),
-      commission_commerciale_ht_montant: sanitizeNumber(chantier.commission_commerciale_ht_montant),
+      commission_eur_per_m2_enabled:
+        typeof chantier.commission_eur_per_m2_enabled === "boolean"
+          ? chantier.commission_eur_per_m2_enabled
+          : Boolean(
+              (chantier as unknown as { commission_commerciale_ht?: unknown })
+                .commission_commerciale_ht,
+            ),
+      commission_eur_per_m2: sanitizeNumber(
+        chantier.commission_eur_per_m2 ??
+          (chantier as unknown as { commission_commerciale_ht_montant?: unknown })
+            .commission_commerciale_ht_montant,
+      ),
       notes: parsedNotes.text ?? "",
-      additional_costs: Array.isArray(chantier.additional_costs)
-        ? (chantier.additional_costs as SiteFormValues["additional_costs"])
-        : [],
+      additional_costs: normalizeAdditionalCostsArray(chantier.additional_costs ?? []),
     };
     reset(defaults, { keepDefaultValues: false });
     setSiteAttachments(parsedNotes.attachments);
@@ -268,10 +325,15 @@ const ChantierDetails = () => {
       productName,
       additionalCosts,
       valorisationCee,
-      commissionCommercialeActive,
-      commissionCommercialeMontant,
+      commissionPerM2Enabled,
+      commissionPerM2,
       subcontractorId,
       subcontractorPaymentConfirmed,
+      subcontractorBaseUnits,
+      subcontractorPaymentAmount,
+      subcontractorPaymentUnits,
+      subcontractorPaymentRate,
+      subcontractorPaymentUnitLabel,
     ] = (rentabilityWatch ?? []) as [
       number | undefined,
       number | undefined,
@@ -288,13 +350,26 @@ const ChantierDetails = () => {
       number | undefined,
       string | undefined,
       boolean | undefined,
+      number | undefined,
+      number | undefined,
+      number | undefined,
+      number | undefined,
+      string | undefined,
     ];
 
     const normalizedAdditionalCosts = Array.isArray(additionalCosts)
-      ? additionalCosts.map((cost) => ({
-          amount_ht: sanitizeNumber(cost?.amount_ht),
-          taxes: sanitizeNumber(cost?.montant_tva),
-        }))
+      ? additionalCosts.map((cost) => {
+          const amountHT = sanitizeNumber(cost?.amount_ht);
+          const tvaRate = normalizeAdditionalCostTvaRate(cost?.tva_rate, 20);
+          const amountTTC = computeAdditionalCostTTC(amountHT, tvaRate);
+          const taxes = Math.max(0, amountTTC - amountHT);
+          return {
+            amount_ht: amountHT,
+            taxes,
+            tva_rate: tvaRate,
+            amount_ttc: amountTTC,
+          };
+        })
       : [];
 
     const selectedSubcontractor = (subcontractorsQuery.data ?? []).find(
@@ -324,10 +399,15 @@ const ChantierDetails = () => {
       additional_costs: normalizedAdditionalCosts,
       product_name: productName,
       valorisation_cee: sanitizeNumber(valorisationCee),
-      commission_commerciale_ht: commissionCommercialeActive,
-      commission_commerciale_ht_montant: sanitizeNumber(commissionCommercialeMontant),
+      commission_eur_per_m2_enabled: commissionPerM2Enabled,
+      commission_eur_per_m2: sanitizeNumber(commissionPerM2),
       subcontractor_pricing_details: subcontractorRate,
       subcontractor_payment_confirmed: Boolean(subcontractorPaymentConfirmed),
+      subcontractor_base_units: sanitizeNumber(subcontractorBaseUnits),
+      subcontractor_payment_amount: sanitizeNumber(subcontractorPaymentAmount),
+      subcontractor_payment_units: sanitizeNumber(subcontractorPaymentUnits),
+      subcontractor_payment_rate: sanitizeNumber(subcontractorPaymentRate),
+      subcontractor_payment_unit_label: subcontractorPaymentUnitLabel,
       project_prime_cee: project?.prime_cee ?? undefined,
       project_prime_cee_total_cents: project?.prime_cee_total_cents ?? undefined,
       project_category: project?.product_name ?? chantier?.product_name ?? undefined,
@@ -336,12 +416,58 @@ const ChantierDetails = () => {
     return calculateRentability(rentabilityInput);
   }, [rentabilityWatch, subcontractorsQuery.data, project?.prime_cee, project?.prime_cee_total_cents, project?.product_name, chantier?.product_name, form]);
 
+  const subcontractorAmountDisplay = rentabilityMetrics.subcontractorEstimatedCost > 0
+    ? formatCurrency(rentabilityMetrics.subcontractorEstimatedCost)
+    : "—";
+  const subcontractorUnitsDisplay = rentabilityMetrics.subcontractorBaseUnits > 0
+    ? `${formatDecimal(rentabilityMetrics.subcontractorBaseUnits)} ${rentabilityMetrics.unitLabel}`
+    : `— ${rentabilityMetrics.unitLabel}`;
+  const subcontractorRateDisplay = rentabilityMetrics.subcontractorRate > 0
+    ? `${formatCurrency(rentabilityMetrics.subcontractorRate)} / ${rentabilityMetrics.unitLabel}`
+    : null;
+
+  useEffect(() => {
+    const updateNumericField = (
+      name:
+        | "subcontractor_base_units"
+        | "subcontractor_payment_units"
+        | "subcontractor_payment_amount"
+        | "subcontractor_payment_rate",
+      value: number,
+    ) => {
+      const current = sanitizeNumber(form.getValues(name));
+      if (!numbersAreClose(current, value)) {
+        form.setValue(name, value, { shouldDirty: true, shouldValidate: false });
+      }
+    };
+
+    updateNumericField("subcontractor_base_units", rentabilityMetrics.subcontractorBaseUnits);
+    updateNumericField("subcontractor_payment_units", rentabilityMetrics.subcontractorBaseUnits);
+    updateNumericField("subcontractor_payment_amount", rentabilityMetrics.subcontractorEstimatedCost);
+    updateNumericField("subcontractor_payment_rate", rentabilityMetrics.subcontractorRate);
+
+    const currentLabel = form.getValues("subcontractor_payment_unit_label") ?? "";
+    const nextLabel = rentabilityMetrics.unitLabel ?? "";
+    if (typeof currentLabel !== "string" || currentLabel.trim() !== nextLabel) {
+      form.setValue("subcontractor_payment_unit_label", nextLabel, {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
+    }
+  }, [form, rentabilityMetrics]);
+
   const updateMutation = useMutation({
     mutationFn: async (payload: SiteSubmitValues) => {
       if (!chantier || !user?.id) return;
+      
+      const updatePayload: Partial<Tables<"sites">> = {
+        ...payload,
+        team_members: payload.team_members?.map(m => m.id) ?? [],
+      };
+      
       const { error } = await supabase
         .from("sites")
-        .update(payload as Partial<Tables<"sites">>)
+        .update(updatePayload)
         .eq("id", chantier.id);
       if (error) throw error;
     },
@@ -365,26 +491,30 @@ const ChantierDetails = () => {
       const filteredCosts = (values.additional_costs ?? [])
         .filter((cost) => cost.label.trim().length > 0)
         .map((cost) => {
-        const amountHT = sanitizeNumber(cost.amount_ht);
-        const montantTVA = sanitizeNumber(cost.montant_tva);
-        const amountTTC = sanitizeNumber(cost.amount_ttc, amountHT + montantTVA);
-        const attachment = cost.attachment?.trim() ?? "";
-        return {
-          label: cost.label.trim(),
-          amount_ht: amountHT,
-          montant_tva: montantTVA,
-          amount_ttc: amountTTC,
-          attachment: attachment.length > 0 ? attachment : null,
-        };
-      });
+          const amountHT = sanitizeNumber(cost.amount_ht);
+          const tvaRate = normalizeAdditionalCostTvaRate(cost.tva_rate, 20);
+          const amountTTC = computeAdditionalCostTTC(amountHT, tvaRate);
+          const montantTVA = Math.max(0, amountTTC - amountHT);
+          const attachment = cost.attachment?.trim() ?? "";
+          return {
+            label: cost.label.trim(),
+            amount_ht: amountHT,
+            tva_rate: tvaRate,
+            montant_tva: montantTVA,
+            amount_ttc: amountTTC,
+            attachment: attachment.length > 0 ? attachment : null,
+          };
+        });
 
     const travauxChoice = values.travaux_non_subventionnes ?? "NA";
     const shouldResetTravaux = travauxChoice === "NA";
     const travauxDescription = shouldResetTravaux ? "" : values.travaux_non_subventionnes_description?.trim() ?? "";
     const travauxMontant = shouldResetTravaux ? 0 : sanitizeNumber(values.travaux_non_subventionnes_montant);
     const travauxFinancement = shouldResetTravaux ? false : Boolean(values.travaux_non_subventionnes_financement);
-    const commissionActive = Boolean(values.commission_commerciale_ht);
-    const commissionMontant = commissionActive ? sanitizeNumber(values.commission_commerciale_ht_montant) : 0;
+    const commissionPerM2Enabled = Boolean(values.commission_eur_per_m2_enabled);
+    const commissionPerM2Value = commissionPerM2Enabled
+      ? sanitizeNumber(values.commission_eur_per_m2)
+      : 0;
 
     const selectedSubcontractor = (subcontractorsQuery.data ?? []).find(
       (option) => option.id === values.subcontractor_id,
@@ -426,8 +556,8 @@ const ChantierDetails = () => {
       travaux_non_subventionnes_description: travauxDescription,
       travaux_non_subventionnes_montant: travauxMontant,
       travaux_non_subventionnes_financement: travauxFinancement,
-      commission_commerciale_ht: commissionActive,
-      commission_commerciale_ht_montant: commissionMontant,
+      commission_eur_per_m2_enabled: commissionPerM2Enabled,
+      commission_eur_per_m2: commissionPerM2Value,
       profit_margin: rentabilityResult.marginRate,
       rentability_total_costs: rentabilityResult.totalCosts,
       rentability_margin_total: rentabilityResult.marginTotal,
@@ -436,6 +566,11 @@ const ChantierDetails = () => {
       rentability_unit_label: rentabilityResult.unitLabel,
       rentability_unit_count: rentabilityResult.unitsUsed,
       rentability_additional_costs_total: rentabilityResult.additionalCostsTotal,
+      subcontractor_payment_amount: rentabilityResult.subcontractorEstimatedCost,
+      subcontractor_payment_units: rentabilityResult.subcontractorBaseUnits,
+      subcontractor_payment_unit_label: rentabilityResult.unitLabel,
+      subcontractor_payment_rate: rentabilityResult.subcontractorRate,
+      subcontractor_base_units: rentabilityResult.subcontractorBaseUnits,
     };
 
       mutateSite(payload);
@@ -844,7 +979,7 @@ const ChantierDetails = () => {
                     />
                     <FormField
                       control={control}
-                      name="commission_commerciale_ht"
+                      name="commission_eur_per_m2_enabled"
                       render={({ field }) => (
                         <FormItem className="col-span-full">
                           <div className="flex items-start gap-3 rounded-lg border border-dashed p-3">
@@ -857,20 +992,21 @@ const ChantierDetails = () => {
                               disabled={disableInputs}
                             />
                             <div className="space-y-2">
-                              <FormLabel>Commission HT active</FormLabel>
+                              <FormLabel>Commission commerciale (€/m²)</FormLabel>
                               <p className="text-xs text-muted-foreground">
-                                Activez si une commission HT est due. Renseignez le montant correspondant.
+                                Activez pour ajouter une commission calculée par mètre carré facturé.
                               </p>
                               <FormField
                                 control={control}
-                                name="commission_commerciale_ht_montant"
+                                name="commission_eur_per_m2"
                                 render={({ field: amountField }) => (
                                   <FormItem>
-                                    <FormLabel>Montant commission HT (€)</FormLabel>
+                                    <FormLabel>Montant commission (€/m²)</FormLabel>
                                     <FormControl>
                                       <Input
                                         type="number"
-                                        step="0.01"
+                                        step="0.1"
+                                        min="0"
                                         {...amountField}
                                         onBlur={(event) => {
                                           amountField.onBlur();
@@ -1010,82 +1146,52 @@ const ChantierDetails = () => {
                       </p>
                     ) : (
                       <div className="space-y-4">
-                        {costFields.map((field, index) => (
-                          <div key={field.id} className="grid gap-4 rounded-lg border border-border/60 p-4 md:grid-cols-4">
-                            <FormField
-                              control={control}
-                              name={`additional_costs.${index}.label` as const}
-                              render={({ field }) => (
-                                <FormItem className="md:col-span-2">
-                                  <FormLabel>Intitulé</FormLabel>
-                                  <FormControl>
-                                    <Input
-                                      {...field}
-                                      onBlur={(event) => {
-                                        field.onBlur();
-                                        handleBlurSave();
-                                      }}
-                                      disabled={disableInputs}
-                                      readOnly={isEditingLocked}
-                                    />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={control}
-                              name={`additional_costs.${index}.amount_ht` as const}
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Montant HT</FormLabel>
-                                  <FormControl>
-                                    <Input
-                                      type="number"
-                                      step="0.01"
-                                      {...field}
-                                      onBlur={(event) => {
-                                        field.onBlur();
-                                        handleBlurSave();
-                                      }}
-                                      disabled={disableInputs}
-                                      readOnly={isEditingLocked}
-                                    />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={control}
-                              name={`additional_costs.${index}.montant_tva` as const}
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>TVA</FormLabel>
-                                  <FormControl>
-                                    <Input
-                                      type="number"
-                                      step="0.01"
-                                      {...field}
-                                      onBlur={(event) => {
-                                        field.onBlur();
-                                        handleBlurSave();
-                                      }}
-                                      disabled={disableInputs}
-                                      readOnly={isEditingLocked}
-                                    />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <div className="md:col-span-4 space-y-2">
+                        {costFields.map((field, index) => {
+                          const costValue = Array.isArray(watchedAdditionalCosts)
+                            ? watchedAdditionalCosts[index]
+                            : undefined;
+                          const amountHTValue =
+                            costValue &&
+                            typeof costValue.amount_ht === "number" &&
+                            Number.isFinite(costValue.amount_ht)
+                              ? costValue.amount_ht
+                              : 0;
+                          const tvaRateValue = normalizeAdditionalCostTvaRate(costValue?.tva_rate, 20);
+                          const computedTTC = computeAdditionalCostTTC(amountHTValue, tvaRateValue);
+                          const computedTaxes = Math.max(0, computedTTC - amountHTValue);
+
+                          return (
+                            <div
+                              key={field.id}
+                              className="grid gap-4 rounded-lg border border-border/60 p-4 md:grid-cols-4"
+                            >
                               <FormField
                                 control={control}
-                                name={`additional_costs.${index}.amount_ttc` as const}
+                                name={`additional_costs.${index}.label` as const}
+                                render={({ field }) => (
+                                  <FormItem className="md:col-span-2">
+                                    <FormLabel>Intitulé</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        {...field}
+                                        onBlur={(event) => {
+                                          field.onBlur();
+                                          handleBlurSave();
+                                        }}
+                                        disabled={disableInputs}
+                                        readOnly={isEditingLocked}
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={control}
+                                name={`additional_costs.${index}.amount_ht` as const}
                                 render={({ field }) => (
                                   <FormItem>
-                                    <FormLabel>Montant TTC</FormLabel>
+                                    <FormLabel>Montant HT</FormLabel>
                                     <FormControl>
                                       <Input
                                         type="number"
@@ -1105,42 +1211,106 @@ const ChantierDetails = () => {
                               />
                               <FormField
                                 control={control}
-                                name={`additional_costs.${index}.attachment` as const}
+                                name={`additional_costs.${index}.tva_rate` as const}
                                 render={({ field }) => (
                                   <FormItem>
-                                    <FormLabel>Preuve (Drive)</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        placeholder="URL ou ID du fichier"
-                                        {...field}
-                                        onBlur={(event) => {
-                                          field.onBlur();
-                                          handleBlurSave();
-                                        }}
-                                        disabled={disableInputs}
-                                        readOnly={isEditingLocked}
-                                      />
-                                    </FormControl>
+                                    <FormLabel>Taux de TVA</FormLabel>
+                                    <Select
+                                      value={
+                                        field.value === undefined || field.value === null
+                                          ? String(tvaRateValue)
+                                          : String(field.value)
+                                      }
+                                      onValueChange={(next) => {
+                                        const parsed = Number.parseFloat(next);
+                                        field.onChange(Number.isFinite(parsed) ? parsed : tvaRateValue);
+                                        handleBlurSave();
+                                      }}
+                                      disabled={disableInputs || isEditingLocked}
+                                    >
+                                      <FormControl>
+                                        <SelectTrigger>
+                                          <SelectValue placeholder="Sélectionner" />
+                                        </SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent>
+                                        {ADDITIONAL_COST_TVA_RATES.map((rate) => (
+                                          <SelectItem key={rate} value={String(rate)}>
+                                            {rate}%
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                    <p className="text-xs text-muted-foreground">
+                                      TVA calculée : {Math.round(computedTaxes * 100) / 100} €
+                                    </p>
                                     <FormMessage />
                                   </FormItem>
                                 )}
                               />
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  removeCost(index);
-                                  handleBlurSave();
-                                }}
-                                className="text-destructive"
-                                disabled={disableInputs}
-                              >
-                                Supprimer
-                              </Button>
+                              <div className="md:col-span-4 space-y-2">
+                                <FormField
+                                  control={control}
+                                  name={`additional_costs.${index}.amount_ttc` as const}
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormLabel>Montant TTC</FormLabel>
+                                      <FormControl>
+                                        <Input
+                                          type="number"
+                                          step="0.01"
+                                          value={
+                                            field.value === undefined || field.value === null
+                                              ? computedTTC
+                                              : field.value
+                                          }
+                                          readOnly
+                                          disabled
+                                        />
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={control}
+                                  name={`additional_costs.${index}.attachment` as const}
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormLabel>Preuve (Drive)</FormLabel>
+                                      <FormControl>
+                                        <Input
+                                          placeholder="URL ou ID du fichier"
+                                          {...field}
+                                          onBlur={(event) => {
+                                            field.onBlur();
+                                            handleBlurSave();
+                                          }}
+                                          disabled={disableInputs}
+                                          readOnly={isEditingLocked}
+                                        />
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    removeCost(index);
+                                    handleBlurSave();
+                                  }}
+                                  className="text-destructive"
+                                  disabled={disableInputs}
+                                >
+                                  Supprimer
+                                </Button>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                     <Button
@@ -1151,7 +1321,7 @@ const ChantierDetails = () => {
                         appendCost({
                           label: "",
                           amount_ht: 0,
-                          montant_tva: 0,
+                          tva_rate: 20,
                           amount_ttc: 0,
                           attachment: null,
                         })
@@ -1205,19 +1375,29 @@ const ChantierDetails = () => {
                       control={control}
                       name="subcontractor_payment_confirmed"
                       render={({ field }) => (
-                        <FormItem className="flex items-center gap-3">
-                          <Checkbox
-                            checked={field.value}
-                            onCheckedChange={(checked) => {
-                              field.onChange(checked);
-                              handleBlurSave();
-                            }}
-                            disabled={disableInputs}
-                          />
-                          <div className="space-y-1">
-                            <FormLabel className="font-medium">Paiement sous-traitant confirmé</FormLabel>
+                        <FormItem className="flex flex-col gap-3 rounded-md border p-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex items-start gap-3">
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={(checked) => {
+                                field.onChange(checked);
+                                handleBlurSave();
+                              }}
+                              disabled={disableInputs}
+                            />
+                            <div className="space-y-1">
+                              <FormLabel className="font-medium">Paiement sous-traitant confirmé</FormLabel>
+                              <p className="text-xs text-muted-foreground">
+                                Indiquez si le règlement du sous-traitant a été effectué.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right text-sm">
+                            <p className="font-semibold text-foreground">{subcontractorAmountDisplay}</p>
                             <p className="text-xs text-muted-foreground">
-                              Indiquez si le règlement du sous-traitant a été effectué.
+                              {subcontractorRateDisplay
+                                ? `${subcontractorUnitsDisplay} · ${subcontractorRateDisplay}`
+                                : subcontractorUnitsDisplay}
                             </p>
                           </div>
                         </FormItem>

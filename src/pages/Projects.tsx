@@ -168,7 +168,7 @@ type ProjectCategoryValue = (typeof PROJECT_CATEGORY_VALUES)[number];
 type CategoryFilterValue = "all" | ProjectCategoryValue;
 type StatusFilterValue = "active" | "archived" | "all" | ProjectStatusSetting["value"];
 
-const ARCHIVED_STATUS_VALUES = ["ARCHIVE", "ARCHIVED"] as const;
+const ARCHIVED_STATUS_VALUES = ["ARCHIVED"] as const;
 const ARCHIVED_STATUS_SET = new Set<string>(ARCHIVED_STATUS_VALUES);
 
 const normalizeCategorySource = (value: string) =>
@@ -393,13 +393,12 @@ const Projects = ({
         query = query.in("id", normalizedAllowedProjectIds);
       }
 
-      const archivedStatuses = [...ARCHIVED_STATUS_VALUES];
+      const archivedStatuses = [...ARCHIVED_STATUS_VALUES] as string[];
 
       if (statusFilter === "archived") {
-        query = query.in("status", archivedStatuses);
+        query = query.in("status", archivedStatuses as any);
       } else if (statusFilter === "active") {
-        const archivedFilter = `(${archivedStatuses.join(",")})`;
-        query = query.not("status", "in", archivedFilter);
+        query = query.not("status", "in", `(${archivedStatuses.join(",")})`);
       } else if (statusFilter !== "all") {
         query = query.eq("status", statusFilter as ProjectStatus);
       }

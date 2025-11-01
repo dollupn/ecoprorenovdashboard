@@ -1180,8 +1180,8 @@ export type Database = {
           client_last_name: string | null
           client_name: string
           cofrac_status: string | null
-          commission_commerciale_ht: string | null
-          commission_commerciale_ht_montant: number | null
+          commission_eur_per_m2_enabled: boolean | null
+          commission_eur_per_m2: number | null
           cout_isolation_m2: number | null
           cout_main_oeuvre_m2_ht: number | null
           created_at: string
@@ -1208,6 +1208,11 @@ export type Database = {
           site_ref: string
           status: SiteStatusValue
           subcontractor_id: string | null
+          subcontractor_base_units: number | null
+          subcontractor_payment_amount: number | null
+          subcontractor_payment_rate: number | null
+          subcontractor_payment_unit_label: string | null
+          subcontractor_payment_units: number | null
           subcontractor_payment_confirmed: boolean
           surface_facturee: number | null
           team_members: string[] | null
@@ -1225,8 +1230,8 @@ export type Database = {
           client_last_name?: string | null
           client_name: string
           cofrac_status?: string | null
-          commission_commerciale_ht?: string | null
-          commission_commerciale_ht_montant?: number | null
+          commission_eur_per_m2_enabled?: boolean | null
+          commission_eur_per_m2?: number | null
           cout_isolation_m2?: number | null
           cout_main_oeuvre_m2_ht?: number | null
           created_at?: string
@@ -1253,6 +1258,11 @@ export type Database = {
           site_ref: string
           status?: SiteStatusValue
           subcontractor_id?: string | null
+          subcontractor_base_units?: number | null
+          subcontractor_payment_amount?: number | null
+          subcontractor_payment_rate?: number | null
+          subcontractor_payment_unit_label?: string | null
+          subcontractor_payment_units?: number | null
           subcontractor_payment_confirmed?: boolean
           surface_facturee?: number | null
           team_members?: string[] | null
@@ -1270,8 +1280,8 @@ export type Database = {
           client_last_name?: string | null
           client_name?: string
           cofrac_status?: string | null
-          commission_commerciale_ht?: string | null
-          commission_commerciale_ht_montant?: number | null
+          commission_eur_per_m2_enabled?: boolean | null
+          commission_eur_per_m2?: number | null
           cout_isolation_m2?: number | null
           cout_main_oeuvre_m2_ht?: number | null
           created_at?: string
@@ -1298,6 +1308,11 @@ export type Database = {
           site_ref?: string
           status?: SiteStatusValue
           subcontractor_id?: string | null
+          subcontractor_base_units?: number | null
+          subcontractor_payment_amount?: number | null
+          subcontractor_payment_rate?: number | null
+          subcontractor_payment_unit_label?: string | null
+          subcontractor_payment_units?: number | null
           subcontractor_payment_confirmed?: boolean
           surface_facturee?: number | null
           team_members?: string[] | null
