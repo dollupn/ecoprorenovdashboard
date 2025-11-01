@@ -45,7 +45,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { DriveFileUploader } from "@/components/integrations/DriveFileUploader";
+import { DriveMultiFileUploader } from "@/components/integrations/DriveMultiFileUploader";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -54,10 +54,9 @@ import { useOrg } from "@/features/organizations/OrgContext";
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 import { calculateRentability, buildRentabilityInputFromSite } from "@/lib/rentability";
 import { getProjectStatusBadgeStyle } from "@/lib/projects";
-import { parseSiteNotes, serializeSiteNotes } from "@/lib/sites";
+import { parseSiteNotes, serializeSiteNotes, type SiteNoteAttachment } from "@/lib/sites";
 import { cn } from "@/lib/utils";
 import { ClipboardList, HandCoins, Loader2, MapPin, UserRound, ArrowLeft, Building2, Lock } from "lucide-react";
-import type { DriveFileMetadata } from "@/integrations/googleDrive";
 import { format } from "date-fns";
 
 const currencyFormatter = new Intl.NumberFormat("fr-FR", {
@@ -126,7 +125,7 @@ const ChantierDetails = () => {
   const { user } = useAuth();
   const { currentOrgId } = useOrg();
   const { statuses: statusOptions } = useProjectStatuses();
-  const [siteDriveFile, setSiteDriveFile] = useState<DriveFileMetadata | null>(null);
+  const [siteAttachments, setSiteAttachments] = useState<SiteNoteAttachment[]>([]);
 
   const resolver = useMemo(() => zodResolver(createSiteSchema(false)), []);
 
@@ -302,8 +301,16 @@ const ChantierDetails = () => {
       additional_costs: normalizeAdditionalCostsArray(chantier.additional_costs ?? []),
     };
     reset(defaults, { keepDefaultValues: false });
-    setSiteDriveFile(parsedNotes.driveFile ?? null);
-  }, [chantier, parsedNotes.driveFile, parsedNotes.text, project?.client_name, project?.product_name, project?.project_ref, reset]);
+    setSiteAttachments(parsedNotes.attachments);
+  }, [
+    chantier,
+    parsedNotes.attachments,
+    parsedNotes.text,
+    project?.client_name,
+    project?.product_name,
+    project?.project_ref,
+    reset,
+  ]);
 
   const rentabilityMetrics = useMemo(() => {
     const [
@@ -536,7 +543,7 @@ const ChantierDetails = () => {
       }),
     );
 
-      const serializedNotes = serializeSiteNotes(values.notes, siteDriveFile);
+      const serializedNotes = serializeSiteNotes(values.notes, siteAttachments[0]?.file ?? null, siteAttachments);
 
       const payload: SiteSubmitValues = {
         ...values,
@@ -573,7 +580,7 @@ const ChantierDetails = () => {
       formState.isDirty,
       isEditingLocked,
       isUpdating,
-      siteDriveFile,
+      siteAttachments,
       mutateSite,
       user?.id,
     ],
@@ -1398,18 +1405,19 @@ const ChantierDetails = () => {
                     />
                     <div className="space-y-2">
                       <FormLabel>Documents chantier</FormLabel>
-                      <DriveFileUploader
+                      <DriveMultiFileUploader
                         orgId={currentOrgId ?? chantier.org_id ?? null}
                         entityType="site"
                         entityId={chantier.site_ref}
-                        value={siteDriveFile}
-                        onChange={(file) => {
-                          setSiteDriveFile(file);
+                        value={siteAttachments}
+                        onChange={(attachments) => {
+                          setSiteAttachments(attachments);
                           if (!isEditingLocked) {
-                            handleBlurSave();
+                            setTimeout(() => handleBlurSave(), 0);
                           }
                         }}
                         maxSizeMb={35}
+                        accept="application/pdf,image/*"
                         description="Importer des photos ou documents Drive"
                         helperText="Prise en charge PDF et images"
                         disabled={disableInputs}

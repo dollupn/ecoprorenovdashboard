@@ -5362,7 +5362,7 @@ const ProjectDetails = () => {
                       const internalNotes = parsedSiteNotes.text?.trim() ?? "";
                       const hasInternalNotes = internalNotes.length > 0;
                       const attachments = parsedSiteNotes.attachments;
-                      const primaryAttachment = attachments[0] ?? parsedSiteNotes.driveFile;
+                      const primaryAttachment = attachments[0]?.file ?? parsedSiteNotes.driveFile;
                       const driveLink =
                         primaryAttachment?.webViewLink ?? primaryAttachment?.webContentLink ?? null;
                       const hasDriveFile = Boolean(driveLink) || attachments.length > 0;
@@ -5370,6 +5370,27 @@ const ProjectDetails = () => {
                       const driveLabel =
                         attachments.length > 1
                           ? `${attachments.length} documents`
+                          : attachments[0]?.title ?? primaryAttachment?.name ?? "Document chantier";
+                      const additionalCostCount = Array.isArray(
+                        site.additional_costs,
+                      )
+                        ? site.additional_costs.length
+                        : 0;
+                      const additionalCostTotal = Array.isArray(site.additional_costs)
+                        ? site.additional_costs.reduce((total, rawCost) => {
+                            if (!rawCost || typeof rawCost !== "object") {
+                              return total;
+                            }
+
+                            const cost = rawCost as Record<string, unknown>;
+                            const amountHT = parseNumber(cost.amount_ht) ?? 0;
+                            const montantTVA =
+                              parseNumber(cost.montant_tva) ?? parseNumber(cost.taxes) ?? 0;
+                            const amountTTC = typeof cost.amount_ttc === 'number' ? cost.amount_ttc : (amountHT + montantTVA);
+
+                            return (total as number) + amountTTC;
+                          }, 0)
+                        : 0;
                           : primaryAttachment?.name ?? "Document chantier";
                       const normalizedAdditionalCosts = normalizeAdditionalCostsArray(
                         site.additional_costs ?? [],
