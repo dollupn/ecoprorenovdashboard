@@ -254,14 +254,6 @@ const SURFACE_FACTUREE_TARGETS = [
 const ARCHIVED_STATUS_VALUES = new Set(["ARCHIVE", "ARCHIVED"]);
 const ARCHIVED_STATUS_VALUE = "ARCHIVED";
 
-type SiteStatus =
-  | "PLANIFIE"
-  | "EN_PREPARATION"
-  | "EN_COURS"
-  | "SUSPENDU"
-  | "TERMINE"
-  | "LIVRE";
-
 type CofracStatus = "EN_ATTENTE" | "CONFORME" | "NON_CONFORME" | "A_PLANIFIER";
 
 type ProjectSite = Tables<"sites"> & {
@@ -676,82 +668,6 @@ const formatDateTimeLabel = (
       timeStyle: "short",
     },
   );
-};
-
-const parseDateValue = (value: unknown): Date | null => {
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  const date = new Date(trimmed);
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-
-  return date;
-};
-
-const getFirstValidDate = (values: unknown[]): Date | null => {
-  for (const value of values) {
-    const parsed = parseDateValue(value);
-    if (parsed) {
-      return parsed;
-    }
-  }
-  return null;
-};
-
-const resolveStringField = (
-  record: Record<string, unknown> | null | undefined,
-  keys: string[],
-): string | null => {
-  if (!record) {
-    return null;
-  }
-
-  for (const key of keys) {
-    const rawValue = record[key];
-    if (typeof rawValue === "string") {
-      const trimmed = rawValue.trim();
-      if (trimmed.length > 0) {
-        return trimmed;
-      }
-    }
-  }
-
-  return null;
-};
-
-const clampNumber = (value: number, min: number, max: number) =>
-  Math.min(Math.max(value, min), max);
-
-const getStatusLabel = (status: SiteStatus) => {
-  const labels: Record<SiteStatus, string> = {
-    PLANIFIE: "Planifié",
-    EN_PREPARATION: "En préparation",
-    EN_COURS: "En cours",
-    SUSPENDU: "Suspendu",
-    TERMINE: "Terminé",
-    LIVRE: "Livré",
-  };
-  return labels[status];
-};
-
-const getStatusColor = (status: SiteStatus) => {
-  const colors: Record<SiteStatus, string> = {
-    PLANIFIE: "bg-blue-500/10 text-blue-700 border-blue-200",
-    EN_PREPARATION: "bg-orange-500/10 text-orange-700 border-orange-200",
-    EN_COURS: "bg-primary/10 text-primary border-primary/20",
-    SUSPENDU: "bg-red-500/10 text-red-700 border-red-200",
-    TERMINE: "bg-green-500/10 text-green-700 border-green-200",
-    LIVRE: "bg-teal-500/10 text-teal-700 border-teal-200",
-  };
-  return colors[status];
 };
 
 const getCofracStatusLabel = (status: CofracStatus) => {
@@ -1768,6 +1684,10 @@ const ProjectJournalTab = ({
       });
     });
 
+    const projectStatusLabel = project.status
+      ? statusLabelByValue[project.status] ?? project.status
+      : "Statut non défini";
+
     mediaItems.forEach((media) => {
       items.push({
         id: `media-${media.id}`,
@@ -1787,13 +1707,12 @@ const ProjectJournalTab = ({
     });
 
     sites.forEach((site) => {
-      const status = (site.status ?? "PLANIFIE") as SiteStatus;
       const eventDate = site.updated_at ?? site.created_at;
       items.push({
         id: `site-${site.id}`,
         type: "chantier",
         title: `Chantier ${site.site_ref}`,
-        description: getStatusLabel(status),
+        description: projectStatusLabel,
         metadata: site.notes,
         actor: site.user_id ? (memberNameById[site.user_id] ?? null) : null,
         date: eventDate,
@@ -1812,6 +1731,7 @@ const ProjectJournalTab = ({
     memberNameById,
     mediaItems,
     notes,
+    project.status,
     sites,
     statusEvents,
     statusLabelByValue,
@@ -3390,7 +3310,7 @@ const ProjectDetails = () => {
     ? projectStatuses.find((status) => status?.value === statusValue)
     : undefined;
   const badgeStyle = getProjectStatusBadgeStyle(statusConfig?.color);
-  const statusLabel = statusConfig?.label ?? statusValue ?? "Statut";
+  const statusLabel = statusConfig?.label ?? statusValue ?? "Statut non défini";
   const statusProgress = statusValue
     ? computeStatusProgress(statusValue, projectStatuses)
     : 0;
@@ -5428,7 +5348,6 @@ const ProjectDetails = () => {
                 ) : (
                   <div className="space-y-4">
                     {projectSites.map((site) => {
-                      const status = (site.status ?? "PLANIFIE") as SiteStatus;
                       const cofracStatus = (site.cofrac_status ??
                         "EN_ATTENTE") as CofracStatus;
                       const teamMembersLabel = formatTeamMembers(
@@ -5592,8 +5511,8 @@ const ProjectDetails = () => {
                               <CardDescription>{addressDisplay}</CardDescription>
                             </div>
                             <div className="flex flex-wrap gap-2">
-                              <Badge variant="outline" className={getStatusColor(status)}>
-                                {getStatusLabel(status)}
+                              <Badge variant="outline" style={badgeStyle}>
+                                {statusLabel}
                               </Badge>
                               <Badge variant="outline">{getCofracStatusLabel(cofracStatus)}</Badge>
                             </div>
@@ -5679,13 +5598,10 @@ const ProjectDetails = () => {
                               <CardContent className="space-y-3 text-sm">
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="text-muted-foreground">
-                                    Statut
+                                    Statut projet
                                   </span>
-                                  <Badge
-                                    variant="outline"
-                                    className={getStatusColor(status)}
-                                  >
-                                    {getStatusLabel(status)}
+                                  <Badge variant="outline" style={badgeStyle}>
+                                    {statusLabel}
                                   </Badge>
                                 </div>
                                 <div className="flex items-center justify-between gap-2">

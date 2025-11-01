@@ -45,6 +45,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 import { calculateRentability, buildRentabilityInputFromSite } from "@/lib/rentability";
+import { getProjectStatusBadgeStyle } from "@/lib/projects";
 import { parseSiteNotes, serializeSiteNotes } from "@/lib/sites";
 import { cn } from "@/lib/utils";
 import { ClipboardList, HandCoins, Loader2, MapPin, UserRound, ArrowLeft, Building2 } from "lucide-react";
@@ -98,13 +99,23 @@ const getStatusGradient = (marginRate: number) => {
   return "border-destructive/60 bg-gradient-to-br from-destructive/10 via-destructive/5 to-transparent";
 };
 
+const COMPLETED_PROJECT_STATUS_VALUES = new Set([
+  "CHANTIER_TERMINE",
+  "LIVRE",
+  "FACTURE_ENVOYEE",
+  "AH",
+  "AAF",
+  "CLOTURE",
+  "TERMINE",
+]);
+
 const ChantierDetails = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
   const { currentOrgId } = useOrg();
-  const { statuses: statusOptions, isLoading: statusesLoading } = useProjectStatuses();
+  const { statuses: statusOptions } = useProjectStatuses();
   const [siteDriveFile, setSiteDriveFile] = useState<DriveFileMetadata | null>(null);
 
   const projectStatusValues = useMemo(
@@ -121,7 +132,6 @@ const ChantierDetails = () => {
   });
 
   const { control, reset, handleSubmit, formState } = form;
-  const watchedStatus = useWatch({ control, name: "status" });
   const watchedTravaux = useWatch({ control, name: "travaux_non_subventionnes" });
   const rentabilityWatch = useWatch({
     control,
@@ -186,6 +196,19 @@ const ChantierDetails = () => {
 
   const chantier = chantierQuery.data?.site ?? null;
   const project = chantier?.project ?? null;
+  const projectStatusValue = project?.status ?? null;
+  const projectStatusConfig = useMemo(
+    () =>
+      projectStatusValue
+        ? statusOptions.find((option) => option.value === projectStatusValue) ?? null
+        : null,
+    [projectStatusValue, statusOptions],
+  );
+  const projectStatusLabel = projectStatusConfig?.label ?? projectStatusValue ?? "Statut non défini";
+  const projectStatusBadgeStyle = getProjectStatusBadgeStyle(projectStatusConfig?.color);
+  const isProjectCompleted = projectStatusValue
+    ? COMPLETED_PROJECT_STATUS_VALUES.has(projectStatusValue)
+    : false;
   const parsedNotes = useMemo(() => parseSiteNotes(chantier?.notes), [chantier?.notes]);
 
   useEffect(() => {
@@ -274,7 +297,7 @@ const ChantierDetails = () => {
   }, [rentabilityWatch]);
 
   const updateMutation = useMutation({
-    mutationFn: async (payload: SiteSubmitValues) => {
+    mutationFn: async (payload: Omit<SiteSubmitValues, "status">) => {
       if (!chantier || !user?.id) return;
       const { error } = await supabase.from("sites").update(payload as any).eq("id", chantier.id);
       if (error) throw error;
@@ -324,8 +347,10 @@ const ChantierDetails = () => {
 
     const serializedNotes = serializeSiteNotes(values.notes, siteDriveFile);
 
-    const payload: SiteSubmitValues = {
-      ...values,
+    const { status: _ignoredStatus, ...valuesWithoutStatus } = values;
+
+    const payload: Omit<SiteSubmitValues, "status"> = {
+      ...valuesWithoutStatus,
       project_ref: values.project_ref?.trim() ?? chantier.project_ref ?? "",
       client_name: values.client_name?.trim() ?? chantier.client_name ?? "",
       subcontractor_id: values.subcontractor_id ?? null,
@@ -350,7 +375,7 @@ const ChantierDetails = () => {
     updateMutation.mutate(payload);
   };
 
-  if (chantierQuery.isLoading || statusesLoading) {
+  if (chantierQuery.isLoading) {
     return (
       <Layout>
         <div className="flex min-h-[60vh] items-center justify-center">
@@ -429,7 +454,9 @@ const ChantierDetails = () => {
                 </h1>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline">{chantier.status}</Badge>
+                <Badge variant="outline" style={projectStatusBadgeStyle}>
+                  {projectStatusLabel}
+                </Badge>
                 <Button variant="outline" size="sm" onClick={() => navigate(-1)} className="inline-flex items-center gap-2">
                   <ArrowLeft className="h-4 w-4" /> Retour
                 </Button>
@@ -498,33 +525,23 @@ const ChantierDetails = () => {
                 <Card className="border border-dashed">
                   <CardHeader>
                     <CardTitle>Statut & conformité</CardTitle>
-                    <CardDescription>Mettez à jour le statut du chantier et le suivi COFRAC.</CardDescription>
+                    <CardDescription>Consultez le statut du projet et mettez à jour le suivi COFRAC.</CardDescription>
                   </CardHeader>
                   <CardContent className="grid gap-4 md:grid-cols-2">
-                    <FormField
-                      control={control}
-                      name="status"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Statut</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Sélectionner un statut" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {statusOptions.map((option) => (
-                                <SelectItem key={option.value} value={option.value}>
-                                  {option.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <div className="rounded-lg border border-border/60 bg-muted/40 p-4">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">Statut projet</p>
+                          <p className="text-sm font-medium text-foreground">{projectStatusLabel}</p>
+                        </div>
+                        <Badge variant="outline" style={projectStatusBadgeStyle}>
+                          {projectStatusLabel}
+                        </Badge>
+                      </div>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Le statut est piloté depuis la fiche projet.
+                      </p>
+                    </div>
                     <FormField
                       control={control}
                       name="cofrac_status"
@@ -942,7 +959,7 @@ const ChantierDetails = () => {
                   </CardContent>
                 </Card>
 
-                {watchedStatus === "TERMINE" ? (
+                {isProjectCompleted ? (
                   <Card className="border border-primary/40 bg-primary/5">
                     <CardHeader>
                       <CardTitle>Après chantier</CardTitle>
