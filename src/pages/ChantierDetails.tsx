@@ -311,10 +311,12 @@ const ChantierDetails = () => {
   });
   const { mutate: mutateSite, isPending: isUpdating } = updateMutation;
 
-  const pendingSubmissionRef = useRef<{ values: SiteFormValues; options?: { force?: boolean } } | null>(null);
+  type SubmissionOptions = { force?: boolean; driveFile?: DriveFileMetadata | null };
+
+  const pendingSubmissionRef = useRef<{ values: SiteFormValues; options?: SubmissionOptions } | null>(null);
 
   const processFormSubmit = useCallback(
-    (values: SiteFormValues, options?: { force?: boolean }) => {
+    (values: SiteFormValues, options?: SubmissionOptions) => {
       if (!chantier || !user?.id) return;
       if (isEditingLocked) return;
       if (!options?.force && !formState.isDirty) return;
@@ -350,7 +352,7 @@ const ChantierDetails = () => {
         }),
       );
 
-      const serializedNotes = serializeSiteNotes(values.notes, siteDriveFile);
+      const serializedNotes = serializeSiteNotes(values.notes, options?.driveFile ?? siteDriveFile);
 
       const payload: SiteSubmitValues = {
         ...values,
@@ -388,7 +390,7 @@ const ChantierDetails = () => {
   );
 
   const submitFormValues = useCallback(
-    (values: SiteFormValues, options?: { force?: boolean }) => {
+    (values: SiteFormValues, options?: SubmissionOptions) => {
       if (isUpdating) {
         pendingSubmissionRef.current = { values, options };
         return;
@@ -415,7 +417,7 @@ const ChantierDetails = () => {
   );
 
   const handleBlurSave = useCallback(
-    (options?: { force?: boolean }) => {
+    (options?: SubmissionOptions) => {
       if (isEditingLocked) return;
       void form.handleSubmit((values) => submitFormValues(values, options))();
     },
@@ -1199,7 +1201,7 @@ const ChantierDetails = () => {
                         onChange={(file) => {
                           setSiteDriveFile(file);
                           if (!isEditingLocked) {
-                            handleBlurSave({ force: true });
+                            handleBlurSave({ force: true, driveFile: file });
                           }
                         }}
                         maxSizeMb={35}
