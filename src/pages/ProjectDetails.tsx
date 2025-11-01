@@ -678,6 +678,58 @@ const formatDateTimeLabel = (
   );
 };
 
+const parseDateValue = (value: unknown): Date | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const date = new Date(trimmed);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date;
+};
+
+const getFirstValidDate = (values: unknown[]): Date | null => {
+  for (const value of values) {
+    const parsed = parseDateValue(value);
+    if (parsed) {
+      return parsed;
+    }
+  }
+  return null;
+};
+
+const resolveStringField = (
+  record: Record<string, unknown> | null | undefined,
+  keys: string[],
+): string | null => {
+  if (!record) {
+    return null;
+  }
+
+  for (const key of keys) {
+    const rawValue = record[key];
+    if (typeof rawValue === "string") {
+      const trimmed = rawValue.trim();
+      if (trimmed.length > 0) {
+        return trimmed;
+      }
+    }
+  }
+
+  return null;
+};
+
+const clampNumber = (value: number, min: number, max: number) =>
+  Math.min(Math.max(value, min), max);
+
 const getStatusLabel = (status: SiteStatus) => {
   const labels: Record<SiteStatus, string> = {
     PLANIFIE: "Planifié",
@@ -3326,7 +3378,10 @@ const ProjectDetails = () => {
     [ceeEntries],
   );
 
-  const projectRecord = (project ?? {}) as Project & Record<string, unknown>;
+  const projectRecord = useMemo(
+    () => ((project ?? {}) as Project & Record<string, unknown>),
+    [project],
+  );
   const statusValue =
     typeof project?.status === "string" && project.status.length > 0
       ? project.status
@@ -3341,6 +3396,236 @@ const ProjectDetails = () => {
     : 0;
 
   const isStatusUpdating = updateProjectStatusMutation.isPending;
+
+  const projectStatusText = useMemo(() => {
+    const resolved = resolveStringField(projectRecord, [
+      "statut",
+      "status_label",
+      "status_name",
+    ]);
+
+    if (resolved) {
+      return resolved;
+    }
+
+    return statusLabel;
+  }, [projectRecord, statusLabel]);
+
+  const { plannedStartDate, plannedEndDate, plannedProgress } = useMemo(() => {
+    const startKeys = [
+      "date_debut_prevue",
+      "date_debut_previsionnelle",
+      "date_debut",
+      "date_debut_planifie",
+      "date_debut_planifiee",
+      "planned_start_date",
+      "start_date",
+      "date_debut_chantier",
+      "chantier_date_debut",
+    ];
+    const endKeys = [
+      "date_fin_prevue",
+      "date_fin_previsionnelle",
+      "date_fin",
+      "date_fin_planifie",
+      "date_fin_planifiee",
+      "planned_end_date",
+      "end_date",
+      "date_fin_chantier",
+      "chantier_date_fin",
+    ];
+
+    const projectStartCandidates: unknown[] = [
+      project?.date_debut_prevue,
+      resolveStringField(projectRecord, startKeys),
+    ];
+    const projectEndCandidates: unknown[] = [
+      project?.date_fin_prevue,
+      resolveStringField(projectRecord, endKeys),
+    ];
+
+    const siteStartCandidates: unknown[] = [];
+    const siteEndCandidates: unknown[] = [];
+
+    projectSites.forEach((site) => {
+      siteStartCandidates.push(site.date_debut, site.date_debut_prevue);
+      siteEndCandidates.push(site.date_fin_prevue);
+
+      const siteRecord = site as unknown as Record<string, unknown>;
+      siteStartCandidates.push(resolveStringField(siteRecord, startKeys));
+      siteEndCandidates.push(resolveStringField(siteRecord, endKeys));
+    });
+
+    const resolvedStart = getFirstValidDate([
+      ...projectStartCandidates,
+      ...siteStartCandidates,
+    ]);
+    const resolvedEnd = getFirstValidDate([
+      ...projectEndCandidates,
+      ...siteEndCandidates,
+    ]);
+
+    if (
+      typeof projectStatusText === "string" &&
+      projectStatusText.trim().toLowerCase() === "chantier terminé"
+    ) {
+      return {
+        plannedStartDate: resolvedStart,
+        plannedEndDate: resolvedEnd,
+        plannedProgress: 100,
+      };
+    }
+
+    if (resolvedStart && resolvedEnd) {
+      const total = resolvedEnd.getTime() - resolvedStart.getTime();
+
+      if (total <= 0) {
+        return {
+          plannedStartDate: resolvedStart,
+          plannedEndDate: resolvedEnd,
+          plannedProgress:
+            new Date().getTime() >= resolvedEnd.getTime() ? 100 : 0,
+        };
+      }
+
+      const elapsed = new Date().getTime() - resolvedStart.getTime();
+      return {
+        plannedStartDate: resolvedStart,
+        plannedEndDate: resolvedEnd,
+        plannedProgress: clampNumber((elapsed / total) * 100, 0, 100),
+      };
+    }
+
+    return {
+      plannedStartDate: resolvedStart,
+      plannedEndDate: resolvedEnd,
+      plannedProgress: null,
+    };
+  }, [project, projectRecord, projectSites, projectStatusText]);
+
+  const plannedStartLabel = plannedStartDate
+    ? plannedStartDate.toLocaleDateString("fr-FR")
+    : "Non planifié";
+  const plannedEndLabel = plannedEndDate
+    ? plannedEndDate.toLocaleDateString("fr-FR")
+    : "Non planifié";
+  const plannedProgressValue =
+    typeof plannedProgress === "number" ? plannedProgress : 0;
+  const plannedProgressLabel =
+    typeof plannedProgress === "number"
+      ? `${Math.round(plannedProgress)}%`
+      : "Non planifié";
+
+  const companyName = useMemo(() => {
+    const direct = typeof project?.company === "string" ? project.company.trim() : "";
+    if (direct.length > 0) {
+      return direct;
+    }
+
+    return (
+      resolveStringField(projectRecord, ["company_name", "company"]) ?? null
+    );
+  }, [project?.company, projectRecord]);
+
+  const sirenValue = useMemo(() => {
+    const direct = typeof project?.siren === "string" ? project.siren.trim() : "";
+    if (direct.length > 0) {
+      return direct;
+    }
+
+    return resolveStringField(projectRecord, ["siren"]);
+  }, [project?.siren, projectRecord]);
+
+  const phoneValue = useMemo(() => {
+    const direct = typeof project?.phone === "string" ? project.phone.trim() : "";
+    if (direct.length > 0) {
+      return direct;
+    }
+
+    return (
+      resolveStringField(projectRecord, [
+        "phone",
+        "client_phone",
+        "telephone",
+        "contact_phone",
+      ]) ?? null
+    );
+  }, [project?.phone, projectRecord]);
+
+  const formattedAddress = useMemo(() => {
+    const combined = resolveStringField(projectRecord, [
+      "address_full",
+      "full_address",
+      "adresse_complete",
+    ]);
+    if (combined) {
+      return combined;
+    }
+
+    const extendedProject = project as Project & { address?: string | null };
+    const addressValue =
+      resolveStringField(projectRecord, ["address", "hq_address"]) ??
+      extendedProject?.address ??
+      project?.hq_address ??
+      null;
+    const postalCodeValue =
+      resolveStringField(projectRecord, ["postal_code", "code_postal"]) ??
+      project?.postal_code ??
+      project?.hq_postal_code ??
+      null;
+    const cityValue =
+      resolveStringField(projectRecord, ["city", "ville"]) ??
+      project?.city ??
+      project?.hq_city ??
+      null;
+
+    const parts = [addressValue, postalCodeValue, cityValue]
+      .map((part) => (typeof part === "string" ? part.trim() : ""))
+      .filter((part) => part.length > 0);
+
+    return parts.length > 0 ? parts.join(" · ") : null;
+  }, [project, projectRecord]);
+
+  const subcontractorName = useMemo(() => {
+    const fromProject = resolveStringField(projectRecord, [
+      "sous_traitant_name",
+      "subcontractor_name",
+      "sous_traitant",
+    ]);
+
+    if (fromProject) {
+      return fromProject;
+    }
+
+    for (const site of projectSites) {
+      const direct =
+        typeof site.subcontractor?.name === "string"
+          ? site.subcontractor.name.trim()
+          : "";
+      if (direct.length > 0) {
+        return direct;
+      }
+
+      const fromSite = resolveStringField(
+        site as unknown as Record<string, unknown>,
+        ["sous_traitant_name", "subcontractor_name", "sous_traitant"],
+      );
+      if (fromSite) {
+        return fromSite;
+      }
+    }
+
+    return null;
+  }, [projectRecord, projectSites]);
+
+  const primeValueLabel =
+    typeof displayedPrimeValue === "number"
+      ? formatCurrency(displayedPrimeValue)
+      : null;
+  const clientName = getProjectClientName(project);
+  const headerBadgeClassName =
+    "gap-1.5 rounded-full border-border/60 bg-muted/30 px-3 py-1 text-xs font-medium text-muted-foreground";
+  const headerBadgeIconClassName = "h-3.5 w-3.5 text-muted-foreground";
 
   const fallbackLatestUpdateText = (() => {
     const candidates = [
@@ -4491,6 +4776,95 @@ const ProjectDetails = () => {
               </AlertDialog>
             )}
           </div>
+        </div>
+
+        <div className="sticky top-0 z-20">
+          <Card className="border border-border/60 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-sm">
+            <CardContent className="flex flex-col gap-4 p-4 md:p-6">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline" className={headerBadgeClassName}>
+                  <UserRound className={headerBadgeIconClassName} />
+                  <span className="font-medium text-foreground">Client {clientName}</span>
+                </Badge>
+                {companyName ? (
+                  <Badge variant="outline" className={headerBadgeClassName}>
+                    <Building2 className={headerBadgeIconClassName} />
+                    <span className="text-foreground">Entreprise {companyName}</span>
+                  </Badge>
+                ) : null}
+                {sirenValue ? (
+                  <Badge variant="outline" className={headerBadgeClassName}>
+                    <ClipboardList className={headerBadgeIconClassName} />
+                    <span className="text-foreground">SIREN {sirenValue}</span>
+                  </Badge>
+                ) : null}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {formattedAddress ? (
+                  <Badge
+                    variant="outline"
+                    className={`${headerBadgeClassName} max-w-full`}
+                  >
+                    <MapPin className={headerBadgeIconClassName} />
+                    <span className="text-foreground">Adresse {formattedAddress}</span>
+                  </Badge>
+                ) : null}
+                {phoneValue ? (
+                  <Badge variant="outline" className={headerBadgeClassName}>
+                    <Phone className={headerBadgeIconClassName} />
+                    <span className="text-foreground">Téléphone {phoneValue}</span>
+                  </Badge>
+                ) : null}
+                {projectEmail ? (
+                  <Badge
+                    variant="outline"
+                    className={`${headerBadgeClassName} max-w-full`}
+                  >
+                    <Mail className={headerBadgeIconClassName} />
+                    <span className="text-foreground">Email {projectEmail}</span>
+                  </Badge>
+                ) : null}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {primeValueLabel ? (
+                  <Badge variant="outline" className={headerBadgeClassName}>
+                    <HandCoins className={headerBadgeIconClassName} />
+                    <span className="text-foreground">Prime CEE {primeValueLabel}</span>
+                  </Badge>
+                ) : null}
+                {subcontractorName ? (
+                  <Badge variant="outline" className={headerBadgeClassName}>
+                    <Users className={headerBadgeIconClassName} />
+                    <span className="text-foreground">Sous-traitant {subcontractorName}</span>
+                  </Badge>
+                ) : null}
+              </div>
+              <div className="space-y-2 rounded-lg border border-dashed border-border/60 bg-muted/30 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <Calendar className="h-4 w-4 text-primary" />
+                    Planification
+                  </div>
+                  <Badge variant="outline" className={headerBadgeClassName}>
+                    <Zap className={headerBadgeIconClassName} />
+                    <span className="text-foreground">{plannedProgressLabel}</span>
+                  </Badge>
+                </div>
+                <Progress value={plannedProgressValue} className="h-2" />
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <CircleDot className="h-3 w-3" />
+                    Début : {plannedStartLabel}
+                  </span>
+                  <ChevronRight className="h-3 w-3" />
+                  <span className="flex items-center gap-1">
+                    <CircleDot className="h-3 w-3" />
+                    Fin : {plannedEndLabel}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <Tabs
