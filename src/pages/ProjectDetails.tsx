@@ -89,8 +89,7 @@ import {
 import { StartChantierDialog } from "@/components/sites/StartChantierDialog";
 import {
   TRAVAUX_NON_SUBVENTIONNES_LABELS,
-  TRAVAUX_NON_SUBVENTIONNES_OPTIONS,
-  type TravauxNonSubventionnesValue,
+  normalizeTravauxNonSubventionnesValue,
 } from "@/components/sites/travauxNonSubventionnes";
 import {
   getDynamicFieldEntries,
@@ -5480,15 +5479,9 @@ const ProjectDetails = () => {
                       )
                         ? `${formatDecimal(rentabilityMetrics.marginPerUnit)} € / ${rentabilityMetrics.unitLabel}`
                         : `— / ${rentabilityMetrics.unitLabel}`;
-                      const rawTravauxChoice = (site.travaux_non_subventionnes ?? "NA") as
-                        | TravauxNonSubventionnesValue
-                        | string;
-                      const isValidTravauxChoice = TRAVAUX_NON_SUBVENTIONNES_OPTIONS.some(
-                        (option) => option.value === rawTravauxChoice,
+                      const travauxChoice = normalizeTravauxNonSubventionnesValue(
+                        site.travaux_non_subventionnes,
                       );
-                      const travauxChoice = isValidTravauxChoice
-                        ? (rawTravauxChoice as TravauxNonSubventionnesValue)
-                        : "NA";
                       const travauxLabel =
                         TRAVAUX_NON_SUBVENTIONNES_LABELS[travauxChoice] ?? "N/A";
                       const hasTravauxDetails = travauxChoice !== "NA";

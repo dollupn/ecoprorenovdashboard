@@ -83,7 +83,7 @@ import {
 } from "./siteFormSchema";
 import {
   TRAVAUX_NON_SUBVENTIONNES_OPTIONS,
-  type TravauxNonSubventionnesValue,
+  normalizeTravauxNonSubventionnesValue,
 } from "./travauxNonSubventionnes";
 
 // Re-export types for other components
@@ -582,6 +582,11 @@ export const SiteDialog = ({
     } as SiteFormValues;
 
     values.notes = parsedNotes.text;
+
+    values.travaux_non_subventionnes = normalizeTravauxNonSubventionnesValue(
+      values.travaux_non_subventionnes,
+      defaultSiteFormValues.travaux_non_subventionnes,
+    );
 
     const allowedTravauxValues = TRAVAUX_NON_SUBVENTIONNES_OPTIONS.map(
       (option) => option.value,

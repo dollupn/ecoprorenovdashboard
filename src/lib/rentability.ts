@@ -1,6 +1,6 @@
 export type RentabilityMeasurementMode = "surface" | "luminaire";
 
-export type RentabilityTravauxOption = "NA" | "CLIENT" | "MARGE" | "MOITIE";
+export type RentabilityTravauxOption = "NA" | "CLIENT" | "MARGE" | "PARTAGE";
 
 export interface RentabilityAdditionalCostInput {
   amount_ht?: number | null;
@@ -93,8 +93,9 @@ const normalizeTravauxOption = (
       return "CLIENT";
     case "MARGE":
       return "MARGE";
+    case "PARTAGE":
     case "MOITIE":
-      return "MOITIE";
+      return "PARTAGE";
     default:
       return "NA";
   }
@@ -144,7 +145,7 @@ export const calculateRentability = (input: RentabilityInput): RentabilityResult
       case "MARGE":
         travauxCost = travauxAmount;
         break;
-      case "MOITIE":
+      case "PARTAGE":
         travauxRevenue = travauxAmount / 2;
         travauxCost = travauxAmount / 2;
         break;
