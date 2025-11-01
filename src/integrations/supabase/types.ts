@@ -1180,8 +1180,8 @@ export type Database = {
           client_last_name: string | null
           client_name: string
           cofrac_status: string | null
-          commission_commerciale_ht: string | null
-          commission_commerciale_ht_montant: number | null
+          commission_eur_per_m2_enabled: boolean | null
+          commission_eur_per_m2: number | null
           cout_isolation_m2: number | null
           cout_main_oeuvre_m2_ht: number | null
           created_at: string
@@ -1225,8 +1225,8 @@ export type Database = {
           client_last_name?: string | null
           client_name: string
           cofrac_status?: string | null
-          commission_commerciale_ht?: string | null
-          commission_commerciale_ht_montant?: number | null
+          commission_eur_per_m2_enabled?: boolean | null
+          commission_eur_per_m2?: number | null
           cout_isolation_m2?: number | null
           cout_main_oeuvre_m2_ht?: number | null
           created_at?: string
@@ -1270,8 +1270,8 @@ export type Database = {
           client_last_name?: string | null
           client_name?: string
           cofrac_status?: string | null
-          commission_commerciale_ht?: string | null
-          commission_commerciale_ht_montant?: number | null
+          commission_eur_per_m2_enabled?: boolean | null
+          commission_eur_per_m2?: number | null
           cout_isolation_m2?: number | null
           cout_main_oeuvre_m2_ht?: number | null
           created_at?: string
