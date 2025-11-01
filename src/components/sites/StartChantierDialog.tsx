@@ -74,6 +74,7 @@ type StartChantierDialogProps = {
   projectName?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onChantierStarted?: () => void;
 };
 
 type StartChantierResponse = {
@@ -116,6 +117,7 @@ export const StartChantierDialog = ({
   projectName,
   open,
   onOpenChange,
+  onChantierStarted,
 }: StartChantierDialogProps) => {
   const { currentOrgId } = useOrg();
   const { toast } = useToast();
@@ -360,6 +362,7 @@ export const StartChantierDialog = ({
       queryClient.invalidateQueries({ queryKey: ["project-status-events", targetProjectId] });
 
       const uploadsCount = uploaded.length;
+      onChantierStarted?.();
       toast({
         title: "Chantier démarré",
         description:
