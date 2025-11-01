@@ -60,6 +60,10 @@ export interface RentabilityResult {
   unitLabel: string;
   measurementMode: RentabilityMeasurementMode;
   costBreakdown: RentabilityCostBreakdown;
+  subcontractorRate: number;
+  subcontractorBaseUnits: number;
+  subcontractorEstimatedCost: number;
+  subcontractorPaymentConfirmed: boolean;
 }
 
 const sanitizeNumber = (value: unknown): number => {
@@ -186,9 +190,11 @@ export const calculateRentability = (input: RentabilityInput): RentabilityResult
 
   const subcontractorRate = Math.max(0, sanitizeNumber(input.subcontractorRatePerUnit));
   const subcontractorUnitsCandidate = Math.max(0, sanitizeNumber(input.subcontractorBaseUnits));
-  const subcontractorUnits = subcontractorUnitsCandidate > 0 ? subcontractorUnitsCandidate : effectiveUnits;
+  const subcontractorUnits = subcontractorUnitsCandidate > 0 ? subcontractorUnitsCandidate : normalizedBaseUnits;
+  const normalizedSubcontractorUnits = subcontractorUnits > 0 ? subcontractorUnits : 0;
   const subcontractorPaymentConfirmed = toBoolean(input.subcontractorPaymentConfirmed);
-  const subcontractorCost = subcontractorPaymentConfirmed ? subcontractorUnits * subcontractorRate : 0;
+  const subcontractorEstimatedCost = normalizedSubcontractorUnits * subcontractorRate;
+  const subcontractorCost = subcontractorPaymentConfirmed ? subcontractorEstimatedCost : 0;
 
   const laborCostTotal = effectiveUnits * laborCostPerUnit;
   const materialCostTotal = effectiveUnits * materialCostPerUnit;
@@ -222,7 +228,7 @@ export const calculateRentability = (input: RentabilityInput): RentabilityResult
     marginPerUnit: roundZero(marginPerUnit),
     marginRate: roundZero(marginRate),
     unitsUsed: roundZero(effectiveUnits),
-    baseUnits: roundZero(effectiveUnits),
+    baseUnits: roundZero(normalizedBaseUnits),
     unitLabel,
     measurementMode,
     costBreakdown: {
@@ -234,6 +240,10 @@ export const calculateRentability = (input: RentabilityInput): RentabilityResult
       additional: roundZero(additionalCostsTotal),
       travaux: roundZero(travauxCost),
     },
+    subcontractorRate: roundZero(subcontractorRate),
+    subcontractorBaseUnits: roundZero(normalizedSubcontractorUnits),
+    subcontractorEstimatedCost: roundZero(subcontractorEstimatedCost),
+    subcontractorPaymentConfirmed,
   };
 };
 
@@ -264,6 +274,10 @@ export interface SiteRentabilitySource {
   subcontractor_pricing_details?: string | number | null;
   subcontractor_payment_confirmed?: boolean | null;
   subcontractor_base_units?: number | null;
+  subcontractor_payment_amount?: number | null;
+  subcontractor_payment_units?: number | null;
+  subcontractor_payment_rate?: number | null;
+  subcontractor_payment_unit_label?: string | null;
   project_category?: string | null;
   additional_costs?: ReadonlyArray<{
     amount_ht?: number | null;
@@ -308,8 +322,23 @@ export const buildRentabilityInputFromSite = (
     values.commission_eur_per_m2 ?? values.commission_commerciale_ht_montant,
   );
 
-  const subcontractorRate = sanitizeNumber(values.subcontractor_pricing_details);
-  const subcontractorBaseUnits = sanitizeNumber(values.subcontractor_base_units);
+  const rawSubcontractorBaseUnits = sanitizeNumber(values.subcontractor_base_units);
+  const storedSubcontractorUnits = sanitizeNumber(values.subcontractor_payment_units);
+  const subcontractorBaseUnits =
+    rawSubcontractorBaseUnits > 0 ? rawSubcontractorBaseUnits : storedSubcontractorUnits;
+
+  const storedSubcontractorAmount = sanitizeNumber(values.subcontractor_payment_amount);
+  const storedSubcontractorRate = sanitizeNumber(values.subcontractor_payment_rate);
+
+  let subcontractorRate = sanitizeNumber(values.subcontractor_pricing_details);
+  if (subcontractorRate <= 0) {
+    if (storedSubcontractorRate > 0) {
+      subcontractorRate = storedSubcontractorRate;
+    } else if (subcontractorBaseUnits > 0 && storedSubcontractorAmount > 0) {
+      subcontractorRate = storedSubcontractorAmount / subcontractorBaseUnits;
+    }
+  }
+  subcontractorRate = subcontractorRate > 0 ? subcontractorRate : 0;
 
   return {
     revenue: values.revenue,

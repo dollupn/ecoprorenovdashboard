@@ -281,6 +281,28 @@ export const createBaseSiteSchema = () => {
     team_members: z.array(teamMemberSchema).optional().default([]),
     additional_costs: z.array(additionalCostSchema).optional().default([]),
     subcontractor_payment_confirmed: z.boolean().default(false),
+    subcontractor_base_units: z.coerce
+      .number({ invalid_type_error: "Base unités invalide" })
+      .min(0, "Les unités doivent être positives")
+      .default(0),
+    subcontractor_payment_amount: z.coerce
+      .number({ invalid_type_error: "Montant sous-traitant invalide" })
+      .min(0, "Le montant doit être positif")
+      .default(0),
+    subcontractor_payment_units: z.coerce
+      .number({ invalid_type_error: "Unités sous-traitant invalides" })
+      .min(0, "Les unités doivent être positives")
+      .default(0),
+    subcontractor_payment_unit_label: z
+      .string({ required_error: "Libellé d'unité requis" })
+      .trim()
+      .optional()
+      .nullable()
+      .transform((value) => (value ?? "").trim()),
+    subcontractor_payment_rate: z.coerce
+      .number({ invalid_type_error: "Tarif sous-traitant invalide" })
+      .min(0, "Le tarif doit être positif")
+      .default(0),
   });
 };
 
@@ -296,6 +318,11 @@ export type SiteSubmitValues = SiteFormValues & {
   rentability_unit_label: string;
   rentability_unit_count: number;
   rentability_additional_costs_total: number;
+  subcontractor_payment_amount: number;
+  subcontractor_payment_units: number;
+  subcontractor_payment_unit_label: string;
+  subcontractor_payment_rate: number;
+  subcontractor_base_units: number;
 };
 
 export const defaultSiteFormValues: SiteFormValues = {
@@ -329,6 +356,11 @@ export const defaultSiteFormValues: SiteFormValues = {
   additional_costs: [],
   team_members: [],
   subcontractor_payment_confirmed: false,
+  subcontractor_base_units: 0,
+  subcontractor_payment_amount: 0,
+  subcontractor_payment_units: 0,
+  subcontractor_payment_unit_label: "",
+  subcontractor_payment_rate: 0,
 };
 
 export const createSiteSchema = (requiresProjectAssociation: boolean) =>

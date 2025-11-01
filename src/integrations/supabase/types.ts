@@ -1208,6 +1208,11 @@ export type Database = {
           site_ref: string
           status: SiteStatusValue
           subcontractor_id: string | null
+          subcontractor_base_units: number | null
+          subcontractor_payment_amount: number | null
+          subcontractor_payment_rate: number | null
+          subcontractor_payment_unit_label: string | null
+          subcontractor_payment_units: number | null
           subcontractor_payment_confirmed: boolean
           surface_facturee: number | null
           team_members: string[] | null
@@ -1253,6 +1258,11 @@ export type Database = {
           site_ref: string
           status?: SiteStatusValue
           subcontractor_id?: string | null
+          subcontractor_base_units?: number | null
+          subcontractor_payment_amount?: number | null
+          subcontractor_payment_rate?: number | null
+          subcontractor_payment_unit_label?: string | null
+          subcontractor_payment_units?: number | null
           subcontractor_payment_confirmed?: boolean
           surface_facturee?: number | null
           team_members?: string[] | null
@@ -1298,6 +1308,11 @@ export type Database = {
           site_ref?: string
           status?: SiteStatusValue
           subcontractor_id?: string | null
+          subcontractor_base_units?: number | null
+          subcontractor_payment_amount?: number | null
+          subcontractor_payment_rate?: number | null
+          subcontractor_payment_unit_label?: string | null
+          subcontractor_payment_units?: number | null
           subcontractor_payment_confirmed?: boolean
           surface_facturee?: number | null
           team_members?: string[] | null
