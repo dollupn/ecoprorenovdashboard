@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -311,42 +311,44 @@ const ChantierDetails = () => {
   });
   const { mutate: mutateSite, isPending: isUpdating } = updateMutation;
 
-  const handleFormSubmit = useCallback(
-    (values: SiteFormValues) => {
+  const pendingSubmissionRef = useRef<{ values: SiteFormValues; options?: { force?: boolean } } | null>(null);
+
+  const processFormSubmit = useCallback(
+    (values: SiteFormValues, options?: { force?: boolean }) => {
       if (!chantier || !user?.id) return;
       if (isEditingLocked) return;
-      if (isUpdating) return;
-      if (!formState.isDirty) return;
+      if (!options?.force && !formState.isDirty) return;
+
       const filteredCosts = (values.additional_costs ?? [])
         .filter((cost) => cost.label.trim().length > 0)
         .map((cost) => {
-        const amountHT = sanitizeNumber(cost.amount_ht);
-        const montantTVA = sanitizeNumber(cost.montant_tva);
-        const amountTTC = sanitizeNumber(cost.amount_ttc, amountHT + montantTVA);
-        const attachment = cost.attachment?.trim() ?? "";
-        return {
-          label: cost.label.trim(),
-          amount_ht: amountHT,
-          montant_tva: montantTVA,
-          amount_ttc: amountTTC,
-          attachment: attachment.length > 0 ? attachment : null,
-        };
-      });
+          const amountHT = sanitizeNumber(cost.amount_ht);
+          const montantTVA = sanitizeNumber(cost.montant_tva);
+          const amountTTC = sanitizeNumber(cost.amount_ttc, amountHT + montantTVA);
+          const attachment = cost.attachment?.trim() ?? "";
+          return {
+            label: cost.label.trim(),
+            amount_ht: amountHT,
+            montant_tva: montantTVA,
+            amount_ttc: amountTTC,
+            attachment: attachment.length > 0 ? attachment : null,
+          };
+        });
 
-    const travauxChoice = values.travaux_non_subventionnes ?? "NA";
-    const shouldResetTravaux = travauxChoice === "NA";
-    const travauxDescription = shouldResetTravaux ? "" : values.travaux_non_subventionnes_description?.trim() ?? "";
-    const travauxMontant = shouldResetTravaux ? 0 : sanitizeNumber(values.travaux_non_subventionnes_montant);
-    const travauxFinancement = shouldResetTravaux ? false : Boolean(values.travaux_non_subventionnes_financement);
-    const commissionActive = Boolean(values.commission_commerciale_ht);
-    const commissionMontant = commissionActive ? sanitizeNumber(values.commission_commerciale_ht_montant) : 0;
+      const travauxChoice = values.travaux_non_subventionnes ?? "NA";
+      const shouldResetTravaux = travauxChoice === "NA";
+      const travauxDescription = shouldResetTravaux ? "" : values.travaux_non_subventionnes_description?.trim() ?? "";
+      const travauxMontant = shouldResetTravaux ? 0 : sanitizeNumber(values.travaux_non_subventionnes_montant);
+      const travauxFinancement = shouldResetTravaux ? false : Boolean(values.travaux_non_subventionnes_financement);
+      const commissionActive = Boolean(values.commission_commerciale_ht);
+      const commissionMontant = commissionActive ? sanitizeNumber(values.commission_commerciale_ht_montant) : 0;
 
-    const rentabilityResult = calculateRentability(
-      buildRentabilityInputFromSite({
-        ...values,
-        additional_costs: filteredCosts,
-      }),
-    );
+      const rentabilityResult = calculateRentability(
+        buildRentabilityInputFromSite({
+          ...values,
+          additional_costs: filteredCosts,
+        }),
+      );
 
       const serializedNotes = serializeSiteNotes(values.notes, siteDriveFile);
 
@@ -355,23 +357,23 @@ const ChantierDetails = () => {
         project_ref: values.project_ref?.trim() ?? chantier.project_ref ?? "",
         client_name: values.client_name?.trim() ?? chantier.client_name ?? "",
         subcontractor_id: values.subcontractor_id ?? null,
-      additional_costs: filteredCosts,
-      notes: serializedNotes,
-      travaux_non_subventionnes: travauxChoice,
-      travaux_non_subventionnes_description: travauxDescription,
-      travaux_non_subventionnes_montant: travauxMontant,
-      travaux_non_subventionnes_financement: travauxFinancement,
-      commission_commerciale_ht: commissionActive,
-      commission_commerciale_ht_montant: commissionMontant,
-      profit_margin: rentabilityResult.marginRate,
-      rentability_total_costs: rentabilityResult.totalCosts,
-      rentability_margin_total: rentabilityResult.marginTotal,
-      rentability_margin_per_unit: rentabilityResult.marginPerUnit,
-      rentability_margin_rate: rentabilityResult.marginRate,
-      rentability_unit_label: rentabilityResult.unitLabel,
-      rentability_unit_count: rentabilityResult.unitsUsed,
-      rentability_additional_costs_total: rentabilityResult.additionalCostsTotal,
-    };
+        additional_costs: filteredCosts,
+        notes: serializedNotes,
+        travaux_non_subventionnes: travauxChoice,
+        travaux_non_subventionnes_description: travauxDescription,
+        travaux_non_subventionnes_montant: travauxMontant,
+        travaux_non_subventionnes_financement: travauxFinancement,
+        commission_commerciale_ht: commissionActive,
+        commission_commerciale_ht_montant: commissionMontant,
+        profit_margin: rentabilityResult.marginRate,
+        rentability_total_costs: rentabilityResult.totalCosts,
+        rentability_margin_total: rentabilityResult.marginTotal,
+        rentability_margin_per_unit: rentabilityResult.marginPerUnit,
+        rentability_margin_rate: rentabilityResult.marginRate,
+        rentability_unit_label: rentabilityResult.unitLabel,
+        rentability_unit_count: rentabilityResult.unitsUsed,
+        rentability_additional_costs_total: rentabilityResult.additionalCostsTotal,
+      };
 
       mutateSite(payload);
     },
@@ -379,17 +381,46 @@ const ChantierDetails = () => {
       chantier,
       formState.isDirty,
       isEditingLocked,
-      isUpdating,
-      siteDriveFile,
       mutateSite,
+      siteDriveFile,
       user?.id,
     ],
   );
 
-  const handleBlurSave = useCallback(() => {
-    if (isEditingLocked) return;
-    void form.handleSubmit(handleFormSubmit)();
-  }, [form, handleFormSubmit, isEditingLocked]);
+  const submitFormValues = useCallback(
+    (values: SiteFormValues, options?: { force?: boolean }) => {
+      if (isUpdating) {
+        pendingSubmissionRef.current = { values, options };
+        return;
+      }
+
+      processFormSubmit(values, options);
+    },
+    [isUpdating, processFormSubmit],
+  );
+
+  useEffect(() => {
+    if (!isUpdating && pendingSubmissionRef.current) {
+      const nextSubmission = pendingSubmissionRef.current;
+      pendingSubmissionRef.current = null;
+      processFormSubmit(nextSubmission.values, { ...nextSubmission.options, force: true });
+    }
+  }, [isUpdating, processFormSubmit]);
+
+  const handleFormSubmit = useCallback(
+    (values: SiteFormValues) => {
+      submitFormValues(values);
+    },
+    [submitFormValues],
+  );
+
+  const handleBlurSave = useCallback(
+    (options?: { force?: boolean }) => {
+      if (isEditingLocked) return;
+      void form.handleSubmit((values) => submitFormValues(values, options))();
+    },
+    [form, isEditingLocked, submitFormValues],
+  );
 
   const disableInputs = isEditingLocked || isUpdating;
 
@@ -1168,7 +1199,7 @@ const ChantierDetails = () => {
                         onChange={(file) => {
                           setSiteDriveFile(file);
                           if (!isEditingLocked) {
-                            handleBlurSave();
+                            handleBlurSave({ force: true });
                           }
                         }}
                         maxSizeMb={35}
