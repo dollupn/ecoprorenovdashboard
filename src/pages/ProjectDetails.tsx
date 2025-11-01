@@ -88,6 +88,11 @@ import {
 } from "@/components/sites/SiteDialog";
 import { StartChantierDialog } from "@/components/sites/StartChantierDialog";
 import {
+  computeAdditionalCostTTC,
+  normalizeAdditionalCostTvaRate,
+  normalizeAdditionalCostsArray,
+} from "@/components/sites/siteFormSchema";
+import {
   TRAVAUX_NON_SUBVENTIONNES_LABELS,
   TRAVAUX_NON_SUBVENTIONNES_OPTIONS,
   type TravauxNonSubventionnesValue,
@@ -341,13 +346,10 @@ const isUuid = (value: string) =>
 const createEmptyAdditionalCost = (): SiteAdditionalCostFormValue => ({
   label: "",
   amount_ht: 0,
-  montant_tva: 0,
+  tva_rate: 20,
   amount_ttc: 0,
   attachment: null,
 });
-
-const computeAdditionalCostTTC = (amountHT: number, montantTVA: number) =>
-  Math.round((amountHT + montantTVA) * 100) / 100;
 
 const parseNumber = (value: unknown): number | null => {
   if (typeof value === "number") {
@@ -530,51 +532,8 @@ const getProductValorisationFormula = (
   return null;
 };
 
-const normalizeAdditionalCosts = (
-  costs: unknown,
-): SiteAdditionalCostFormValue[] => {
-  if (!Array.isArray(costs)) {
-    return [createEmptyAdditionalCost()];
-  }
-
-  const normalized = costs
-    .map((cost) => {
-      if (!cost || typeof cost !== "object") {
-        return null;
-      }
-
-      const raw = cost as Record<string, unknown>;
-      const label = typeof raw.label === "string" ? raw.label : "";
-
-      const amountHTValue =
-        parseNumber(raw.amount_ht) ??
-        parseNumber(raw.amount) ??
-        parseNumber(raw.amount_ttc) ??
-        0;
-      const montantTvaValue =
-        parseNumber(raw.montant_tva) ??
-        parseNumber(raw.taxes) ??
-        0;
-      const amountTTCValue =
-        parseNumber(raw.amount_ttc) ??
-        parseNumber(raw.total_ttc) ??
-        parseNumber(raw.amount) ??
-        computeAdditionalCostTTC(amountHTValue, montantTvaValue);
-      const attachmentValue =
-        typeof raw.attachment === "string" && raw.attachment.trim().length > 0
-          ? raw.attachment.trim()
-          : null;
-
-      return {
-        label,
-        amount_ht: amountHTValue,
-        montant_tva: montantTvaValue,
-        amount_ttc: amountTTCValue,
-        attachment: attachmentValue,
-      } as SiteAdditionalCostFormValue;
-    })
-    .filter((cost) => cost !== null) as SiteAdditionalCostFormValue[];
-
+const normalizeAdditionalCosts = (costs: unknown): SiteAdditionalCostFormValue[] => {
+  const normalized = normalizeAdditionalCostsArray(costs ?? []);
   return normalized.length > 0 ? normalized : [createEmptyAdditionalCost()];
 };
 
@@ -4226,15 +4185,15 @@ const ProjectDetails = () => {
           .filter((cost) => cost.label.trim().length > 0)
           .map((cost) => {
             const attachment = cost.attachment ? cost.attachment.trim() : "";
-            const montantTVA = Number.isFinite(cost.montant_tva) ? cost.montant_tva : 0;
             const amountHT = Number.isFinite(cost.amount_ht) ? cost.amount_ht : 0;
-            const amountTTC = Number.isFinite(cost.amount_ttc)
-              ? cost.amount_ttc
-              : computeAdditionalCostTTC(amountHT, montantTVA);
+            const tvaRate = normalizeAdditionalCostTvaRate(cost.tva_rate, 20);
+            const amountTTC = computeAdditionalCostTTC(amountHT, tvaRate);
+            const montantTVA = Math.max(0, amountTTC - amountHT);
 
             return {
               label: cost.label.trim(),
               amount_ht: amountHT,
+              tva_rate: tvaRate,
               montant_tva: montantTVA,
               amount_ttc: amountTTC,
               attachment: attachment.length > 0 ? attachment : null,
@@ -5370,26 +5329,14 @@ const ProjectDetails = () => {
                         attachments.length > 1
                           ? `${attachments.length} documents`
                           : primaryAttachment?.name ?? "Document chantier";
-                      const additionalCostCount = Array.isArray(
-                        site.additional_costs,
-                      )
-                        ? site.additional_costs.length
-                        : 0;
-                      const additionalCostTotal = Array.isArray(site.additional_costs)
-                        ? site.additional_costs.reduce((total, rawCost) => {
-                            if (!rawCost || typeof rawCost !== "object") {
-                              return total;
-                            }
-
-                            const cost = rawCost as Record<string, unknown>;
-                            const amountHT = parseNumber(cost.amount_ht) ?? 0;
-                            const montantTVA =
-                              parseNumber(cost.montant_tva) ?? parseNumber(cost.taxes) ?? 0;
-                            const amountTTC = typeof cost.amount_ttc === 'number' ? cost.amount_ttc : (amountHT + montantTVA);
-
-                            return (total as number) + amountTTC;
-                          }, 0)
-                        : 0;
+                      const normalizedAdditionalCosts = normalizeAdditionalCostsArray(
+                        site.additional_costs ?? [],
+                      );
+                      const additionalCostCount = normalizedAdditionalCosts.length;
+                      const additionalCostTotal = normalizedAdditionalCosts.reduce(
+                        (total, cost) => total + cost.amount_ttc,
+                        0,
+                      );
                       const additionalCostDisplay =
                         additionalCostCount > 0
                           ? `${formatCurrency(Number(additionalCostTotal))} (${additionalCostCount})`
@@ -5412,9 +5359,7 @@ const ProjectDetails = () => {
                         travaux_non_subventionnes: site.travaux_non_subventionnes,
                         travaux_non_subventionnes_montant:
                           site.travaux_non_subventionnes_montant,
-                        additional_costs: Array.isArray(site.additional_costs)
-                          ? (site.additional_costs as SiteFormValues["additional_costs"])
-                          : [],
+                        additional_costs: normalizeAdditionalCostsArray(site.additional_costs ?? []),
                         product_name: site.product_name,
                         valorisation_cee: site.valorisation_cee,
                         commission_commerciale_ht: site.commission_commerciale_ht,

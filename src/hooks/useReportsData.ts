@@ -14,6 +14,7 @@ import {
   buildRentabilityInputFromSite,
   type RentabilityInput,
 } from "@/lib/rentability";
+import { normalizeAdditionalCostsArray } from "@/components/sites/siteFormSchema";
 import { withDefaultProductCeeConfig } from "@/lib/prime-cee-unified";
 import { DEFAULT_PROJECT_STATUSES } from "@/lib/projects";
 
@@ -147,9 +148,7 @@ const normalizeStatus = (value: string | null | undefined) =>
     : null;
 
 const resolveSiteRentability = (site: SiteRow) => {
-  const additionalCosts = Array.isArray(site.additional_costs)
-    ? (site.additional_costs as RentabilityInput["additionalCosts"])
-    : [];
+  const additionalCosts = normalizeAdditionalCostsArray(site.additional_costs ?? []);
 
   const computed = calculateRentability(
     buildRentabilityInputFromSite({
