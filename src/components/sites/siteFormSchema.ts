@@ -95,12 +95,7 @@ export const computeAdditionalCostTTC = (
   return Math.round(total * 100) / 100;
 };
 
-export const createBaseSiteSchema = (statusOptions: readonly string[]) => {
-  const statusSchema =
-    statusOptions.length > 0
-      ? z.enum(statusOptions as [string, ...string[]])
-      : z.string().min(1, "Statut requis");
-
+export const createBaseSiteSchema = () => {
   return z.object({
     site_ref: z.string().min(3, "Référence requise"),
     project_ref: z.string(),
@@ -109,7 +104,6 @@ export const createBaseSiteSchema = (statusOptions: readonly string[]) => {
     address: z.string().min(3, "Adresse requise"),
     city: z.string().min(2, "Ville requise"),
     postal_code: z.string().min(4, "Code postal invalide"),
-    status: statusSchema,
     cofrac_status: z.enum(["EN_ATTENTE", "CONFORME", "NON_CONFORME", "A_PLANIFIER"]),
     date_debut: z.string().min(1, "Date de début requise"),
     date_fin_prevue: z.string().optional(),
@@ -178,7 +172,6 @@ export const defaultSiteFormValues: SiteFormValues = {
   address: "",
   city: "",
   postal_code: "",
-  status: "",
   cofrac_status: "EN_ATTENTE",
   date_debut: "",
   date_fin_prevue: "",
@@ -204,11 +197,8 @@ export const defaultSiteFormValues: SiteFormValues = {
   subcontractor_payment_confirmed: false,
 };
 
-export const createSiteSchema = (
-  statusValues: readonly string[],
-  requiresProjectAssociation: boolean,
-) =>
-  createBaseSiteSchema(statusValues).superRefine((data, ctx) => {
+export const createSiteSchema = (requiresProjectAssociation: boolean) =>
+  createBaseSiteSchema().superRefine((data, ctx) => {
     const projectRef = data.project_ref?.trim?.() ?? "";
     const clientName = data.client_name?.trim?.() ?? "";
 

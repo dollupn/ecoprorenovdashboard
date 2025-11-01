@@ -48,8 +48,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
-import { getProjectClientName, DEFAULT_PROJECT_STATUSES } from "@/lib/projects";
+import { getProjectClientName } from "@/lib/projects";
 import { parseSiteNotes, serializeSiteNotes } from "@/lib/sites";
 import {
   Select,
@@ -64,7 +63,6 @@ import type { DriveFileMetadata } from "@/integrations/googleDrive";
 import { GripVertical, Info, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMembers } from "@/features/members/api";
-import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 import { calculateRentability, buildRentabilityInputFromSite } from "@/lib/rentability";
 import {
   Tooltip,
@@ -94,9 +92,6 @@ export type { SiteFormValues, SiteProjectOption, SiteSubmitValues };
 // Helper to get Drive file key
 const getDriveFileKey = (file: DriveFileMetadata | null | undefined) =>
   file?.id ?? file?.webViewLink ?? file?.webContentLink ?? file?.name ?? null;
-
-// Fallback status values
-const fallbackProjectStatusValues = DEFAULT_PROJECT_STATUSES.map((status) => status.value);
 
 interface SiteDialogProps {
   open: boolean;
@@ -469,15 +464,6 @@ const cofracStatusOptions = [
   { value: "A_PLANIFIER", label: "Audit à planifier" },
 ] as const;
 
-const POST_DELIVERY_STATUS_VALUES = new Set([
-  "FACTURE_ENVOYEE",
-  "AH",
-  "AAF",
-  "CLOTURE",
-  "ANNULE",
-  "ABANDONNE",
-]);
-
 export const SiteDialog = ({
   open,
   mode,
@@ -489,7 +475,6 @@ export const SiteDialog = ({
   defaultTab = "avant-chantier",
   readOnly = false,
 }: SiteDialogProps) => {
-  const { statuses: projectStatuses } = useProjectStatuses();
   const parsedNotes = useMemo(() => parseSiteNotes(initialValues?.notes), [initialValues?.notes]);
 
   const [siteDriveFile, setSiteDriveFile] = useState<DriveFileMetadata | null>(parsedNotes.driveFile);
@@ -500,7 +485,6 @@ export const SiteDialog = ({
   const isReadOnly = Boolean(readOnly);
   const resolvedOrgId = orgId ?? initialValues?.org_id ?? null;
   const { data: members = [], isLoading: membersLoading } = useMembers(resolvedOrgId);
-  const statusValues = useMemo(() => projectStatuses.map((status) => status.value), [projectStatuses]);
   const memberNameById = useMemo(() => {
     const result: Record<string, string> = {};
     members.forEach((member) => {
@@ -518,14 +502,6 @@ export const SiteDialog = ({
         name: memberNameById[member.user_id] ?? "Utilisateur",
       })),
     [members, memberNameById],
-  );
-  const resolvedStatusOptions = useMemo(
-    () => (statusValues.length > 0 ? statusValues : fallbackProjectStatusValues),
-    [statusValues],
-  );
-  const statusDisplayOptions = useMemo(
-    () => (projectStatuses.length > 0 ? projectStatuses : DEFAULT_PROJECT_STATUSES),
-    [projectStatuses],
   );
   useEffect(() => {
     if (open) {
@@ -595,15 +571,9 @@ export const SiteDialog = ({
 
     const normalizedTeamMembers = normalizeTeamMembers(initialValues?.team_members, memberNameById);
 
-    const resolvedStatus =
-      initialValues?.status && statusValues.includes(initialValues.status)
-        ? initialValues.status
-        : statusValues[0] ?? defaultSiteFormValues.status;
-
     const values: SiteFormValues = {
       ...defaultSiteFormValues,
       ...initialValues,
-      status: resolvedStatus,
       subcontractor_id:
         typeof initialValues?.subcontractor_id === "string" && initialValues.subcontractor_id.length > 0
           ? initialValues.subcontractor_id
@@ -650,11 +620,6 @@ export const SiteDialog = ({
     ) {
       values.valorisation_cee = 0;
     }
-
-    if (!resolvedStatusOptions.includes(values.status)) {
-      values.status = resolvedStatusOptions[0] ?? "";
-    }
-
     return values;
   }, [initialValues, parsedNotes.text]);
 
@@ -680,10 +645,7 @@ export const SiteDialog = ({
 
   const hasAvailableProjects = availableProjects.length > 0;
 
- const schema = useMemo(
-  () => createSiteSchema(resolvedStatusOptions, hasAvailableProjects),
-  [resolvedStatusOptions, hasAvailableProjects]
-);
+  const schema = useMemo(() => createSiteSchema(hasAvailableProjects), [hasAvailableProjects]);
 
   const resolver = useMemo(() => zodResolver(schema), [schema]);
 
@@ -1018,56 +980,6 @@ export const SiteDialog = ({
 
               <TabsContent value="avant-chantier" className="space-y-6 mt-6">
                 <fieldset disabled={isReadOnly} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="status"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Statut</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value}
-                          disabled={isReadOnly || resolvedStatusOptions.length === 0}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Sélectionner un statut" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {statusDisplayOptions.map((option) => {
-                              const showActivity = POST_DELIVERY_STATUS_VALUES.has(option.value);
-                              const isActive = option.isActive !== false;
-                              const activityLabel = isActive ? "Actif" : "Inactif";
-                              const activityClasses = isActive
-                                ? "border-emerald-500/40 text-emerald-600"
-                                : "border-destructive/40 text-destructive";
-
-                              return (
-                                <SelectItem key={option.value} value={option.value}>
-                                  <div className="flex items-center justify-between gap-3">
-                                    <span>{option.label}</span>
-                                    {showActivity ? (
-                                      <Badge
-                                        variant="outline"
-                                        className={`text-[10px] uppercase tracking-wide ${activityClasses}`}
-                                      >
-                                        {activityLabel}
-                                      </Badge>
-                                    ) : null}
-                                  </div>
-                                </SelectItem>
-                              );
-                            })}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
