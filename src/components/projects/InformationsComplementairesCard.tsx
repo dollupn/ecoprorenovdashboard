@@ -23,6 +23,11 @@ interface InformationsComplementairesCardProps {
   memberName?: string | null;
 }
 
+const surfaceFormatter = new Intl.NumberFormat("fr-FR", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
 export const InformationsComplementairesCard = ({
   project,
   onEdit,
@@ -62,7 +67,9 @@ export const InformationsComplementairesCard = ({
         <InfoRow
           label="Surface isolée"
           value={
-            project.surface_isolee ? `${project.surface_isolee.toFixed(2)} m²` : "—"
+            typeof project.surface_isolee === "number"
+              ? `${surfaceFormatter.format(project.surface_isolee)} m²`
+              : "—"
           }
         />
         <InfoRow label="Nom signataire" value={project.signatory_name || "—"} />

@@ -258,7 +258,8 @@ const formatPercent = (value: number) => percentFormatter.format(value);
 const SURFACE_FACTUREE_TARGETS = [
   "surface_facturee",
   "surface facturée",
-] as const;
+];
+const SURFACE_ISOLEE_TARGETS = ["surface_isolee", "surface isolée"];
 
 const ARCHIVED_STATUS_VALUES = new Set(["ARCHIVED"]);
 const ARCHIVED_STATUS_VALUE = "ARCHIVED";
@@ -2463,6 +2464,32 @@ const ProjectDetails = () => {
     () => getDisplayedProducts(project?.project_products),
     [project?.project_products],
   );
+
+  const projectSurfaceIsolee = useMemo(() => {
+    const firstDisplayedProduct = projectProducts[0];
+
+    if (firstDisplayedProduct?.product) {
+      const surfaceIsoleeValue = getDynamicFieldNumericValue(
+        firstDisplayedProduct.product.params_schema,
+        firstDisplayedProduct.dynamic_params,
+        SURFACE_ISOLEE_TARGETS,
+      );
+
+      if (
+        typeof surfaceIsoleeValue === "number" &&
+        Number.isFinite(surfaceIsoleeValue)
+      ) {
+        return surfaceIsoleeValue;
+      }
+    }
+
+    const fallbackSurface = project?.surface_isolee_m2;
+    if (typeof fallbackSurface === "number" && Number.isFinite(fallbackSurface)) {
+      return fallbackSurface;
+    }
+
+    return null;
+  }, [projectProducts, project?.surface_isolee_m2]);
 
   const {
     data: projectUpdatesState,
@@ -4872,9 +4899,9 @@ const ProjectDetails = () => {
                   building_type: project.building_type,
                   usage: project.usage,
                   surface_facturee: project.surface_batiment_m2,
-                  surface_isolee: project.surface_isolee_m2,
-                  signatory_name: project.signatory_name,
-                  signatory_title: project.signatory_title,
+                  surface_isolee: projectSurfaceIsolee,
+                  nom_signataire: (project as any).nom_signataire,
+                  titre_signataire: (project as any).titre_signataire,
                   siren: project.siren,
                   source: project.source,
                   external_reference: project.external_reference,
