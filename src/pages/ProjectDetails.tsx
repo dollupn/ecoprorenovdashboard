@@ -5304,15 +5304,6 @@ const ProjectDetails = () => {
                                 <span className="font-medium text-foreground">{revenueDisplay}</span>
                               </span>
                             </div>
-                            {typeof site.valorisation_cee === "number" ? (
-                              <div className="flex items-center gap-2">
-                                <HandCoins className="h-4 w-4 text-amber-600" />
-                                <span>
-                                  Valorisation :{" "}
-                                  <span className="font-medium text-foreground">{primeDisplay}</span>
-                                </span>
-                              </div>
-                            ) : null}
                             {site.subcontractor ? (
                               <div className="flex items-center gap-2">
                                 <Building2 className="h-4 w-4 text-primary" />
