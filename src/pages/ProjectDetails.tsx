@@ -1256,15 +1256,6 @@ const InformationsGeneralesTab = ({
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           <div className="flex items-center gap-2">
-            <Euro className="w-4 h-4 text-primary" />
-            <span className="text-muted-foreground">Coût du chantier:</span>
-            <span className="font-medium">
-              {typeof projectCostValue === "number"
-                ? formatCurrency(projectCostValue)
-                : "Non défini"}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
             <HandCoins className="w-4 h-4 text-emerald-600" />
             <span className="text-muted-foreground">Prime CEE:</span>
             <span className="font-medium">
@@ -4930,17 +4921,6 @@ const ProjectDetails = () => {
                     <CardTitle>Finances & planning</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4 text-sm">
-                    <div className="flex items-center gap-2">
-                      <Euro className="w-4 h-4 text-primary" />
-                      <span className="text-muted-foreground">
-                        Coût du chantier:
-                      </span>
-                      <span className="font-medium">
-                        {typeof projectCostValue === "number"
-                          ? formatCurrency(projectCostValue)
-                          : "Non défini"}
-                      </span>
-                    </div>
                     <div className="flex items-center gap-2">
                       <HandCoins className="w-4 h-4 text-emerald-600" />
                       <span className="text-muted-foreground">Prime CEE:</span>
