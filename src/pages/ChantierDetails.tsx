@@ -640,6 +640,19 @@ const ChantierDetails = () => {
 
   const marginRate = rentabilityMetrics.marginRate ?? 0;
   const rentabilityBorder = getStatusGradient(marginRate);
+  const rentabilityIsLighting = rentabilityMetrics.measurementMode === "luminaire";
+  const rentabilityBilledUnitsLabel = rentabilityIsLighting
+    ? "Nombre de luminaires facturés"
+    : "Surface facturée (m²)";
+  const rentabilityExecutedUnitsLabel = rentabilityIsLighting
+    ? "Nombre de luminaires posés"
+    : "Surface posée (m²)";
+  const rentabilityLaborCostLabel = rentabilityIsLighting
+    ? "Coût main d'œuvre / luminaire (€)"
+    : "Coût main d'œuvre / m² (€)";
+  const rentabilityMaterialCostLabel = rentabilityIsLighting
+    ? "Coût matériel / luminaire (€)"
+    : "Coût matériaux / m² (€)";
 
   return (
     <Layout>
@@ -872,11 +885,11 @@ const ChantierDetails = () => {
                       name="surface_facturee"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Surface facturée (m²)</FormLabel>
+                          <FormLabel>{rentabilityBilledUnitsLabel}</FormLabel>
                           <FormControl>
                             <Input
                               type="number"
-                              step="0.1"
+                              step={rentabilityIsLighting ? 1 : 0.1}
                               {...field}
                               onBlur={(event) => {
                                 field.onBlur();
@@ -895,7 +908,7 @@ const ChantierDetails = () => {
                       name="cout_main_oeuvre_m2_ht"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Coût main d'œuvre / m² (€)</FormLabel>
+                          <FormLabel>{rentabilityLaborCostLabel}</FormLabel>
                           <FormControl>
                             <Input
                               type="number"
@@ -918,7 +931,7 @@ const ChantierDetails = () => {
                       name="cout_isolation_m2"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Coût matériaux / m² (€)</FormLabel>
+                          <FormLabel>{rentabilityMaterialCostLabel}</FormLabel>
                           <FormControl>
                             <Input
                               type="number"
@@ -941,11 +954,11 @@ const ChantierDetails = () => {
                       name="isolation_utilisee_m2"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Surface posée (m²)</FormLabel>
+                          <FormLabel>{rentabilityExecutedUnitsLabel}</FormLabel>
                           <FormControl>
                             <Input
                               type="number"
-                              step="0.1"
+                              step={rentabilityIsLighting ? 1 : 0.1}
                               {...field}
                               onBlur={(event) => {
                                 field.onBlur();
@@ -974,16 +987,21 @@ const ChantierDetails = () => {
                               disabled={disableInputs}
                             />
                             <div className="space-y-2">
-                              <FormLabel>Commission commerciale (€/m²)</FormLabel>
+                              <FormLabel>
+                                Commission commerciale ({rentabilityIsLighting ? "€/luminaire" : "€/m²"})
+                              </FormLabel>
                               <p className="text-xs text-muted-foreground">
-                                Activez pour ajouter une commission calculée par mètre carré facturé.
+                                Activez pour ajouter une commission calculée par{" "}
+                                {rentabilityIsLighting ? "luminaire" : "mètre carré"} facturé.
                               </p>
                               <FormField
                                 control={control}
                                 name="commission_eur_per_m2"
                                 render={({ field: amountField }) => (
                                   <FormItem>
-                                    <FormLabel>Montant commission (€/m²)</FormLabel>
+                                    <FormLabel>
+                                      Montant commission ({rentabilityIsLighting ? "€/luminaire" : "€/m²"})
+                                    </FormLabel>
                                     <FormControl>
                                       <Input
                                         type="number"
@@ -1401,7 +1419,7 @@ const ChantierDetails = () => {
                         maxSizeMb={35}
                         accept="application/pdf,image/*"
                         description="Importer des photos ou documents Drive"
-                        helperText="Prise en charge PDF et images"
+                        helperText="Prise en charge PDF et images, avec titres et tags personnalisés"
                         disabled={disableInputs}
                       />
                     </div>
@@ -1459,7 +1477,7 @@ const ChantierDetails = () => {
                       <span className="font-semibold text-foreground">{formatCurrency(rentabilityMetrics.revenue)}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">Coûts totaux</span>
+                      <span className="text-muted-foreground">Coût chantier (HT+TVA)</span>
                       <span className="font-semibold text-foreground">{formatCurrency(rentabilityMetrics.totalCosts)}</span>
                     </div>
                     <div className="flex items-center justify-between">

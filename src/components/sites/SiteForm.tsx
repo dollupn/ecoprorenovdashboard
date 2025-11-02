@@ -822,6 +822,22 @@ export const SiteForm = ({
     rentability.measurementMode === "luminaire"
       ? "Marge (€ / luminaire)"
       : "Marge (€ / m²)";
+  const isLightingMode = rentability.measurementMode === "luminaire";
+  const billedUnitsLabel = isLightingMode
+    ? "Nombre de luminaires facturés"
+    : "Surface facturée (m²)";
+  const executedUnitsLabel = isLightingMode
+    ? "Nombre de luminaires posés"
+    : "Surface utilisée (m²)";
+  const executedUnitsTooltip = isLightingMode
+    ? "incluant les luminaires installés"
+    : "incluant les pertes";
+  const laborCostLabel = isLightingMode
+    ? "Coût main d'œuvre HT (€/luminaire)"
+    : "Coût main d'œuvre HT (€/m²)";
+  const materialCostLabel = isLightingMode
+    ? "Coût matériel (€/luminaire)"
+    : "Coût isolation (€/m²)";
 
   const subcontractorAmountDisplay =
     rentability.subcontractorEstimatedCost > 0
@@ -1186,9 +1202,15 @@ export const SiteForm = ({
                     name="surface_facturee"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Surface facturée (m²)</FormLabel>
+                        <FormLabel>{billedUnitsLabel}</FormLabel>
                         <FormControl>
-                          <Input type="number" min={0} step={0.1} {...field} disabled={isReadOnly} />
+                          <Input
+                            type="number"
+                            min={0}
+                            step={isLightingMode ? 1 : 0.1}
+                            {...field}
+                            disabled={isReadOnly}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1421,9 +1443,11 @@ export const SiteForm = ({
                         />
                       </FormControl>
                       <div className="space-y-1 leading-none">
-                        <FormLabel>Commission commerciale (€/m²)</FormLabel>
+                        <FormLabel>
+                          Commission commerciale ({isLightingMode ? "€/luminaire" : "€/m²"})
+                        </FormLabel>
                         <p className="text-sm text-muted-foreground">
-                          Active le calcul d'une commission commerciale par mètre carré.
+                          Active le calcul d'une commission commerciale par {isLightingMode ? "luminaire" : "mètre carré"}.
                         </p>
                       </div>
                     </FormItem>
@@ -1449,7 +1473,7 @@ export const SiteForm = ({
                     name="cout_main_oeuvre_m2_ht"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Coût main d'œuvre HT (€/m²)</FormLabel>
+                        <FormLabel>{laborCostLabel}</FormLabel>
                         <FormControl>
                           <Input type="number" min={0} step={0.1} {...field} disabled={isReadOnly} />
                         </FormControl>
@@ -1462,7 +1486,7 @@ export const SiteForm = ({
                     name="cout_isolation_m2"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Coût isolation (€/m²)</FormLabel>
+                        <FormLabel>{materialCostLabel}</FormLabel>
                         <FormControl>
                           <Input type="number" min={0} step={0.1} {...field} disabled={isReadOnly} />
                         </FormControl>
@@ -1476,7 +1500,7 @@ export const SiteForm = ({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="flex items-center gap-1">
-                          Surface utilisée (m²)
+                          {executedUnitsLabel}
                           <TooltipProvider delayDuration={150}>
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -1486,13 +1510,19 @@ export const SiteForm = ({
                                 />
                               </TooltipTrigger>
                               <TooltipContent>
-                                <p>incluant les pertes</p>
+                                <p>{executedUnitsTooltip}</p>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
                         </FormLabel>
                         <FormControl>
-                          <Input type="number" min={0} step={0.1} {...field} disabled={isReadOnly} />
+                          <Input
+                            type="number"
+                            min={0}
+                            step={isLightingMode ? 1 : 0.1}
+                            {...field}
+                            disabled={isReadOnly}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1504,19 +1534,6 @@ export const SiteForm = ({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Commission commerciale (€)</FormLabel>
-                        <FormControl>
-                          <Input type="number" min={0} step={50} {...field} disabled={isReadOnly} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="travaux_non_subventionnes"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Travaux non subventionnés (€)</FormLabel>
                         <FormControl>
                           <Input type="number" min={0} step={50} {...field} disabled={isReadOnly} />
                         </FormControl>
@@ -1543,7 +1560,9 @@ export const SiteForm = ({
                       name="commission_eur_per_m2"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Montant commission commerciale (€/m²)</FormLabel>
+                          <FormLabel>
+                            Montant commission commerciale ({isLightingMode ? "€/luminaire" : "€/m²"})
+                          </FormLabel>
                           <FormControl>
                             <Input type="number" min={0} step={0.1} {...field} disabled={isReadOnly} />
                           </FormControl>
@@ -1571,7 +1590,9 @@ export const SiteForm = ({
                       </span>
                     </div>
                     <div className="space-y-1">
-                      <span className="text-xs uppercase tracking-wide text-muted-foreground">Coûts totaux</span>
+                      <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                        Coût chantier (HT+TVA)
+                      </span>
                       <span className="text-sm font-semibold text-foreground">
                         {formattedTotalCosts}
                       </span>
@@ -1656,7 +1677,7 @@ export const SiteForm = ({
                     entityType="site"
                     entityId={initialValues?.site_ref}
                     description="Documents liés au chantier"
-                    helperText="Ajoutez des photos ou des fichiers stockés sur Google Drive."
+                    helperText="Ajoutez des photos ou documents Drive, personnalisez le titre et les tags."
                     disabled={isReadOnly}
                   />
                 </div>
@@ -1669,7 +1690,7 @@ export const SiteForm = ({
                 {isReadOnly ? "Fermer" : "Annuler"}
               </Button>
               {isReadOnly ? null : (
-                <Button type="submit">{mode === "create" ? "Créer le chantier" : "Enregistrer"}</Button>
+                <Button type="submit">{mode === "create" ? "Créer le chantier" : "Mettre à jour"}</Button>
               )}
             </div>
           </form>
