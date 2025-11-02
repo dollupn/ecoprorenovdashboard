@@ -4628,6 +4628,15 @@ const ProjectDetails = () => {
                 await refetch();
               }}
             />
+            <Button
+              variant="secondary"
+              onClick={() => setStartChantierDialogOpen(true)}
+              disabled={startChantierDisabled}
+              title={startChantierDisabledReason}
+            >
+              <Hammer className="mr-2 h-4 w-4" />
+              Démarrer un chantier
+            </Button>
             <Button variant="outline" onClick={handleOpenQuote}>
               <FileText className="w-4 h-4 mr-2" />
               Générer un devis
