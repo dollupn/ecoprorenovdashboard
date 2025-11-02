@@ -11,6 +11,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout/Layout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ChantierDetailsForm } from "@/components/chantiers/ChantierDetailsForm";
 import {
   Card,
   CardContent,
@@ -5083,57 +5084,33 @@ const ProjectDetails = () => {
             />
           </TabsContent>
           <TabsContent value="chantiers" className="space-y-6">
-            <Card className="shadow-card bg-gradient-card border-0">
-              <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div className="space-y-1">
-                  <CardTitle>Chantiers du projet</CardTitle>
-                  <CardDescription>
-                    Créez, éditez et suivez les chantiers rattachés à{" "}
-                    {project.project_ref}.
-                  </CardDescription>
-                </div>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setStartChantierDialogOpen(true)}
-                  className="inline-flex items-center gap-2"
-                  disabled={startChantierDisabled}
-                  title={startChantierDisabledReason}
-                >
-                  <Hammer className="h-4 w-4" />
-                  Démarrer Chantier
-                </Button>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {siteEditorMode === "create" ? (
-                  <Card className="border border-primary/40 bg-primary/5">
-                    <CardHeader>
-                      <CardTitle className="text-base">
-                        {siteEditorHeading?.title ?? "Nouveau chantier"}
-                      </CardTitle>
-                      {siteEditorHeading?.description ? (
-                        <CardDescription>{siteEditorHeading.description}</CardDescription>
-                      ) : null}
-                    </CardHeader>
-                    <CardContent>
-                      <SiteForm
-                        mode="create"
-                        onCancel={resetSiteEditor}
-                        onSubmit={handleSubmitSite}
-                        initialValues={siteInitialValues}
-                        orgId={currentOrgId}
-                        projects={projectSiteOptions}
-                        defaultTab={siteEditorDefaultTab}
-                        readOnly={siteEditorReadOnly}
-                      />
-                    </CardContent>
-                  </Card>
-                ) : null}
-                {projectSitesLoading ? (
-                  <div className="py-6 text-sm text-muted-foreground">
-                    Chargement des chantiers...
+            {projectSitesLoading ? (
+              <div className="py-6 text-sm text-muted-foreground">
+                Chargement des chantiers...
+              </div>
+            ) : projectSites.length === 0 ? (
+              <Card className="shadow-card bg-gradient-card border-0">
+                <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="space-y-1">
+                    <CardTitle>Chantiers du projet</CardTitle>
+                    <CardDescription>
+                      Créez, éditez et suivez les chantiers rattachés à{" "}
+                      {project.project_ref}.
+                    </CardDescription>
                   </div>
-                ) : projectSites.length === 0 ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setStartChantierDialogOpen(true)}
+                    className="inline-flex items-center gap-2"
+                    disabled={startChantierDisabled}
+                    title={startChantierDisabledReason}
+                  >
+                    <Hammer className="h-4 w-4" />
+                    Démarrer Chantier
+                  </Button>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   <div className="space-y-4 py-10 text-center">
                     <div className="space-y-2">
                       <CardTitle className="text-lg">
@@ -5159,260 +5136,21 @@ const ProjectDetails = () => {
                       </p>
                     ) : null}
                   </div>
-                ) : (
-                  <div className="space-y-4">
-                    {projectSites.map((site) => {
-                      const cofracStatus = (site.cofrac_status ??
-                        "EN_ATTENTE") as CofracStatus;
-                      const teamMembersLabel = formatTeamMembers(
-                        site.team_members,
-                      );
-                      const progressValue =
-                        typeof site.progress_percentage === "number"
-                          ? Math.min(Math.max(site.progress_percentage, 0), 100)
-                          : 0;
-                      const parsedSiteNotes = parseSiteNotes(site.notes);
-                      const internalNotes = parsedSiteNotes.text?.trim() ?? "";
-                      const hasInternalNotes = internalNotes.length > 0;
-                      const attachments = parsedSiteNotes.attachments;
-                      const primaryAttachment = attachments[0]?.file ?? parsedSiteNotes.driveFile;
-                      const driveLink =
-                        primaryAttachment?.webViewLink ?? primaryAttachment?.webContentLink ?? null;
-                      const hasDriveFile = Boolean(driveLink) || attachments.length > 0;
-                      const extraAttachmentCount = Math.max(0, attachments.length - 1);
-                      const driveLabel =
-                        attachments.length > 1
-                          ? `${attachments.length} documents`
-                          : attachments[0]?.title ?? primaryAttachment?.name ?? "Document chantier";
-                      const normalizedAdditionalCosts = normalizeAdditionalCostsArray(
-                        site.additional_costs ?? [],
-                      );
-                      const additionalCostCount = normalizedAdditionalCosts.length;
-                      const additionalCostTotal = normalizedAdditionalCosts.reduce(
-                        (total, cost) => total + cost.amount_ttc,
-                        0,
-                      );
-                      const additionalCostDisplay =
-                        additionalCostCount > 0
-                          ? `${formatCurrency(Number(additionalCostTotal))} (${additionalCostCount})`
-                          : "—";
-                      const revenueDisplay =
-                        typeof site.revenue === "number"
-                          ? formatCurrency(site.revenue)
-                          : "—";
-                      const primeDisplay =
-                        typeof site.valorisation_cee === "number"
-                          ? formatCurrency(site.valorisation_cee)
-                          : "—";
-                      const rentabilityInput = buildRentabilityInputFromSite({
-                        revenue: site.revenue,
-                        cout_main_oeuvre_m2_ht: site.cout_main_oeuvre_m2_ht,
-                        cout_isolation_m2: site.cout_isolation_m2,
-                        isolation_utilisee_m2: site.isolation_utilisee_m2,
-                        surface_facturee: site.surface_facturee,
-                        montant_commission: site.montant_commission,
-                        travaux_non_subventionnes: site.travaux_non_subventionnes,
-                        travaux_non_subventionnes_montant:
-                          site.travaux_non_subventionnes_montant,
-                        additional_costs: normalizeAdditionalCostsArray(site.additional_costs ?? []),
-                        product_name: site.product_name,
-                        valorisation_cee: site.valorisation_cee,
-                        subcontractor_pricing_details: (site.subcontractor as any)?.pricing_details ?? null,
-                        subcontractor_payment_confirmed: site.subcontractor_payment_confirmed,
-                        project_prime_cee: project?.prime_cee ?? undefined,
-                        project_prime_cee_total_cents: project?.prime_cee_total_cents ?? undefined,
-                        project_category: project?.product_name ?? site.product_name ?? undefined,
-                      });
-                      const computedRentability = calculateRentability(rentabilityInput);
-                      const rentabilityUnitLabel =
-                        typeof site.rentability_unit_label === "string" &&
-                        site.rentability_unit_label.trim().length > 0
-                          ? site.rentability_unit_label
-                          : computedRentability.unitLabel;
-                      const rentabilityMetrics = {
-                        ca: computedRentability.ca,
-                        baseUnits: computedRentability.baseUnits,
-                        additionalCostsTotal:
-                          typeof site.rentability_additional_costs_total === "number"
-                            ? site.rentability_additional_costs_total
-                            : computedRentability.additionalCostsTotal,
-                        totalCosts:
-                          typeof site.rentability_total_costs === "number"
-                            ? site.rentability_total_costs
-                            : computedRentability.totalCosts,
-                        marginPerUnit:
-                          typeof site.rentability_margin_per_unit === "number"
-                            ? site.rentability_margin_per_unit
-                            : computedRentability.marginPerUnit,
-                        marginTotal:
-                          typeof site.rentability_margin_total === "number"
-                            ? site.rentability_margin_total
-                            : computedRentability.marginTotal,
-                        marginRate:
-                          typeof site.rentability_margin_rate === "number"
-                            ? site.rentability_margin_rate
-                            : computedRentability.marginRate,
-                        unitLabel: rentabilityUnitLabel,
-                        primeCee: computedRentability.primeCee,
-                      };
-                      const rentabilityMarginPerUnitLabel =
-                        rentabilityMetrics.unitLabel === "luminaire"
-                          ? "Marge (€ / luminaire)"
-                          : "Marge (€ / m²)";
-                      const rentabilityAdditionalCostsDisplay = formatCurrency(
-                        rentabilityMetrics.additionalCostsTotal,
-                      );
-                      const rentabilityTotalCostsDisplay = formatCurrency(
-                        rentabilityMetrics.totalCosts,
-                      );
-                      const rentabilityMarginTotalDisplay = formatCurrency(
-                        rentabilityMetrics.marginTotal,
-                      );
-                      const rentabilityMarginRateDisplay = Number.isFinite(
-                        rentabilityMetrics.marginRate,
-                      )
-                        ? formatPercent(rentabilityMetrics.marginRate)
-                        : "—";
-                      const rentabilityMarginPerUnitDisplay = Number.isFinite(
-                        rentabilityMetrics.marginPerUnit,
-                      )
-                        ? `${formatDecimal(rentabilityMetrics.marginPerUnit)} € / ${rentabilityMetrics.unitLabel}`
-                        : `— / ${rentabilityMetrics.unitLabel}`;
-                      const travauxChoice = normalizeTravauxNonSubventionnesValue(
-                        site.travaux_non_subventionnes,
-                      );
-                      const travauxLabel =
-                        TRAVAUX_NON_SUBVENTIONNES_LABELS[travauxChoice] ?? "N/A";
-                      const hasTravauxDetails = travauxChoice !== "NA";
-                      const travauxMontant =
-                        typeof site.travaux_non_subventionnes_montant === "number" &&
-                        Number.isFinite(site.travaux_non_subventionnes_montant)
-                          ? site.travaux_non_subventionnes_montant
-                          : 0;
-                      const commissionPerM2Enabled = false;
-                      const commissionPerM2Value = 0;
-
-                      const addressDisplay = site.address
-                        ? `${site.address} · ${site.postal_code} ${site.city}`
-                        : `${site.city} (${site.postal_code})`;
-
-                      const isEditingSite =
-                        siteEditorMode === "edit" && editingSiteId === site.id;
-
-                      return (
-                        <div key={site.id} className="space-y-4">
-                          <Card className="border border-border/60 bg-background/60">
-                          <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                            <div>
-                              <CardTitle className="text-base">{site.site_ref}</CardTitle>
-                              <CardDescription>{addressDisplay}</CardDescription>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              <Badge variant="outline" style={badgeStyle}>
-                                {statusLabel}
-                              </Badge>
-                              <Badge variant="outline">{getCofracStatusLabel(cofracStatus)}</Badge>
-                            </div>
-                          </CardHeader>
-                          <CardContent className="grid gap-3 text-sm text-muted-foreground md:grid-cols-2 xl:grid-cols-4">
-                            <div className="flex items-center gap-2">
-                              <Calendar className="h-4 w-4 text-primary" />
-                              <span>
-                                Début :{" "}
-                                <span className="font-medium text-foreground">
-                                  {new Date(site.date_debut).toLocaleDateString("fr-FR")}
-                                </span>
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Calendar className="h-4 w-4 text-primary" />
-                              <span>
-                                Fin prévue :{" "}
-                                <span className="font-medium text-foreground">
-                                  {site.date_fin_prevue
-                                    ? new Date(site.date_fin_prevue).toLocaleDateString("fr-FR")
-                                    : "—"}
-                                </span>
-                              </span>
-                            </div>
-                            <div>
-                              <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
-                                <span>Avancement</span>
-                                <span className="font-medium text-foreground">{progressValue}%</span>
-                              </div>
-                              <Progress value={progressValue} />
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Euro className="h-4 w-4 text-emerald-600" />
-                              <span>
-                                CA :{" "}
-                                <span className="font-medium text-foreground">{revenueDisplay}</span>
-                              </span>
-                            </div>
-                            {site.subcontractor ? (
-                              <div className="flex items-center gap-2">
-                                <Building2 className="h-4 w-4 text-primary" />
-                                <span>
-                                  Sous-traitant :{" "}
-                                  <span className="font-medium text-foreground">
-                                    {site.subcontractor.name}
-                                  </span>
-                                </span>
-                              </div>
-                            ) : null}
-                            {teamMembersLabel ? (
-                              <div className="flex items-center gap-2">
-                                <Users className="h-4 w-4 text-primary" />
-                                <span>
-                                  Équipe :{" "}
-                                  <span className="font-medium text-foreground">{teamMembersLabel}</span>
-                                </span>
-                              </div>
-                            ) : null}
-                          </CardContent>
-                            <CardFooter className="flex justify-end gap-2">
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => navigate(`/chantiers/${site.id}`)}
-                              >
-                                <ChevronRight className="h-4 w-4" />
-                                Voir détails complets
-                              </Button>
-                            </CardFooter>
-                          </Card>
-                          {isEditingSite && siteEditorMode === "edit" ? (
-                            <Card className="border border-primary/40 bg-primary/5">
-                              <CardHeader>
-                                <CardTitle className="text-base">
-                                  {siteEditorHeading?.title ?? "Modifier le chantier"}
-                                </CardTitle>
-                                {siteEditorHeading?.description ? (
-                                  <CardDescription>{siteEditorHeading.description}</CardDescription>
-                                ) : null}
-                              </CardHeader>
-                              <CardContent>
-                                <SiteForm
-                                  mode="edit"
-                                  onCancel={resetSiteEditor}
-                                  onSubmit={handleSubmitSite}
-                                  initialValues={siteInitialValues}
-                                  orgId={currentOrgId}
-                                  projects={projectSiteOptions}
-                                  defaultTab={siteEditorDefaultTab}
-                                  readOnly={siteEditorReadOnly}
-                                />
-                              </CardContent>
-                            </Card>
-                          ) : null}
-                        </div>
-                      );
-
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            ) : (
+              projectSites.map((site) => (
+                <ChantierDetailsForm
+                  key={site.id}
+                  chantier={site as any}
+                  orgId={currentOrgId}
+                  embedded={true}
+                  onUpdate={() => {
+                    void refetchProjectSites();
+                  }}
+                />
+              ))
+            )}
           </TabsContent>
         </Tabs>
 
