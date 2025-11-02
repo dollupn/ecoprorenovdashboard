@@ -1347,10 +1347,10 @@ const ChantierDetails = () => {
                           <FormLabel>Sous-traitant</FormLabel>
                           <Select
                             onValueChange={(value) => {
-                              field.onChange(value);
+                              field.onChange(value === "none" ? null : value);
                               handleBlurSave();
                             }}
-                            value={field.value ?? ""}
+                            value={field.value ?? "none"}
                             disabled={disableInputs}
                           >
                             <FormControl>
@@ -1359,7 +1359,7 @@ const ChantierDetails = () => {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              <SelectItem value="">Aucun</SelectItem>
+                              <SelectItem value="none">Aucun</SelectItem>
                               {(subcontractorsQuery.data ?? []).map((option) => (
                                 <SelectItem key={option.id} value={option.id}>
                                   {option.name}
