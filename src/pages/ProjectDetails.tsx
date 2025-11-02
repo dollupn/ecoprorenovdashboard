@@ -1153,7 +1153,12 @@ const InformationsGeneralesTab = ({
                 <p className="text-sm text-muted-foreground">Email</p>
                 <p className="font-medium flex items-center gap-2">
                   <Mail className="w-4 h-4 text-primary" />
-                  {projectEmail}
+                  <a
+                    href={`mailto:${projectEmail}`}
+                    className="transition-colors hover:text-primary"
+                  >
+                    {projectEmail}
+                  </a>
                 </p>
               </div>
             )}
@@ -4469,7 +4474,7 @@ const ProjectDetails = () => {
   };
 
   const projectCostValue = project?.estimated_value ?? null;
-  const projectEmail = (() => {
+  const projectEmail = useMemo(() => {
     if (!project) return null;
 
     const projectWithEmails = project as Project & {
@@ -4490,7 +4495,7 @@ const ProjectDetails = () => {
     }
 
     return null;
-  })();
+  }, [project]);
   const driveFolderUrl = project
     ? ((project as Project & { drive_folder_url?: string | null })
         .drive_folder_url ?? null)
