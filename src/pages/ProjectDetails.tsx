@@ -5310,10 +5310,6 @@ const ProjectDetails = () => {
                         additional_costs: normalizeAdditionalCostsArray(site.additional_costs ?? []),
                         product_name: site.product_name,
                         valorisation_cee: site.valorisation_cee,
-                        commission_eur_per_m2_enabled:
-                          (site.commission_eur_per_m2_enabled ?? false) as boolean,
-                        commission_eur_per_m2:
-                          (site.commission_eur_per_m2 ?? 0) as number,
                         subcontractor_pricing_details: (site.subcontractor as any)?.pricing_details ?? null,
                         subcontractor_payment_confirmed: site.subcontractor_payment_confirmed,
                         project_prime_cee: project?.prime_cee ?? undefined,
@@ -5386,17 +5382,8 @@ const ProjectDetails = () => {
                         Number.isFinite(site.travaux_non_subventionnes_montant)
                           ? site.travaux_non_subventionnes_montant
                           : 0;
-                      const commissionPerM2Enabled = Boolean(
-                        site.commission_eur_per_m2_enabled ??
-                          (site as unknown as { commission_commerciale_ht?: unknown }).commission_commerciale_ht,
-                      );
-                      const commissionPerM2Value =
-                        parseNumber(site.commission_eur_per_m2) ??
-                        parseNumber(
-                          (site as unknown as { commission_commerciale_ht_montant?: unknown })
-                            .commission_commerciale_ht_montant,
-                        ) ??
-                        0;
+                      const commissionPerM2Enabled = false;
+                      const commissionPerM2Value = 0;
 
                       const addressDisplay = site.address
                         ? `${site.address} · ${site.postal_code} ${site.city}`

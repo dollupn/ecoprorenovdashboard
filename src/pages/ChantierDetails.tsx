@@ -275,27 +275,10 @@ const ChantierDetails = () => {
       valorisation_cee: sanitizeNumber(chantier.valorisation_cee),
       subcontractor_id: chantier.subcontractor_id ?? null,
       subcontractor_payment_confirmed: Boolean(chantier.subcontractor_payment_confirmed),
-      subcontractor_base_units: sanitizeNumber(chantier.subcontractor_base_units),
-      subcontractor_payment_amount: sanitizeNumber(chantier.subcontractor_payment_amount),
-      subcontractor_payment_units: sanitizeNumber(chantier.subcontractor_payment_units),
-      subcontractor_payment_unit_label: chantier.subcontractor_payment_unit_label?.trim() ?? "",
-      subcontractor_payment_rate: sanitizeNumber(chantier.subcontractor_payment_rate),
       travaux_non_subventionnes: normalizeTravauxNonSubventionnesValue(
         chantier.travaux_non_subventionnes,
       ),
       travaux_non_subventionnes_montant: sanitizeNumber(chantier.travaux_non_subventionnes_montant),
-      commission_eur_per_m2_enabled:
-        typeof chantier.commission_eur_per_m2_enabled === "boolean"
-          ? chantier.commission_eur_per_m2_enabled
-          : Boolean(
-              (chantier as unknown as { commission_commerciale_ht?: unknown })
-                .commission_commerciale_ht,
-            ),
-      commission_eur_per_m2: sanitizeNumber(
-        chantier.commission_eur_per_m2 ??
-          (chantier as unknown as { commission_commerciale_ht_montant?: unknown })
-            .commission_commerciale_ht_montant,
-      ),
       notes: parsedNotes.text ?? "",
       additional_costs: normalizeAdditionalCostsArray(chantier.additional_costs ?? []),
     };

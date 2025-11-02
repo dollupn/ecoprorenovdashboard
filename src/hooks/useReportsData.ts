@@ -151,8 +151,6 @@ const resolveSiteRentability = (site: SiteRow) => {
       additional_costs: additionalCosts ?? [],
       product_name: site.product_name,
       valorisation_cee: site.valorisation_cee ?? 0,
-      commission_eur_per_m2_enabled: site.commission_eur_per_m2_enabled,
-      commission_eur_per_m2: site.commission_eur_per_m2,
       subcontractor_payment_confirmed: site.subcontractor_payment_confirmed ?? false,
       project_category: site.product_name,
     }),
