@@ -87,6 +87,7 @@ import {
   type SiteSubmitValues,
 } from "@/components/sites/SiteDialog";
 import { StartChantierDialog } from "@/components/sites/StartChantierDialog";
+import { InformationsComplementairesCard } from "@/components/projects/InformationsComplementairesCard";
 import {
   computeAdditionalCostTTC,
   normalizeAdditionalCostTvaRate,
@@ -2236,6 +2237,7 @@ const ProjectDetails = () => {
   );
   const [siteInitialValues, setSiteInitialValues] =
     useState<Partial<SiteFormValues>>();
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!projectStatusesError) return;
@@ -4579,10 +4581,10 @@ const ProjectDetails = () => {
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            <h1 className="mt-2 text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+            <h1 className="mt-2 text-2xl font-bold text-primary">
               {project.project_ref}
             </h1>
-            <p className="text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {productCodes.length > 0
                 ? productCodes.join(", ")
                 : "Aucun code produit"}{" "}
@@ -4615,19 +4617,6 @@ const ProjectDetails = () => {
             <Button variant="outline" onClick={handleOpenQuote}>
               <FileText className="w-4 h-4 mr-2" />
               Générer un devis
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                void handleCreateSite();
-              }}
-            >
-              <Hammer className="w-4 h-4 mr-2" />
-              Créer un chantier
-            </Button>
-            <Button variant="outline" onClick={handleOpenDocuments}>
-              <FolderOpen className="w-4 h-4 mr-2" />
-              Voir les media
             </Button>
             {(isAdmin || project.user_id === user?.id) &&
               !isProjectArchived && (
@@ -4699,94 +4688,90 @@ const ProjectDetails = () => {
           </div>
         </div>
 
-        <div className="sticky top-0 z-20">
-          <Card className="border border-border/60 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-sm">
-            <CardContent className="flex flex-col gap-4 p-4 md:p-6">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline" className={headerBadgeClassName}>
-                  <UserRound className={headerBadgeIconClassName} />
-                  <span className="font-medium text-foreground">Client {clientName}</span>
-                </Badge>
-                {companyName ? (
-                  <Badge variant="outline" className={headerBadgeClassName}>
-                    <Building2 className={headerBadgeIconClassName} />
-                    <span className="text-foreground">Entreprise {companyName}</span>
-                  </Badge>
-                ) : null}
-                {sirenValue ? (
-                  <Badge variant="outline" className={headerBadgeClassName}>
-                    <ClipboardList className={headerBadgeIconClassName} />
-                    <span className="text-foreground">SIREN {sirenValue}</span>
-                  </Badge>
-                ) : null}
+        <Card className="border border-border/60 bg-background/95 backdrop-blur shadow-sm">
+          <CardContent className="flex flex-col gap-4 p-4 md:p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <UserRound className="h-4 w-4 text-primary" />
+                  <span className="text-sm text-muted-foreground">Client</span>
+                </div>
+                <p className="font-medium">{clientName}</p>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {formattedAddress ? (
-                  <Badge
-                    variant="outline"
-                    className={`${headerBadgeClassName} max-w-full`}
-                  >
-                    <MapPin className={headerBadgeIconClassName} />
-                    <span className="text-foreground">Adresse {formattedAddress}</span>
-                  </Badge>
-                ) : null}
-                {phoneValue ? (
-                  <Badge variant="outline" className={headerBadgeClassName}>
-                    <Phone className={headerBadgeIconClassName} />
-                    <span className="text-foreground">Téléphone {phoneValue}</span>
-                  </Badge>
-                ) : null}
-                {projectEmail ? (
-                  <Badge
-                    variant="outline"
-                    className={`${headerBadgeClassName} max-w-full`}
-                  >
-                    <Mail className={headerBadgeIconClassName} />
-                    <span className="text-foreground">Email {projectEmail}</span>
-                  </Badge>
-                ) : null}
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {primeValueLabel ? (
-                  <Badge variant="outline" className={headerBadgeClassName}>
-                    <HandCoins className={headerBadgeIconClassName} />
-                    <span className="text-foreground">Prime CEE {primeValueLabel}</span>
-                  </Badge>
-                ) : null}
-                {subcontractorName ? (
-                  <Badge variant="outline" className={headerBadgeClassName}>
-                    <Users className={headerBadgeIconClassName} />
-                    <span className="text-foreground">Sous-traitant {subcontractorName}</span>
-                  </Badge>
-                ) : null}
-              </div>
-              <div className="space-y-2 rounded-lg border border-dashed border-border/60 bg-muted/30 p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                    <Calendar className="h-4 w-4 text-primary" />
-                    Planification
+              
+              {companyName && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-primary" />
+                    <span className="text-sm text-muted-foreground">Entreprise</span>
                   </div>
-                  <Badge variant="outline" className={headerBadgeClassName}>
-                    <Zap className={headerBadgeIconClassName} />
-                    <span className="text-foreground">{plannedProgressLabel}</span>
-                  </Badge>
+                  <p className="font-medium">{companyName}</p>
                 </div>
-                <Progress value={plannedProgressValue} className="h-2" />
-                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <CircleDot className="h-3 w-3" />
-                    Début : {plannedStartLabel}
-                  </span>
-                  <ChevronRight className="h-3 w-3" />
-                  <span className="flex items-center gap-1">
-                    <CircleDot className="h-3 w-3" />
-                    Fin : {plannedEndLabel}
-                  </span>
+              )}
+
+              {formattedAddress && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-primary" />
+                    <span className="text-sm text-muted-foreground">Adresse</span>
+                  </div>
+                  <p className="font-medium text-sm">{formattedAddress}</p>
+                </div>
+              )}
+
+              {phoneValue && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-4 w-4 text-primary" />
+                    <span className="text-sm text-muted-foreground">Téléphone</span>
+                  </div>
+                  <p className="font-medium">
+                    <a href={`tel:${phoneValue}`} className="hover:text-primary transition-colors">
+                      {phoneValue}
+                    </a>
+                  </p>
+                </div>
+              )}
+
+              {projectEmail && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-primary" />
+                    <span className="text-sm text-muted-foreground">Email</span>
+                  </div>
+                  <p className="font-medium text-sm">
+                    <a href={`mailto:${projectEmail}`} className="hover:text-primary transition-colors">
+                      {projectEmail}
+                    </a>
+                  </p>
+                </div>
+              )}
+
+              {primeValueLabel && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <HandCoins className="h-4 w-4 text-primary" />
+                    <span className="text-sm text-muted-foreground">Prime CEE (totale)</span>
+                  </div>
+                  <p className="font-bold text-lg text-primary">{primeValueLabel}</p>
+                </div>
+              )}
+            </div>
+
+            {nextAppointmentDetails && (
+              <div className="mt-4 pt-4 border-t">
+                <div className="flex items-center gap-2 text-sm">
+                  <Calendar className="h-4 w-4 text-primary" />
+                  <span className="text-muted-foreground">RDV Planifié</span>
+                  <span className="font-semibold">{nextAppointmentDetails.formattedDate}</span>
+                  {nextAppointmentDetails.metadata && (
+                    <span className="text-muted-foreground">({nextAppointmentDetails.metadata})</span>
+                  )}
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        </div>
+            )}
+          </CardContent>
+        </Card>
 
         <Tabs
           value={activeTab}
@@ -4800,162 +4785,32 @@ const ProjectDetails = () => {
             <TabsTrigger value="journal">Journal</TabsTrigger>
           </TabsList>
           <TabsContent value="details" className="space-y-6">
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-              <Card className="shadow-card bg-gradient-card border-0 xl:col-span-2">
-                <CardHeader>
-                  <CardTitle>Informations générales</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">Client</p>
-                      <p className="font-medium flex items-center gap-2">
-                        <UserRound className="w-4 h-4 text-primary" />
-                        {getProjectClientName(project)}
-                      </p>
-                      {project.company && (
-                        <p className="text-sm text-muted-foreground">
-                          {project.company}
-                        </p>
-                      )}
-                      {project.siren && (
-                        <p className="flex items-center gap-2 font-medium">
-                          <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                            SIREN
-                          </span>
-                          <span>{project.siren}</span>
-                        </p>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">Téléphone</p>
-                      <p className="font-medium flex items-center gap-2">
-                        <Phone className="w-4 h-4 text-primary" />
-                        {project.phone ?? "Non renseigné"}
-                      </p>
-                    </div>
-                    {projectEmail && (
-                      <div className="space-y-2">
-                        <p className="text-sm text-muted-foreground">Email</p>
-                        <p className="font-medium flex items-center gap-2">
-                          <Mail className="w-4 h-4 text-primary" />
-                          {projectEmail}
-                        </p>
-                      </div>
-                    )}
-                    <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">Adresse</p>
-                      <p className="font-medium flex items-center gap-2">
-                        <MapPin className="w-4 h-4 text-primary" />
-                        {(project as Project & { address?: string }).address
-                          ? [
-                              (project as Project & { address?: string })
-                                .address,
-                              [project.postal_code, project.city]
-                                .filter(Boolean)
-                                .join(" "),
-                            ]
-                              .filter(
-                                (part) =>
-                                  part && part.toString().trim().length > 0,
-                              )
-                              .join(", ")
-                          : `${project.city} (${project.postal_code})`}
-                      </p>
-                    </div>
-                    <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">Source</p>
-                      <p className="font-medium flex items-center gap-2">
-                        <UserRound className="w-4 h-4 text-primary" />
-                        {project.source && project.source.trim().length > 0
-                          ? project.source
-                          : "Non renseigné"}
-                      </p>
-                    </div>
-                    <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">Assigné à</p>
-                      <p className="font-medium">{project.assigned_to}</p>
-                    </div>
-                  </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <InformationsComplementairesCard
+                project={{
+                  assigned_to: project.assigned_to,
+                  building_type: project.building_type,
+                  usage: project.usage,
+                  surface_facturee: project.surface_batiment_m2,
+                  surface_isolee: project.surface_isolee_m2,
+                  nom_signataire: (project as any).nom_signataire,
+                  titre_signataire: (project as any).titre_signataire,
+                  siren: project.siren,
+                  source: project.source,
+                  external_ref: (project as any).external_ref,
+                  hq_address: project.hq_address,
+                  hq_city: project.hq_city,
+                  hq_postal_code: project.hq_postal_code,
+                }}
+                onEdit={() => setEditDialogOpen(true)}
+                memberName={memberNameById[project.assigned_to ?? ""] ?? null}
+              />
 
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">
-                        Type de bâtiment
-                      </p>
-                      <p className="font-medium flex items-center gap-2">
-                        <Building2 className="w-4 h-4 text-primary" />
-                        {project.building_type ?? "Non renseigné"}
-                      </p>
-                    </div>
-                    <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">Usage</p>
-                      <p className="font-medium">
-                        {project.usage ?? "Non renseigné"}
-                      </p>
-                    </div>
-                    <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">
-                        Surface bâtiment
-                      </p>
-                      <p className="font-medium">
-                        {typeof project.surface_batiment_m2 === "number"
-                          ? `${project.surface_batiment_m2} m²`
-                          : "Non renseigné"}
-                      </p>
-                    </div>
-                    <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">
-                        Surface isolée
-                      </p>
-                      <p className="font-medium">
-                        {typeof project.surface_isolee_m2 === "number"
-                          ? `${project.surface_isolee_m2} m²`
-                          : "Non renseigné"}
-                      </p>
-                    </div>
-                  </div>
-              </CardContent>
-            </Card>
-
-            <Card className="shadow-card border border-dashed border-primary/20">
-              <CardHeader>
-                <CardTitle>Démarrer un chantier</CardTitle>
-                <CardDescription>
-                  Initialisez rapidement un chantier opérationnel synchronisé avec
-                  ce projet.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <p className="text-sm text-muted-foreground">
-                  Créez un chantier prérempli avec les informations du projet et
-                  mettez à jour automatiquement le statut associé.
-                </p>
-                <Button
-                  onClick={() => setQuickStartOpen(true)}
-                  className="inline-flex items-center gap-2"
-                  disabled={isStartingChantier}
-                >
-                  {isStartingChantier ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Initialisation...
-                    </>
-                  ) : (
-                    <>
-                      <Hammer className="h-4 w-4" />
-                      Démarrer le chantier
-                    </>
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
-
-            <div className="flex flex-col gap-6">
-              <Card className="shadow-card bg-gradient-card border-0">
-                <CardHeader>
-                  <CardTitle>Finances & planning</CardTitle>
-                </CardHeader>
+              <div className="space-y-6">
+                <Card className="shadow-card bg-gradient-card border-0">
+                  <CardHeader>
+                    <CardTitle>Finances & planning</CardTitle>
+                  </CardHeader>
                   <CardContent className="space-y-4 text-sm">
                     <div className="flex items-center gap-2">
                       <Euro className="w-4 h-4 text-primary" />
@@ -5000,6 +4855,41 @@ const ProjectDetails = () => {
                   </CardContent>
                 </Card>
 
+                <Card className="shadow-card border border-dashed border-primary/20">
+                  <CardHeader>
+                    <CardTitle>Démarrer un chantier</CardTitle>
+                    <CardDescription>
+                      Initialisez rapidement un chantier opérationnel synchronisé avec
+                      ce projet.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <p className="text-sm text-muted-foreground">
+                      Créez un chantier prérempli avec les informations du projet et
+                      mettez à jour automatiquement le statut associé.
+                    </p>
+                    <Button
+                      onClick={() => setQuickStartOpen(true)}
+                      className="inline-flex items-center gap-2"
+                      disabled={isStartingChantier}
+                    >
+                      {isStartingChantier ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Initialisation...
+                        </>
+                      ) : (
+                        <>
+                          <Hammer className="h-4 w-4" />
+                          Démarrer le chantier
+                        </>
+                      )}
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div>
                 <Card className="shadow-card border-0">
                   <CardHeader className="space-y-2">
                     <CardTitle className="flex items-center gap-2 text-base font-semibold">
@@ -5951,6 +5841,7 @@ const ProjectDetails = () => {
             ) : null}
           </DialogContent>
         </Dialog>
+
       </div>
     </Layout>
   );
