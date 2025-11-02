@@ -87,6 +87,10 @@ import {
   type SiteSubmitValues,
 } from "@/components/sites/SiteDialog";
 import { StartChantierDialog } from "@/components/sites/StartChantierDialog";
+import {
+  AddProjectDialog,
+  type ProjectFormValues,
+} from "@/components/projects/AddProjectDialog";
 import { InformationsComplementairesCard } from "@/components/projects/InformationsComplementairesCard";
 import {
   computeAdditionalCostTTC,
@@ -2396,6 +2400,58 @@ const ProjectDetails = () => {
     },
     enabled: !!id && !!user?.id && (!currentOrgId || !membersLoading),
   });
+
+  const editDialogInitialValues = useMemo<Partial<ProjectFormValues>>(() => {
+    if (!project) {
+      return {};
+    }
+
+    const projectRecord = project as Record<string, unknown>;
+    const legacyExternalRefValue = projectRecord["external_ref"];
+    const legacyExternalRef =
+      typeof legacyExternalRefValue === "string" ? legacyExternalRefValue : undefined;
+
+    return {
+      client_first_name: project.client_first_name ?? "",
+      client_last_name: project.client_last_name ?? "",
+      company: project.company ?? "",
+      phone: project.phone ?? "",
+      email: project.email ?? "",
+      hq_address: project.hq_address ?? "",
+      hq_city: project.hq_city ?? "",
+      hq_postal_code: project.hq_postal_code ?? "",
+      same_address: Boolean(project.same_address),
+      address: project.address ?? "",
+      city: project.city ?? "",
+      postal_code: project.postal_code ?? "",
+      siren: project.siren ?? "",
+      external_reference: project.external_reference ?? legacyExternalRef ?? "",
+      products: (project.project_products ?? []).map((product) => ({
+        product_id: product.product_id ?? "",
+        quantity:
+          typeof product.quantity === "number" && Number.isFinite(product.quantity)
+            ? product.quantity
+            : Number(product.quantity) || 1,
+        dynamic_params: (product.dynamic_params ?? {}) as Record<
+          string,
+          unknown
+        >,
+      })),
+      building_type: project.building_type ?? "",
+      usage: project.usage ?? "",
+      delegate_id: project.delegate_id ?? "",
+      signatory_name: project.signatory_name ?? "",
+      signatory_title: project.signatory_title ?? "",
+      surface_batiment_m2: project.surface_batiment_m2 ?? undefined,
+      status: project.status ?? "",
+      assigned_to: project.assigned_to ?? "",
+      source: project.source ?? "",
+      date_debut_prevue: project.date_debut_prevue ?? "",
+      date_fin_prevue: project.date_fin_prevue ?? "",
+      estimated_value: project.estimated_value ?? undefined,
+      lead_id: project.lead_id ?? undefined,
+    } satisfies Partial<ProjectFormValues>;
+  }, [project]);
 
   const productCodes = useMemo(() => {
     if (!project?.project_products) return [] as string[];
@@ -4848,13 +4904,22 @@ const ProjectDetails = () => {
                   titre_signataire: (project as any).titre_signataire,
                   siren: project.siren,
                   source: project.source,
-                  external_ref: (project as any).external_ref,
+                  external_reference: project.external_reference,
                   hq_address: project.hq_address,
                   hq_city: project.hq_city,
                   hq_postal_code: project.hq_postal_code,
                 }}
                 onEdit={() => setEditDialogOpen(true)}
                 memberName={memberNameById[project.assigned_to ?? ""] ?? null}
+              />
+              <AddProjectDialog
+                mode="edit"
+                projectId={project.id}
+                projectRef={project.project_ref}
+                open={editDialogOpen}
+                onOpenChange={setEditDialogOpen}
+                onProjectUpdated={refetch}
+                initialValues={editDialogInitialValues}
               />
 
               <div className="space-y-6">

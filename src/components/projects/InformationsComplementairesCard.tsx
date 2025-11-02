@@ -10,11 +10,11 @@ interface InformationsComplementairesCardProps {
     usage?: string | null;
     surface_facturee?: number | null;
     surface_isolee?: number | null;
-    nom_signataire?: string | null;
-    titre_signataire?: string | null;
+    signatory_name?: string | null;
+    signatory_title?: string | null;
     siren?: string | null;
     source?: string | null;
-    external_ref?: string | null;
+    external_reference?: string | null;
     hq_address?: string | null;
     hq_city?: string | null;
     hq_postal_code?: string | null;
@@ -72,11 +72,11 @@ export const InformationsComplementairesCard = ({
               : "—"
           }
         />
-        <InfoRow label="Nom signataire" value={project.nom_signataire || "—"} />
-        <InfoRow label="Titre signataire" value={project.titre_signataire || "—"} />
+        <InfoRow label="Nom signataire" value={project.signatory_name || "—"} />
+        <InfoRow label="Titre signataire" value={project.signatory_title || "—"} />
         <InfoRow label="SIREN" value={project.siren || "—"} />
         <InfoRow label="Source" value={project.source || "—"} />
-        <InfoRow label="Référence externe" value={project.external_ref || "—"} />
+        <InfoRow label="Référence externe" value={project.external_reference || "—"} />
         
         {(project.hq_address || project.hq_city || project.hq_postal_code) && (
           <>

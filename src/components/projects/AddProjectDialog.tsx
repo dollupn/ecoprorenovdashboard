@@ -391,6 +391,8 @@ interface AddProjectDialogProps {
   mode?: "create" | "edit";
   projectId?: string;
   projectRef?: string | null;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 const baseDefaultValues: Partial<ProjectFormValues> = {
@@ -476,8 +478,21 @@ export const AddProjectDialog = ({
   mode = "create",
   projectId,
   projectRef,
+  open: openProp,
+  onOpenChange,
 }: AddProjectDialogProps) => {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = openProp !== undefined;
+  const open = isControlled ? openProp : internalOpen;
+  const setOpen = useCallback(
+    (nextOpen: boolean) => {
+      if (!isControlled) {
+        setInternalOpen(nextOpen);
+      }
+      onOpenChange?.(nextOpen);
+    },
+    [isControlled, onOpenChange],
+  );
   const [loading, setLoading] = useState(false);
   const [isManualHqAddress, setIsManualHqAddress] = useState(false);
   const [isManualSiteAddress, setIsManualSiteAddress] = useState(false);
@@ -1581,16 +1596,23 @@ export const AddProjectDialog = ({
     }
   };
 
+  const defaultTrigger = (
+    <Button>
+      <Plus className="w-4 h-4 mr-2" />
+      Nouveau Projet
+    </Button>
+  );
+
+  const dialogTrigger = trigger === undefined ? defaultTrigger : trigger;
+  const shouldRenderTrigger = Boolean(
+    dialogTrigger && (!isControlled || trigger !== undefined),
+  );
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button>
-            <Plus className="w-4 h-4 mr-2" />
-            Nouveau Projet
-          </Button>
-        )}
-      </DialogTrigger>
+      {shouldRenderTrigger ? (
+        <DialogTrigger asChild>{dialogTrigger}</DialogTrigger>
+      ) : null}
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
