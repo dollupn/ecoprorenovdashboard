@@ -6,33 +6,6 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-export type SiteStatusValue =
-  | "NOUVEAU"
-  | "ETUDE"
-  | "DEVIS_ENVOYE"
-  | "DEVIS_SIGNE"
-  | "DEVIS_ACCEPTE"
-  | "DEVIS_REFUSE"
-  | "ACCEPTE"
-  | "A_PLANIFIER"
-  | "VISITE_TECHNIQUE"
-  | "PLANIFIE"
-  | "EN_PREPARATION"
-  | "EN_COURS"
-  | "CHANTIER_PLANIFIE"
-  | "CHANTIER_EN_COURS"
-  | "CHANTIER_TERMINE"
-  | "SUSPENDU"
-  | "TERMINE"
-  | "LIVRE"
-  | "FACTURE"
-  | "FACTURE_ENVOYEE"
-  | "AH"
-  | "AAF"
-  | "CLOTURE"
-  | "ANNULE"
-  | "ABANDONNE"
-
 export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
@@ -851,7 +824,7 @@ export type Database = {
           notes: string | null
           org_id: string
           project_id: string
-          status: SiteStatusValue
+          status: string
         }
         Insert: {
           changed_at?: string
@@ -860,7 +833,7 @@ export type Database = {
           notes?: string | null
           org_id: string
           project_id: string
-          status: SiteStatusValue
+          status: string
         }
         Update: {
           changed_at?: string
@@ -869,7 +842,7 @@ export type Database = {
           notes?: string | null
           org_id?: string
           project_id?: string
-          status?: SiteStatusValue
+          status?: string
         }
         Relationships: [
           {
@@ -890,7 +863,7 @@ export type Database = {
           next_step: string | null
           org_id: string
           project_id: string
-          status: SiteStatusValue | null
+          status: string | null
           updated_at: string
         }
         Insert: {
@@ -901,7 +874,7 @@ export type Database = {
           next_step?: string | null
           org_id: string
           project_id: string
-          status?: SiteStatusValue | null
+          status?: string | null
           updated_at?: string
         }
         Update: {
@@ -912,7 +885,7 @@ export type Database = {
           next_step?: string | null
           org_id?: string
           project_id?: string
-          status?: SiteStatusValue | null
+          status?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -940,6 +913,7 @@ export type Database = {
           date_fin_prevue: string | null
           delegate_id: string | null
           discount: number | null
+          email: string | null
           estimated_value: number | null
           external_reference: string | null
           hq_address: string | null
@@ -959,7 +933,7 @@ export type Database = {
           signatory_title: string | null
           siren: string | null
           source: string | null
-          status: SiteStatusValue
+          status: string
           surface_batiment_m2: number | null
           surface_isolee_m2: number | null
           unit_price: number | null
@@ -981,6 +955,7 @@ export type Database = {
           date_fin_prevue?: string | null
           delegate_id?: string | null
           discount?: number | null
+          email?: string | null
           estimated_value?: number | null
           external_reference?: string | null
           hq_address?: string | null
@@ -1000,7 +975,7 @@ export type Database = {
           signatory_title?: string | null
           siren?: string | null
           source?: string | null
-          status?: SiteStatusValue
+          status?: string
           surface_batiment_m2?: number | null
           surface_isolee_m2?: number | null
           unit_price?: number | null
@@ -1022,6 +997,7 @@ export type Database = {
           date_fin_prevue?: string | null
           delegate_id?: string | null
           discount?: number | null
+          email?: string | null
           estimated_value?: number | null
           external_reference?: string | null
           hq_address?: string | null
@@ -1041,7 +1017,7 @@ export type Database = {
           signatory_title?: string | null
           siren?: string | null
           source?: string | null
-          status?: SiteStatusValue
+          status?: string
           surface_batiment_m2?: number | null
           surface_isolee_m2?: number | null
           unit_price?: number | null
@@ -1180,8 +1156,8 @@ export type Database = {
           client_last_name: string | null
           client_name: string
           cofrac_status: string | null
-          commission_eur_per_m2_enabled: boolean | null
-          commission_eur_per_m2: number | null
+          commission_commerciale_ht: string | null
+          commission_commerciale_ht_montant: number | null
           cout_isolation_m2: number | null
           cout_main_oeuvre_m2_ht: number | null
           created_at: string
@@ -1206,13 +1182,8 @@ export type Database = {
           rentability_unit_label: string | null
           revenue: number | null
           site_ref: string
-          status: SiteStatusValue
+          status: string
           subcontractor_id: string | null
-          subcontractor_base_units: number | null
-          subcontractor_payment_amount: number | null
-          subcontractor_payment_rate: number | null
-          subcontractor_payment_unit_label: string | null
-          subcontractor_payment_units: number | null
           subcontractor_payment_confirmed: boolean
           surface_facturee: number | null
           team_members: string[] | null
@@ -1230,8 +1201,8 @@ export type Database = {
           client_last_name?: string | null
           client_name: string
           cofrac_status?: string | null
-          commission_eur_per_m2_enabled?: boolean | null
-          commission_eur_per_m2?: number | null
+          commission_commerciale_ht?: string | null
+          commission_commerciale_ht_montant?: number | null
           cout_isolation_m2?: number | null
           cout_main_oeuvre_m2_ht?: number | null
           created_at?: string
@@ -1256,13 +1227,8 @@ export type Database = {
           rentability_unit_label?: string | null
           revenue?: number | null
           site_ref: string
-          status?: SiteStatusValue
+          status?: string
           subcontractor_id?: string | null
-          subcontractor_base_units?: number | null
-          subcontractor_payment_amount?: number | null
-          subcontractor_payment_rate?: number | null
-          subcontractor_payment_unit_label?: string | null
-          subcontractor_payment_units?: number | null
           subcontractor_payment_confirmed?: boolean
           surface_facturee?: number | null
           team_members?: string[] | null
@@ -1280,8 +1246,8 @@ export type Database = {
           client_last_name?: string | null
           client_name?: string
           cofrac_status?: string | null
-          commission_eur_per_m2_enabled?: boolean | null
-          commission_eur_per_m2?: number | null
+          commission_commerciale_ht?: string | null
+          commission_commerciale_ht_montant?: number | null
           cout_isolation_m2?: number | null
           cout_main_oeuvre_m2_ht?: number | null
           created_at?: string
@@ -1306,13 +1272,8 @@ export type Database = {
           rentability_unit_label?: string | null
           revenue?: number | null
           site_ref?: string
-          status?: SiteStatusValue
+          status?: string
           subcontractor_id?: string | null
-          subcontractor_base_units?: number | null
-          subcontractor_payment_amount?: number | null
-          subcontractor_payment_rate?: number | null
-          subcontractor_payment_unit_label?: string | null
-          subcontractor_payment_units?: number | null
           subcontractor_payment_confirmed?: boolean
           surface_facturee?: number | null
           team_members?: string[] | null
