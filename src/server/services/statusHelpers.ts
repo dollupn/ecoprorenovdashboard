@@ -47,27 +47,20 @@ const getProjectStatusIndex = (status: string): number => {
 };
 
 export const ensureProjectStatusTransition = (current: string, next: string) => {
+  // Validate that the next status is valid
   if (!PROJECT_STATUS_ORDER.includes(next as ProjectStatus)) {
-    throw new ValidationError(`Statut projet inconnu: ${next}`);
+    const validStatuses = PROJECT_STATUS_ORDER.join(', ');
+    throw new ValidationError(
+      `Statut projet inconnu: "${next}". Statuts valides: ${validStatuses}`
+    );
   }
 
+  // Validate that the current status is valid (if it exists)
   if (current && !PROJECT_STATUS_ORDER.includes(current as ProjectStatus)) {
-    throw new ValidationError(`Statut projet actuel inconnu: ${current}`);
+    throw new ValidationError(`Statut projet actuel inconnu: "${current}"`);
   }
 
-  if (!current) {
-    return;
-  }
-
-  const currentIndex = getProjectStatusIndex(current);
-  const nextIndex = getProjectStatusIndex(next);
-
-  if (currentIndex === -1 || nextIndex === -1) {
-    return;
-  }
-
-  if (nextIndex < currentIndex) {
-    throw new ValidationError("Impossible de revenir à un statut projet précédent");
-  }
+  // Allow all transitions (forward and backward)
+  // This allows users to correct mistakes or move projects back in the workflow
 };
 

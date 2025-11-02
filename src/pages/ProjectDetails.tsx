@@ -2967,39 +2967,38 @@ const ProjectDetails = () => {
       }
 
       const normalized = trimmed.toUpperCase();
+      
+      // Call backend API instead of direct Supabase update
+      const response = await fetch(`/api/projects/${project.id}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-organization-id': currentOrgId || '',
+        },
+        body: JSON.stringify({ status: normalized }),
+      });
 
-      let updateQuery = supabase
-        .from("projects")
-        .update({ status: normalized as ProjectStatus })
-        .eq("id", project.id);
-
-      if (currentOrgId) {
-        updateQuery = updateQuery.eq("org_id", currentOrgId);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Erreur inconnue' }));
+        throw new Error(errorData.message || 'Impossible de mettre à jour le statut');
       }
 
-      const { error: updateError } = await updateQuery;
-      if (updateError) {
-        throw updateError;
-      }
-
-      const statusEventPayload = {
-        project_id: project.id,
-        org_id: currentOrgId ?? "",
-        status: normalized as ProjectStatus,
-        changed_at: new Date().toISOString(),
-        changed_by: user?.id ?? null,
-        notes: null,
-      };
-
-      const { error: eventError } = await supabase
-        .from("project_status_events")
-        .insert([statusEventPayload]);
-
-      if (eventError && !isTableUnavailableError(eventError)) {
-        throw eventError;
-      }
-
-      return normalized;
+      const result = await response.json();
+      return result.project.status; // Return the updated status
+    },
+    onSuccess: async (newStatus) => {
+      toast({
+        title: "Statut mis à jour",
+        description: `Le statut du projet a été changé à ${newStatus}`,
+      });
+      await Promise.all([refetch(), refetchStatusEvents()]);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Mise à jour du statut échouée",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
