@@ -4911,6 +4911,8 @@ const ProjectDetails = () => {
                 }}
                 onEdit={() => setEditDialogOpen(true)}
                 memberName={memberNameById[project.assigned_to ?? ""] ?? null}
+                delegateName={project.delegate?.name ?? null}
+                delegatePrice={project.delegate?.price_eur_per_mwh ?? null}
               />
               <AddProjectDialog
                 mode="edit"

@@ -3,6 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Edit } from "lucide-react";
 
+const currencyFormatter = new Intl.NumberFormat("fr-FR", {
+  style: "currency",
+  currency: "EUR",
+});
+
 interface InformationsComplementairesCardProps {
   project: {
     assigned_to?: string | null;
@@ -21,6 +26,8 @@ interface InformationsComplementairesCardProps {
   };
   onEdit: () => void;
   memberName?: string | null;
+  delegateName?: string | null;
+  delegatePrice?: number | null;
 }
 
 const surfaceFormatter = new Intl.NumberFormat("fr-FR", {
@@ -32,6 +39,8 @@ export const InformationsComplementairesCard = ({
   project,
   onEdit,
   memberName,
+  delegateName,
+  delegatePrice,
 }: InformationsComplementairesCardProps) => {
   const InfoRow = ({ label, value }: { label: string; value: React.ReactNode }) => {
     if (!value) return null;
@@ -42,6 +51,16 @@ export const InformationsComplementairesCard = ({
       </div>
     );
   };
+
+  const formattedDelegatePrice =
+    typeof delegatePrice === "number"
+      ? `${currencyFormatter.format(delegatePrice)} / MWh`
+      : null;
+
+  const delegateValue =
+    delegateName && formattedDelegatePrice
+      ? `${delegateName} • ${formattedDelegatePrice}`
+      : delegateName || formattedDelegatePrice || "—";
 
   return (
     <Card>
@@ -54,6 +73,7 @@ export const InformationsComplementairesCard = ({
       </CardHeader>
       <CardContent className="space-y-1">
         <InfoRow label="Assigné à" value={memberName || project.assigned_to || "—"} />
+        <InfoRow label="Délégataire" value={delegateValue} />
         <InfoRow label="Type de bâtiment" value={project.building_type || "—"} />
         <InfoRow label="Usage" value={project.usage || "—"} />
         <InfoRow
