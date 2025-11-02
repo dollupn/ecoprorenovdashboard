@@ -4838,38 +4838,6 @@ const ProjectDetails = () => {
                   </CardContent>
                 </Card>
 
-                <Card className="shadow-card border border-dashed border-primary/20">
-                  <CardHeader>
-                    <CardTitle>Démarrer un chantier</CardTitle>
-                    <CardDescription>
-                      Initialisez rapidement un chantier opérationnel synchronisé avec
-                      ce projet.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                    <p className="text-sm text-muted-foreground">
-                      Créez un chantier prérempli avec les informations du projet et
-                      mettez à jour automatiquement le statut associé.
-                    </p>
-                    <Button
-                      onClick={() => setQuickStartOpen(true)}
-                      className="inline-flex items-center gap-2"
-                      disabled={isStartingChantier}
-                    >
-                      {isStartingChantier ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Initialisation...
-                        </>
-                      ) : (
-                        <>
-                          <Hammer className="h-4 w-4" />
-                          Démarrer le chantier
-                        </>
-                      )}
-                    </Button>
-                  </CardContent>
-                </Card>
               </div>
 
               <div>
