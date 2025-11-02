@@ -2967,24 +2967,41 @@ const ProjectDetails = () => {
       }
 
       const normalized = trimmed.toUpperCase();
-      
-      // Call backend API instead of direct Supabase update
-      const response = await fetch(`/api/projects/${project.id}/status`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-organization-id': currentOrgId || '',
-        },
-        body: JSON.stringify({ status: normalized }),
-      });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Erreur inconnue' }));
-        throw new Error(errorData.message || 'Impossible de mettre à jour le statut');
+      // Direct Supabase update
+      let updateQuery = supabase
+        .from("projects")
+        .update({ status: normalized as ProjectStatus })
+        .eq("id", project.id);
+
+      if (currentOrgId) {
+        updateQuery = updateQuery.eq("org_id", currentOrgId);
       }
 
-      const result = await response.json();
-      return result.project.status; // Return the updated status
+      const { error: updateError } = await updateQuery;
+      if (updateError) {
+        throw updateError;
+      }
+
+      // Create status event
+      const statusEventPayload = {
+        project_id: project.id,
+        org_id: currentOrgId ?? "",
+        status: normalized as ProjectStatus,
+        changed_at: new Date().toISOString(),
+        changed_by: user?.id ?? null,
+        notes: null,
+      };
+
+      const { error: eventError } = await supabase
+        .from("project_status_events")
+        .insert([statusEventPayload]);
+
+      if (eventError && !isTableUnavailableError(eventError)) {
+        console.warn("Could not create status event:", eventError);
+      }
+
+      return normalized
     },
     onSuccess: async (newStatus) => {
       toast({
