@@ -2344,15 +2344,11 @@ const ProjectDetails = () => {
     return result;
   }, [memberNameById]);
 
-  const currentMember = useMemo(
-    () => members.find((member) => member.user_id === user?.id),
-    [members, user?.id]
-  );
-  
-  const isAdmin = useMemo(
-    () => currentMember?.role === "admin" || currentMember?.role === "owner",
-    [currentMember]
-  );
+  const { currentMember, isAdmin } = useMemo(() => {
+    const member = members.find((m) => m.user_id === user?.id);
+    const admin = member?.role === "admin" || member?.role === "owner";
+    return { currentMember: member, isAdmin: admin };
+  }, [members, user?.id]);
 
   const {
     data: project,
