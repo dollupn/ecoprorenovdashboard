@@ -81,11 +81,11 @@ import {
 } from "@/components/quotes/AddQuoteDialog";
 import { ProjectScheduleDialog } from "@/components/projects/ProjectScheduleDialog";
 import {
-  SiteDialog,
+  SiteForm,
   type SiteFormValues,
   type SiteProjectOption,
   type SiteSubmitValues,
-} from "@/components/sites/SiteDialog";
+} from "@/components/sites/SiteForm";
 import { StartChantierDialog } from "@/components/sites/StartChantierDialog";
 import {
   computeAdditionalCostTTC,
@@ -2226,12 +2226,16 @@ const ProjectDetails = () => {
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
   const [startChantierDialogOpen, setStartChantierDialogOpen] = useState(false);
-  const [siteDialogOpen, setSiteDialogOpen] = useState(false);
-  const [siteDialogMode, setSiteDialogMode] = useState<"create" | "edit">(
-    "create",
-  );
   const [siteInitialValues, setSiteInitialValues] =
     useState<Partial<SiteFormValues>>();
+  const [siteEditorMode, setSiteEditorMode] = useState<"create" | "edit" | null>(
+    null,
+  );
+  const [siteEditorDefaultTab, setSiteEditorDefaultTab] = useState<
+    "avant-chantier" | "apres-chantier"
+  >("avant-chantier");
+  const [siteEditorReadOnly, setSiteEditorReadOnly] = useState(false);
+  const [editingSiteId, setEditingSiteId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!projectStatusesError) return;
@@ -2250,10 +2254,6 @@ const ProjectDetails = () => {
     useState<ProjectMediaCategory>(MEDIA_CATEGORIES[0]?.value ?? "PHOTOS");
   const [journalFilter, setJournalFilter] = useState<JournalFilter>("all");
   const [quickUpdateText, setQuickUpdateText] = useState("");
-  const [siteDialogDefaultTab, setSiteDialogDefaultTab] = useState<
-    "avant-chantier" | "apres-chantier"
-  >("avant-chantier");
-  const [siteDialogReadOnly, setSiteDialogReadOnly] = useState(false);
   const [lightboxImage, setLightboxImage] = useState<ProductImage | null>(null);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
 
@@ -4125,19 +4125,43 @@ const ProjectDetails = () => {
     setQuoteDialogOpen(true);
   };
 
-  const handleCreateSite = () => {
-    setSiteDialogMode("create");
+  const resetSiteEditor = useCallback(() => {
+    setSiteEditorMode(null);
     setSiteInitialValues(undefined);
     setActiveSite(null);
-    setSiteDialogOpen(true);
-  };
+    setSiteEditorDefaultTab("avant-chantier");
+    setSiteEditorReadOnly(false);
+    setEditingSiteId(null);
+  }, []);
+
+  const siteEditorHeading = useMemo(() => {
+    if (!siteEditorMode) {
+      return null;
+    }
+
+    if (siteEditorReadOnly) {
+      return {
+        title: "Détails du chantier",
+        description:
+          "Consultez les informations opérationnelles et financières du chantier.",
+      };
+    }
+
+    return {
+      title:
+        siteEditorMode === "create" ? "Nouveau chantier" : "Modifier le chantier",
+      description:
+        "Renseignez les informations financières et opérationnelles du chantier.",
+    };
+  }, [siteEditorMode, siteEditorReadOnly]);
 
   const handleEditSite = (site: any, options?: { readOnly?: boolean; defaultTab?: "avant-chantier" | "apres-chantier" }) => {
-    setSiteDialogMode("edit");
+    setSiteEditorMode("edit");
     setActiveSite(site);
-    setSiteDialogReadOnly(options?.readOnly ?? false);
-    setSiteDialogDefaultTab(options?.defaultTab ?? "avant-chantier");
-    setSiteDialogOpen(true);
+    setSiteInitialValues(site ?? undefined);
+    setSiteEditorReadOnly(options?.readOnly ?? false);
+    setSiteEditorDefaultTab(options?.defaultTab ?? "avant-chantier");
+    setEditingSiteId(site?.id ?? null);
   };
 
   const handleSubmitSite = async (values: SiteSubmitValues) => {
@@ -4276,13 +4300,13 @@ const ProjectDetails = () => {
     const normalizedNextStatus =
       typeof baseSiteData.status === "string" ? baseSiteData.status : null;
     const statusChanged =
-      siteDialogMode === "edit" &&
+      siteEditorMode === "edit" &&
       activeSite &&
       normalizedNextStatus &&
       normalizedNextStatus !== activeSite.status;
 
     try {
-      if (siteDialogMode === "edit" && activeSite) {
+      if (siteEditorMode === "edit" && activeSite) {
         const { error } = await supabase
           .from("sites")
           .update(baseSiteData as any)
@@ -4310,10 +4334,7 @@ const ProjectDetails = () => {
       } else {
         await refetchProjectSites();
       }
-      setSiteDialogOpen(false);
-      setSiteInitialValues(undefined);
-      setActiveSite(null);
-      setSiteDialogMode("create");
+      resetSiteEditor();
     } catch (error) {
       console.error("Error saving site:", error);
       toast({
@@ -5083,7 +5104,31 @@ const ProjectDetails = () => {
                   Démarrer Chantier
                 </Button>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
+                {siteEditorMode === "create" ? (
+                  <Card className="border border-primary/40 bg-primary/5">
+                    <CardHeader>
+                      <CardTitle className="text-base">
+                        {siteEditorHeading?.title ?? "Nouveau chantier"}
+                      </CardTitle>
+                      {siteEditorHeading?.description ? (
+                        <CardDescription>{siteEditorHeading.description}</CardDescription>
+                      ) : null}
+                    </CardHeader>
+                    <CardContent>
+                      <SiteForm
+                        mode="create"
+                        onCancel={resetSiteEditor}
+                        onSubmit={handleSubmitSite}
+                        initialValues={siteInitialValues}
+                        orgId={currentOrgId}
+                        projects={projectSiteOptions}
+                        defaultTab={siteEditorDefaultTab}
+                        readOnly={siteEditorReadOnly}
+                      />
+                    </CardContent>
+                  </Card>
+                ) : null}
                 {projectSitesLoading ? (
                   <div className="py-6 text-sm text-muted-foreground">
                     Chargement des chantiers...
@@ -5251,12 +5296,12 @@ const ProjectDetails = () => {
                         ? `${site.address} · ${site.postal_code} ${site.city}`
                         : `${site.city} (${site.postal_code})`;
 
+                      const isEditingSite =
+                        siteEditorMode === "edit" && editingSiteId === site.id;
+
                       return (
-                        <>
-                          <Card
-                            key={site.id}
-                            className="border border-border/60 bg-background/60"
-                          >
+                        <div key={site.id} className="space-y-4">
+                          <Card className="border border-border/60 bg-background/60">
                           <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                             <div>
                               <CardTitle className="text-base">{site.site_ref}</CardTitle>
@@ -5596,7 +5641,31 @@ const ProjectDetails = () => {
                               <Link to={`/chantiers/${site.id}`}>Voir détails</Link>
                             </Button>
                           </CardFooter>
-                        </>
+                          {isEditingSite && siteEditorMode === "edit" ? (
+                            <Card className="border border-primary/40 bg-primary/5">
+                              <CardHeader>
+                                <CardTitle className="text-base">
+                                  {siteEditorHeading?.title ?? "Modifier le chantier"}
+                                </CardTitle>
+                                {siteEditorHeading?.description ? (
+                                  <CardDescription>{siteEditorHeading.description}</CardDescription>
+                                ) : null}
+                              </CardHeader>
+                              <CardContent>
+                                <SiteForm
+                                  mode="edit"
+                                  onCancel={resetSiteEditor}
+                                  onSubmit={handleSubmitSite}
+                                  initialValues={siteInitialValues}
+                                  orgId={currentOrgId}
+                                  projects={projectSiteOptions}
+                                  defaultTab={siteEditorDefaultTab}
+                                  readOnly={siteEditorReadOnly}
+                                />
+                              </CardContent>
+                            </Card>
+                          ) : null}
+                        </div>
                       );
 
                     })}
@@ -5649,27 +5718,6 @@ const ProjectDetails = () => {
             onOpenChange={setStartChantierDialogOpen}
           />
         ) : null}
-        <SiteDialog
-          open={siteDialogOpen}
-          mode={siteDialogMode}
-          onOpenChange={(open) => {
-            setSiteDialogOpen(open);
-            if (!open) {
-              setSiteInitialValues(undefined);
-              setActiveSite(null);
-              setSiteDialogMode("create");
-              setSiteDialogDefaultTab("avant-chantier");
-              setSiteDialogReadOnly(false);
-            }
-          }}
-          onSubmit={handleSubmitSite}
-          initialValues={siteInitialValues}
-          orgId={currentOrgId}
-          projects={projectSiteOptions}
-          defaultTab={siteDialogDefaultTab}
-          readOnly={siteDialogReadOnly}
-        />
-
         <Dialog
           open={Boolean(lightboxImage)}
           onOpenChange={(open) => {
