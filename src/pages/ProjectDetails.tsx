@@ -2344,9 +2344,15 @@ const ProjectDetails = () => {
     return result;
   }, [memberNameById]);
 
-  const currentMember = members.find((member) => member.user_id === user?.id);
-  const isAdmin =
-    currentMember?.role === "admin" || currentMember?.role === "owner";
+  const currentMember = useMemo(
+    () => members.find((member) => member.user_id === user?.id),
+    [members, user?.id]
+  );
+  
+  const isAdmin = useMemo(
+    () => currentMember?.role === "admin" || currentMember?.role === "owner",
+    [currentMember]
+  );
 
   const {
     data: project,
