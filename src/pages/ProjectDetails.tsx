@@ -88,11 +88,6 @@ import {
 } from "@/components/sites/SiteDialog";
 import { StartChantierDialog } from "@/components/sites/StartChantierDialog";
 import {
-  AddProjectDialog,
-  type ProjectFormValues,
-} from "@/components/projects/AddProjectDialog";
-import { InformationsComplementairesCard } from "@/components/projects/InformationsComplementairesCard";
-import {
   computeAdditionalCostTTC,
   normalizeAdditionalCostTvaRate,
   normalizeAdditionalCostsArray,
@@ -259,7 +254,6 @@ const SURFACE_FACTUREE_TARGETS = [
   "surface_facturee",
   "surface facturée",
 ];
-const SURFACE_ISOLEE_TARGETS = ["surface_isolee", "surface isolée"];
 
 const ARCHIVED_STATUS_VALUES = new Set(["ARCHIVED"]);
 const ARCHIVED_STATUS_VALUE = "ARCHIVED";
@@ -2238,7 +2232,6 @@ const ProjectDetails = () => {
   );
   const [siteInitialValues, setSiteInitialValues] =
     useState<Partial<SiteFormValues>>();
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!projectStatusesError) return;
@@ -2392,57 +2385,6 @@ const ProjectDetails = () => {
     enabled: !!id && !!user?.id && (!currentOrgId || !membersLoading),
   });
 
-  const editDialogInitialValues = useMemo<Partial<ProjectFormValues>>(() => {
-    if (!project) {
-      return {};
-    }
-
-    const projectRecord = project as Record<string, unknown>;
-    const legacyExternalRefValue = projectRecord["external_ref"];
-    const legacyExternalRef =
-      typeof legacyExternalRefValue === "string" ? legacyExternalRefValue : undefined;
-
-    return {
-      client_first_name: project.client_first_name ?? "",
-      client_last_name: project.client_last_name ?? "",
-      company: project.company ?? "",
-      phone: project.phone ?? "",
-      email: project.email ?? "",
-      hq_address: project.hq_address ?? "",
-      hq_city: project.hq_city ?? "",
-      hq_postal_code: project.hq_postal_code ?? "",
-      same_address: Boolean(project.same_address),
-      address: project.address ?? "",
-      city: project.city ?? "",
-      postal_code: project.postal_code ?? "",
-      siren: project.siren ?? "",
-      external_reference: project.external_reference ?? legacyExternalRef ?? "",
-      products: (project.project_products ?? []).map((product) => ({
-        product_id: product.product_id ?? "",
-        quantity:
-          typeof product.quantity === "number" && Number.isFinite(product.quantity)
-            ? product.quantity
-            : Number(product.quantity) || 1,
-        dynamic_params: (product.dynamic_params ?? {}) as Record<
-          string,
-          unknown
-        >,
-      })),
-      building_type: project.building_type ?? "",
-      usage: project.usage ?? "",
-      delegate_id: project.delegate_id ?? "",
-      signatory_name: project.signatory_name ?? "",
-      signatory_title: project.signatory_title ?? "",
-      surface_batiment_m2: project.surface_batiment_m2 ?? undefined,
-      status: project.status ?? "",
-      assigned_to: project.assigned_to ?? "",
-      source: project.source ?? "",
-      date_debut_prevue: project.date_debut_prevue ?? "",
-      date_fin_prevue: project.date_fin_prevue ?? "",
-      estimated_value: project.estimated_value ?? undefined,
-      lead_id: project.lead_id ?? undefined,
-    } satisfies Partial<ProjectFormValues>;
-  }, [project]);
 
   const productCodes = useMemo(() => {
     if (!project?.project_products) return [] as string[];
@@ -2455,32 +2397,6 @@ const ProjectDetails = () => {
     () => getDisplayedProducts(project?.project_products),
     [project?.project_products],
   );
-
-  const projectSurfaceIsolee = useMemo(() => {
-    const firstDisplayedProduct = projectProducts[0];
-
-    if (firstDisplayedProduct?.product) {
-      const surfaceIsoleeValue = getDynamicFieldNumericValue(
-        firstDisplayedProduct.product.params_schema,
-        firstDisplayedProduct.dynamic_params,
-        SURFACE_ISOLEE_TARGETS,
-      );
-
-      if (
-        typeof surfaceIsoleeValue === "number" &&
-        Number.isFinite(surfaceIsoleeValue)
-      ) {
-        return surfaceIsoleeValue;
-      }
-    }
-
-    const fallbackSurface = project?.surface_isolee_m2;
-    if (typeof fallbackSurface === "number" && Number.isFinite(fallbackSurface)) {
-      return fallbackSurface;
-    }
-
-    return null;
-  }, [projectProducts, project?.surface_isolee_m2]);
 
   const {
     data: projectUpdatesState,
@@ -4884,37 +4800,6 @@ const ProjectDetails = () => {
           </TabsList>
           <TabsContent value="details" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <InformationsComplementairesCard
-                project={{
-                  assigned_to: project.assigned_to,
-                  building_type: project.building_type,
-                  usage: project.usage,
-                  surface_facturee: project.surface_batiment_m2,
-                  surface_isolee: projectSurfaceIsolee,
-                  nom_signataire: (project as any).nom_signataire,
-                  titre_signataire: (project as any).titre_signataire,
-                  siren: project.siren,
-                  source: project.source,
-                  external_reference: project.external_reference,
-                  hq_address: project.hq_address,
-                  hq_city: project.hq_city,
-                  hq_postal_code: project.hq_postal_code,
-                }}
-                onEdit={() => setEditDialogOpen(true)}
-                memberName={memberNameById[project.assigned_to ?? ""] ?? null}
-                delegateName={project.delegate?.name ?? null}
-                delegatePrice={project.delegate?.price_eur_per_mwh ?? null}
-              />
-              <AddProjectDialog
-                mode="edit"
-                projectId={project.id}
-                projectRef={project.project_ref}
-                open={editDialogOpen}
-                onOpenChange={setEditDialogOpen}
-                onProjectUpdated={refetch}
-                initialValues={editDialogInitialValues}
-              />
-
               <div className="space-y-6">
                 <Card className="shadow-card bg-gradient-card border-0">
                   <CardHeader>
