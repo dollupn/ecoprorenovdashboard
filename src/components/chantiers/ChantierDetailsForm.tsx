@@ -419,9 +419,12 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
     mutationFn: async (payload: SiteSubmitValues) => {
       if (!chantier || !user?.id) return;
       
+      // Remove fields that don't exist in the database
+      const { commission_eur_per_m2_enabled, commission_eur_per_m2, ...rest } = payload;
+      
       const updatePayload: Partial<Tables<"sites">> = {
-        ...payload,
-        team_members: payload.team_members?.map(m => m.id) ?? [],
+        ...rest,
+        team_members: rest.team_members?.map(m => m.id) ?? [],
       };
       
       const { error } = await supabase
