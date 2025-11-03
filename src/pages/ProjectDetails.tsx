@@ -12,6 +12,8 @@ import { Layout } from "@/components/layout/Layout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ChantierDetailsForm } from "@/components/chantiers/ChantierDetailsForm";
+import { InformationsComplementairesCard } from "@/components/projects/InformationsComplementairesCard";
+import { AddProjectDialog } from "@/components/projects/AddProjectDialog";
 import {
   Card,
   CardContent,
@@ -2237,6 +2239,7 @@ const ProjectDetails = () => {
   const [startChantierDialogOpen, setStartChantierDialogOpen] = useState(false);
   const [siteInitialValues, setSiteInitialValues] =
     useState<Partial<SiteFormValues>>();
+  const [editProjectDialogOpen, setEditProjectDialogOpen] = useState(false);
   const [siteEditorMode, setSiteEditorMode] = useState<"create" | "edit" | null>(
     null,
   );
@@ -3003,6 +3006,10 @@ const ProjectDetails = () => {
     (content: string) => addNoteMutation.mutateAsync(content),
     [addNoteMutation],
   );
+
+  const handleEditProject = useCallback(() => {
+    setEditProjectDialogOpen(true);
+  }, []);
 
   const updateProjectStatusMutation = useMutation({
     mutationKey: ["project-status-update", project?.id],
@@ -5090,6 +5097,14 @@ const ProjectDetails = () => {
                   </CardContent>
                 </Card>
 
+                <InformationsComplementairesCard
+                  project={project}
+                  onEdit={handleEditProject}
+                  memberName={memberNameById[project.assigned_to] ?? null}
+                  delegateName={project.delegate?.name ?? null}
+                  delegatePrice={project.delegate?.price_eur_per_mwh ?? null}
+                />
+
               </div>
             </div>
 
@@ -5253,6 +5268,23 @@ const ProjectDetails = () => {
             projectName={getProjectClientName(project)}
             open={startChantierDialogOpen}
             onOpenChange={setStartChantierDialogOpen}
+          />
+        ) : null}
+        {project?.id ? (
+          <AddProjectDialog
+            mode="edit"
+            projectId={project.id}
+            projectRef={project.project_ref}
+            open={editProjectDialogOpen}
+            onOpenChange={setEditProjectDialogOpen}
+            onProjectUpdated={() => {
+              void refetch();
+              setEditProjectDialogOpen(false);
+              toast({
+                title: "Projet mis à jour",
+                description: "Les modifications ont été enregistrées avec succès.",
+              });
+            }}
           />
         ) : null}
         <Dialog
