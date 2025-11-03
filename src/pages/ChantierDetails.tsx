@@ -76,6 +76,7 @@ const percentFormatter = new Intl.NumberFormat("fr-FR", {
 });
 
 type SiteWithProject = Tables<"sites"> & {
+  frais_tva_percentage?: number | null;
   project: (Tables<"projects"> & {
     lead?: Pick<Tables<"leads">, "email" | "phone_raw"> | null;
   }) | null;
@@ -161,6 +162,7 @@ const ChantierDetails = () => {
       "product_name",
       "additional_costs",
       "valorisation_cee",
+      "frais_tva_percentage",
       "commission_eur_per_m2_enabled",
       "commission_eur_per_m2",
       "subcontractor_id",
@@ -289,6 +291,7 @@ const ChantierDetails = () => {
         chantier.commission_eur_per_m2 ?? chantier.commission_commerciale_ht_montant,
       ),
       valorisation_cee: sanitizeNumber(chantier.valorisation_cee),
+      frais_tva_percentage: Math.min(100, Math.max(0, sanitizeNumber(chantier.frais_tva_percentage))),
       subcontractor_id: chantier.subcontractor_id ?? null,
       subcontractor_payment_confirmed: Boolean(chantier.subcontractor_payment_confirmed),
       travaux_non_subventionnes: normalizeTravauxNonSubventionnesValue(
@@ -323,6 +326,7 @@ const ChantierDetails = () => {
       productName,
       additionalCosts,
       valorisationCee,
+      fraisTvaPercentage,
       commissionPerM2Enabled,
       commissionPerM2,
       subcontractorId,
@@ -343,6 +347,7 @@ const ChantierDetails = () => {
       number | undefined,
       string | undefined,
       SiteFormValues["additional_costs"] | undefined,
+      number | undefined,
       number | undefined,
       boolean | undefined,
       number | undefined,
@@ -397,6 +402,7 @@ const ChantierDetails = () => {
       additional_costs: normalizedAdditionalCosts,
       product_name: productName,
       valorisation_cee: sanitizeNumber(valorisationCee),
+      frais_tva_percentage: Math.min(100, Math.max(0, sanitizeNumber(fraisTvaPercentage))),
       commission_eur_per_m2_enabled: commissionPerM2Enabled,
       commission_eur_per_m2: sanitizeNumber(commissionPerM2),
       subcontractor_pricing_details: subcontractorRate,
@@ -513,6 +519,7 @@ const ChantierDetails = () => {
     const commissionPerM2Value = commissionPerM2Enabled
       ? sanitizeNumber(values.commission_eur_per_m2)
       : 0;
+    const fraisTvaPercentage = Math.min(100, Math.max(0, sanitizeNumber(values.frais_tva_percentage)));
 
     const selectedSubcontractor = (subcontractorsQuery.data ?? []).find(
       (option) => option.id === values.subcontractor_id,
@@ -533,6 +540,7 @@ const ChantierDetails = () => {
       buildRentabilityInputFromSite({
         ...values,
         valorisation_cee: values.valorisation_cee,
+        frais_tva_percentage: fraisTvaPercentage,
         additional_costs: filteredCosts,
         project_prime_cee: project?.prime_cee ?? undefined,
         project_prime_cee_total_cents: project?.prime_cee_total_cents ?? undefined,
@@ -548,28 +556,29 @@ const ChantierDetails = () => {
         project_ref: values.project_ref?.trim() ?? chantier.project_ref ?? "",
         client_name: values.client_name?.trim() ?? chantier.client_name ?? "",
         subcontractor_id: values.subcontractor_id ?? null,
-      additional_costs: filteredCosts,
-      notes: serializedNotes,
-      travaux_non_subventionnes: travauxChoice,
-      travaux_non_subventionnes_description: travauxDescription,
-      travaux_non_subventionnes_montant: travauxMontant,
-      travaux_non_subventionnes_financement: travauxFinancement,
-      commission_eur_per_m2_enabled: commissionPerM2Enabled,
-      commission_eur_per_m2: commissionPerM2Value,
-      profit_margin: rentabilityResult.marginRate,
-      rentability_total_costs: rentabilityResult.totalCosts,
-      rentability_margin_total: rentabilityResult.marginTotal,
-      rentability_margin_per_unit: rentabilityResult.marginPerUnit,
-      rentability_margin_rate: rentabilityResult.marginRate,
-      rentability_unit_label: rentabilityResult.unitLabel,
-      rentability_unit_count: rentabilityResult.unitsUsed,
-      rentability_additional_costs_total: rentabilityResult.additionalCostsTotal,
-      subcontractor_payment_amount: rentabilityResult.subcontractorEstimatedCost,
-      subcontractor_payment_units: rentabilityResult.subcontractorBaseUnits,
-      subcontractor_payment_unit_label: rentabilityResult.unitLabel,
-      subcontractor_payment_rate: rentabilityResult.subcontractorRate,
-      subcontractor_base_units: rentabilityResult.subcontractorBaseUnits,
-    };
+        additional_costs: filteredCosts,
+        notes: serializedNotes,
+        travaux_non_subventionnes: travauxChoice,
+        travaux_non_subventionnes_description: travauxDescription,
+        travaux_non_subventionnes_montant: travauxMontant,
+        travaux_non_subventionnes_financement: travauxFinancement,
+        commission_eur_per_m2_enabled: commissionPerM2Enabled,
+        commission_eur_per_m2: commissionPerM2Value,
+        frais_tva_percentage: fraisTvaPercentage,
+        profit_margin: rentabilityResult.marginRate,
+        rentability_total_costs: rentabilityResult.totalCosts,
+        rentability_margin_total: rentabilityResult.marginTotal,
+        rentability_margin_per_unit: rentabilityResult.marginPerUnit,
+        rentability_margin_rate: rentabilityResult.marginRate,
+        rentability_unit_label: rentabilityResult.unitLabel,
+        rentability_unit_count: rentabilityResult.unitsUsed,
+        rentability_additional_costs_total: rentabilityResult.additionalCostsTotal,
+        subcontractor_payment_amount: rentabilityResult.subcontractorEstimatedCost,
+        subcontractor_payment_units: rentabilityResult.subcontractorBaseUnits,
+        subcontractor_payment_unit_label: rentabilityResult.unitLabel,
+        subcontractor_payment_rate: rentabilityResult.subcontractorRate,
+        subcontractor_base_units: rentabilityResult.subcontractorBaseUnits,
+      };
 
       mutateSite(payload);
     },
@@ -868,6 +877,35 @@ const ChantierDetails = () => {
                               disabled={disableInputs}
                               readOnly={isEditingLocked}
                             />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={control}
+                      name="frais_tva_percentage"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>TVA des frais (%)</FormLabel>
+                          <FormControl>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="number"
+                                step="0.1"
+                                min={0}
+                                max={100}
+                                className="flex-1"
+                                {...field}
+                                onBlur={(event) => {
+                                  field.onBlur();
+                                  handleBlurSave();
+                                }}
+                                disabled={disableInputs}
+                                readOnly={isEditingLocked}
+                              />
+                              <span className="text-sm text-muted-foreground">%</span>
+                            </div>
                           </FormControl>
                           <FormMessage />
                         </FormItem>
