@@ -272,6 +272,12 @@ const ChantierDetails = () => {
       cout_isolation_m2: sanitizeNumber(chantier.cout_isolation_m2),
       isolation_utilisee_m2: sanitizeNumber(chantier.isolation_utilisee_m2),
       montant_commission: sanitizeNumber(chantier.montant_commission),
+      commission_eur_per_m2_enabled: Boolean(
+        chantier.commission_eur_per_m2_enabled ?? chantier.commission_commerciale_ht,
+      ),
+      commission_eur_per_m2: sanitizeNumber(
+        chantier.commission_eur_per_m2 ?? chantier.commission_commerciale_ht_montant,
+      ),
       valorisation_cee: sanitizeNumber(chantier.valorisation_cee),
       subcontractor_id: chantier.subcontractor_id ?? null,
       subcontractor_payment_confirmed: Boolean(chantier.subcontractor_payment_confirmed),

@@ -103,7 +103,12 @@ import {
   formatDynamicFieldValue,
 } from "@/lib/product-params";
 import { parseSiteNotes } from "@/lib/sites";
-import { calculateRentability, buildRentabilityInputFromSite } from "@/lib/rentability";
+import {
+  calculateRentability,
+  buildRentabilityInputFromSite,
+  type RentabilityInput,
+  type RentabilityResult,
+} from "@/lib/rentability";
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 import { useOrganizationPrimeSettings } from "@/features/organizations/useOrganizationPrimeSettings";
 import {
@@ -299,7 +304,9 @@ const clampNumber = (value: number | null | undefined, min: number, max: number)
 type CofracStatus = "EN_ATTENTE" | "CONFORME" | "NON_CONFORME" | "A_PLANIFIER";
 
 type ProjectSite = Tables<"sites"> & {
-  subcontractor?: { id: string; name: string } | null;
+  subcontractor?: { id: string; name: string; pricing_details?: string | null } | null;
+  rentability?: RentabilityResult;
+  rentabilityInput?: RentabilityInput;
 };
 
 type SiteAdditionalCostFormValue = SiteFormValues["additional_costs"][number];
@@ -2732,8 +2739,8 @@ const ProjectDetails = () => {
 
   const projectRefFilter = project?.project_ref?.trim() ?? "";
 
-  const { 
-    data: projectSites = [],
+  const {
+    data: projectSitesData = [],
     isLoading: projectSitesLoading,
     refetch: refetchProjectSites,
   } = useQuery<ProjectSite[]>({
@@ -2764,6 +2771,51 @@ const ProjectDetails = () => {
     },
     enabled: Boolean(project?.id && currentOrgId),
   });
+
+  const projectSites = useMemo<ProjectSite[]>(() => {
+    if (!projectSitesData.length) {
+      return [];
+    }
+
+    return projectSitesData.map((site) => {
+      const additionalCosts = normalizeAdditionalCostsArray(site.additional_costs ?? []);
+      const travauxChoice = normalizeTravauxNonSubventionnesValue(site.travaux_non_subventionnes);
+
+      const rentabilityInput = buildRentabilityInputFromSite({
+        revenue: site.revenue,
+        cout_main_oeuvre_m2_ht: site.cout_main_oeuvre_m2_ht,
+        cout_isolation_m2: site.cout_isolation_m2,
+        isolation_utilisee_m2: site.isolation_utilisee_m2,
+        surface_facturee: site.surface_facturee,
+        montant_commission: site.montant_commission,
+        travaux_non_subventionnes: travauxChoice,
+        travaux_non_subventionnes_montant: site.travaux_non_subventionnes_montant,
+        additional_costs: additionalCosts,
+        product_name: site.product_name,
+        valorisation_cee: site.valorisation_cee,
+        commission_eur_per_m2_enabled: site.commission_eur_per_m2_enabled,
+        commission_eur_per_m2: site.commission_eur_per_m2,
+        subcontractor_pricing_details: site.subcontractor?.pricing_details ?? null,
+        subcontractor_payment_confirmed: site.subcontractor_payment_confirmed,
+        subcontractor_base_units: site.subcontractor_base_units,
+        subcontractor_payment_amount: site.subcontractor_payment_amount,
+        subcontractor_payment_units: site.subcontractor_payment_units,
+        subcontractor_payment_rate: site.subcontractor_payment_rate,
+        subcontractor_payment_unit_label: site.subcontractor_payment_unit_label,
+        project_prime_cee: project?.prime_cee ?? undefined,
+        project_prime_cee_total_cents: project?.prime_cee_total_cents ?? undefined,
+        project_category: project?.product_name ?? site.product_name ?? undefined,
+      });
+
+      const rentability = calculateRentability(rentabilityInput);
+
+      return {
+        ...site,
+        rentabilityInput,
+        rentability,
+      };
+    });
+  }, [projectSitesData, project]);
 
   const startChantierMutation = useMutation({
     mutationKey: ["project-start-chantier", project?.id],
