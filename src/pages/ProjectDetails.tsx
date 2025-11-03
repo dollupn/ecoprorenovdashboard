@@ -4889,219 +4889,227 @@ const ProjectDetails = () => {
             <TabsTrigger value="journal">Journal</TabsTrigger>
           </TabsList>
           <TabsContent value="details" className="space-y-6">
-            {/* Row 1: Informations complémentaires */}
-            <InformationsComplementairesCard
-              project={project}
-              onEdit={handleEditProject}
-              memberName={memberNameById[project.assigned_to] ?? null}
-              delegateName={project.delegate?.name ?? null}
-              delegatePrice={project.delegate?.price_eur_per_mwh ?? null}
-            />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* First Column: Informations complémentaires */}
+              <div>
+                <InformationsComplementairesCard
+                  project={project}
+                  onEdit={handleEditProject}
+                  memberName={memberNameById[project.assigned_to] ?? null}
+                  delegateName={project.delegate?.name ?? null}
+                  delegatePrice={project.delegate?.price_eur_per_mwh ?? null}
+                />
+              </div>
 
-            {/* Row 2: Finances & Planning */}
-            <Card className="shadow-card bg-gradient-card border-0">
-              <CardHeader>
-                <CardTitle>Finances & planning</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4 text-sm">
-                <div className="flex items-center gap-2">
-                  <HandCoins className="w-4 h-4 text-emerald-600" />
-                  <span className="text-muted-foreground">Prime CEE:</span>
-                  <span className="font-medium">
-                    {typeof displayedPrimeValue === "number"
-                      ? formatCurrency(displayedPrimeValue)
-                      : "Non définie"}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-blue-600" />
-                  <span className="text-muted-foreground">MWh générés:</span>
-                  <span className="font-medium text-blue-600">
-                    {hasComputedCeeTotals
-                      ? `${formatDecimal(ceeTotals.totalValorisationMwh)} MWh`
-                      : "Non calculés"}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <HandCoins className="w-4 h-4 text-amber-600" />
-                  <span className="text-muted-foreground">
-                    Valorisation totale:
-                  </span>
-                  <span className="font-medium text-amber-600">
-                    {hasComputedCeeTotals
-                      ? formatCurrency(ceeTotals.totalValorisationEur)
-                      : "Non calculée"}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Row 3: Progression & Mises à jour */}
-            <Card className="shadow-card border-0">
-              <CardHeader className="space-y-2">
-                <CardTitle className="flex items-center gap-2 text-base font-semibold">
-                  <NotebookPen className="w-4 h-4 text-primary" />
-                  Progression & Mises à jour
-                </CardTitle>
-                <CardDescription>
-                  Suivez l'avancement du dossier et consignez les dernières
-                  informations partagées avec le client.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-3">
+              {/* Second Column: Finances & Planning */}
+              <div>
+                <Card className="shadow-card bg-gradient-card border-0">
+                  <CardHeader>
+                    <CardTitle>Finances & planning</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4 text-sm">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground">
-                        Statut
+                      <HandCoins className="w-4 h-4 text-emerald-600" />
+                      <span className="text-muted-foreground">Prime CEE:</span>
+                      <span className="font-medium">
+                        {typeof displayedPrimeValue === "number"
+                          ? formatCurrency(displayedPrimeValue)
+                          : "Non définie"}
                       </span>
-                      <Badge
-                        variant="outline"
-                        style={badgeStyle}
-                        className="text-xs font-medium"
-                      >
-                        {statusLabel}
-                      </Badge>
                     </div>
-                    <span className="text-xs text-muted-foreground">
-                      {statusProgress > 0 ? `${statusProgress}%` : "0%"}
-                    </span>
-                  </div>
-                  <Progress value={statusProgress} className="h-2" />
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm font-medium">
-                    <Clock className="w-4 h-4 text-primary" />
-                    Dernière mise à jour
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {latestUpdateDisplay ??
-                      "Aucune mise à jour enregistrée"}
-                  </p>
-                  {latestUpdateText ? (
-                    <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
-                      {latestUpdateText}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-2">
-                  <div className="text-sm font-medium text-muted-foreground">
-                    Prochaine étape
-                  </div>
-                  <p className="text-sm font-medium">
-                    {nextStepDescription ?? "Aucune étape planifiée"}
-                  </p>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="text-sm font-medium text-muted-foreground">
-                    Historique récent
-                  </div>
-                  {projectUpdatesLoading ? (
-                    <div className="flex items-center justify-center py-4">
-                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    <div className="flex items-center gap-2">
+                      <Zap className="w-4 h-4 text-blue-600" />
+                      <span className="text-muted-foreground">MWh générés:</span>
+                      <span className="font-medium text-blue-600">
+                        {hasComputedCeeTotals
+                          ? `${formatDecimal(ceeTotals.totalValorisationMwh)} MWh`
+                          : "Non calculés"}
+                      </span>
                     </div>
-                  ) : shortHistoryItems.length > 0 ? (
-                    <ul className="space-y-3">
-                      {shortHistoryItems.map((item) => {
-                        const displayDate = formatDateTimeLabel(
-                          item.createdAt,
-                          {
-                            dateStyle: "short",
-                            timeStyle: "short",
-                          },
-                        );
-                        return (
-                          <li
-                            key={item.id}
-                            className="rounded-lg border border-border/60 bg-muted/20 p-3"
+                    <div className="flex items-center gap-2">
+                      <HandCoins className="w-4 h-4 text-amber-600" />
+                      <span className="text-muted-foreground">
+                        Valorisation totale:
+                      </span>
+                      <span className="font-medium text-amber-600">
+                        {hasComputedCeeTotals
+                          ? formatCurrency(ceeTotals.totalValorisationEur)
+                          : "Non calculée"}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Third Column: Progression & Mises à jour */}
+              <div>
+                <Card className="shadow-card border-0">
+                  <CardHeader className="space-y-2">
+                    <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                      <NotebookPen className="w-4 h-4 text-primary" />
+                      Progression & Mises à jour
+                    </CardTitle>
+                    <CardDescription>
+                      Suivez l'avancement du dossier et consignez les dernières
+                      informations partagées avec le client.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground">
+                            Statut
+                          </span>
+                          <Badge
+                            variant="outline"
+                            style={badgeStyle}
+                            className="text-xs font-medium"
                           >
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="text-sm font-medium leading-tight">
-                                {item.text}
-                              </span>
-                              {displayDate ? (
-                                <span className="text-[11px] text-muted-foreground whitespace-nowrap">
-                                  {displayDate}
-                                </span>
-                              ) : null}
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      Aucune note historique pour le moment.
-                    </p>
-                  )}
-                </div>
+                            {statusLabel}
+                          </Badge>
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {statusProgress > 0 ? `${statusProgress}%` : "0%"}
+                        </span>
+                      </div>
+                      <Progress value={statusProgress} className="h-2" />
+                    </div>
 
-                <div className="space-y-3">
-                  <label
-                    className="text-sm font-medium text-muted-foreground"
-                    htmlFor="quick-update-textarea"
-                  >
-                    Ajouter une mise à jour rapide
-                  </label>
-                  <Textarea
-                    id="quick-update-textarea"
-                    value={quickUpdateText}
-                    onChange={(event) =>
-                      setQuickUpdateText(event.target.value)
-                    }
-                    rows={3}
-                    placeholder="Note interne, suivi client, information de planning..."
-                    className="resize-none"
-                  />
-                  <div className="flex items-center justify-end">
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        void handleQuickUpdateSubmit();
-                      }}
-                      disabled={isQuickUpdateDisabled}
-                    >
-                      {isSavingQuickUpdate ? (
-                        <>
-                          <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                          Enregistrement...
-                        </>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <Clock className="w-4 h-4 text-primary" />
+                        Dernière mise à jour
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {latestUpdateDisplay ??
+                          "Aucune mise à jour enregistrée"}
+                      </p>
+                      {latestUpdateText ? (
+                        <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
+                          {latestUpdateText}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="text-sm font-medium text-muted-foreground">
+                        Prochaine étape
+                      </div>
+                      <p className="text-sm font-medium">
+                        {nextStepDescription ?? "Aucune étape planifiée"}
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="text-sm font-medium text-muted-foreground">
+                        Historique récent
+                      </div>
+                      {projectUpdatesLoading ? (
+                        <div className="flex items-center justify-center py-4">
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : shortHistoryItems.length > 0 ? (
+                        <ul className="space-y-3">
+                          {shortHistoryItems.map((item) => {
+                            const displayDate = formatDateTimeLabel(
+                              item.createdAt,
+                              {
+                                dateStyle: "short",
+                                timeStyle: "short",
+                              },
+                            );
+                            return (
+                              <li
+                                key={item.id}
+                                className="rounded-lg border border-border/60 bg-muted/20 p-3"
+                              >
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="text-sm font-medium leading-tight">
+                                    {item.text}
+                                  </span>
+                                  {displayDate ? (
+                                    <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                                      {displayDate}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
                       ) : (
-                        "Enregistrer"
+                        <p className="text-sm text-muted-foreground">
+                          Aucune note historique pour le moment.
+                        </p>
                       )}
-                    </Button>
-                  </div>
-                </div>
+                    </div>
 
-                <div className="flex items-center justify-between gap-2">
-                  {!projectUpdatesTableAvailable && projectUpdatesError ? (
-                    <span className="text-xs text-muted-foreground italic">
-                      Les mises à jour sont sauvegardées directement sur la
-                      fiche projet.
-                    </span>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">
-                      {projectUpdates.length > 0
-                        ? `${projectUpdates.length} mise${projectUpdates.length > 1 ? "s" : ""} enregistrée${
-                            projectUpdates.length > 1 ? "s" : ""
-                          }`
-                        : "Aucune mise à jour enregistrée"}
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab("journal")}
-                    className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-                  >
-                    Voir tout l'historique
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
-                </div>
-              </CardContent>
-            </Card>
+                    <div className="space-y-3">
+                      <label
+                        className="text-sm font-medium text-muted-foreground"
+                        htmlFor="quick-update-textarea"
+                      >
+                        Ajouter une mise à jour rapide
+                      </label>
+                      <Textarea
+                        id="quick-update-textarea"
+                        value={quickUpdateText}
+                        onChange={(event) =>
+                          setQuickUpdateText(event.target.value)
+                        }
+                        rows={3}
+                        placeholder="Note interne, suivi client, information de planning..."
+                        className="resize-none"
+                      />
+                      <div className="flex items-center justify-end">
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            void handleQuickUpdateSubmit();
+                          }}
+                          disabled={isQuickUpdateDisabled}
+                        >
+                          {isSavingQuickUpdate ? (
+                            <>
+                              <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                              Enregistrement...
+                            </>
+                          ) : (
+                            "Enregistrer"
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2">
+                      {!projectUpdatesTableAvailable && projectUpdatesError ? (
+                        <span className="text-xs text-muted-foreground italic">
+                          Les mises à jour sont sauvegardées directement sur la
+                          fiche projet.
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          {projectUpdates.length > 0
+                            ? `${projectUpdates.length} mise${projectUpdates.length > 1 ? "s" : ""} enregistrée${
+                                projectUpdates.length > 1 ? "s" : ""
+                              }`
+                            : "Aucune mise à jour enregistrée"}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("journal")}
+                        className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                      >
+                        Voir tout l'historique
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
 
             <Card className="shadow-card bg-gradient-card border-0">
               <CardHeader>
