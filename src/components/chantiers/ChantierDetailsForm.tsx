@@ -79,6 +79,12 @@ type SiteWithProject = Tables<"sites"> & {
 const formatCurrency = (value: number) => currencyFormatter.format(value);
 const formatDecimal = (value: number) => decimalFormatter.format(value);
 const formatPercent = (value: number) => percentFormatter.format(value);
+const formatDate = (value?: string | null) => {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("fr-FR");
+};
 
 const sanitizeNumber = (value: unknown, fallback = 0) => {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -1408,16 +1414,22 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
                 <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Projet</span>
-                  <span className="font-medium text-foreground">{project?.project_ref ?? chantier.project_ref}</span>
+                  <span className="text-muted-foreground">Date début</span>
+                  <span className="font-medium text-foreground">
+                    {formatDate(chantier.date_debut ?? project?.date_debut ?? null)}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Produit</span>
-                  <span className="font-medium text-foreground">{project?.product_name ?? chantier.product_name ?? "—"}</span>
+                  <span className="text-muted-foreground">Date fin prévisionnelle</span>
+                  <span className="font-medium text-foreground">
+                    {formatDate(chantier.date_fin_prevue ?? project?.date_fin_prevue ?? null)}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Responsable</span>
-                  <span className="font-medium text-foreground">{project?.assigned_to ?? "—"}</span>
+                  <span className="text-muted-foreground">Sous-traitant</span>
+                  <span className="font-medium text-foreground">
+                    {chantier.subcontractor?.name ?? "—"}
+                  </span>
                 </div>
               </CardContent>
             </Card>
