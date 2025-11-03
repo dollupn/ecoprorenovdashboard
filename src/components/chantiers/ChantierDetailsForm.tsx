@@ -547,6 +547,8 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
   const disableInputs = isEditingLocked || isUpdating;
 
   const marginRate = rentabilityMetrics.marginRate ?? 0;
+  const marginTotal = rentabilityMetrics.marginTotal ?? 0;
+  const marginPerUnit = rentabilityMetrics.marginPerUnit ?? 0;
   const rentabilityBorder = getStatusGradient(marginRate);
   const rentabilityIsLighting = rentabilityMetrics.measurementMode === "luminaire";
   const rentabilityBilledUnitsLabel = rentabilityIsLighting
@@ -1303,38 +1305,92 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                 </CardTitle>
                 <CardDescription>Calculée automatiquement à partir des montants saisis.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Chiffre d'affaires</span>
-                  <span className="font-semibold text-foreground">{formatCurrency(rentabilityMetrics.revenue)}</span>
+              <CardContent className="space-y-4 text-sm">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Chiffre d'affaires</span>
+                    <span className="font-semibold text-foreground">{formatCurrency(rentabilityMetrics.revenue)}</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">Prime CEE + Travaux client</div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Coût chantier (HT+TVA)</span>
-                  <span className="font-semibold text-foreground">{formatCurrency(rentabilityMetrics.totalCosts)}</span>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Unités de base</span>
+                    <span className="font-semibold text-foreground">
+                      {rentabilityMetrics.baseUnits > 0
+                        ? `${formatDecimal(rentabilityMetrics.baseUnits)} ${rentabilityMetrics.unitLabel}`
+                        : `— ${rentabilityMetrics.unitLabel}`}
+                    </span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">Unités facturées ou exécutées</div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Marge totale</span>
-                  <span className="font-semibold text-foreground">{formatCurrency(rentabilityMetrics.marginTotal)}</span>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Coût chantier (HT+TVA)</span>
+                    <span className="font-semibold text-foreground">{formatCurrency(rentabilityMetrics.totalCosts)}</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Main d'œuvre + Matériaux + Sous-traitance + Frais
+                  </div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Marge (%)</span>
-                  <span className={cn("font-semibold", marginRate >= 0 ? "text-emerald-600" : "text-destructive")}>{formatPercent(marginRate)}</span>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Marge totale</span>
+                    <span
+                      className={cn(
+                        "font-semibold",
+                        marginTotal > 0 ? "text-emerald-600" : marginTotal < 0 ? "text-destructive" : "text-foreground",
+                      )}
+                    >
+                      {formatCurrency(rentabilityMetrics.marginTotal)}
+                    </span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">CA - Coûts totaux</div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">
-                    Marge / {rentabilityMetrics.unitLabel === "luminaire" ? "luminaire" : "m²"}
-                  </span>
-                  <span className="font-semibold text-foreground">
-                    {rentabilityMetrics.unitsUsed > 0
-                      ? `${formatDecimal(rentabilityMetrics.marginPerUnit)} €`
-                      : "—"}
-                  </span>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Marge (%)</span>
+                    <span
+                      className={cn(
+                        "font-semibold",
+                        marginRate > 0 ? "text-emerald-600" : marginRate < 0 ? "text-destructive" : "text-foreground",
+                      )}
+                    >
+                      {formatPercent(marginRate)}
+                    </span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">Marge totale / CA</div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Frais additionnels</span>
-                  <span className="font-semibold text-foreground">
-                    {formatCurrency(rentabilityMetrics.additionalCostsTotal)}
-                  </span>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">
+                      Marge / {rentabilityMetrics.unitLabel === "luminaire" ? "luminaire" : "m²"}
+                    </span>
+                    <span
+                      className={cn(
+                        "font-semibold",
+                        marginPerUnit > 0
+                          ? "text-emerald-600"
+                          : marginPerUnit < 0
+                            ? "text-destructive"
+                            : "text-foreground",
+                      )}
+                    >
+                      {rentabilityMetrics.unitsUsed > 0
+                        ? `${formatDecimal(rentabilityMetrics.marginPerUnit)} €`
+                        : "—"}
+                    </span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">Marge totale / Unités</div>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Frais additionnels</span>
+                    <span className="font-semibold text-foreground">
+                      {formatCurrency(rentabilityMetrics.additionalCostsTotal)}
+                    </span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">Frais de chantier additionnels</div>
                 </div>
               </CardContent>
             </Card>
