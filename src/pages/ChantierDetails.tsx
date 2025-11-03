@@ -151,12 +151,10 @@ const ChantierDetails = () => {
   const rentabilityWatch = useWatch({
     control,
     name: [
-      "revenue",
       "cout_main_oeuvre_m2_ht",
       "cout_isolation_m2",
       "isolation_utilisee_m2",
       "surface_facturee",
-      "montant_commission",
       "travaux_non_subventionnes",
       "travaux_non_subventionnes_montant",
       "product_name",
@@ -315,12 +313,10 @@ const ChantierDetails = () => {
 
   const rentabilityMetrics = useMemo(() => {
     const [
-      revenue,
       laborCost,
       materialCost,
       isolationUsed,
       surfaceFacturee,
-      commission,
       travauxChoice,
       travauxMontant,
       productName,
@@ -341,8 +337,6 @@ const ChantierDetails = () => {
       number | undefined,
       number | undefined,
       number | undefined,
-      number | undefined,
-      number | undefined,
       SiteFormValues["travaux_non_subventionnes"] | undefined,
       number | undefined,
       string | undefined,
@@ -359,6 +353,10 @@ const ChantierDetails = () => {
       number | undefined,
       string | undefined,
     ];
+
+    const revenueValue = sanitizeNumber(chantier?.revenue);
+    const commissionValue = sanitizeNumber(chantier?.montant_commission);
+    const valorisationCeeValue = sanitizeNumber(chantier?.valorisation_cee);
 
     const normalizedAdditionalCosts = Array.isArray(additionalCosts)
       ? additionalCosts.map((cost) => {
@@ -391,18 +389,19 @@ const ChantierDetails = () => {
     })();
 
     const rentabilityInput = buildRentabilityInputFromSite({
-      revenue: sanitizeNumber(revenue),
+      revenue: revenueValue,
       cout_main_oeuvre_m2_ht: sanitizeNumber(laborCost),
       cout_isolation_m2: sanitizeNumber(materialCost),
       isolation_utilisee_m2: sanitizeNumber(isolationUsed),
       surface_facturee: sanitizeNumber(surfaceFacturee),
-      montant_commission: sanitizeNumber(commission),
+      montant_commission: commissionValue,
       travaux_non_subventionnes: (travauxChoice ?? "NA") as SiteFormValues["travaux_non_subventionnes"],
       travaux_non_subventionnes_montant: sanitizeNumber(travauxMontant),
       additional_costs: normalizedAdditionalCosts,
       product_name: productName,
       valorisation_cee: sanitizeNumber(valorisationCee),
       frais_tva_percentage: Math.min(100, Math.max(0, sanitizeNumber(fraisTvaPercentage))),
+      valorisation_cee: valorisationCeeValue,
       commission_eur_per_m2_enabled: commissionPerM2Enabled,
       commission_eur_per_m2: sanitizeNumber(commissionPerM2),
       subcontractor_pricing_details: subcontractorRate,
@@ -418,7 +417,18 @@ const ChantierDetails = () => {
     });
 
     return calculateRentability(rentabilityInput);
-  }, [rentabilityWatch, subcontractorsQuery.data, project?.prime_cee, project?.prime_cee_total_cents, project?.product_name, chantier?.product_name, form]);
+  }, [
+    rentabilityWatch,
+    subcontractorsQuery.data,
+    project?.prime_cee,
+    project?.prime_cee_total_cents,
+    project?.product_name,
+    chantier?.product_name,
+    chantier?.revenue,
+    chantier?.montant_commission,
+    chantier?.valorisation_cee,
+    form,
+  ]);
 
   const subcontractorAmountDisplay = rentabilityMetrics.subcontractorEstimatedCost > 0
     ? formatCurrency(rentabilityMetrics.subcontractorEstimatedCost)
@@ -541,6 +551,9 @@ const ChantierDetails = () => {
         ...values,
         valorisation_cee: values.valorisation_cee,
         frais_tva_percentage: fraisTvaPercentage,
+        revenue: sanitizeNumber(chantier?.revenue ?? values.revenue),
+        montant_commission: sanitizeNumber(chantier?.montant_commission ?? values.montant_commission),
+        valorisation_cee: sanitizeNumber(chantier?.valorisation_cee ?? values.valorisation_cee),
         additional_costs: filteredCosts,
         project_prime_cee: project?.prime_cee ?? undefined,
         project_prime_cee_total_cents: project?.prime_cee_total_cents ?? undefined,
@@ -553,6 +566,9 @@ const ChantierDetails = () => {
 
       const payload: SiteSubmitValues = {
         ...values,
+        revenue: sanitizeNumber(chantier?.revenue ?? values.revenue),
+        montant_commission: sanitizeNumber(chantier?.montant_commission ?? values.montant_commission),
+        valorisation_cee: sanitizeNumber(chantier?.valorisation_cee ?? values.valorisation_cee),
         project_ref: values.project_ref?.trim() ?? chantier.project_ref ?? "",
         client_name: values.client_name?.trim() ?? chantier.client_name ?? "",
         subcontractor_id: values.subcontractor_id ?? null,

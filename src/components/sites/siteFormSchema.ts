@@ -245,7 +245,10 @@ export const createBaseSiteSchema = () => {
       .number({ invalid_type_error: "Avancement invalide" })
       .min(0)
       .max(100),
-    revenue: z.coerce.number({ invalid_type_error: "CA invalide" }).min(0, "Le CA doit être positif"),
+    revenue: z.coerce
+      .number({ invalid_type_error: "CA invalide" })
+      .min(0, "Le CA doit être positif")
+      .default(0),
     profit_margin: z.coerce.number({ invalid_type_error: "Marge invalide" }).min(-100).max(100),
     surface_facturee: z.coerce.number({ invalid_type_error: "Surface invalide" }).min(0),
     cout_main_oeuvre_m2_ht: z.coerce.number({ invalid_type_error: "Coût invalide" }).min(0),
