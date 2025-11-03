@@ -140,17 +140,14 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
   const rentabilityWatch = useWatch({
     control,
     name: [
-      "revenue",
       "cout_main_oeuvre_m2_ht",
       "cout_isolation_m2",
       "isolation_utilisee_m2",
       "surface_facturee",
-      "montant_commission",
       "travaux_non_subventionnes",
       "travaux_non_subventionnes_montant",
       "product_name",
       "additional_costs",
-      "valorisation_cee",
       "commission_eur_per_m2_enabled",
       "commission_eur_per_m2",
       "subcontractor_id",
@@ -277,17 +274,14 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
 
   const rentabilityMetrics = useMemo(() => {
     const [
-      revenue,
       laborCost,
       materialCost,
       isolationUsed,
       surfaceFacturee,
-      commission,
       travauxChoice,
       travauxMontant,
       productName,
       additionalCosts,
-      valorisationCee,
       commissionPerM2Enabled,
       commissionPerM2,
       subcontractorId,
@@ -302,13 +296,10 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
       number | undefined,
       number | undefined,
       number | undefined,
-      number | undefined,
-      number | undefined,
       SiteFormValues["travaux_non_subventionnes"] | undefined,
       number | undefined,
       string | undefined,
       SiteFormValues["additional_costs"] | undefined,
-      number | undefined,
       boolean | undefined,
       number | undefined,
       string | undefined,
@@ -319,6 +310,11 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
       number | undefined,
       string | undefined,
     ];
+
+    // Get calculated values from form
+    const revenue = sanitizeNumber(form.getValues("revenue"));
+    const commission = sanitizeNumber(form.getValues("montant_commission"));
+    const valorisationCee = sanitizeNumber(form.getValues("valorisation_cee"));
 
     const normalizedAdditionalCosts = Array.isArray(additionalCosts)
       ? additionalCosts.map((cost) => {
