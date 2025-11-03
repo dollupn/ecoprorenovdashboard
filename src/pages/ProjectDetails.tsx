@@ -304,6 +304,7 @@ const clampNumber = (value: number | null | undefined, min: number, max: number)
 type CofracStatus = "EN_ATTENTE" | "CONFORME" | "NON_CONFORME" | "A_PLANIFIER";
 
 type ProjectSite = Tables<"sites"> & {
+  project?: Tables<"projects"> | null;
   subcontractor?: { id: string; name: string; pricing_details?: string | null } | null;
   rentability?: RentabilityResult;
   rentabilityInput?: RentabilityInput;
@@ -2750,7 +2751,11 @@ const ProjectDetails = () => {
 
       let query = supabase
         .from("sites")
-        .select("*, subcontractor:subcontractors(id, name, pricing_details)")
+        .select(`
+          *,
+          subcontractor:subcontractors(id, name, pricing_details),
+          project:projects(*)
+        `)
         .eq("org_id", currentOrgId)
         .order("created_at", { ascending: false });
 
@@ -2797,11 +2802,6 @@ const ProjectDetails = () => {
         commission_eur_per_m2: site.commission_eur_per_m2,
         subcontractor_pricing_details: site.subcontractor?.pricing_details ?? null,
         subcontractor_payment_confirmed: site.subcontractor_payment_confirmed,
-        subcontractor_base_units: site.subcontractor_base_units,
-        subcontractor_payment_amount: site.subcontractor_payment_amount,
-        subcontractor_payment_units: site.subcontractor_payment_units,
-        subcontractor_payment_rate: site.subcontractor_payment_rate,
-        subcontractor_payment_unit_label: site.subcontractor_payment_unit_label,
         project_prime_cee: project?.prime_cee ?? undefined,
         project_prime_cee_total_cents: project?.prime_cee_total_cents ?? undefined,
         project_category: project?.product_name ?? site.product_name ?? undefined,
@@ -5190,19 +5190,26 @@ const ProjectDetails = () => {
                   </div>
                 </CardContent>
               </Card>
-            ) : (
-              projectSites.map((site) => (
+          ) : (
+            projectSites.map((site) => {
+              const siteWithProject = {
+                ...site,
+                project: project,
+              };
+              
+              return (
                 <ChantierDetailsForm
                   key={site.id}
-                  chantier={site as any}
+                  chantier={siteWithProject as any}
                   orgId={currentOrgId}
                   embedded={true}
                   onUpdate={() => {
                     void refetchProjectSites();
                   }}
                 />
-              ))
-            )}
+              );
+            })
+          )}
           </TabsContent>
         </Tabs>
 

@@ -399,9 +399,8 @@ const ChantierDetails = () => {
       travaux_non_subventionnes_montant: sanitizeNumber(travauxMontant),
       additional_costs: normalizedAdditionalCosts,
       product_name: productName,
-      valorisation_cee: sanitizeNumber(valorisationCee),
-      frais_tva_percentage: Math.min(100, Math.max(0, sanitizeNumber(fraisTvaPercentage))),
       valorisation_cee: valorisationCeeValue,
+      frais_tva_percentage: Math.min(100, Math.max(0, sanitizeNumber(fraisTvaPercentage))),
       commission_eur_per_m2_enabled: commissionPerM2Enabled,
       commission_eur_per_m2: sanitizeNumber(commissionPerM2),
       subcontractor_pricing_details: subcontractorRate,
@@ -549,7 +548,6 @@ const ChantierDetails = () => {
     const rentabilityResult = calculateRentability(
       buildRentabilityInputFromSite({
         ...values,
-        valorisation_cee: values.valorisation_cee,
         frais_tva_percentage: fraisTvaPercentage,
         revenue: sanitizeNumber(chantier?.revenue ?? values.revenue),
         montant_commission: sanitizeNumber(chantier?.montant_commission ?? values.montant_commission),
@@ -1586,13 +1584,13 @@ const ChantierDetails = () => {
                     <div className="flex items-center justify-between">
                       <span className="text-muted-foreground">Date début</span>
                       <span className="font-medium text-foreground">
-                        {formatDateDisplay(chantier.date_debut ?? project?.date_debut ?? null)}
+                        {formatDateDisplay((chantier as any).date_debut ?? project?.date_debut_prevue ?? null)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-muted-foreground">Date fin prévisionnelle</span>
                       <span className="font-medium text-foreground">
-                        {formatDateDisplay(chantier.date_fin_prevue ?? project?.date_fin_prevue ?? null)}
+                        {formatDateDisplay((chantier as any).date_fin_prevue ?? project?.date_fin_prevue ?? null)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">

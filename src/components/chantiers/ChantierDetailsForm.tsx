@@ -1416,13 +1416,13 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Date début</span>
                   <span className="font-medium text-foreground">
-                    {formatDate(chantier.date_debut ?? project?.date_debut ?? null)}
+                    {formatDate((chantier as any).date_debut ?? project?.date_debut_prevue ?? null)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Date fin prévisionnelle</span>
                   <span className="font-medium text-foreground">
-                    {formatDate(chantier.date_fin_prevue ?? project?.date_fin_prevue ?? null)}
+                    {formatDate((chantier as any).date_fin_prevue ?? project?.date_fin_prevue ?? null)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
