@@ -1194,6 +1194,7 @@ export type Database = {
           updated_at: string
           user_id: string
           valorisation_cee: number | null
+          frais_tva_percentage: number | null
         }
         Insert: {
           additional_costs?: Json | null
@@ -1241,6 +1242,7 @@ export type Database = {
           updated_at?: string
           user_id: string
           valorisation_cee?: number | null
+          frais_tva_percentage?: number | null
         }
         Update: {
           additional_costs?: Json | null
@@ -1288,6 +1290,7 @@ export type Database = {
           updated_at?: string
           user_id?: string
           valorisation_cee?: number | null
+          frais_tva_percentage?: number | null
         }
         Relationships: [
           {
