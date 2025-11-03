@@ -1115,34 +1115,20 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                 <FormField
                   control={control}
                   name="subcontractor_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Sous-traitant</FormLabel>
-                      <Select
-                        onValueChange={(value) => {
-                          field.onChange(value === "none" ? null : value);
-                          handleBlurSave();
-                        }}
-                        value={field.value ?? "none"}
-                        disabled={disableInputs}
-                      >
-                        <FormControl>
-                          <SelectTrigger disabled={disableInputs}>
-                            <SelectValue placeholder="Sélectionner" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="none">Aucun</SelectItem>
-                          {(subcontractorsQuery.data ?? []).map((option) => (
-                            <SelectItem key={option.id} value={option.id}>
-                              {option.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  render={({ field }) => {
+                    const selectedSubcontractor = (subcontractorsQuery.data ?? []).find(
+                      (s) => s.id === field.value
+                    );
+                    return (
+                      <FormItem>
+                        <FormLabel>Sous-traitant</FormLabel>
+                        <div className="rounded-md border bg-muted px-3 py-2 text-sm">
+                          {selectedSubcontractor?.name ?? "Aucun"}
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    );
+                  }}
                 />
                 <FormField
                   control={control}
