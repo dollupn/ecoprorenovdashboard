@@ -241,6 +241,7 @@ export const createBaseSiteSchema = () => {
     cofrac_status: z.enum(["EN_ATTENTE", "CONFORME", "NON_CONFORME", "A_PLANIFIER"]),
     date_debut: z.string().min(1, "Date de début requise"),
     date_fin_prevue: z.string().optional(),
+    date_fin: z.string().optional().nullable(),
     progress_percentage: z.coerce
       .number({ invalid_type_error: "Avancement invalide" })
       .min(0)
@@ -319,6 +320,91 @@ export const createBaseSiteSchema = () => {
       .number({ invalid_type_error: "Tarif sous-traitant invalide" })
       .min(0, "Le tarif doit être positif")
       .default(0),
+    // Isolation fields
+    surface_facturee_m2: z.coerce
+      .number({ invalid_type_error: "Surface facturée invalide" })
+      .min(0, "La surface facturée doit être positive")
+      .refine((val) => val > 0, {
+        message: "La surface facturée ne peut pas être zéro",
+      })
+      .optional()
+      .nullable(),
+    surface_posee_m2: z.coerce
+      .number({ invalid_type_error: "Surface posée invalide" })
+      .min(0, "La surface posée doit être positive")
+      .optional()
+      .nullable(),
+    cout_mo_par_m2: z.coerce
+      .number({ invalid_type_error: "Coût MO/m² invalide" })
+      .min(0, "Le coût doit être positif")
+      .optional()
+      .nullable(),
+    cout_isolant_par_m2: z.coerce
+      .number({ invalid_type_error: "Coût isolant/m² invalide" })
+      .min(0, "Le coût doit être positif")
+      .optional()
+      .nullable(),
+    cout_materiaux_par_m2: z.coerce
+      .number({ invalid_type_error: "Coût matériaux/m² invalide" })
+      .min(0, "Le coût doit être positif")
+      .optional()
+      .nullable(),
+    cout_total_materiaux: z.coerce
+      .number({ invalid_type_error: "Coût total matériaux invalide" })
+      .min(0, "Le coût doit être positif")
+      .optional()
+      .nullable(),
+    commission_commerciale_par_m2: z.coerce
+      .number({ invalid_type_error: "Commission/m² invalide" })
+      .min(0, "La commission doit être positive")
+      .optional()
+      .nullable(),
+    // Eclairage fields
+    nb_luminaires: z.coerce
+      .number({ invalid_type_error: "Nombre de luminaires invalide" })
+      .int("Le nombre doit être un entier")
+      .min(0, "Le nombre doit être positif")
+      .optional()
+      .nullable(),
+    cout_total_mo: z.coerce
+      .number({ invalid_type_error: "Coût total MO invalide" })
+      .min(0, "Le coût doit être positif")
+      .optional()
+      .nullable(),
+    cout_total_materiaux_eclairage: z.coerce
+      .number({ invalid_type_error: "Coût total matériaux éclairage invalide" })
+      .min(0, "Le coût doit être positif")
+      .optional()
+      .nullable(),
+    // Common financial fields
+    travaux_non_subventionnes_client: z.coerce
+      .number({ invalid_type_error: "Montant client invalide" })
+      .min(0, "Le montant doit être positif")
+      .default(0),
+    tva_rate: z.coerce
+      .number({ invalid_type_error: "Taux TVA invalide" })
+      .min(0, "Le taux doit être positif")
+      .max(1, "Le taux doit être inférieur ou égal à 1")
+      .default(0.021),
+    frais_additionnels_total: z.coerce
+      .number({ invalid_type_error: "Frais additionnels invalides" })
+      .min(0, "Les frais doivent être positifs")
+      .default(0),
+    // Derived snapshot totals
+    ca_ttc: z.coerce
+      .number({ invalid_type_error: "CA TTC invalide" })
+      .min(0, "Le CA doit être positif")
+      .optional()
+      .nullable(),
+    cout_chantier_ttc: z.coerce
+      .number({ invalid_type_error: "Coût chantier TTC invalide" })
+      .min(0, "Le coût doit être positif")
+      .optional()
+      .nullable(),
+    marge_totale_ttc: z.coerce
+      .number({ invalid_type_error: "Marge totale TTC invalide" })
+      .optional()
+      .nullable(),
   });
 };
 
@@ -352,6 +438,7 @@ export const defaultSiteFormValues: SiteFormValues = {
   cofrac_status: "EN_ATTENTE",
   date_debut: "",
   date_fin_prevue: "",
+  date_fin: null,
   progress_percentage: 0,
   revenue: 0,
   profit_margin: 0,
@@ -378,6 +465,26 @@ export const defaultSiteFormValues: SiteFormValues = {
   subcontractor_payment_units: 0,
   subcontractor_payment_unit_label: "",
   subcontractor_payment_rate: 0,
+  // Isolation fields
+  surface_facturee_m2: null,
+  surface_posee_m2: null,
+  cout_mo_par_m2: null,
+  cout_isolant_par_m2: null,
+  cout_materiaux_par_m2: null,
+  cout_total_materiaux: null,
+  commission_commerciale_par_m2: null,
+  // Eclairage fields
+  nb_luminaires: null,
+  cout_total_mo: null,
+  cout_total_materiaux_eclairage: null,
+  // Common financial fields
+  travaux_non_subventionnes_client: 0,
+  tva_rate: 0.021,
+  frais_additionnels_total: 0,
+  // Derived snapshot totals
+  ca_ttc: null,
+  cout_chantier_ttc: null,
+  marge_totale_ttc: null,
 };
 
 export const createSiteSchema = (requiresProjectAssociation: boolean) =>
