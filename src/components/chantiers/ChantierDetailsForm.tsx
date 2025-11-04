@@ -47,11 +47,11 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
-import { calculateRentability, buildRentabilityInputFromSite } from "@/lib/rentability";
+import { calculateRentability, buildRentabilityInputFromSite, isLedProduct } from "@/lib/rentability";
 import { getProjectStatusBadgeStyle } from "@/lib/projects";
 import { parseSiteNotes, serializeSiteNotes, type SiteNoteAttachment } from "@/lib/sites";
 import { cn } from "@/lib/utils";
-import { ClipboardList, Loader2, Lock } from "lucide-react";
+import { ClipboardList, Loader2, Lock, Info } from "lucide-react";
 
 const currencyFormatter = new Intl.NumberFormat("fr-FR", {
   style: "currency",
@@ -126,6 +126,8 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
   const { user } = useAuth();
   const { statuses: statusOptions } = useProjectStatuses();
   const [siteAttachments, setSiteAttachments] = useState<SiteNoteAttachment[]>([]);
+  const [tvaRate, setTvaRate] = useState(0.021);
+  const [showHT, setShowHT] = useState(false);
 
   const resolver = useMemo(() => zodResolver(createSiteSchema(false)), []);
 
@@ -137,6 +139,12 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
 
   const { control, reset, handleSubmit, formState } = form;
   const watchedTravaux = useWatch({ control, name: "travaux_non_subventionnes" });
+  const watchedProductName = useWatch({ control, name: "product_name" });
+  const watchedSurfaceFacturee = useWatch({ control, name: "surface_facturee_m2" });
+  const watchedSurfacePosee = useWatch({ control, name: "surface_posee_m2" });
+  const watchedCoutIsolant = useWatch({ control, name: "cout_isolant_par_m2" });
+  const watchedTravauxClient = useWatch({ control, name: "travaux_non_subventionnes_client" });
+  
   const rentabilityWatch = useWatch({
     control,
     name: [
@@ -157,6 +165,19 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
       "subcontractor_payment_units",
       "subcontractor_payment_rate",
       "subcontractor_payment_unit_label",
+      "surface_facturee_m2",
+      "surface_posee_m2",
+      "cout_mo_par_m2",
+      "cout_isolant_par_m2",
+      "cout_materiaux_par_m2",
+      "cout_total_materiaux",
+      "commission_commerciale_par_m2",
+      "nb_luminaires",
+      "cout_total_mo",
+      "cout_total_materiaux_eclairage",
+      "travaux_non_subventionnes_client",
+      "tva_rate",
+      "frais_additionnels_total",
     ],
   });
   const watchedAdditionalCosts = useWatch({ control, name: "additional_costs" });
@@ -208,6 +229,10 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
   const project = chantier?.project ?? null;
   const projectStatusValue = project?.status ?? null;
   const isEditingLocked = projectStatusValue !== "CHANTIER_TERMINE";
+  
+  // Detect category: Isolation vs Éclairage
+  const productName = watchedProductName ?? chantier?.product_name ?? project?.product_name ?? "";
+  const isEclairage = isLedProduct(productName);
   const projectStatusConfig = useMemo(
     () =>
       projectStatusValue
@@ -273,43 +298,24 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
   ]);
 
   const rentabilityMetrics = useMemo(() => {
-    const [
-      laborCost,
-      materialCost,
-      isolationUsed,
-      surfaceFacturee,
-      travauxChoice,
-      travauxMontant,
-      productName,
-      additionalCosts,
-      commissionPerM2Enabled,
-      commissionPerM2,
-      subcontractorId,
-      subcontractorPaymentConfirmed,
-      subcontractorBaseUnits,
-      subcontractorPaymentAmount,
-      subcontractorPaymentUnits,
-      subcontractorPaymentRate,
-      subcontractorPaymentUnitLabel,
-    ] = (rentabilityWatch ?? []) as [
-      number | undefined,
-      number | undefined,
-      number | undefined,
-      number | undefined,
-      SiteFormValues["travaux_non_subventionnes"] | undefined,
-      number | undefined,
-      string | undefined,
-      SiteFormValues["additional_costs"] | undefined,
-      boolean | undefined,
-      number | undefined,
-      string | undefined,
-      boolean | undefined,
-      number | undefined,
-      number | undefined,
-      number | undefined,
-      number | undefined,
-      string | undefined,
-    ];
+    const values = rentabilityWatch ?? [];
+    const laborCost = values[0] as number | undefined;
+    const materialCost = values[1] as number | undefined;
+    const isolationUsed = values[2] as number | undefined;
+    const surfaceFacturee = values[3] as number | undefined;
+    const travauxChoice = values[4] as SiteFormValues["travaux_non_subventionnes"] | undefined;
+    const travauxMontant = values[5] as number | undefined;
+    const productName = values[6] as string | undefined;
+    const additionalCosts = values[7] as SiteFormValues["additional_costs"] | undefined;
+    const commissionPerM2Enabled = values[8] as boolean | undefined;
+    const commissionPerM2 = values[9] as number | undefined;
+    const subcontractorId = values[10] as string | undefined;
+    const subcontractorPaymentConfirmed = values[11] as boolean | undefined;
+    const subcontractorBaseUnits = values[12] as number | undefined;
+    const subcontractorPaymentAmount = values[13] as number | undefined;
+    const subcontractorPaymentUnits = values[14] as number | undefined;
+    const subcontractorPaymentRate = values[15] as number | undefined;
+    const subcontractorPaymentUnitLabel = values[16] as string | undefined;
 
     // Get calculated values from form
     const revenue = sanitizeNumber(form.getValues("revenue"));
@@ -555,25 +561,76 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
     void form.handleSubmit(handleFormSubmit)();
   }, [form, handleFormSubmit, isEditingLocked]);
 
+  // Auto-compute isolation derived fields
+  useEffect(() => {
+    if (isEclairage) return;
+    
+    const surfaceFacturee = sanitizeNumber(watchedSurfaceFacturee);
+    const surfacePosee = sanitizeNumber(watchedSurfacePosee);
+    const coutIsolant = sanitizeNumber(watchedCoutIsolant);
+    
+    if (surfaceFacturee > 0) {
+      const coutMateriauxParM2 = (surfacePosee * coutIsolant) / surfaceFacturee;
+      const coutTotalMateriaux = coutMateriauxParM2 * surfaceFacturee;
+      
+      const currentMat = sanitizeNumber(form.getValues("cout_materiaux_par_m2"));
+      const currentTotal = sanitizeNumber(form.getValues("cout_total_materiaux"));
+      
+      if (!numbersAreClose(currentMat, coutMateriauxParM2)) {
+        form.setValue("cout_materiaux_par_m2", coutMateriauxParM2, { shouldDirty: false });
+      }
+      if (!numbersAreClose(currentTotal, coutTotalMateriaux)) {
+        form.setValue("cout_total_materiaux", coutTotalMateriaux, { shouldDirty: false });
+      }
+    } else {
+      form.setValue("cout_materiaux_par_m2", 0, { shouldDirty: false });
+      form.setValue("cout_total_materiaux", 0, { shouldDirty: false });
+    }
+  }, [watchedSurfaceFacturee, watchedSurfacePosee, watchedCoutIsolant, isEclairage, form]);
+
   const disableInputs = isEditingLocked || isUpdating;
 
   const marginRate = rentabilityMetrics.marginRate ?? 0;
   const marginTotal = rentabilityMetrics.marginTotal ?? 0;
   const marginPerUnit = rentabilityMetrics.marginPerUnit ?? 0;
   const rentabilityBorder = getStatusGradient(marginRate);
-  const rentabilityIsLighting = rentabilityMetrics.measurementMode === "luminaire";
-  const rentabilityBilledUnitsLabel = rentabilityIsLighting
-    ? "Nombre de luminaires facturés"
-    : "Surface facturée (m²)";
-  const rentabilityExecutedUnitsLabel = rentabilityIsLighting
-    ? "Nombre de luminaires posés"
-    : "Surface posée (m²)";
-  const rentabilityLaborCostLabel = rentabilityIsLighting
-    ? "Coût main d'œuvre / luminaire (€)"
-    : "Coût main d'œuvre / m² (€)";
-  const rentabilityMaterialCostLabel = rentabilityIsLighting
-    ? "Coût matériel / luminaire (€)"
-    : "Coût matériaux / m² (€)";
+  
+  // Calculate CA and costs based on category
+  const primeCee = sanitizeNumber(chantier?.valorisation_cee ?? project?.prime_cee);
+  const travauxClient = sanitizeNumber(watchedTravauxClient);
+  const fraisAdditionnels = sanitizeNumber(rentabilityMetrics.additionalCostsTotal);
+  
+  const ca = primeCee + travauxClient;
+  
+  let coutChantier = 0;
+  let margeTotal = 0;
+  let margePerUnit = 0;
+  
+  if (isEclairage) {
+    const coutMO = sanitizeNumber(form.getValues("cout_total_mo"));
+    const coutMat = sanitizeNumber(form.getValues("cout_total_materiaux_eclairage"));
+    coutChantier = coutMO + coutMat + fraisAdditionnels;
+    margeTotal = ca - coutChantier;
+    
+    const nbLuminaires = sanitizeNumber(form.getValues("nb_luminaires"));
+    margePerUnit = nbLuminaires > 0 ? margeTotal / nbLuminaires : 0;
+  } else {
+    const surfaceFacturee = sanitizeNumber(form.getValues("surface_facturee_m2"));
+    const coutMOParM2 = sanitizeNumber(form.getValues("cout_mo_par_m2"));
+    const coutTotalMat = sanitizeNumber(form.getValues("cout_total_materiaux"));
+    const commissionParM2 = sanitizeNumber(form.getValues("commission_commerciale_par_m2"));
+    const commissionEnabled = Boolean(form.getValues("commission_eur_per_m2_enabled"));
+    
+    const coutMO = coutMOParM2 * surfaceFacturee;
+    coutChantier = coutMO + coutTotalMat + fraisAdditionnels;
+    const commission = commissionEnabled ? commissionParM2 * surfaceFacturee : 0;
+    margeTotal = ca - coutChantier - commission;
+    margePerUnit = surfaceFacturee > 0 ? margeTotal / surfaceFacturee : 0;
+  }
+  
+  // Apply TVA conversion for display
+  const tvaMultiplier = 1 + tvaRate;
+  const displayValue = (value: number) => showHT ? value / tvaMultiplier : value;
 
   return (
     <div className="space-y-6">
@@ -581,12 +638,12 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
         <form onSubmit={handleSubmit(handleFormSubmit)} className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
           <div className="space-y-6">
             {isEditingLocked ? (
-              <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                <Lock className="mt-0.5 h-4 w-4 shrink-0" />
+              <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+                <Info className="mt-0.5 h-4 w-4 shrink-0" />
                 <div className="space-y-1">
                   <p className="font-medium">Modifications verrouillées</p>
                   <p className="text-xs">
-                    Passez le projet au statut «&nbsp;CHANTIER_TERMINE&nbsp;» depuis l'onglet Projet pour activer la mise à jour du chantier.
+                    Passez le projet au statut « CHANTIER_TERMINE » depuis l'onglet Projet pour activer la mise à jour du chantier.
                   </p>
                 </div>
               </div>
@@ -656,151 +713,273 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                 <CardDescription>CA, commissions et coûts principaux.</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4 md:grid-cols-2">
-                <FormField
-                  control={control}
-                  name="surface_facturee"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{rentabilityBilledUnitsLabel}</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step={rentabilityIsLighting ? 1 : 0.1}
-                          {...field}
-                          onBlur={(event) => {
-                            field.onBlur();
-                            handleBlurSave();
-                          }}
-                          disabled={disableInputs}
-                          readOnly={isEditingLocked}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={control}
-                  name="cout_main_oeuvre_m2_ht"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{rentabilityLaborCostLabel}</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          {...field}
-                          onBlur={(event) => {
-                            field.onBlur();
-                            handleBlurSave();
-                          }}
-                          disabled={disableInputs}
-                          readOnly={isEditingLocked}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={control}
-                  name="cout_isolation_m2"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{rentabilityMaterialCostLabel}</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          {...field}
-                          onBlur={(event) => {
-                            field.onBlur();
-                            handleBlurSave();
-                          }}
-                          disabled={disableInputs}
-                          readOnly={isEditingLocked}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={control}
-                  name="isolation_utilisee_m2"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{rentabilityExecutedUnitsLabel}</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step={rentabilityIsLighting ? 1 : 0.1}
-                          {...field}
-                          onBlur={(event) => {
-                            field.onBlur();
-                            handleBlurSave();
-                          }}
-                          disabled={disableInputs}
-                          readOnly={isEditingLocked}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={control}
-                  name="commission_eur_per_m2_enabled"
-                  render={({ field }) => (
-                    <FormItem className="col-span-full">
-                      <div className="flex items-start gap-3 rounded-lg border border-dashed p-3">
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={(checked) => {
-                            field.onChange(checked);
-                            handleBlurSave();
-                          }}
-                          disabled={disableInputs}
-                        />
-                        <div className="space-y-2">
-                          <FormLabel>
-                            Commission commerciale ({rentabilityIsLighting ? "€/luminaire" : "€/m²"})
+                {!isEclairage ? (
+                  <>
+                    {/* Isolation fields */}
+                    <FormField
+                      control={control}
+                      name="surface_facturee_m2"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Surface facturée (m²)</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              step="0.1"
+                              {...field}
+                              onBlur={(event) => {
+                                field.onBlur();
+                                handleBlurSave();
+                              }}
+                              disabled={disableInputs}
+                              readOnly={isEditingLocked}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={control}
+                      name="cout_mo_par_m2"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Coût main d'œuvre / m² (€)</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              {...field}
+                              onBlur={(event) => {
+                                field.onBlur();
+                                handleBlurSave();
+                              }}
+                              disabled={disableInputs}
+                              readOnly={isEditingLocked}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={control}
+                      name="surface_posee_m2"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="flex items-center gap-1.5">
+                            Surface posée (m²)
+                            <span className="text-xs text-muted-foreground" title="Inclus chute">ℹ️</span>
                           </FormLabel>
-                          <p className="text-xs text-muted-foreground">
-                            Activez pour ajouter une commission calculée par{" "}
-                            {rentabilityIsLighting ? "luminaire" : "mètre carré"} facturé.
-                          </p>
-                          <FormField
-                            control={control}
-                            name="commission_eur_per_m2"
-                            render={({ field: amountField }) => (
-                              <FormItem>
-                                <FormLabel>
-                                  Montant commission ({rentabilityIsLighting ? "€/luminaire" : "€/m²"})
-                                </FormLabel>
-                                <FormControl>
-                                  <Input
-                                    type="number"
-                                    step="0.1"
-                                    min="0"
-                                    {...amountField}
-                                    onBlur={(event) => {
-                                      amountField.onBlur();
-                                      handleBlurSave();
-                                    }}
-                                    disabled={!field.value || disableInputs}
-                                    readOnly={isEditingLocked}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
+                          <FormControl>
+                            <Input
+                              type="number"
+                              step="0.1"
+                              {...field}
+                              onBlur={(event) => {
+                                field.onBlur();
+                                handleBlurSave();
+                              }}
+                              disabled={disableInputs}
+                              readOnly={isEditingLocked}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={control}
+                      name="cout_isolant_par_m2"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Coût isolant / m² (€)</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              {...field}
+                              onBlur={(event) => {
+                                field.onBlur();
+                                handleBlurSave();
+                              }}
+                              disabled={disableInputs}
+                              readOnly={isEditingLocked}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    {/* Computed read-only fields */}
+                    <div className="col-span-full grid gap-4 md:grid-cols-2 rounded-lg border bg-muted/30 p-4">
+                      <FormField
+                        control={control}
+                        name="cout_materiaux_par_m2"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs text-muted-foreground">Coût matériaux / m² (€)</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                {...field}
+                                value={field.value ?? 0}
+                                readOnly
+                                disabled
+                                className="bg-background/50 text-right font-medium"
+                              />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={control}
+                        name="cout_total_materiaux"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs text-muted-foreground">Coût total matériaux (€)</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                {...field}
+                                value={field.value ?? 0}
+                                readOnly
+                                disabled
+                                className="bg-background/50 text-right font-medium"
+                              />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Éclairage fields */}
+                    <FormField
+                      control={control}
+                      name="nb_luminaires"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nombre de luminaires installés</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              step="1"
+                              {...field}
+                              onBlur={(event) => {
+                                field.onBlur();
+                                handleBlurSave();
+                              }}
+                              disabled={disableInputs}
+                              readOnly={isEditingLocked}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={control}
+                      name="cout_total_mo"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Coût total main d'œuvre (€)</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              {...field}
+                              onBlur={(event) => {
+                                field.onBlur();
+                                handleBlurSave();
+                              }}
+                              disabled={disableInputs}
+                              readOnly={isEditingLocked}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={control}
+                      name="cout_total_materiaux_eclairage"
+                      render={({ field }) => (
+                        <FormItem className="md:col-span-2">
+                          <FormLabel>Coût total matériaux (€)</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              {...field}
+                              onBlur={(event) => {
+                                field.onBlur();
+                                handleBlurSave();
+                              }}
+                              disabled={disableInputs}
+                              readOnly={isEditingLocked}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </>
+                )}
+                
+                {/* Commission block - only show for Isolation */}
+                {!isEclairage && (
+                  <FormField
+                    control={control}
+                    name="commission_eur_per_m2_enabled"
+                    render={({ field }) => (
+                      <FormItem className="col-span-full">
+                        <div className="flex items-start gap-3 rounded-lg border border-dashed p-3">
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={(checked) => {
+                              field.onChange(checked);
+                              handleBlurSave();
+                            }}
+                            disabled={disableInputs}
                           />
+                          <div className="space-y-2">
+                            <FormLabel>Commission commerciale (€/m²)</FormLabel>
+                            <p className="text-xs text-muted-foreground">
+                              Activez pour ajouter une commission calculée par mètre carré facturé.
+                            </p>
+                            <FormField
+                              control={control}
+                              name="commission_commerciale_par_m2"
+                              render={({ field: amountField }) => (
+                                <FormItem>
+                                  <FormLabel>Montant commission (€/m²)</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      type="number"
+                                      step="0.1"
+                                      min="0"
+                                      {...amountField}
+                                      onBlur={(event) => {
+                                        amountField.onBlur();
+                                        handleBlurSave();
+                                      }}
+                                      disabled={!field.value || disableInputs}
+                                      readOnly={isEditingLocked}
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
                         </div>
-                      </div>
-                    </FormItem>
-                  )}
-                />
+                      </FormItem>
+                    )}
+                  />
+                )}
               </CardContent>
             </Card>
 
@@ -1228,8 +1407,35 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
           <div className="space-y-6">
             <Card className={cn("border-2", rentabilityBorder)}>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <ClipboardList className="h-4 w-4" /> Rentabilité prévisionnelle
+                <CardTitle className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ClipboardList className="h-4 w-4" /> Rentabilité prévisionnelle
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Select
+                      value={String(tvaRate)}
+                      onValueChange={(val) => setTvaRate(parseFloat(val))}
+                    >
+                      <SelectTrigger className="h-7 w-24 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0.021">TVA 2,1%</SelectItem>
+                        <SelectItem value="0.055">TVA 5,5%</SelectItem>
+                        <SelectItem value="0.10">TVA 10%</SelectItem>
+                        <SelectItem value="0.20">TVA 20%</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => setShowHT(!showHT)}
+                    >
+                      {showHT ? "Voir TTC" : "Voir HT"}
+                    </Button>
+                  </div>
                 </CardTitle>
                 <CardDescription>Calculée automatiquement à partir des montants saisis.</CardDescription>
               </CardHeader>
@@ -1237,28 +1443,17 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Chiffre d'affaires</span>
-                    <span className="font-semibold text-foreground">{formatCurrency(rentabilityMetrics.revenue)}</span>
+                    <span className="font-semibold text-foreground">{formatCurrency(displayValue(ca))}</span>
                   </div>
                   <div className="text-xs text-muted-foreground">Prime CEE + Travaux client</div>
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Unités de base</span>
-                    <span className="font-semibold text-foreground">
-                      {rentabilityMetrics.baseUnits > 0
-                        ? `${formatDecimal(rentabilityMetrics.baseUnits)} ${rentabilityMetrics.unitLabel}`
-                        : `— ${rentabilityMetrics.unitLabel}`}
-                    </span>
-                  </div>
-                  <div className="text-xs text-muted-foreground">Unités facturées ou exécutées</div>
-                </div>
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Coût chantier (HT+TVA)</span>
-                    <span className="font-semibold text-foreground">{formatCurrency(rentabilityMetrics.totalCosts)}</span>
+                    <span className="text-muted-foreground">Coût chantier</span>
+                    <span className="font-semibold text-foreground">{formatCurrency(displayValue(coutChantier))}</span>
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    Main d'œuvre + Matériaux + Sous-traitance + Frais
+                    MO + Matériaux + Frais
                   </div>
                 </div>
                 <div className="space-y-1">
@@ -1267,55 +1462,41 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                     <span
                       className={cn(
                         "font-semibold",
-                        marginTotal > 0 ? "text-emerald-600" : marginTotal < 0 ? "text-destructive" : "text-foreground",
+                        margeTotal > 0 ? "text-emerald-600" : margeTotal < 0 ? "text-destructive" : "text-foreground",
                       )}
                     >
-                      {formatCurrency(rentabilityMetrics.marginTotal)}
+                      {formatCurrency(displayValue(margeTotal))}
                     </span>
                   </div>
-                  <div className="text-xs text-muted-foreground">CA - Coûts totaux</div>
-                </div>
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Marge (%)</span>
-                    <span
-                      className={cn(
-                        "font-semibold",
-                        marginRate > 0 ? "text-emerald-600" : marginRate < 0 ? "text-destructive" : "text-foreground",
-                      )}
-                    >
-                      {formatPercent(marginRate)}
-                    </span>
-                  </div>
-                  <div className="text-xs text-muted-foreground">Marge totale / CA</div>
+                  <div className="text-xs text-muted-foreground">CA - Coût chantier{!isEclairage && " - Commission"}</div>
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">
-                      Marge / {rentabilityMetrics.unitLabel === "luminaire" ? "luminaire" : "m²"}
+                      Marge / {isEclairage ? "luminaire" : "m²"}
                     </span>
                     <span
                       className={cn(
                         "font-semibold",
-                        marginPerUnit > 0
+                        margePerUnit > 0
                           ? "text-emerald-600"
-                          : marginPerUnit < 0
+                          : margePerUnit < 0
                             ? "text-destructive"
                             : "text-foreground",
                       )}
                     >
-                      {rentabilityMetrics.unitsUsed > 0
-                        ? `${formatDecimal(rentabilityMetrics.marginPerUnit)} €`
-                        : "—"}
+                      {margePerUnit !== 0 ? `${formatDecimal(displayValue(margePerUnit))} €` : "—"}
                     </span>
                   </div>
-                  <div className="text-xs text-muted-foreground">Marge totale / Unités</div>
+                  <div className="text-xs text-muted-foreground">
+                    Marge totale / {isEclairage ? "Nombre luminaires" : "Surface facturée"}
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Frais additionnels</span>
                     <span className="font-semibold text-foreground">
-                      {formatCurrency(rentabilityMetrics.additionalCostsTotal)}
+                      {formatCurrency(displayValue(fraisAdditionnels))}
                     </span>
                   </div>
                   <div className="text-xs text-muted-foreground">Frais de chantier additionnels</div>
