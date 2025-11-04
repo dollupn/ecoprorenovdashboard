@@ -473,9 +473,21 @@ const ChantierDetails = () => {
     mutationFn: async (payload: SiteSubmitValues) => {
       if (!chantier || !user?.id) return;
       
+      // Exclude computed rentability fields that don't exist in the database
+      const {
+        rentability_total_costs,
+        rentability_margin_total,
+        rentability_margin_per_unit,
+        rentability_margin_rate,
+        rentability_unit_label,
+        rentability_unit_count,
+        rentability_additional_costs_total,
+        ...dbPayload
+      } = payload;
+      
       const updatePayload: Partial<Tables<"sites">> = {
-        ...payload,
-        team_members: payload.team_members?.map(m => m.id) ?? [],
+        ...dbPayload,
+        team_members: dbPayload.team_members?.map(m => m.id) ?? [],
       };
       
       const { error } = await supabase
