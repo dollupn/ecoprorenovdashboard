@@ -1151,6 +1151,7 @@ export type Database = {
         Row: {
           additional_costs: Json | null
           address: string
+          ca_ttc: number | null
           city: string
           client_first_name: string | null
           client_last_name: string | null
@@ -1158,16 +1159,28 @@ export type Database = {
           cofrac_status: string | null
           commission_commerciale_ht: string | null
           commission_commerciale_ht_montant: number | null
+          commission_commerciale_par_m2: number | null
           commission_eur_per_m2: number | null
           commission_eur_per_m2_enabled: boolean | null
+          cout_chantier_ttc: number | null
+          cout_isolant_par_m2: number | null
           cout_isolation_m2: number | null
           cout_main_oeuvre_m2_ht: number | null
+          cout_materiaux_par_m2: number | null
+          cout_mo_par_m2: number | null
+          cout_total_materiaux: number | null
+          cout_total_materiaux_eclairage: number | null
+          cout_total_mo: number | null
           created_at: string
           date_debut: string
+          date_fin: string | null
           date_fin_prevue: string | null
+          frais_additionnels_total: number | null
           id: string
           isolation_utilisee_m2: number | null
+          marge_totale_ttc: number | null
           montant_commission: number | null
+          nb_luminaires: number | null
           notes: string | null
           org_id: string | null
           postal_code: string
@@ -1188,17 +1201,21 @@ export type Database = {
           subcontractor_id: string | null
           subcontractor_payment_confirmed: boolean
           surface_facturee: number | null
+          surface_facturee_m2: number | null
+          surface_posee_m2: number | null
           team_members: string[] | null
           travaux_non_subventionnes: string | null
+          travaux_non_subventionnes_client: number | null
           travaux_non_subventionnes_montant: number | null
+          tva_rate: number | null
           updated_at: string
           user_id: string
           valorisation_cee: number | null
-          frais_tva_percentage: number | null
         }
         Insert: {
           additional_costs?: Json | null
           address: string
+          ca_ttc?: number | null
           city: string
           client_first_name?: string | null
           client_last_name?: string | null
@@ -1206,16 +1223,28 @@ export type Database = {
           cofrac_status?: string | null
           commission_commerciale_ht?: string | null
           commission_commerciale_ht_montant?: number | null
+          commission_commerciale_par_m2?: number | null
           commission_eur_per_m2?: number | null
           commission_eur_per_m2_enabled?: boolean | null
+          cout_chantier_ttc?: number | null
+          cout_isolant_par_m2?: number | null
           cout_isolation_m2?: number | null
           cout_main_oeuvre_m2_ht?: number | null
+          cout_materiaux_par_m2?: number | null
+          cout_mo_par_m2?: number | null
+          cout_total_materiaux?: number | null
+          cout_total_materiaux_eclairage?: number | null
+          cout_total_mo?: number | null
           created_at?: string
           date_debut: string
+          date_fin?: string | null
           date_fin_prevue?: string | null
+          frais_additionnels_total?: number | null
           id?: string
           isolation_utilisee_m2?: number | null
+          marge_totale_ttc?: number | null
           montant_commission?: number | null
+          nb_luminaires?: number | null
           notes?: string | null
           org_id?: string | null
           postal_code: string
@@ -1236,17 +1265,21 @@ export type Database = {
           subcontractor_id?: string | null
           subcontractor_payment_confirmed?: boolean
           surface_facturee?: number | null
+          surface_facturee_m2?: number | null
+          surface_posee_m2?: number | null
           team_members?: string[] | null
           travaux_non_subventionnes?: string | null
+          travaux_non_subventionnes_client?: number | null
           travaux_non_subventionnes_montant?: number | null
+          tva_rate?: number | null
           updated_at?: string
           user_id: string
           valorisation_cee?: number | null
-          frais_tva_percentage?: number | null
         }
         Update: {
           additional_costs?: Json | null
           address?: string
+          ca_ttc?: number | null
           city?: string
           client_first_name?: string | null
           client_last_name?: string | null
@@ -1254,16 +1287,28 @@ export type Database = {
           cofrac_status?: string | null
           commission_commerciale_ht?: string | null
           commission_commerciale_ht_montant?: number | null
+          commission_commerciale_par_m2?: number | null
           commission_eur_per_m2?: number | null
           commission_eur_per_m2_enabled?: boolean | null
+          cout_chantier_ttc?: number | null
+          cout_isolant_par_m2?: number | null
           cout_isolation_m2?: number | null
           cout_main_oeuvre_m2_ht?: number | null
+          cout_materiaux_par_m2?: number | null
+          cout_mo_par_m2?: number | null
+          cout_total_materiaux?: number | null
+          cout_total_materiaux_eclairage?: number | null
+          cout_total_mo?: number | null
           created_at?: string
           date_debut?: string
+          date_fin?: string | null
           date_fin_prevue?: string | null
+          frais_additionnels_total?: number | null
           id?: string
           isolation_utilisee_m2?: number | null
+          marge_totale_ttc?: number | null
           montant_commission?: number | null
+          nb_luminaires?: number | null
           notes?: string | null
           org_id?: string | null
           postal_code?: string
@@ -1284,13 +1329,16 @@ export type Database = {
           subcontractor_id?: string | null
           subcontractor_payment_confirmed?: boolean
           surface_facturee?: number | null
+          surface_facturee_m2?: number | null
+          surface_posee_m2?: number | null
           team_members?: string[] | null
           travaux_non_subventionnes?: string | null
+          travaux_non_subventionnes_client?: number | null
           travaux_non_subventionnes_montant?: number | null
+          tva_rate?: number | null
           updated_at?: string
           user_id?: string
           valorisation_cee?: number | null
-          frais_tva_percentage?: number | null
         }
         Relationships: [
           {
