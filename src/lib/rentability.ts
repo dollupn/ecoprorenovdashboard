@@ -22,7 +22,7 @@ export interface RentabilityInput {
   travauxOption?: RentabilityTravauxOption | null;
   travauxAmount?: number | null;
   additionalCosts?: ReadonlyArray<RentabilityAdditionalCostInput | null | undefined> | null;
-  fraisTvaPercentage?: number | null;
+  tvaRate?: number | null;
   subcontractorRatePerUnit?: number | null;
   subcontractorBaseUnits?: number | null;
   subcontractorPaymentConfirmed?: boolean | null;
@@ -184,7 +184,9 @@ export const calculateRentability = (input: RentabilityInput): RentabilityResult
       const taxes = amount * (rateCandidate / 100);
       return sum + amount + taxes;
     }
-    const rate = clampPercentage(Math.max(0, sanitizeNumber(input.fraisTvaPercentage)));
+    // Fallback to input tvaRate (convert from decimal to percentage)
+    const tvaRateDecimal = Math.max(0, sanitizeNumber(input.tvaRate));
+    const rate = Math.min(100, tvaRateDecimal * 100);
     const taxes = rate > 0 ? amount * (rate / 100) : 0;
     return sum + amount + taxes;
   }, 0);
@@ -378,7 +380,6 @@ export interface SiteRentabilitySource {
   commission_eur_per_m2?: number | string | null;
   commission_commerciale_ht?: string | boolean | null;
   commission_commerciale_ht_montant?: number | string | null;
-  frais_tva_percentage?: number | null;
   subcontractor_pricing_details?: string | number | null;
   subcontractor_payment_confirmed?: boolean | null;
   subcontractor_base_units?: number | null;
@@ -479,7 +480,7 @@ export const buildRentabilityInputFromSite = (
     travauxOption: (values.travaux_non_subventionnes as RentabilityTravauxOption | null | undefined) ?? null,
     travauxAmount: travauxAmountCandidate,
     additionalCosts: Array.isArray(values.additional_costs) ? values.additional_costs : [],
-    fraisTvaPercentage: values.frais_tva_percentage,
+    tvaRate: values.tva_rate,
     subcontractorRatePerUnit: subcontractorRate,
     subcontractorBaseUnits,
     subcontractorPaymentConfirmed: values.subcontractor_payment_confirmed,

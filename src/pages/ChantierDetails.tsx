@@ -160,7 +160,7 @@ const ChantierDetails = () => {
       "product_name",
       "additional_costs",
       "valorisation_cee",
-      "frais_tva_percentage",
+      "tva_rate",
       "commission_eur_per_m2_enabled",
       "commission_eur_per_m2",
       "subcontractor_id",
@@ -289,7 +289,7 @@ const ChantierDetails = () => {
         chantier.commission_eur_per_m2 ?? chantier.commission_commerciale_ht_montant,
       ),
       valorisation_cee: sanitizeNumber(chantier.valorisation_cee),
-      frais_tva_percentage: Math.min(100, Math.max(0, sanitizeNumber(chantier.frais_tva_percentage))),
+      tva_rate: sanitizeNumber(chantier.tva_rate, 0.021),
       subcontractor_id: chantier.subcontractor_id ?? null,
       subcontractor_payment_confirmed: Boolean(chantier.subcontractor_payment_confirmed),
       travaux_non_subventionnes: normalizeTravauxNonSubventionnesValue(
@@ -322,7 +322,7 @@ const ChantierDetails = () => {
       productName,
       additionalCosts,
       valorisationCee,
-      fraisTvaPercentage,
+      tvaRate,
       commissionPerM2Enabled,
       commissionPerM2,
       subcontractorId,
@@ -400,7 +400,7 @@ const ChantierDetails = () => {
       additional_costs: normalizedAdditionalCosts,
       product_name: productName,
       valorisation_cee: valorisationCeeValue,
-      frais_tva_percentage: Math.min(100, Math.max(0, sanitizeNumber(fraisTvaPercentage))),
+      tva_rate: sanitizeNumber(tvaRate, 0.021),
       commission_eur_per_m2_enabled: commissionPerM2Enabled,
       commission_eur_per_m2: sanitizeNumber(commissionPerM2),
       subcontractor_pricing_details: subcontractorRate,
@@ -528,7 +528,7 @@ const ChantierDetails = () => {
     const commissionPerM2Value = commissionPerM2Enabled
       ? sanitizeNumber(values.commission_eur_per_m2)
       : 0;
-    const fraisTvaPercentage = Math.min(100, Math.max(0, sanitizeNumber(values.frais_tva_percentage)));
+    const tvaRateValue = sanitizeNumber(values.tva_rate, 0.021);
 
     const selectedSubcontractor = (subcontractorsQuery.data ?? []).find(
       (option) => option.id === values.subcontractor_id,
@@ -548,7 +548,6 @@ const ChantierDetails = () => {
     const rentabilityResult = calculateRentability(
       buildRentabilityInputFromSite({
         ...values,
-        frais_tva_percentage: fraisTvaPercentage,
         revenue: sanitizeNumber(chantier?.revenue ?? values.revenue),
         montant_commission: sanitizeNumber(chantier?.montant_commission ?? values.montant_commission),
         valorisation_cee: sanitizeNumber(chantier?.valorisation_cee ?? values.valorisation_cee),
@@ -578,7 +577,7 @@ const ChantierDetails = () => {
         travaux_non_subventionnes_financement: travauxFinancement,
         commission_eur_per_m2_enabled: commissionPerM2Enabled,
         commission_eur_per_m2: commissionPerM2Value,
-        frais_tva_percentage: fraisTvaPercentage,
+        tva_rate: tvaRateValue,
         profit_margin: rentabilityResult.marginRate,
         rentability_total_costs: rentabilityResult.totalCosts,
         rentability_margin_total: rentabilityResult.marginTotal,
@@ -898,19 +897,24 @@ const ChantierDetails = () => {
                     />
                     <FormField
                       control={control}
-                      name="frais_tva_percentage"
+                      name="tva_rate"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>TVA des frais (%)</FormLabel>
+                          <FormLabel>Taux TVA chantier</FormLabel>
                           <FormControl>
                             <div className="flex items-center gap-2">
                               <Input
                                 type="number"
-                                step="0.1"
+                                step="0.001"
                                 min={0}
-                                max={100}
+                                max={1}
                                 className="flex-1"
                                 {...field}
+                                value={(field.value * 100).toFixed(1)}
+                                onChange={(e) => {
+                                  const percentValue = parseFloat(e.target.value);
+                                  field.onChange(percentValue / 100);
+                                }}
                                 onBlur={(event) => {
                                   field.onBlur();
                                   handleBlurSave();

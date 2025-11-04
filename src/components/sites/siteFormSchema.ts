@@ -266,10 +266,6 @@ export const createBaseSiteSchema = () => {
       .min(0)
       .optional()
       .default(0),
-    frais_tva_percentage: z.coerce
-      .number({ invalid_type_error: "TVA invalide" })
-      .min(0, "Le taux de TVA doit être positif")
-      .max(100, "Le taux de TVA doit être inférieur ou égal à 100"),
     travaux_non_subventionnes: z.enum(
       TRAVAUX_NON_SUBVENTIONNES_OPTIONS.map((option) => option.value) as [
         TravauxNonSubventionnesValue,
@@ -448,7 +444,6 @@ export const defaultSiteFormValues: SiteFormValues = {
   isolation_utilisee_m2: 0,
   montant_commission: 0,
   valorisation_cee: 0,
-  frais_tva_percentage: 0,
   travaux_non_subventionnes: "NA",
   travaux_non_subventionnes_description: "",
   travaux_non_subventionnes_montant: 0,
