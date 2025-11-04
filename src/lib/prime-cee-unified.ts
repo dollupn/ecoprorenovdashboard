@@ -441,12 +441,14 @@ export const computePrimeCee = ({
   products,
   productMap,
   buildingType,
+  buildingSurface,
   delegate,
   primeBonification,
 }: {
   products: PrimeProductInput[];
   productMap: Record<string, PrimeCeeProductCatalogEntry>;
   buildingType?: string | null;
+  buildingSurface?: number | null;
   delegate?: Delegate | null;
   primeBonification?: number | null;
 }): PrimeCeeComputation | null => {
@@ -548,9 +550,29 @@ export const computePrimeCee = ({
       multiplierDetection?.label ? { multiplierLabel: multiplierDetection.label } : null,
     );
 
+    // Check for surface-based tariff override
+    let effectiveDelegatePrice = delegatePrice;
+    const productAny = product as any;
+    if (buildingSurface !== null && buildingSurface !== undefined) {
+      const tariffGe400 = toPositiveNumber(productAny.valeur_sante_entrepot_commerce_ge_400);
+      const tariffLt400 = toPositiveNumber(productAny.valeur_sante_entrepot_commerce_lt_400);
+      
+      if (buildingSurface >= 400 && tariffGe400) {
+        effectiveDelegatePrice = tariffGe400;
+        if (import.meta.env.DEV) {
+          console.log(`[CEE] Using tariff ≥400m² (${tariffGe400}) for building surface ${buildingSurface}m²`);
+        }
+      } else if (buildingSurface < 400 && tariffLt400) {
+        effectiveDelegatePrice = tariffLt400;
+        if (import.meta.env.DEV) {
+          console.log(`[CEE] Using tariff <400m² (${tariffLt400}) for building surface ${buildingSurface}m²`);
+        }
+      }
+    }
+
     const valorisationTotalMwh = valorisationPerUnitMwh * multiplierValue;
-    const valorisationPerUnitEur = valorisationPerUnitMwh * delegatePrice;
-    const valorisationTotalEur = valorisationTotalMwh * delegatePrice;
+    const valorisationPerUnitEur = valorisationPerUnitMwh * effectiveDelegatePrice;
+    const valorisationTotalEur = valorisationTotalMwh * effectiveDelegatePrice;
     const valorisationLabel = multiplierDetection?.label
       ? `Valorisation ${multiplierDetection.label}`
       : "Valorisation m²/LED";
@@ -575,7 +597,7 @@ export const computePrimeCee = ({
       multiplierLabel,
       valorisationTotalMwh,
       valorisationTotalEur,
-      delegatePrice,
+      delegatePrice: effectiveDelegatePrice,
       totalPrime: valorisationTotalEur,
       hasMissingKwhCumac: false,
     });

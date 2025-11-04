@@ -573,6 +573,7 @@ const Projects = ({
         products: projectProducts,
         productMap,
         buildingType: project.building_type,
+        buildingSurface: project.surface_batiment_m2,
         delegate: project.delegate,
         primeBonification,
       });

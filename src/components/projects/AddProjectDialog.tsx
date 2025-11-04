@@ -868,6 +868,7 @@ export const AddProjectDialog = ({
   const watchedProducts = useWatch({ control: form.control, name: "products" });
   const watchedBuildingType = useWatch({ control: form.control, name: "building_type" });
   const watchedDelegateId = useWatch({ control: form.control, name: "delegate_id" });
+  const watchedSurfaceBatiment = useWatch({ control: form.control, name: "surface_batiment_m2" });
   const sameAddress = form.watch("same_address");
 
   const productMap = useMemo(() => {
@@ -943,11 +944,12 @@ export const AddProjectDialog = ({
     return computePrimeCee({
       products: normalizedProducts,
       buildingType: watchedBuildingType,
+      buildingSurface: watchedSurfaceBatiment,
       delegate: selectedDelegate,
       primeBonification,
       productMap,
     });
-  }, [watchedProducts, watchedBuildingType, selectedDelegate, primeBonification, productMap]);
+  }, [watchedProducts, watchedBuildingType, watchedSurfaceBatiment, selectedDelegate, primeBonification, productMap]);
 
   const primeCeeProducts = primeCeeComputation?.products ?? [];
   const hasPrimeCeeValue =
@@ -1380,6 +1382,7 @@ export const AddProjectDialog = ({
       const primeCeeValue = computePrimeCee({
         products: validProducts,
         buildingType: data.building_type,
+        buildingSurface: data.surface_batiment_m2,
         delegate: delegateRecord,
         primeBonification,
         productMap,
