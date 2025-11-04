@@ -64,6 +64,12 @@ export interface RentabilityResult {
   subcontractorBaseUnits: number;
   subcontractorEstimatedCost: number;
   subcontractorPaymentConfirmed: boolean;
+  // Snapshot totals for persistence
+  ca_ttc: number;
+  cout_chantier_ttc: number;
+  marge_totale_ttc: number;
+  marge_par_surface?: number;
+  marge_par_luminaire?: number;
 }
 
 const sanitizeNumber = (value: unknown): number => {
@@ -244,6 +250,10 @@ export const calculateRentability = (input: RentabilityInput): RentabilityResult
     subcontractorBaseUnits: roundZero(normalizedSubcontractorUnits),
     subcontractorEstimatedCost: roundZero(subcontractorEstimatedCost),
     subcontractorPaymentConfirmed,
+    // Snapshot totals (same as above for backward compatibility)
+    ca_ttc: roundZero(totalRevenue),
+    cout_chantier_ttc: roundZero(totalCosts),
+    marge_totale_ttc: roundZero(marginTotal),
   };
 };
 
@@ -251,7 +261,105 @@ export const isLedProduct = (productName: string | null | undefined): boolean =>
   if (!productName) return false;
   const normalized = productName.normalize("NFD").replace(/[^\p{L}\p{N}]+/gu, " ").toLowerCase();
   if (normalized.length === 0) return false;
-  return normalized.includes("led") || normalized.includes("luminaire");
+  return normalized.includes("led") || normalized.includes("luminaire") || normalized.includes("eclair");
+};
+
+/**
+ * New category-based rentability calculation
+ * Replaces legacy logic with Isolation vs Éclairage-specific formulas
+ */
+export interface CategoryRentabilityInput {
+  // Category detection
+  category: "Isolation" | "Eclairage";
+  
+  // Common
+  prime_cee: number;
+  travaux_non_subventionnes_client?: number;
+  frais_additionnels_total?: number;
+  
+  // Isolation-specific
+  surface_facturee_m2?: number;
+  surface_posee_m2?: number;
+  cout_mo_par_m2?: number;
+  cout_isolant_par_m2?: number;
+  cout_materiaux_par_m2?: number;
+  cout_total_materiaux?: number;
+  commission_commerciale_par_m2?: number;
+  commission_enabled?: boolean;
+  
+  // Éclairage-specific
+  nb_luminaires?: number;
+  cout_total_mo?: number;
+  cout_total_materiaux_eclairage?: number;
+}
+
+export interface CategoryRentabilityResult {
+  ca_ttc: number;
+  cout_chantier_ttc: number;
+  marge_totale_ttc: number;
+  marge_par_surface?: number;
+  marge_par_luminaire?: number;
+  frais_additionnels_total: number;
+  category: string;
+}
+
+export const calculateCategoryRentability = (
+  input: CategoryRentabilityInput
+): CategoryRentabilityResult => {
+  const primeCee = Math.max(0, sanitizeNumber(input.prime_cee));
+  const travauxClient = Math.max(0, sanitizeNumber(input.travaux_non_subventionnes_client));
+  const fraisAdditionnels = Math.max(0, sanitizeNumber(input.frais_additionnels_total));
+  
+  // Common: CA = prime_cee + travaux_non_subventionnes_client
+  const ca_ttc = primeCee + travauxClient;
+  
+  let cout_chantier_ttc = 0;
+  let marge_totale_ttc = 0;
+  let marge_par_surface: number | undefined;
+  let marge_par_luminaire: number | undefined;
+  
+  if (input.category === "Isolation") {
+    const surfaceFacturee = Math.max(0, sanitizeNumber(input.surface_facturee_m2));
+    const coutMOParM2 = Math.max(0, sanitizeNumber(input.cout_mo_par_m2));
+    const coutTotalMateriaux = Math.max(0, sanitizeNumber(input.cout_total_materiaux));
+    const commissionParM2 = Math.max(0, sanitizeNumber(input.commission_commerciale_par_m2));
+    const commissionEnabled = toBoolean(input.commission_enabled);
+    
+    // Isolation: cout_chantier = (cout_mo_par_m2 * surface_facturee_m2) + cout_total_materiaux + frais_additionnels_total
+    const coutMO = coutMOParM2 * surfaceFacturee;
+    cout_chantier_ttc = coutMO + coutTotalMateriaux + fraisAdditionnels;
+    
+    // Commission increases cost (reduces margin)
+    if (commissionEnabled && commissionParM2 > 0 && surfaceFacturee > 0) {
+      cout_chantier_ttc += commissionParM2 * surfaceFacturee;
+    }
+    
+    // Margin
+    marge_totale_ttc = ca_ttc - cout_chantier_ttc;
+    marge_par_surface = surfaceFacturee > 0 ? marge_totale_ttc / surfaceFacturee : 0;
+  } else {
+    // Éclairage
+    const nbLuminaires = Math.max(0, sanitizeNumber(input.nb_luminaires));
+    const coutTotalMO = Math.max(0, sanitizeNumber(input.cout_total_mo));
+    const coutTotalMateriaux = Math.max(0, sanitizeNumber(input.cout_total_materiaux_eclairage));
+    
+    // Éclairage: cout_chantier = cout_total_mo + cout_total_materiaux + frais_additionnels_total
+    cout_chantier_ttc = coutTotalMO + coutTotalMateriaux + fraisAdditionnels;
+    
+    // Margin
+    marge_totale_ttc = ca_ttc - cout_chantier_ttc;
+    marge_par_luminaire = nbLuminaires > 0 ? marge_totale_ttc / nbLuminaires : 0;
+  }
+  
+  return {
+    ca_ttc: roundZero(ca_ttc),
+    cout_chantier_ttc: roundZero(cout_chantier_ttc),
+    marge_totale_ttc: roundZero(marge_totale_ttc),
+    marge_par_surface: marge_par_surface !== undefined ? roundZero(marge_par_surface) : undefined,
+    marge_par_luminaire: marge_par_luminaire !== undefined ? roundZero(marge_par_luminaire) : undefined,
+    frais_additionnels_total: roundZero(fraisAdditionnels),
+    category: input.category,
+  };
 };
 
 export interface SiteRentabilitySource {
@@ -286,6 +394,22 @@ export interface SiteRentabilitySource {
     tva_rate?: number | null;
   }> | null;
   product_name?: string | null;
+  // New Isolation fields
+  surface_facturee_m2?: number | null;
+  surface_posee_m2?: number | null;
+  cout_mo_par_m2?: number | null;
+  cout_isolant_par_m2?: number | null;
+  cout_materiaux_par_m2?: number | null;
+  cout_total_materiaux?: number | null;
+  commission_commerciale_par_m2?: number | null;
+  // New Éclairage fields
+  nb_luminaires?: number | null;
+  cout_total_mo?: number | null;
+  cout_total_materiaux_eclairage?: number | null;
+  // Common new fields
+  travaux_non_subventionnes_client?: number | null;
+  tva_rate?: number | null;
+  frais_additionnels_total?: number | null;
 }
 
 export const buildRentabilityInputFromSite = (
@@ -296,8 +420,9 @@ export const buildRentabilityInputFromSite = (
   const measurementMode = ledProduct ? "luminaire" : "surface";
   const unitLabel = ledProduct ? "luminaire" : "m²";
 
-  const executedUnits = sanitizeNumber(values.isolation_utilisee_m2);
-  const billedUnits = sanitizeNumber(values.surface_facturee);
+  // Use new fields when available, fall back to legacy
+  const executedUnits = sanitizeNumber(values.surface_posee_m2 ?? values.isolation_utilisee_m2);
+  const billedUnits = sanitizeNumber(values.surface_facturee_m2 ?? values.surface_facturee);
 
   const travauxAmountCandidate =
     typeof values.travaux_non_subventionnes_montant === "number"
@@ -319,7 +444,7 @@ export const buildRentabilityInputFromSite = (
     values.commission_eur_per_m2_enabled ?? values.commission_commerciale_ht,
   );
   const commissionPerUnit = sanitizeNumber(
-    values.commission_eur_per_m2 ?? values.commission_commerciale_ht_montant,
+    values.commission_commerciale_par_m2 ?? values.commission_eur_per_m2 ?? values.commission_commerciale_ht_montant,
   );
 
   const rawSubcontractorBaseUnits = sanitizeNumber(values.subcontractor_base_units);
@@ -344,8 +469,8 @@ export const buildRentabilityInputFromSite = (
     revenue: values.revenue,
     originalRevenue: values.revenue,
     primeCee,
-    laborCostPerUnit: values.cout_main_oeuvre_m2_ht,
-    materialCostPerUnit: values.cout_isolation_m2,
+    laborCostPerUnit: values.cout_mo_par_m2 ?? values.cout_main_oeuvre_m2_ht,
+    materialCostPerUnit: values.cout_materiaux_par_m2 ?? values.cout_isolation_m2,
     unitsUsed: executedUnits,
     billedUnits,
     commission: values.montant_commission,

@@ -47,7 +47,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
-import { calculateRentability, buildRentabilityInputFromSite, isLedProduct } from "@/lib/rentability";
+import { calculateRentability, buildRentabilityInputFromSite, isLedProduct, calculateCategoryRentability } from "@/lib/rentability";
 import { getProjectStatusBadgeStyle } from "@/lib/projects";
 import { parseSiteNotes, serializeSiteNotes, type SiteNoteAttachment } from "@/lib/sites";
 import { cn } from "@/lib/utils";
@@ -510,6 +510,29 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
         subcontractor_pricing_details: subcontractorRate,
       }),
     );
+    
+    // Calculate category-based snapshots for persistence
+    const primeCee = sanitizeNumber(chantier?.valorisation_cee ?? project?.prime_cee);
+    const travauxClient = sanitizeNumber(values.travaux_non_subventionnes_client);
+    const fraisAdditionnels = sanitizeNumber(rentabilityResult.additionalCostsTotal);
+    const isEclairageProduct = isLedProduct(values.product_name ?? project?.product_name);
+    
+    const categorySnapshots = calculateCategoryRentability({
+      category: isEclairageProduct ? "Eclairage" : "Isolation",
+      prime_cee: primeCee,
+      travaux_non_subventionnes_client: travauxClient,
+      frais_additionnels_total: fraisAdditionnels,
+      // Isolation fields
+      surface_facturee_m2: sanitizeNumber(values.surface_facturee_m2),
+      cout_mo_par_m2: sanitizeNumber(values.cout_mo_par_m2),
+      cout_total_materiaux: sanitizeNumber(values.cout_total_materiaux),
+      commission_commerciale_par_m2: sanitizeNumber(values.commission_commerciale_par_m2),
+      commission_enabled: commissionPerM2Enabled,
+      // Éclairage fields
+      nb_luminaires: sanitizeNumber(values.nb_luminaires),
+      cout_total_mo: sanitizeNumber(values.cout_total_mo),
+      cout_total_materiaux_eclairage: sanitizeNumber(values.cout_total_materiaux_eclairage),
+    });
 
       const serializedNotes = serializeSiteNotes(values.notes, siteAttachments[0]?.file ?? null, siteAttachments);
 
@@ -539,6 +562,10 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
       subcontractor_payment_unit_label: rentabilityResult.unitLabel,
       subcontractor_payment_rate: rentabilityResult.subcontractorRate,
       subcontractor_base_units: rentabilityResult.subcontractorBaseUnits,
+      // Snapshot totals for instant dashboard KPIs
+      ca_ttc: categorySnapshots.ca_ttc,
+      cout_chantier_ttc: categorySnapshots.cout_chantier_ttc,
+      marge_totale_ttc: categorySnapshots.marge_totale_ttc,
     };
 
       mutateSite(payload);
@@ -595,38 +622,29 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
   const marginPerUnit = rentabilityMetrics.marginPerUnit ?? 0;
   const rentabilityBorder = getStatusGradient(marginRate);
   
-  // Calculate CA and costs based on category
-  const primeCee = sanitizeNumber(chantier?.valorisation_cee ?? project?.prime_cee);
-  const travauxClient = sanitizeNumber(watchedTravauxClient);
-  const fraisAdditionnels = sanitizeNumber(rentabilityMetrics.additionalCostsTotal);
-  
-  const ca = primeCee + travauxClient;
-  
-  let coutChantier = 0;
-  let margeTotal = 0;
-  let margePerUnit = 0;
-  
-  if (isEclairage) {
-    const coutMO = sanitizeNumber(form.getValues("cout_total_mo"));
-    const coutMat = sanitizeNumber(form.getValues("cout_total_materiaux_eclairage"));
-    coutChantier = coutMO + coutMat + fraisAdditionnels;
-    margeTotal = ca - coutChantier;
+  // Use new category-based calculation
+  const categoryRentability = useMemo(() => {
+    const primeCee = sanitizeNumber(chantier?.valorisation_cee ?? project?.prime_cee);
+    const travauxClient = sanitizeNumber(watchedTravauxClient);
+    const fraisAdditionnels = sanitizeNumber(rentabilityMetrics.additionalCostsTotal);
     
-    const nbLuminaires = sanitizeNumber(form.getValues("nb_luminaires"));
-    margePerUnit = nbLuminaires > 0 ? margeTotal / nbLuminaires : 0;
-  } else {
-    const surfaceFacturee = sanitizeNumber(form.getValues("surface_facturee_m2"));
-    const coutMOParM2 = sanitizeNumber(form.getValues("cout_mo_par_m2"));
-    const coutTotalMat = sanitizeNumber(form.getValues("cout_total_materiaux"));
-    const commissionParM2 = sanitizeNumber(form.getValues("commission_commerciale_par_m2"));
-    const commissionEnabled = Boolean(form.getValues("commission_eur_per_m2_enabled"));
-    
-    const coutMO = coutMOParM2 * surfaceFacturee;
-    coutChantier = coutMO + coutTotalMat + fraisAdditionnels;
-    const commission = commissionEnabled ? commissionParM2 * surfaceFacturee : 0;
-    margeTotal = ca - coutChantier - commission;
-    margePerUnit = surfaceFacturee > 0 ? margeTotal / surfaceFacturee : 0;
-  }
+    return calculateCategoryRentability({
+      category: isEclairage ? "Eclairage" : "Isolation",
+      prime_cee: primeCee,
+      travaux_non_subventionnes_client: travauxClient,
+      frais_additionnels_total: fraisAdditionnels,
+      // Isolation fields
+      surface_facturee_m2: sanitizeNumber(form.getValues("surface_facturee_m2")),
+      cout_mo_par_m2: sanitizeNumber(form.getValues("cout_mo_par_m2")),
+      cout_total_materiaux: sanitizeNumber(form.getValues("cout_total_materiaux")),
+      commission_commerciale_par_m2: sanitizeNumber(form.getValues("commission_commerciale_par_m2")),
+      commission_enabled: Boolean(form.getValues("commission_eur_per_m2_enabled")),
+      // Éclairage fields
+      nb_luminaires: sanitizeNumber(form.getValues("nb_luminaires")),
+      cout_total_mo: sanitizeNumber(form.getValues("cout_total_mo")),
+      cout_total_materiaux_eclairage: sanitizeNumber(form.getValues("cout_total_materiaux_eclairage")),
+    });
+  }, [isEclairage, watchedTravauxClient, rentabilityMetrics.additionalCostsTotal, chantier?.valorisation_cee, project?.prime_cee, form, rentabilityWatch]);
   
   // Apply TVA conversion for display
   const tvaMultiplier = 1 + tvaRate;
@@ -1443,14 +1461,14 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Chiffre d'affaires</span>
-                    <span className="font-semibold text-foreground">{formatCurrency(displayValue(ca))}</span>
+                    <span className="font-semibold text-foreground">{formatCurrency(displayValue(categoryRentability.ca_ttc))}</span>
                   </div>
                   <div className="text-xs text-muted-foreground">Prime CEE + Travaux client</div>
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Coût chantier</span>
-                    <span className="font-semibold text-foreground">{formatCurrency(displayValue(coutChantier))}</span>
+                    <span className="font-semibold text-foreground">{formatCurrency(displayValue(categoryRentability.cout_chantier_ttc))}</span>
                   </div>
                   <div className="text-xs text-muted-foreground">
                     MO + Matériaux + Frais
@@ -1462,10 +1480,10 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                     <span
                       className={cn(
                         "font-semibold",
-                        margeTotal > 0 ? "text-emerald-600" : margeTotal < 0 ? "text-destructive" : "text-foreground",
+                        categoryRentability.marge_totale_ttc > 0 ? "text-emerald-600" : categoryRentability.marge_totale_ttc < 0 ? "text-destructive" : "text-foreground",
                       )}
                     >
-                      {formatCurrency(displayValue(margeTotal))}
+                      {formatCurrency(displayValue(categoryRentability.marge_totale_ttc))}
                     </span>
                   </div>
                   <div className="text-xs text-muted-foreground">CA - Coût chantier{!isEclairage && " - Commission"}</div>
@@ -1478,14 +1496,21 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                     <span
                       className={cn(
                         "font-semibold",
-                        margePerUnit > 0
+                        (categoryRentability.marge_par_luminaire ?? categoryRentability.marge_par_surface ?? 0) > 0
                           ? "text-emerald-600"
-                          : margePerUnit < 0
+                          : (categoryRentability.marge_par_luminaire ?? categoryRentability.marge_par_surface ?? 0) < 0
                             ? "text-destructive"
                             : "text-foreground",
                       )}
                     >
-                      {margePerUnit !== 0 ? `${formatDecimal(displayValue(margePerUnit))} €` : "—"}
+                      {isEclairage 
+                        ? (categoryRentability.marge_par_luminaire !== undefined && categoryRentability.marge_par_luminaire !== 0
+                            ? `${formatDecimal(displayValue(categoryRentability.marge_par_luminaire))} €`
+                            : "—")
+                        : (categoryRentability.marge_par_surface !== undefined && categoryRentability.marge_par_surface !== 0
+                            ? `${formatDecimal(displayValue(categoryRentability.marge_par_surface))} €`
+                            : "—")
+                      }
                     </span>
                   </div>
                   <div className="text-xs text-muted-foreground">
@@ -1496,7 +1521,7 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Frais additionnels</span>
                     <span className="font-semibold text-foreground">
-                      {formatCurrency(displayValue(fraisAdditionnels))}
+                      {formatCurrency(displayValue(categoryRentability.frais_additionnels_total))}
                     </span>
                   </div>
                   <div className="text-xs text-muted-foreground">Frais de chantier additionnels</div>
