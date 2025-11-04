@@ -128,6 +128,8 @@ export const fetchChantierById = async (
   return response.data;
 };
 
+export const fetchSiteById = fetchChantierById;
+
 export const createChantier = async (
   values: Partial<SiteRow> &
     Pick<SiteRow, "project_id" | "project_ref" | "site_ref" | "client_name" | "address" | "city" | "postal_code" | "date_debut" | "user_id" | "org_id">,
@@ -135,6 +137,26 @@ export const createChantier = async (
   const response: PostgrestSingleResponse<SiteRow> = await client()
     .from("sites")
     .insert(values)
+    .select("*")
+    .single();
+
+  if (response.error) {
+    throw response.error;
+  }
+
+  return response.data;
+};
+
+export const updateSite = async (
+  siteId: string,
+  orgId: string,
+  updates: Partial<SiteRow>,
+): Promise<SiteRow> => {
+  const response: PostgrestSingleResponse<SiteRow> = await client()
+    .from("sites")
+    .update(updates)
+    .eq("id", siteId)
+    .eq("org_id", orgId)
     .select("*")
     .single();
 

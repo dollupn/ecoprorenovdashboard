@@ -425,12 +425,14 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
     mutationFn: async (payload: SiteSubmitValues) => {
       if (!chantier || !user?.id) return;
       
-      // Remove fields that don't exist in the database
-      const { commission_eur_per_m2_enabled, commission_eur_per_m2, ...rest } = payload;
+      // Remove UI-only fields that don't exist in the database
+      const { commission_eur_per_m2_enabled, commission_eur_per_m2, cout_total_materiaux_eclairage, ...rest } = payload;
       
       const updatePayload: Partial<Tables<"sites">> = {
         ...rest,
         team_members: rest.team_members?.map(m => m.id) ?? [],
+        // Ensure cout_total_materiaux is used for both categories
+        cout_total_materiaux: payload.cout_total_materiaux ?? payload.cout_total_materiaux_eclairage ?? null,
       };
       
       const { error } = await supabase
@@ -511,27 +513,45 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
       }),
     );
     
-    // Calculate category-based snapshots for persistence
+    // Determine category
+    const isEclairageProduct = isLedProduct(values.product_name ?? project?.product_name);
+    
+    // Common values
     const primeCee = sanitizeNumber(chantier?.valorisation_cee ?? project?.prime_cee);
     const travauxClient = sanitizeNumber(values.travaux_non_subventionnes_client);
     const fraisAdditionnels = sanitizeNumber(rentabilityResult.additionalCostsTotal);
-    const isEclairageProduct = isLedProduct(values.product_name ?? project?.product_name);
+    const tvaRateValue = sanitizeNumber(values.tva_rate);
     
+    // Isolation raw fields (with guards)
+    const surfaceFactureeM2 = sanitizeNumber(values.surface_facturee_m2);
+    const surfacePoseeM2 = surfaceFactureeM2 > 0 ? sanitizeNumber(values.surface_posee_m2) : 0;
+    const coutMoParM2 = surfaceFactureeM2 > 0 ? sanitizeNumber(values.cout_mo_par_m2) : 0;
+    const coutIsolantParM2 = surfaceFactureeM2 > 0 ? sanitizeNumber(values.cout_isolant_par_m2) : 0;
+    const coutMateriauxParM2 = surfaceFactureeM2 > 0 ? sanitizeNumber(values.cout_materiaux_par_m2) : 0;
+    const coutTotalMateriaux = surfaceFactureeM2 > 0 ? sanitizeNumber(values.cout_total_materiaux) : 0;
+    const commissionCommerciale = surfaceFactureeM2 > 0 && commissionPerM2Enabled ? commissionPerM2Value : 0;
+    
+    // Éclairage raw fields (with guards)
+    const nbLuminaires = sanitizeNumber(values.nb_luminaires);
+    const coutTotalMo = nbLuminaires > 0 ? sanitizeNumber(values.cout_total_mo) : 0;
+    const coutTotalMateriauxEclairage = nbLuminaires > 0 ? sanitizeNumber(values.cout_total_materiaux_eclairage) : 0;
+    
+    // Calculate category-based snapshots with guarded values
     const categorySnapshots = calculateCategoryRentability({
       category: isEclairageProduct ? "Eclairage" : "Isolation",
       prime_cee: primeCee,
       travaux_non_subventionnes_client: travauxClient,
       frais_additionnels_total: fraisAdditionnels,
-      // Isolation fields
-      surface_facturee_m2: sanitizeNumber(values.surface_facturee_m2),
-      cout_mo_par_m2: sanitizeNumber(values.cout_mo_par_m2),
-      cout_total_materiaux: sanitizeNumber(values.cout_total_materiaux),
-      commission_commerciale_par_m2: sanitizeNumber(values.commission_commerciale_par_m2),
-      commission_enabled: commissionPerM2Enabled,
-      // Éclairage fields
-      nb_luminaires: sanitizeNumber(values.nb_luminaires),
-      cout_total_mo: sanitizeNumber(values.cout_total_mo),
-      cout_total_materiaux_eclairage: sanitizeNumber(values.cout_total_materiaux_eclairage),
+      // Isolation fields (guarded)
+      surface_facturee_m2: surfaceFactureeM2,
+      cout_mo_par_m2: coutMoParM2,
+      cout_total_materiaux: coutTotalMateriaux,
+      commission_commerciale_par_m2: commissionCommerciale,
+      commission_enabled: commissionPerM2Enabled && surfaceFactureeM2 > 0,
+      // Éclairage fields (guarded)
+      nb_luminaires: nbLuminaires,
+      cout_total_mo: coutTotalMo,
+      cout_total_materiaux_eclairage: coutTotalMateriauxEclairage,
     });
 
       const serializedNotes = serializeSiteNotes(values.notes, siteAttachments[0]?.file ?? null, siteAttachments);
@@ -549,6 +569,40 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
       travaux_non_subventionnes_financement: travauxFinancement,
       commission_eur_per_m2_enabled: commissionPerM2Enabled,
       commission_eur_per_m2: commissionPerM2Value,
+      
+      // Common financial fields
+      travaux_non_subventionnes_client: travauxClient,
+      tva_rate: tvaRateValue,
+      frais_additionnels_total: fraisAdditionnels,
+      
+      // Category-specific raw fields (null for non-applicable)
+      ...(isEclairageProduct ? {
+        // Éclairage: save éclairage fields, null out isolation fields
+        nb_luminaires: nbLuminaires,
+        cout_total_mo: coutTotalMo,
+        cout_total_materiaux_eclairage: coutTotalMateriauxEclairage,
+        cout_total_materiaux: coutTotalMateriauxEclairage,
+        surface_facturee_m2: null,
+        surface_posee_m2: null,
+        cout_mo_par_m2: null,
+        cout_isolant_par_m2: null,
+        cout_materiaux_par_m2: null,
+        commission_commerciale_par_m2: null,
+      } : {
+        // Isolation: save isolation fields, null out éclairage fields
+        surface_facturee_m2: surfaceFactureeM2,
+        surface_posee_m2: surfacePoseeM2,
+        cout_mo_par_m2: coutMoParM2,
+        cout_isolant_par_m2: coutIsolantParM2,
+        cout_materiaux_par_m2: coutMateriauxParM2,
+        cout_total_materiaux: coutTotalMateriaux,
+        commission_commerciale_par_m2: commissionCommerciale,
+        nb_luminaires: null,
+        cout_total_mo: null,
+        cout_total_materiaux_eclairage: null,
+      }),
+      
+      // Legacy rentability (keep for backward compatibility)
       profit_margin: rentabilityResult.marginRate,
       rentability_total_costs: rentabilityResult.totalCosts,
       rentability_margin_total: rentabilityResult.marginTotal,
@@ -562,7 +616,8 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
       subcontractor_payment_unit_label: rentabilityResult.unitLabel,
       subcontractor_payment_rate: rentabilityResult.subcontractorRate,
       subcontractor_base_units: rentabilityResult.subcontractorBaseUnits,
-      // Snapshot totals for instant dashboard KPIs
+      
+      // Snapshot totals (TTC only) for instant dashboard KPIs
       ca_ttc: categorySnapshots.ca_ttc,
       cout_chantier_ttc: categorySnapshots.cout_chantier_ttc,
       marge_totale_ttc: categorySnapshots.marge_totale_ttc,

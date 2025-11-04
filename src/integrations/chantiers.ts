@@ -79,4 +79,47 @@ export const startChantier = async (
   });
 };
 
-export type { StartChantierPayload, ChantierResponse };
+type UpdateChantierPayload = {
+  // Common fields
+  travaux_non_subventionnes_client?: number | null;
+  tva_rate?: number | null;
+  frais_additionnels_total?: number | null;
+  
+  // Isolation fields
+  surface_facturee_m2?: number | null;
+  surface_posee_m2?: number | null;
+  cout_mo_par_m2?: number | null;
+  cout_isolant_par_m2?: number | null;
+  cout_materiaux_par_m2?: number | null;
+  cout_total_materiaux?: number | null;
+  commission_commerciale_par_m2?: number | null;
+  commission_eur_per_m2_enabled?: boolean | null;
+  
+  // Éclairage fields
+  nb_luminaires?: number | null;
+  cout_total_mo?: number | null;
+  
+  // Snapshot totals (TTC only)
+  ca_ttc?: number | null;
+  cout_chantier_ttc?: number | null;
+  marge_totale_ttc?: number | null;
+  
+  // Per-unit margins
+  rentability_margin_per_unit?: number | null;
+};
+
+export const saveChantier = async (
+  siteId: string,
+  payload: UpdateChantierPayload,
+): Promise<Tables<"sites">> => {
+  if (!siteId) {
+    throw new Error("Identifiant du chantier requis");
+  }
+
+  return await fetchJson<Tables<"sites">>(`${API_BASE_PATH}/${siteId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+};
+
+export type { StartChantierPayload, ChantierResponse, UpdateChantierPayload };

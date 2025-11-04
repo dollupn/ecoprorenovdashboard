@@ -139,3 +139,39 @@ export const startChantierService = async (orgId: string, projectId: string, inp
 
   return { chantier, project };
 };
+
+type UpdateChantierInput = {
+  travaux_non_subventionnes_client?: number | null;
+  tva_rate?: number | null;
+  frais_additionnels_total?: number | null;
+  surface_facturee_m2?: number | null;
+  surface_posee_m2?: number | null;
+  cout_mo_par_m2?: number | null;
+  cout_isolant_par_m2?: number | null;
+  cout_materiaux_par_m2?: number | null;
+  cout_total_materiaux?: number | null;
+  commission_commerciale_par_m2?: number | null;
+  commission_eur_per_m2_enabled?: boolean | null;
+  nb_luminaires?: number | null;
+  cout_total_mo?: number | null;
+  ca_ttc?: number | null;
+  cout_chantier_ttc?: number | null;
+  marge_totale_ttc?: number | null;
+  rentability_margin_per_unit?: number | null;
+};
+
+export const updateChantierService = async (
+  orgId: string,
+  siteId: string,
+  input: UpdateChantierInput,
+) => {
+  const { updateSite, fetchSiteById } = await import("../repositories/projectRepository");
+  
+  const existingSite = await fetchSiteById(siteId, orgId);
+  if (!existingSite) {
+    throw new NotFoundError("Chantier introuvable");
+  }
+
+  const updatedSite = await updateSite(siteId, orgId, input);
+  return updatedSite;
+};
