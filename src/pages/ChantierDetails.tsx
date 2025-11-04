@@ -473,8 +473,9 @@ const ChantierDetails = () => {
     mutationFn: async (payload: SiteSubmitValues) => {
       if (!chantier || !user?.id) return;
       
-      // Exclude computed rentability fields that don't exist in the database
+      // Exclude all computed/non-existent fields from database update
       const {
+        // Computed rentability fields
         rentability_total_costs,
         rentability_margin_total,
         rentability_margin_per_unit,
@@ -482,6 +483,15 @@ const ChantierDetails = () => {
         rentability_unit_label,
         rentability_unit_count,
         rentability_additional_costs_total,
+        // Subcontractor payment fields (computed)
+        subcontractor_base_units,
+        subcontractor_payment_amount,
+        subcontractor_payment_units,
+        subcontractor_payment_unit_label,
+        subcontractor_payment_rate,
+        // Fields not in database schema
+        travaux_non_subventionnes_description,
+        travaux_non_subventionnes_financement,
         ...dbPayload
       } = payload;
       
