@@ -132,6 +132,10 @@ export interface DashboardMetrics {
     rate: number;
     delta: number | null;
   };
+  caMois: number;
+  caSemaine: number;
+  margeTotaleMois: number;
+  ledInstalleesMois: number;
   generatedAt: string;
 }
 
@@ -211,6 +215,8 @@ export const useDashboardMetrics = (
         leadsRdv,
         qualifiedLeads,
         acceptedProjects,
+        finishedSitesMonth,
+        finishedSitesWeek,
       ] = await Promise.all([
         supabase
           .from("leads")
@@ -253,6 +259,20 @@ export const useDashboardMetrics = (
           .eq("org_id", orgId)
           .eq("status", ACCEPTED_PROJECT_STATUS as ProjectStatus)
           .gte("updated_at", previousPeriodStart.toISOString()),
+        supabase
+          .from("sites")
+          .select("id, ca_ttc, marge_totale_ttc, surface_facturee_m2, nb_luminaires, date_fin, project_id, projects!inner(product_cee_categories)")
+          .eq("org_id", orgId)
+          .eq("status", "CHANTIER_TERMINE")
+          .gte("date_fin", startMonth.toISOString())
+          .lt("date_fin", nextMonthStart.toISOString()),
+        supabase
+          .from("sites")
+          .select("id, ca_ttc, date_fin")
+          .eq("org_id", orgId)
+          .eq("status", "CHANTIER_TERMINE")
+          .gte("date_fin", startWeek.toISOString())
+          .lte("date_fin", endWeek.toISOString()),
       ]);
 
       if (activeLeads.error) throw activeLeads.error;
@@ -262,6 +282,8 @@ export const useDashboardMetrics = (
       if (leadsRdv.error) throw leadsRdv.error;
       if (qualifiedLeads.error) throw qualifiedLeads.error;
       if (acceptedProjects.error) throw acceptedProjects.error;
+      if (finishedSitesMonth.error) throw finishedSitesMonth.error;
+      if (finishedSitesWeek.error) throw finishedSitesWeek.error;
 
       const projets = (projectsData.data ?? []).map(
         (project): ProjectWithProducts => ({
@@ -286,14 +308,30 @@ export const useDashboardMetrics = (
         );
       }).length;
 
-      const surfaceIsolee = projets
-        .filter((project) => isStatusValue(PROJECT_SURFACE_STATUSES, project.status))
-        .filter((project) => {
-          if (!project.updated_at) return false;
-          const updated = new Date(project.updated_at);
-          return updated >= startMonth && updated < nextMonthStart;
+      // Calculate KPIs from finished chantiers
+      const finishedMonthSites = finishedSitesMonth.data ?? [];
+      const finishedWeekSites = finishedSitesWeek.data ?? [];
+
+      const caMois = finishedMonthSites.reduce((acc, site) => acc + (site.ca_ttc ?? 0), 0);
+      const caSemaine = finishedWeekSites.reduce((acc, site) => acc + (site.ca_ttc ?? 0), 0);
+      const margeTotaleMois = finishedMonthSites.reduce(
+        (acc, site) => acc + (site.marge_totale_ttc ?? 0),
+        0
+      );
+
+      const surfaceIsoleeMois = finishedMonthSites
+        .filter((site) => {
+          const category = (site.projects as any)?.product_cee_categories;
+          return category === "Isolation";
         })
-        .reduce((acc, project) => acc + (project.surface_isolee_m2 ?? 0), 0);
+        .reduce((acc, site) => acc + (site.surface_facturee_m2 ?? 0), 0);
+
+      const ledInstalleesMois = finishedMonthSites
+        .filter((site) => {
+          const category = (site.projects as any)?.product_cee_categories;
+          return category === "Eclairage";
+        })
+        .reduce((acc, site) => acc + (site.nb_luminaires ?? 0), 0);
 
       const energyAggregation = aggregateEnergyByCategory(projets, {
         shouldIncludeProject: (project) => isStatusValue(PROJECT_SURFACE_STATUSES, project.status),
@@ -341,13 +379,17 @@ export const useDashboardMetrics = (
         chantiersOuverts: sites.length,
         chantiersFinSemaine,
         rdvProgrammesSemaine: rdv.length,
-        surfaceIsoleeMois: surfaceIsolee,
+        surfaceIsoleeMois,
         totalMwh: Number.isFinite(totalMwh) ? Number(totalMwh.toFixed(2)) : 0,
         energyByCategory: energyAggregation.breakdown,
         tauxConversion: {
           rate: Number(currentRate.toFixed(1)),
           delta: delta === null ? null : Number(delta.toFixed(1)),
         },
+        caMois,
+        caSemaine,
+        margeTotaleMois,
+        ledInstalleesMois,
         generatedAt: now.toISOString(),
       };
 

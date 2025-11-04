@@ -161,48 +161,26 @@ const DashboardPage = () => {
 
           <KPICard
             title="CA du Mois"
-            value={currencyFormatter.format(revenueQuery.data?.currentMonthTotal ?? 0)}
-            change={
-              revenueQuery.data
-                ? revenueQuery.data.previousMonthTotal === 0
-                  ? "Premier mois mesuré"
-                  : `${(((revenueQuery.data.currentMonthTotal - revenueQuery.data.previousMonthTotal) /
-                      revenueQuery.data.previousMonthTotal) * 100).toFixed(1)}% vs mois dernier`
-                : undefined
-            }
-            changeType={
-              revenueQuery.data && revenueQuery.data.previousMonthTotal !== 0 &&
-              revenueQuery.data.currentMonthTotal < revenueQuery.data.previousMonthTotal
-                ? "negative"
-                : "positive"
-            }
+            value={currencyFormatter.format(metricsQuery.data?.caMois ?? 0)}
+            change="Chantiers terminés ce mois"
+            changeType="positive"
             icon={Euro}
             gradient="from-accent to-accent-hover"
-            isLoading={revenueQuery.isLoading || !queriesEnabled}
-            error={revenueQuery.error ? "Erreur" : undefined}
+            isLoading={metricsQuery.isLoading || !queriesEnabled}
+            error={metricsQuery.error ? "Erreur" : undefined}
           />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
           <KPICard
             title="CA de la Semaine"
-            value={currencyFormatter.format(revenueQuery.data?.currentWeekTotal ?? 0)}
-            change={
-              revenueWeekDelta === null
-                ? "Pas de comparaison disponible"
-                : `${revenueWeekDelta > 0 ? "+" : ""}${revenueWeekDelta.toFixed(1)}% vs semaine dernière`
-            }
-            changeType={
-              revenueWeekDelta === null
-                ? "neutral"
-                : revenueWeekDelta >= 0
-                  ? "positive"
-                  : "negative"
-            }
+            value={currencyFormatter.format(metricsQuery.data?.caSemaine ?? 0)}
+            change="Chantiers terminés cette semaine"
+            changeType="positive"
             icon={BarChart3}
             gradient="from-purple-500 to-purple-600"
-            isLoading={revenueQuery.isLoading || !queriesEnabled}
-            error={revenueQuery.error ? "Erreur" : undefined}
+            isLoading={metricsQuery.isLoading || !queriesEnabled}
+            error={metricsQuery.error ? "Erreur" : undefined}
           />
 
           <KPICard
@@ -243,15 +221,17 @@ const DashboardPage = () => {
                   : "negative"
             }
             icon={Target}
-            gradient="from-green-500 to-green-600"
+            gradient="from-cyan-500 to-cyan-600"
             isLoading={metricsQuery.isLoading || !queriesEnabled}
             error={metricsQuery.error ? "Erreur" : undefined}
           />
+        </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
           <KPICard
             title="Surface Isolée"
             value={`${surfaceFormatter.format(metricsQuery.data?.surfaceIsoleeMois ?? 0)} m²`}
-            change="Ce mois"
+            change="Chantiers terminés ce mois"
             changeType="neutral"
             icon={Ruler}
             gradient="from-teal-500 to-teal-600"
@@ -276,6 +256,28 @@ const DashboardPage = () => {
                 <Skeleton className="h-3 w-2/3" />
               </div>
             }
+          />
+
+          <KPICard
+            title="Marge Totale"
+            value={currencyFormatter.format(metricsQuery.data?.margeTotaleMois ?? 0)}
+            change="Chantiers terminés ce mois"
+            changeType="positive"
+            icon={Target}
+            gradient="from-green-500 to-green-600"
+            isLoading={metricsQuery.isLoading || !queriesEnabled}
+            error={metricsQuery.error ? "Erreur" : undefined}
+          />
+
+          <KPICard
+            title="LEDs Installées"
+            value={numberFormatter.format(metricsQuery.data?.ledInstalleesMois ?? 0)}
+            change="Chantiers terminés ce mois"
+            changeType="neutral"
+            icon={Zap}
+            gradient="from-amber-500 to-amber-600"
+            isLoading={metricsQuery.isLoading || !queriesEnabled}
+            error={metricsQuery.error ? "Erreur" : undefined}
           />
         </div>
 
