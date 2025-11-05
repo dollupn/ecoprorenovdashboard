@@ -230,50 +230,27 @@ export const StartChantierDialog = ({
         throw new Error("Organisation non trouvée");
       }
 
-      // Fetch project data
-      const { data: project, error: projectError } = await supabase
-        .from("projects")
-        .select("*")
-        .eq("id", projectId)
-        .eq("org_id", currentOrgId)
-        .single();
+      const response = await fetch(`/api/chantiers/${projectId}/start`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          dateDebut: values.startDate,
+          dateFinPrevue: values.endDate?.trim() || null,
+          subcontractorId: values.subcontractorId,
+          notes: values.notes,
+        }),
+      });
 
-      if (projectError || !project) {
-        throw new Error("Projet introuvable");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: "Erreur inconnue" }));
+        throw new Error(errorData.message || "Impossible de créer le chantier");
       }
 
-      // Create chantier directly
-      const siteRef = `${project.project_ref}-CHANTIER`;
-      
-      const { data: chantier, error: chantierError } = await supabase
-        .from("sites")
-        .insert([{
-          project_id: project.id,
-          org_id: project.org_id,
-          user_id: project.user_id,
-          project_ref: project.project_ref,
-          site_ref: siteRef,
-          client_name: project.client_name,
-          client_first_name: project.client_first_name,
-          client_last_name: project.client_last_name,
-          product_name: project.product_name,
-          address: project.address || "",
-          city: project.city,
-          postal_code: project.postal_code,
-          date_debut: values.startDate,
-          date_fin_prevue: values.endDate?.trim() || null,
-          subcontractor_id: values.subcontractorId,
-          notes: serializeSiteNotes(values.notes, null, []),
-          team_members: [],
-        }])
-        .select()
-        .single();
-
-      if (chantierError || !chantier) {
-        throw new Error(chantierError?.message || "Impossible de créer le chantier");
-      }
-
-      return { chantier, project };
+      const result: StartChantierResponse = await response.json();
+      return result;
     },
   });
 
