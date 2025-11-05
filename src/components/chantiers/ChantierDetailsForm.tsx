@@ -143,7 +143,7 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
   const watchedSurfaceFacturee = useWatch({ control, name: "surface_facturee_m2" });
   const watchedSurfacePosee = useWatch({ control, name: "surface_posee_m2" });
   const watchedCoutIsolant = useWatch({ control, name: "cout_isolant_par_m2" });
-  const watchedTravauxClient = useWatch({ control, name: "travaux_non_subventionnes_client" });
+  const watchedTravauxMontant = useWatch({ control, name: "travaux_non_subventionnes_montant" });
   
   const rentabilityWatch = useWatch({
     control,
@@ -654,7 +654,7 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
     void form.handleSubmit(handleFormSubmit)();
   }, [form, handleFormSubmit, isEditingLocked]);
 
-  // Auto-compute isolation derived fields
+  // Auto-compute isolation derived fields (can be manually overridden)
   useEffect(() => {
     if (isEclairage) return;
     
@@ -670,14 +670,14 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
       const currentTotal = sanitizeNumber(form.getValues("cout_total_materiaux"));
       
       if (!numbersAreClose(currentMat, coutMateriauxParM2)) {
-        form.setValue("cout_materiaux_par_m2", coutMateriauxParM2, { shouldDirty: false });
+        form.setValue("cout_materiaux_par_m2", coutMateriauxParM2, { shouldDirty: true });
       }
       if (!numbersAreClose(currentTotal, coutTotalMateriaux)) {
-        form.setValue("cout_total_materiaux", coutTotalMateriaux, { shouldDirty: false });
+        form.setValue("cout_total_materiaux", coutTotalMateriaux, { shouldDirty: true });
       }
     } else {
-      form.setValue("cout_materiaux_par_m2", 0, { shouldDirty: false });
-      form.setValue("cout_total_materiaux", 0, { shouldDirty: false });
+      form.setValue("cout_materiaux_par_m2", 0, { shouldDirty: true });
+      form.setValue("cout_total_materiaux", 0, { shouldDirty: true });
     }
   }, [watchedSurfaceFacturee, watchedSurfacePosee, watchedCoutIsolant, isEclairage, form]);
 
@@ -691,7 +691,10 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
   // Use new category-based calculation
   const categoryRentability = useMemo(() => {
     const primeCee = sanitizeNumber(chantier?.valorisation_cee ?? project?.prime_cee);
-    const travauxClient = sanitizeNumber(watchedTravauxClient);
+    // Calculate travaux client based on type: N/A = 0, otherwise use the amount
+    const travauxClient = watchedTravaux === "NA" 
+      ? 0 
+      : sanitizeNumber(watchedTravauxMontant);
     const fraisAdditionnels = sanitizeNumber(rentabilityMetrics.additionalCostsTotal);
     
     return calculateCategoryRentability({
@@ -710,7 +713,7 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
       cout_total_mo: sanitizeNumber(form.getValues("cout_total_mo")),
       cout_total_materiaux_eclairage: sanitizeNumber(form.getValues("cout_total_materiaux_eclairage")),
     });
-  }, [isEclairage, watchedTravauxClient, rentabilityMetrics.additionalCostsTotal, chantier?.valorisation_cee, project?.prime_cee, form, rentabilityWatch]);
+  }, [isEclairage, watchedTravaux, watchedTravauxMontant, rentabilityMetrics.additionalCostsTotal, chantier?.valorisation_cee, project?.prime_cee, form, rentabilityWatch]);
   
   // Apply TVA conversion for display
   const tvaMultiplier = 1 + tvaRate;
@@ -896,22 +899,31 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                       )}
                     />
                     
-                    {/* Computed read-only fields */}
+                    {/* Computed fields - editable with auto-calculation */}
                     <div className="col-span-full grid gap-4 md:grid-cols-2 rounded-lg border bg-muted/30 p-4">
                       <FormField
                         control={control}
                         name="cout_materiaux_par_m2"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-xs text-muted-foreground">Coût matériaux / m² (€)</FormLabel>
+                            <FormLabel className="text-xs text-muted-foreground">
+                              Coût matériaux / m² (€)
+                              <span className="ml-1 text-xs opacity-60">(calculé automatiquement)</span>
+                            </FormLabel>
                             <FormControl>
                               <Input
                                 type="number"
+                                step="0.01"
                                 {...field}
                                 value={field.value ?? 0}
-                                readOnly
-                                disabled
-                                className="bg-background/50 text-right font-medium"
+                                onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                                onBlur={(e) => {
+                                  field.onBlur();
+                                  handleBlurSave();
+                                }}
+                                disabled={disableInputs}
+                                placeholder="Calculé automatiquement"
+                                className="text-right font-medium"
                               />
                             </FormControl>
                           </FormItem>
@@ -922,15 +934,24 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                         name="cout_total_materiaux"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-xs text-muted-foreground">Coût total matériaux (€)</FormLabel>
+                            <FormLabel className="text-xs text-muted-foreground">
+                              Coût total matériaux (€)
+                              <span className="ml-1 text-xs opacity-60">(calculé automatiquement)</span>
+                            </FormLabel>
                             <FormControl>
                               <Input
                                 type="number"
+                                step="0.01"
                                 {...field}
                                 value={field.value ?? 0}
-                                readOnly
-                                disabled
-                                className="bg-background/50 text-right font-medium"
+                                onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                                onBlur={(e) => {
+                                  field.onBlur();
+                                  handleBlurSave();
+                                }}
+                                disabled={disableInputs}
+                                placeholder="Calculé automatiquement"
+                                className="text-right font-medium"
                               />
                             </FormControl>
                           </FormItem>

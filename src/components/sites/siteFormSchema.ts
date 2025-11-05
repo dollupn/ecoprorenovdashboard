@@ -65,7 +65,7 @@ export const normalizeTeamMembers = (
   return Array.from(uniqueMembers.values());
 };
 
-export const ADDITIONAL_COST_TVA_RATES = [0, 5.5, 10, 20] as const;
+export const ADDITIONAL_COST_TVA_RATES = [0, 2.1, 5.5, 8.5, 10, 20] as const;
 
 export type AdditionalCostTvaRate = (typeof ADDITIONAL_COST_TVA_RATES)[number];
 
@@ -89,7 +89,7 @@ const findClosestAllowedTvaRate = (rate: number): AdditionalCostTvaRate => {
 
 export const normalizeAdditionalCostTvaRate = (
   value: unknown,
-  fallback: AdditionalCostTvaRate = 20,
+  fallback: AdditionalCostTvaRate = 2.1,
 ): AdditionalCostTvaRate => {
   if (typeof value === "number" && Number.isFinite(value) && isAllowedTvaRate(value)) {
     return value as AdditionalCostTvaRate;
