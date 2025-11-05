@@ -89,7 +89,7 @@ const findClosestAllowedTvaRate = (rate: number): AdditionalCostTvaRate => {
 
 export const normalizeAdditionalCostTvaRate = (
   value: unknown,
-  fallback: AdditionalCostTvaRate = 2.1,
+  fallback: AdditionalCostTvaRate = 8.5,
 ): AdditionalCostTvaRate => {
   if (typeof value === "number" && Number.isFinite(value) && isAllowedTvaRate(value)) {
     return value as AdditionalCostTvaRate;

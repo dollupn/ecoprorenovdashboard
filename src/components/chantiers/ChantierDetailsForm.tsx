@@ -51,7 +51,7 @@ import { calculateRentability, buildRentabilityInputFromSite, isLedProduct, calc
 import { getProjectStatusBadgeStyle } from "@/lib/projects";
 import { parseSiteNotes, serializeSiteNotes, type SiteNoteAttachment } from "@/lib/sites";
 import { cn } from "@/lib/utils";
-import { ClipboardList, Loader2, Lock, Info } from "lucide-react";
+import { ClipboardList, Loader2, Lock, Info, Save } from "lucide-react";
 
 const currencyFormatter = new Intl.NumberFormat("fr-FR", {
   style: "currency",
@@ -126,8 +126,6 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
   const { user } = useAuth();
   const { statuses: statusOptions } = useProjectStatuses();
   const [siteAttachments, setSiteAttachments] = useState<SiteNoteAttachment[]>([]);
-  const [tvaRate, setTvaRate] = useState(0.021);
-  const [showHT, setShowHT] = useState(false);
 
   const resolver = useMemo(() => zodResolver(createSiteSchema(false)), []);
 
@@ -197,7 +195,7 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
         cost && typeof cost.amount_ht === "number" && Number.isFinite(cost.amount_ht)
           ? cost.amount_ht
           : 0;
-      const tvaRate = normalizeAdditionalCostTvaRate(cost?.tva_rate, 20);
+      const tvaRate = normalizeAdditionalCostTvaRate(cost?.tva_rate, 8.5);
       const computedTTC = computeAdditionalCostTTC(amountHT, tvaRate);
       const currentValue = form.getValues(`additional_costs.${index}.amount_ttc`);
       const normalizedCurrent =
@@ -344,7 +342,7 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
     const normalizedAdditionalCosts = Array.isArray(additionalCosts)
       ? additionalCosts.map((cost) => {
           const amountHT = sanitizeNumber(cost?.amount_ht);
-          const tvaRate = normalizeAdditionalCostTvaRate(cost?.tva_rate, 20);
+          const tvaRate = normalizeAdditionalCostTvaRate(cost?.tva_rate, 8.5);
           const amountTTC = computeAdditionalCostTTC(amountHT, tvaRate);
           const taxes = Math.max(0, amountTTC - amountHT);
           return {
@@ -494,7 +492,7 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
         .filter((cost) => cost.label.trim().length > 0)
         .map((cost) => {
           const amountHT = sanitizeNumber(cost.amount_ht);
-          const tvaRate = normalizeAdditionalCostTvaRate(cost.tva_rate, 20);
+          const tvaRate = normalizeAdditionalCostTvaRate(cost.tva_rate, 8.5);
           const amountTTC = computeAdditionalCostTTC(amountHT, tvaRate);
           const montantTVA = Math.max(0, amountTTC - amountHT);
           const attachment = cost.attachment?.trim() ?? "";
@@ -549,7 +547,11 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
     const isEclairageProduct = isLedProduct(values.product_name ?? project?.product_name);
     
     // Common values
-    const primeCee = sanitizeNumber(chantier?.valorisation_cee ?? project?.prime_cee);
+    const primeCee = sanitizeNumber(
+      (chantier?.valorisation_cee && chantier.valorisation_cee > 0) 
+        ? chantier.valorisation_cee 
+        : project?.prime_cee
+    );
     const travauxClient = sanitizeNumber(values.travaux_non_subventionnes_client);
     const fraisAdditionnels = sanitizeNumber(rentabilityResult.additionalCostsTotal);
     const tvaRateValue = sanitizeNumber(values.tva_rate);
@@ -722,7 +724,11 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
   
     // Use new category-based calculation
     const categoryRentability = useMemo(() => {
-      const primeCee = sanitizeNumber(chantier?.valorisation_cee ?? project?.prime_cee);
+      const primeCee = sanitizeNumber(
+        (chantier?.valorisation_cee && chantier.valorisation_cee > 0) 
+          ? chantier.valorisation_cee 
+          : project?.prime_cee
+      );
       // Calculate travaux client based on checkbox AND type
       const travauxClient = (watchedTravauxEnabled && watchedTravaux !== "NA")
         ? sanitizeNumber(watchedTravauxMontant) 
@@ -746,10 +752,6 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
       cout_total_materiaux_eclairage: sanitizeNumber(form.getValues("cout_total_materiaux_eclairage")),
     });
   }, [isEclairage, watchedTravauxEnabled, watchedTravaux, watchedTravauxMontant, rentabilityMetrics.additionalCostsTotal, chantier?.valorisation_cee, project?.prime_cee, form, rentabilityWatch]);
-  
-  // Apply TVA conversion for display
-  const tvaMultiplier = 1 + tvaRate;
-  const displayValue = (value: number) => showHT ? value / tvaMultiplier : value;
 
   return (
     <div className="space-y-6">
@@ -802,7 +804,6 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                       <Select
                         onValueChange={(value) => {
                           field.onChange(value);
-                          handleBlurSave();
                         }}
                         value={field.value}
                         disabled={disableInputs}
@@ -848,7 +849,6 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                               {...field}
                               onBlur={(event) => {
                                 field.onBlur();
-                                handleBlurSave();
                               }}
                               disabled={disableInputs}
                               readOnly={isEditingLocked}
@@ -871,7 +871,6 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                               {...field}
                               onBlur={(event) => {
                                 field.onBlur();
-                                handleBlurSave();
                               }}
                               disabled={disableInputs}
                               readOnly={isEditingLocked}
@@ -897,7 +896,6 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                               {...field}
                               onBlur={(event) => {
                                 field.onBlur();
-                                handleBlurSave();
                               }}
                               disabled={disableInputs}
                               readOnly={isEditingLocked}
@@ -920,7 +918,6 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                               {...field}
                               onBlur={(event) => {
                                 field.onBlur();
-                                handleBlurSave();
                               }}
                               disabled={disableInputs}
                               readOnly={isEditingLocked}
@@ -951,7 +948,6 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                                 onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                                 onBlur={(e) => {
                                   field.onBlur();
-                                  handleBlurSave();
                                 }}
                                 disabled={disableInputs}
                                 placeholder="Calculé automatiquement"
@@ -979,7 +975,6 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                                 onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                                 onBlur={(e) => {
                                   field.onBlur();
-                                  handleBlurSave();
                                 }}
                                 disabled={disableInputs}
                                 placeholder="Calculé automatiquement"
@@ -1007,7 +1002,6 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                               {...field}
                               onBlur={(event) => {
                                 field.onBlur();
-                                handleBlurSave();
                               }}
                               disabled={disableInputs}
                               readOnly={isEditingLocked}
@@ -1030,7 +1024,6 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                               {...field}
                               onBlur={(event) => {
                                 field.onBlur();
-                                handleBlurSave();
                               }}
                               disabled={disableInputs}
                               readOnly={isEditingLocked}
@@ -1053,7 +1046,6 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                               {...field}
                               onBlur={(event) => {
                                 field.onBlur();
-                                handleBlurSave();
                               }}
                               disabled={disableInputs}
                               readOnly={isEditingLocked}
@@ -1078,7 +1070,6 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                             checked={field.value}
                             onCheckedChange={(checked) => {
                               field.onChange(checked);
-                              handleBlurSave();
                             }}
                             disabled={disableInputs}
                           />
@@ -1141,7 +1132,6 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                               // Reset to NA when disabled
                               form.setValue("travaux_non_subventionnes", "NA");
                             }
-                            handleBlurSave();
                           }}
                           disabled={disableInputs}
                         />
@@ -1170,7 +1160,6 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                           <Select
                             onValueChange={(value) => {
                               field.onChange(value);
-                              handleBlurSave();
                             }}
                             value={field.value}
                             disabled={disableInputs}
@@ -1206,7 +1195,6 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                               {...field}
                               onBlur={(event) => {
                                 field.onBlur();
-                                handleBlurSave();
                               }}
                               disabled={disableInputs}
                               readOnly={isEditingLocked}
@@ -1229,7 +1217,6 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                               {...field}
                               onBlur={(event) => {
                                 field.onBlur();
-                                handleBlurSave();
                               }}
                               disabled={disableInputs}
                               readOnly={isEditingLocked}
@@ -1248,7 +1235,6 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                             checked={field.value}
                             onCheckedChange={(checked) => {
                               field.onChange(checked);
-                              handleBlurSave();
                             }}
                             disabled={disableInputs}
                           />
@@ -1276,7 +1262,7 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                   <div className="space-y-4">
                     {costFields.map((field, index) => {
                       const costValue = Array.isArray(watchedAdditionalCosts)
-                        ? watchedAdditionalCosts[index]
+                          ? watchedAdditionalCosts[index]
                         : undefined;
                       const amountHTValue =
                         costValue &&
@@ -1284,7 +1270,7 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                         Number.isFinite(costValue.amount_ht)
                           ? costValue.amount_ht
                           : 0;
-                      const tvaRateValue = normalizeAdditionalCostTvaRate(costValue?.tva_rate, 20);
+                      const tvaRateValue = normalizeAdditionalCostTvaRate(costValue?.tva_rate, 8.5);
                       const computedTTC = computeAdditionalCostTTC(amountHTValue, tvaRateValue);
                       const computedTaxes = Math.max(0, computedTTC - amountHTValue);
 
@@ -1304,7 +1290,6 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                                     {...field}
                                     onBlur={(event) => {
                                       field.onBlur();
-                                      handleBlurSave();
                                     }}
                                     disabled={disableInputs}
                                     readOnly={isEditingLocked}
@@ -1327,7 +1312,6 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                                     {...field}
                                     onBlur={(event) => {
                                       field.onBlur();
-                                      handleBlurSave();
                                     }}
                                     disabled={disableInputs}
                                     readOnly={isEditingLocked}
@@ -1352,7 +1336,6 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                                   onValueChange={(next) => {
                                     const parsed = Number.parseFloat(next);
                                     field.onChange(Number.isFinite(parsed) ? parsed : tvaRateValue);
-                                    handleBlurSave();
                                   }}
                                   disabled={disableInputs || isEditingLocked}
                                 >
@@ -1412,7 +1395,6 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                                       {...field}
                                       onBlur={(event) => {
                                         field.onBlur();
-                                        handleBlurSave();
                                       }}
                                       disabled={disableInputs}
                                       readOnly={isEditingLocked}
@@ -1428,7 +1410,6 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                               size="sm"
                               onClick={() => {
                                 removeCost(index);
-                                handleBlurSave();
                               }}
                               className="text-destructive"
                               disabled={disableInputs}
@@ -1495,7 +1476,6 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                           checked={field.value}
                           onCheckedChange={(checked) => {
                             field.onChange(checked);
-                            handleBlurSave();
                           }}
                           disabled={disableInputs}
                         />
@@ -1526,9 +1506,6 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                     value={siteAttachments}
                     onChange={(attachments) => {
                       setSiteAttachments(attachments);
-                      if (!isEditingLocked) {
-                        setTimeout(() => handleBlurSave(), 0);
-                      }
                     }}
                     maxSizeMb={35}
                     accept="application/pdf,image/*"
@@ -1549,7 +1526,6 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                           {...field}
                           onBlur={(event) => {
                             field.onBlur();
-                            handleBlurSave();
                           }}
                           disabled={disableInputs}
                           readOnly={isEditingLocked}
@@ -1580,35 +1556,8 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
           <div className="space-y-6">
             <Card className={cn("border-2", rentabilityBorder)}>
               <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <ClipboardList className="h-4 w-4" /> Rentabilité prévisionnelle
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <Select
-                      value={String(tvaRate)}
-                      onValueChange={(val) => setTvaRate(parseFloat(val))}
-                    >
-                      <SelectTrigger className="h-7 w-24 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="0.021">TVA 2,1%</SelectItem>
-                        <SelectItem value="0.055">TVA 5,5%</SelectItem>
-                        <SelectItem value="0.10">TVA 10%</SelectItem>
-                        <SelectItem value="0.20">TVA 20%</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-7 px-2 text-xs"
-                      onClick={() => setShowHT(!showHT)}
-                    >
-                      {showHT ? "Voir TTC" : "Voir HT"}
-                    </Button>
-                  </div>
+                <CardTitle className="flex items-center gap-2">
+                  <ClipboardList className="h-4 w-4" /> Rentabilité prévisionnelle
                 </CardTitle>
                 <CardDescription>Calculée automatiquement à partir des montants saisis.</CardDescription>
               </CardHeader>
@@ -1616,14 +1565,14 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Chiffre d'affaires</span>
-                    <span className="font-semibold text-foreground">{formatCurrency(displayValue(categoryRentability.ca_ttc))}</span>
+                    <span className="font-semibold text-foreground">{formatCurrency(categoryRentability.ca_ttc)}</span>
                   </div>
                   <div className="text-xs text-muted-foreground">Prime CEE + Travaux client</div>
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Coût chantier</span>
-                    <span className="font-semibold text-foreground">{formatCurrency(displayValue(categoryRentability.cout_chantier_ttc))}</span>
+                    <span className="font-semibold text-foreground">{formatCurrency(categoryRentability.cout_chantier_ttc)}</span>
                   </div>
                   <div className="text-xs text-muted-foreground">
                     MO + Matériaux + Frais
@@ -1638,7 +1587,7 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                         categoryRentability.marge_totale_ttc > 0 ? "text-emerald-600" : categoryRentability.marge_totale_ttc < 0 ? "text-destructive" : "text-foreground",
                       )}
                     >
-                      {formatCurrency(displayValue(categoryRentability.marge_totale_ttc))}
+                      {formatCurrency(categoryRentability.marge_totale_ttc)}
                     </span>
                   </div>
                   <div className="text-xs text-muted-foreground">CA - Coût chantier{!isEclairage && " - Commission"}</div>
@@ -1660,10 +1609,10 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                     >
                       {isEclairage 
                         ? (categoryRentability.marge_par_luminaire !== undefined && categoryRentability.marge_par_luminaire !== 0
-                            ? `${formatDecimal(displayValue(categoryRentability.marge_par_luminaire))} €`
+                            ? `${formatDecimal(categoryRentability.marge_par_luminaire)} €`
                             : "—")
                         : (categoryRentability.marge_par_surface !== undefined && categoryRentability.marge_par_surface !== 0
-                            ? `${formatDecimal(displayValue(categoryRentability.marge_par_surface))} €`
+                            ? `${formatDecimal(categoryRentability.marge_par_surface)} €`
                             : "—")
                       }
                     </span>
@@ -1676,7 +1625,7 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Frais additionnels</span>
                     <span className="font-semibold text-foreground">
-                      {formatCurrency(displayValue(categoryRentability.frais_additionnels_total))}
+                      {formatCurrency(categoryRentability.frais_additionnels_total)}
                     </span>
                   </div>
                   <div className="text-xs text-muted-foreground">Frais de chantier additionnels</div>
@@ -1713,6 +1662,31 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
           </div>
         </form>
       </Form>
+      
+      {/* Floating save button */}
+      {formState.isDirty && !isEditingLocked && (
+        <div className="fixed bottom-6 right-6 z-50">
+          <Button
+            type="button"
+            size="lg"
+            className="shadow-lg"
+            onClick={handleBlurSave}
+            disabled={isUpdating}
+          >
+            {isUpdating ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Enregistrement...
+              </>
+            ) : (
+              <>
+                <Save className="mr-2 h-4 w-4" />
+                Enregistrer
+              </>
+            )}
+          </Button>
+        </div>
+      )}
     </div>
   );
 };
