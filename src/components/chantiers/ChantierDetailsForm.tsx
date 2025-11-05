@@ -138,6 +138,7 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
   });
 
   const { control, reset, handleSubmit, formState } = form;
+  const watchedTravauxEnabled = useWatch({ control, name: "travaux_non_subventionnes_enabled" });
   const watchedTravaux = useWatch({ control, name: "travaux_non_subventionnes" });
   const watchedProductName = useWatch({ control, name: "product_name" });
   const watchedSurfaceFacturee = useWatch({ control, name: "surface_facturee_m2" });
@@ -153,6 +154,7 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
       "isolation_utilisee_m2",
       "surface_facturee",
       "travaux_non_subventionnes",
+      "travaux_non_subventionnes_enabled",
       "travaux_non_subventionnes_montant",
       "product_name",
       "additional_costs",
@@ -270,20 +272,36 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
       isolation_utilisee_m2: sanitizeNumber(chantier.isolation_utilisee_m2),
       montant_commission: sanitizeNumber(chantier.montant_commission),
       commission_eur_per_m2_enabled: Boolean(
-        chantier.commission_eur_per_m2_enabled ?? chantier.commission_commerciale_ht,
+        chantier.commission_eur_per_m2_enabled ?? chantier.commission_commerciale_par_m2,
       ),
       commission_eur_per_m2: sanitizeNumber(
-        chantier.commission_eur_per_m2 ?? chantier.commission_commerciale_ht_montant,
+        chantier.commission_eur_per_m2 ?? chantier.commission_commerciale_par_m2,
       ),
       valorisation_cee: sanitizeNumber(chantier.valorisation_cee),
       subcontractor_id: chantier.subcontractor_id ?? null,
       subcontractor_payment_confirmed: Boolean(chantier.subcontractor_payment_confirmed),
+      travaux_non_subventionnes_enabled: Boolean(
+        chantier.travaux_non_subventionnes && 
+        chantier.travaux_non_subventionnes !== "NA"
+      ),
       travaux_non_subventionnes: normalizeTravauxNonSubventionnesValue(
         chantier.travaux_non_subventionnes,
       ),
       travaux_non_subventionnes_montant: sanitizeNumber(chantier.travaux_non_subventionnes_montant),
       notes: parsedNotes.text ?? "",
       additional_costs: normalizeAdditionalCostsArray(chantier.additional_costs ?? []),
+      // Isolation fields - use correct column names
+      surface_facturee_m2: sanitizeNumber(chantier.surface_facturee_m2),
+      surface_posee_m2: sanitizeNumber(chantier.surface_posee_m2),
+      cout_mo_par_m2: sanitizeNumber(chantier.cout_mo_par_m2),
+      cout_isolant_par_m2: sanitizeNumber(chantier.cout_isolant_par_m2),
+      cout_materiaux_par_m2: sanitizeNumber(chantier.cout_materiaux_par_m2),
+      cout_total_materiaux: sanitizeNumber(chantier.cout_total_materiaux),
+      commission_commerciale_par_m2: sanitizeNumber(chantier.commission_commerciale_par_m2),
+      // Éclairage fields
+      nb_luminaires: sanitizeNumber(chantier.nb_luminaires),
+      cout_total_mo: sanitizeNumber(chantier.cout_total_mo),
+      cout_total_materiaux_eclairage: sanitizeNumber(chantier.cout_total_materiaux_eclairage),
     };
     reset(defaults, { keepDefaultValues: false });
     setSiteAttachments(parsedNotes.attachments);
@@ -304,18 +322,19 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
     const isolationUsed = values[2] as number | undefined;
     const surfaceFacturee = values[3] as number | undefined;
     const travauxChoice = values[4] as SiteFormValues["travaux_non_subventionnes"] | undefined;
-    const travauxMontant = values[5] as number | undefined;
-    const productName = values[6] as string | undefined;
-    const additionalCosts = values[7] as SiteFormValues["additional_costs"] | undefined;
-    const commissionPerM2Enabled = values[8] as boolean | undefined;
-    const commissionPerM2 = values[9] as number | undefined;
-    const subcontractorId = values[10] as string | undefined;
-    const subcontractorPaymentConfirmed = values[11] as boolean | undefined;
-    const subcontractorBaseUnits = values[12] as number | undefined;
-    const subcontractorPaymentAmount = values[13] as number | undefined;
-    const subcontractorPaymentUnits = values[14] as number | undefined;
-    const subcontractorPaymentRate = values[15] as number | undefined;
-    const subcontractorPaymentUnitLabel = values[16] as string | undefined;
+    const travauxEnabled = values[5] as boolean | undefined;
+    const travauxMontant = values[6] as number | undefined;
+    const productName = values[7] as string | undefined;
+    const additionalCosts = values[8] as SiteFormValues["additional_costs"] | undefined;
+    const commissionPerM2Enabled = values[9] as boolean | undefined;
+    const commissionPerM2 = values[10] as number | undefined;
+    const subcontractorId = values[11] as string | undefined;
+    const subcontractorPaymentConfirmed = values[12] as boolean | undefined;
+    const subcontractorBaseUnits = values[13] as number | undefined;
+    const subcontractorPaymentAmount = values[14] as number | undefined;
+    const subcontractorPaymentUnits = values[15] as number | undefined;
+    const subcontractorPaymentRate = values[16] as number | undefined;
+    const subcontractorPaymentUnitLabel = values[17] as string | undefined;
 
     // Get calculated values from form
     const revenue = sanitizeNumber(form.getValues("revenue"));
@@ -437,6 +456,7 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
         subcontractor_payment_rate,
         travaux_non_subventionnes_description,
         travaux_non_subventionnes_financement,
+        travaux_non_subventionnes_enabled,
         ...rest 
       } = payload;
       
@@ -681,6 +701,18 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
     }
   }, [watchedSurfaceFacturee, watchedSurfacePosee, watchedCoutIsolant, isEclairage, form]);
 
+  // Auto-calculate travaux_non_subventionnes_client based on checkbox and type
+  useEffect(() => {
+    const travauxClient = (watchedTravauxEnabled && watchedTravaux !== "NA")
+      ? sanitizeNumber(watchedTravauxMontant) 
+      : 0;
+    
+    const currentValue = sanitizeNumber(form.getValues("travaux_non_subventionnes_client"));
+    if (!numbersAreClose(currentValue, travauxClient)) {
+      form.setValue("travaux_non_subventionnes_client", travauxClient, { shouldDirty: true });
+    }
+  }, [watchedTravauxEnabled, watchedTravaux, watchedTravauxMontant, form]);
+
   const disableInputs = isEditingLocked || isUpdating;
 
   const marginRate = rentabilityMetrics.marginRate ?? 0;
@@ -688,13 +720,13 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
   const marginPerUnit = rentabilityMetrics.marginPerUnit ?? 0;
   const rentabilityBorder = getStatusGradient(marginRate);
   
-  // Use new category-based calculation
-  const categoryRentability = useMemo(() => {
-    const primeCee = sanitizeNumber(chantier?.valorisation_cee ?? project?.prime_cee);
-    // Calculate travaux client based on type: N/A = 0, otherwise use the amount
-    const travauxClient = watchedTravaux === "NA" 
-      ? 0 
-      : sanitizeNumber(watchedTravauxMontant);
+    // Use new category-based calculation
+    const categoryRentability = useMemo(() => {
+      const primeCee = sanitizeNumber(chantier?.valorisation_cee ?? project?.prime_cee);
+      // Calculate travaux client based on checkbox AND type
+      const travauxClient = (watchedTravauxEnabled && watchedTravaux !== "NA")
+        ? sanitizeNumber(watchedTravauxMontant) 
+        : 0;
     const fraisAdditionnels = sanitizeNumber(rentabilityMetrics.additionalCostsTotal);
     
     return calculateCategoryRentability({
@@ -713,7 +745,7 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
       cout_total_mo: sanitizeNumber(form.getValues("cout_total_mo")),
       cout_total_materiaux_eclairage: sanitizeNumber(form.getValues("cout_total_materiaux_eclairage")),
     });
-  }, [isEclairage, watchedTravaux, watchedTravauxMontant, rentabilityMetrics.additionalCostsTotal, chantier?.valorisation_cee, project?.prime_cee, form, rentabilityWatch]);
+  }, [isEclairage, watchedTravauxEnabled, watchedTravaux, watchedTravauxMontant, rentabilityMetrics.additionalCostsTotal, chantier?.valorisation_cee, project?.prime_cee, form, rentabilityWatch]);
   
   // Apply TVA conversion for display
   const tvaMultiplier = 1 + tvaRate;
@@ -1094,38 +1126,73 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                 <CardDescription>Déclarez les travaux complémentaires.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Checkbox to enable/disable the section */}
                 <FormField
                   control={control}
-                  name="travaux_non_subventionnes"
+                  name="travaux_non_subventionnes_enabled"
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Type de travaux</FormLabel>
-                      <Select
-                        onValueChange={(value) => {
-                          field.onChange(value);
-                          handleBlurSave();
-                        }}
-                        value={field.value}
-                        disabled={disableInputs}
-                      >
-                        <FormControl>
-                          <SelectTrigger disabled={disableInputs}>
-                            <SelectValue placeholder="Sélectionner" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {TRAVAUX_NON_SUBVENTIONNES_OPTIONS.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
+                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={(checked) => {
+                            field.onChange(checked);
+                            if (!checked) {
+                              // Reset to NA when disabled
+                              form.setValue("travaux_non_subventionnes", "NA");
+                            }
+                            handleBlurSave();
+                          }}
+                          disabled={disableInputs}
+                        />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel className="font-medium">
+                          Inclure des travaux non subventionnés
+                        </FormLabel>
+                        <p className="text-sm text-muted-foreground">
+                          Cochez pour déclarer des travaux complémentaires facturés au client
+                        </p>
+                      </div>
                     </FormItem>
                   )}
                 />
-                {watchedTravaux !== "NA" ? (
+
+                {/* Show fields only when enabled */}
+                {watchedTravauxEnabled && (
+                  <>
+                    <FormField
+                      control={control}
+                      name="travaux_non_subventionnes"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Type de travaux</FormLabel>
+                          <Select
+                            onValueChange={(value) => {
+                              field.onChange(value);
+                              handleBlurSave();
+                            }}
+                            value={field.value}
+                            disabled={disableInputs}
+                          >
+                            <FormControl>
+                              <SelectTrigger disabled={disableInputs}>
+                                <SelectValue placeholder="Sélectionner" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {/* Remove "N/A" from options since it's controlled by checkbox */}
+                              {TRAVAUX_NON_SUBVENTIONNES_OPTIONS.filter(opt => opt.value !== "NA").map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   <div className="grid gap-4 md:grid-cols-2">
                     <FormField
                       control={control}
@@ -1190,7 +1257,8 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                       )}
                     />
                   </div>
-                ) : null}
+                  </>
+                )}
               </CardContent>
             </Card>
 

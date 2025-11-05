@@ -266,6 +266,7 @@ export const createBaseSiteSchema = () => {
       .min(0)
       .optional()
       .default(0),
+    travaux_non_subventionnes_enabled: z.boolean().default(false),
     travaux_non_subventionnes: z.enum(
       TRAVAUX_NON_SUBVENTIONNES_OPTIONS.map((option) => option.value) as [
         TravauxNonSubventionnesValue,
@@ -443,6 +444,7 @@ export const defaultSiteFormValues: SiteFormValues = {
   isolation_utilisee_m2: 0,
   montant_commission: 0,
   valorisation_cee: 0,
+  travaux_non_subventionnes_enabled: false,
   travaux_non_subventionnes: "NA",
   travaux_non_subventionnes_description: "",
   travaux_non_subventionnes_montant: 0,
