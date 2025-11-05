@@ -426,7 +426,19 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
       if (!chantier || !user?.id) return;
       
       // Remove UI-only fields that don't exist in the database
-      const { commission_eur_per_m2_enabled, commission_eur_per_m2, cout_total_materiaux_eclairage, ...rest } = payload;
+      const { 
+        commission_eur_per_m2_enabled, 
+        commission_eur_per_m2, 
+        cout_total_materiaux_eclairage,
+        subcontractor_base_units,
+        subcontractor_payment_amount,
+        subcontractor_payment_units,
+        subcontractor_payment_unit_label,
+        subcontractor_payment_rate,
+        travaux_non_subventionnes_description,
+        travaux_non_subventionnes_financement,
+        ...rest 
+      } = payload;
       
       const updatePayload: Partial<Tables<"sites">> = {
         ...rest,
