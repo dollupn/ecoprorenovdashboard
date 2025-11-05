@@ -609,7 +609,6 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
       rentability_margin_per_unit: rentabilityResult.marginPerUnit,
       rentability_margin_rate: rentabilityResult.marginRate,
       rentability_unit_label: rentabilityResult.unitLabel,
-      rentability_unit_count: rentabilityResult.unitsUsed,
       rentability_additional_costs_total: rentabilityResult.additionalCostsTotal,
       subcontractor_payment_amount: rentabilityResult.subcontractorEstimatedCost,
       subcontractor_payment_units: rentabilityResult.subcontractorBaseUnits,

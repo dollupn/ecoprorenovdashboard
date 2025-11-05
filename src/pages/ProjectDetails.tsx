@@ -4353,7 +4353,6 @@ const ProjectDetails = () => {
       rentability_margin_per_unit: values.rentability_margin_per_unit,
       rentability_margin_rate: values.rentability_margin_rate,
       rentability_unit_label: values.rentability_unit_label,
-      rentability_unit_count: values.rentability_unit_count,
       rentability_additional_costs_total: values.rentability_additional_costs_total,
     };
 

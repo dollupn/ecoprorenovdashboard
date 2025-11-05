@@ -414,7 +414,6 @@ export type SiteSubmitValues = SiteFormValues & {
   rentability_margin_per_unit: number;
   rentability_margin_rate: number;
   rentability_unit_label: string;
-  rentability_unit_count: number;
   rentability_additional_costs_total: number;
   subcontractor_payment_amount: number;
   subcontractor_payment_units: number;

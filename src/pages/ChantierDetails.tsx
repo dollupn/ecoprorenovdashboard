@@ -475,8 +475,6 @@ const ChantierDetails = () => {
       
       // Exclude ONLY fields that don't exist in database
       const {
-        // This field doesn't exist in DB (only rentability_unit_label exists)
-        rentability_unit_count,
         // Subcontractor payment fields (computed, not stored in DB)
         subcontractor_base_units,
         subcontractor_payment_amount,
@@ -600,7 +598,6 @@ const ChantierDetails = () => {
         rentability_margin_per_unit: rentabilityResult.marginPerUnit,
         rentability_margin_rate: rentabilityResult.marginRate,
         rentability_unit_label: rentabilityResult.unitLabel,
-        rentability_unit_count: rentabilityResult.unitsUsed,
         rentability_additional_costs_total: rentabilityResult.additionalCostsTotal,
         subcontractor_payment_amount: rentabilityResult.subcontractorEstimatedCost,
         subcontractor_payment_units: rentabilityResult.subcontractorBaseUnits,
