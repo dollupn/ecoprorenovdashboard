@@ -228,7 +228,19 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
 
   const project = chantier?.project ?? null;
   const projectStatusValue = project?.status ?? null;
-  const isEditingLocked = projectStatusValue !== "CHANTIER_TERMINE";
+  
+  // Allow editing for chantier and post-completion statuses
+  const EDITABLE_STATUSES = [
+    "CHANTIER_PLANIFIE",
+    "CHANTIER_EN_COURS", 
+    "CHANTIER_TERMINE",
+    "LIVRE",
+    "FACTURE_ENVOYEE",
+    "AH",
+    "AAF",
+    "CLOTURE"
+  ];
+  const isEditingLocked = projectStatusValue ? !EDITABLE_STATUSES.includes(projectStatusValue) : true;
   
   // Use the same category detection logic as the Projects list
   const projectCategory = deriveProjectCategory(project ?? {});
@@ -793,11 +805,8 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
             {isEditingLocked ? (
               <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
                 <Info className="mt-0.5 h-4 w-4 shrink-0" />
-                <div className="space-y-1">
-                  <p className="font-medium">Modifications verrouillées</p>
-                  <p className="text-xs">
-                    Passez le projet au statut « CHANTIER_TERMINE » depuis l'onglet Projet pour activer la mise à jour du chantier.
-                  </p>
+                <div>
+                  <p className="font-medium">Chantier Terminé</p>
                 </div>
               </div>
             ) : null}
