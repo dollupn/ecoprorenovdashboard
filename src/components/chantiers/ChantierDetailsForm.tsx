@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useSearchParams } from "react-router-dom";
 import {
   useFieldArray,
   useForm,
@@ -41,6 +42,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { DriveMultiFileUploader } from "@/components/integrations/DriveMultiFileUploader";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -48,6 +51,15 @@ import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 import { calculateRentability, buildRentabilityInputFromSite, isLedProduct, calculateCategoryRentability } from "@/lib/rentability";
+import {
+  calcEclairageHT,
+  calcEclairageTTC,
+  calcIsolationHT,
+  calcIsolationTTC,
+  formatEuro,
+  type EclairageRentabiliteInput,
+  type IsolationRentabiliteInput,
+} from "@/lib/rentabilite";
 import { getProjectStatusBadgeStyle, deriveProjectCategory } from "@/lib/projects";
 import { parseSiteNotes, serializeSiteNotes, type SiteNoteAttachment } from "@/lib/sites";
 import { cn } from "@/lib/utils";
@@ -126,6 +138,17 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
   const { user } = useAuth();
   const { statuses: statusOptions } = useProjectStatuses();
   const [siteAttachments, setSiteAttachments] = useState<SiteNoteAttachment[]>([]);
+  
+  // HT/TTC toggle state (persisted in URL)
+  const [searchParams, setSearchParams] = useSearchParams();
+  const viewMode = searchParams.get("view") === "ttc" ? "ttc" : "ht";
+
+  const toggleViewMode = () => {
+    const newMode = viewMode === "ht" ? "ttc" : "ht";
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set("view", newMode);
+    setSearchParams(newParams);
+  };
 
   const resolver = useMemo(() => zodResolver(createSiteSchema(false)), []);
 
@@ -742,36 +765,68 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
   const marginPerUnit = rentabilityMetrics.marginPerUnit ?? 0;
   const rentabilityBorder = getStatusGradient(marginRate);
   
-    // Use new category-based calculation
-    const categoryRentability = useMemo(() => {
-      const primeCee = sanitizeNumber(
-        (chantier?.valorisation_cee && chantier.valorisation_cee > 0) 
-          ? chantier.valorisation_cee 
-          : project?.prime_cee
-      );
-      // Calculate travaux client based on checkbox AND type
-      const travauxClient = (watchedTravauxEnabled && watchedTravaux !== "NA")
-        ? sanitizeNumber(watchedTravauxMontant) 
-        : 0;
-    const fraisAdditionnels = sanitizeNumber(rentabilityMetrics.additionalCostsTotal);
+  // New HT/TTC calculation
+  const categoryRentability = useMemo(() => {
+    const primeCee = sanitizeNumber(
+      (chantier?.valorisation_cee && chantier.valorisation_cee > 0) 
+        ? chantier.valorisation_cee 
+        : project?.prime_cee
+    );
     
-    return calculateCategoryRentability({
-      category: isEclairage ? "Eclairage" : "Isolation",
-      prime_cee: primeCee,
-      travaux_non_subventionnes_client: travauxClient,
-      frais_additionnels_total: fraisAdditionnels,
-      // Isolation fields
-      surface_facturee_m2: sanitizeNumber(form.getValues("surface_facturee_m2")),
-      cout_mo_par_m2: sanitizeNumber(form.getValues("cout_mo_par_m2")),
-      cout_total_materiaux: sanitizeNumber(form.getValues("cout_total_materiaux")),
-      commission_commerciale_par_m2: sanitizeNumber(form.getValues("commission_commerciale_par_m2")),
-      commission_enabled: Boolean(form.getValues("commission_eur_per_m2_enabled")),
-      // Éclairage fields
-      nb_luminaires: sanitizeNumber(form.getValues("nb_luminaires")),
-      cout_total_mo: sanitizeNumber(form.getValues("cout_total_mo")),
-      cout_total_materiaux_eclairage: sanitizeNumber(form.getValues("cout_total_materiaux_eclairage")),
-    });
-  }, [isEclairage, watchedTravauxEnabled, watchedTravaux, watchedTravauxMontant, rentabilityMetrics.additionalCostsTotal, chantier?.valorisation_cee, project?.prime_cee, form, rentabilityWatch]);
+    const travauxClient = (watchedTravauxEnabled && watchedTravaux !== "NA")
+      ? sanitizeNumber(watchedTravauxMontant) 
+      : 0;
+    
+    // Get additional costs array
+    const additionalCosts = (form.getValues("additional_costs") ?? []).map(cost => ({
+      amount_ht: sanitizeNumber(cost.amount_ht),
+      amount_ttc: sanitizeNumber(cost.amount_ttc),
+    }));
+    
+    if (isEclairage) {
+      const input: EclairageRentabiliteInput = {
+        primeCEE_TTC: primeCee,
+        travauxNonSubv_HT: travauxClient,
+        MO_HT: sanitizeNumber(form.getValues("cout_total_mo")),
+        MAT_HT: sanitizeNumber(form.getValues("cout_total_materiaux_eclairage")),
+        commission_HT: 0, // Éclairage doesn't use commission typically
+        nbLuminaires: sanitizeNumber(form.getValues("nb_luminaires")),
+        fraisAdditionnels: additionalCosts,
+      };
+      
+      return viewMode === "ht" ? calcEclairageHT(input) : calcEclairageTTC(input);
+    } else {
+      // Isolation
+      const surfaceFacturee = sanitizeNumber(form.getValues("surface_facturee_m2"));
+      const surfacePosee = sanitizeNumber(form.getValues("surface_posee_m2"));
+      const moPerM2 = sanitizeNumber(form.getValues("cout_mo_par_m2"));
+      const commissionPerM2 = sanitizeNumber(form.getValues("commission_commerciale_par_m2"));
+      const commissionEnabled = Boolean(form.getValues("commission_eur_per_m2_enabled"));
+      
+      const input: IsolationRentabiliteInput = {
+        primeCEE_TTC: primeCee,
+        travauxNonSubv_HT: travauxClient,
+        surface_facturee_m2: surfaceFacturee,
+        surface_posee_m2: surfacePosee,
+        MO_HT_per_m2: moPerM2,
+        MAT_HT: sanitizeNumber(form.getValues("cout_total_materiaux")),
+        commission_HT: commissionEnabled ? commissionPerM2 * surfaceFacturee : 0,
+        fraisAdditionnels: additionalCosts,
+      };
+      
+      return viewMode === "ht" ? calcIsolationHT(input) : calcIsolationTTC(input);
+    }
+  }, [
+    isEclairage, 
+    viewMode, 
+    watchedTravauxEnabled, 
+    watchedTravaux, 
+    watchedTravauxMontant,
+    chantier?.valorisation_cee, 
+    project?.prime_cee, 
+    form,
+    rentabilityWatch
+  ]);
 
   // Live recompute for Éclairage changes
   useEffect(() => {
@@ -1597,79 +1652,104 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
           <div className="space-y-6">
             <Card className={cn("border-2", rentabilityBorder)}>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <ClipboardList className="h-4 w-4" /> Rentabilité prévisionnelle
-                </CardTitle>
-                <CardDescription>Calculée automatiquement à partir des montants saisis.</CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <ClipboardList className="h-4 w-4" /> Rentabilité prévisionnelle
+                    </CardTitle>
+                    <CardDescription>Calculée automatiquement à partir des montants saisis.</CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="view-toggle" className="text-sm font-medium">
+                      {viewMode === "ht" ? "HT" : "TTC"}
+                    </Label>
+                    <Switch
+                      id="view-toggle"
+                      checked={viewMode === "ttc"}
+                      onCheckedChange={toggleViewMode}
+                    />
+                  </div>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4 text-sm">
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Chiffre d'affaires</span>
-                    <span className="font-semibold text-foreground">{formatCurrency(categoryRentability.ca_ttc)}</span>
+                    <span className="text-muted-foreground">
+                      Chiffre d'affaires {viewMode === "ht" ? "(HT)" : "(TTC)"}
+                    </span>
+                    <span className="font-semibold text-foreground">
+                      {formatEuro(categoryRentability.ca)}
+                    </span>
                   </div>
                   <div className="text-xs text-muted-foreground">Prime CEE + Travaux client</div>
                 </div>
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Coût chantier</span>
-                    <span className="font-semibold text-foreground">{formatCurrency(categoryRentability.cout_chantier_ttc)}</span>
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    MO + Matériaux + Frais
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Marge totale</span>
-                    <span
-                      className={cn(
-                        "font-semibold",
-                        categoryRentability.marge_totale_ttc > 0 ? "text-emerald-600" : categoryRentability.marge_totale_ttc < 0 ? "text-destructive" : "text-foreground",
-                      )}
-                    >
-                      {formatCurrency(categoryRentability.marge_totale_ttc)}
-                    </span>
-                  </div>
-                  <div className="text-xs text-muted-foreground">CA - Coût chantier{!isEclairage && " - Commission"}</div>
-                </div>
+                
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">
-                      Marge / {isEclairage ? "luminaire" : "m²"}
+                      Coût chantier {viewMode === "ht" ? "(HT)" : "(TTC)"}
                     </span>
-                    <span
-                      className={cn(
-                        "font-semibold",
-                        (categoryRentability.marge_par_luminaire ?? categoryRentability.marge_par_surface ?? 0) > 0
-                          ? "text-emerald-600"
-                          : (categoryRentability.marge_par_luminaire ?? categoryRentability.marge_par_surface ?? 0) < 0
-                            ? "text-destructive"
-                            : "text-foreground",
-                      )}
-                    >
-                      {isEclairage 
-                        ? (categoryRentability.marge_par_luminaire !== undefined && categoryRentability.marge_par_luminaire !== 0
-                            ? `${formatDecimal(categoryRentability.marge_par_luminaire)} €`
-                            : "—")
-                        : (categoryRentability.marge_par_surface !== undefined && categoryRentability.marge_par_surface !== 0
-                            ? `${formatDecimal(categoryRentability.marge_par_surface)} €`
-                            : "—")
-                      }
+                    <span className="font-semibold text-foreground">
+                      {formatEuro(categoryRentability.cout_chantier)}
+                    </span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">MO + Matériaux + Frais</div>
+                </div>
+                
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">
+                      Marge totale {viewMode === "ht" ? "(HT)" : "(TTC)"}
+                    </span>
+                    <span className={cn(
+                      "font-semibold",
+                      categoryRentability.marge_totale > 0 
+                        ? "text-emerald-600" 
+                        : categoryRentability.marge_totale < 0 
+                          ? "text-destructive" 
+                          : "text-foreground"
+                    )}>
+                      {formatEuro(categoryRentability.marge_totale)}
+                    </span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    CA - Coût chantier{!isEclairage && " - Commission"}
+                  </div>
+                </div>
+                
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">
+                      Marge / {isEclairage ? "luminaire" : "m²"} {viewMode === "ht" ? "(HT)" : "(TTC)"}
+                    </span>
+                    <span className={cn(
+                      "font-semibold",
+                      categoryRentability.marge_par_unite > 0
+                        ? "text-emerald-600"
+                        : categoryRentability.marge_par_unite < 0
+                          ? "text-destructive"
+                          : "text-foreground"
+                    )}>
+                      {formatEuro(categoryRentability.marge_par_unite)}
                     </span>
                   </div>
                   <div className="text-xs text-muted-foreground">
                     Marge totale / {isEclairage ? "Nombre luminaires" : "Surface facturée"}
                   </div>
                 </div>
+                
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Frais additionnels</span>
+                    <span className="text-muted-foreground">
+                      Frais additionnels {viewMode === "ht" ? "(HT)" : "(TTC)"}
+                    </span>
                     <span className="font-semibold text-foreground">
-                      {formatCurrency(categoryRentability.frais_additionnels_total)}
+                      {formatEuro(categoryRentability.frais_additionnels)}
                     </span>
                   </div>
-                  <div className="text-xs text-muted-foreground">Frais de chantier additionnels</div>
+                  <div className="text-xs text-muted-foreground">
+                    Frais de chantier additionnels
+                  </div>
                 </div>
               </CardContent>
             </Card>
