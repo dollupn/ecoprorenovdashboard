@@ -286,6 +286,12 @@ export const createBaseSiteSchema = () => {
     commission_eur_per_m2: z.coerce
       .number({ invalid_type_error: "Montant invalide" })
       .min(0),
+    commission_eur_per_led_enabled: z.boolean().default(false),
+    commission_eur_per_led: z.coerce
+      .number({ invalid_type_error: "Commission/LED invalide" })
+      .min(0, "La commission doit être positive")
+      .optional()
+      .nullable(),
     notes: z.string().optional(),
     subcontractor_id: z
       .string({ invalid_type_error: "Sélection invalide" })
@@ -451,6 +457,8 @@ export const defaultSiteFormValues: SiteFormValues = {
   travaux_non_subventionnes_financement: false,
   commission_eur_per_m2_enabled: false,
   commission_eur_per_m2: 0,
+  commission_eur_per_led_enabled: false,
+  commission_eur_per_led: null,
   notes: "",
   subcontractor_id: null,
   additional_costs: [],

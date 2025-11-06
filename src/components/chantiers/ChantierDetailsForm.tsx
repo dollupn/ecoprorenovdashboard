@@ -181,6 +181,8 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
       "additional_costs",
       "commission_eur_per_m2_enabled",
       "commission_eur_per_m2",
+      "commission_eur_per_led_enabled",
+      "commission_eur_per_led",
       "subcontractor_id",
       "subcontractor_payment_confirmed",
       "subcontractor_base_units",
@@ -368,13 +370,15 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
     const additionalCosts = values[8] as SiteFormValues["additional_costs"] | undefined;
     const commissionPerM2Enabled = values[9] as boolean | undefined;
     const commissionPerM2 = values[10] as number | undefined;
-    const subcontractorId = values[11] as string | undefined;
-    const subcontractorPaymentConfirmed = values[12] as boolean | undefined;
-    const subcontractorBaseUnits = values[13] as number | undefined;
-    const subcontractorPaymentAmount = values[14] as number | undefined;
-    const subcontractorPaymentUnits = values[15] as number | undefined;
-    const subcontractorPaymentRate = values[16] as number | undefined;
-    const subcontractorPaymentUnitLabel = values[17] as string | undefined;
+    const commissionPerLedEnabled = values[11] as boolean | undefined;
+    const commissionPerLed = values[12] as number | undefined;
+    const subcontractorId = values[13] as string | undefined;
+    const subcontractorPaymentConfirmed = values[14] as boolean | undefined;
+    const subcontractorBaseUnits = values[15] as number | undefined;
+    const subcontractorPaymentAmount = values[16] as number | undefined;
+    const subcontractorPaymentUnits = values[17] as number | undefined;
+    const subcontractorPaymentRate = values[18] as number | undefined;
+    const subcontractorPaymentUnitLabel = values[19] as string | undefined;
 
     // Get calculated values from form
     const revenue = sanitizeNumber(form.getValues("revenue"));
@@ -784,13 +788,17 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
     }));
     
     if (isEclairage) {
+      const nbLuminaires = sanitizeNumber(form.getValues("nb_luminaires"));
+      const commissionPerLed = sanitizeNumber(form.getValues("commission_eur_per_led"));
+      const commissionEnabled = Boolean(form.getValues("commission_eur_per_led_enabled"));
+
       const input: EclairageRentabiliteInput = {
         primeCEE_TTC: primeCee,
         travauxNonSubv_HT: travauxClient,
         MO_HT: sanitizeNumber(form.getValues("cout_total_mo")),
         MAT_HT: sanitizeNumber(form.getValues("cout_total_materiaux_eclairage")),
-        commission_HT: 0, // Éclairage doesn't use commission typically
-        nbLuminaires: sanitizeNumber(form.getValues("nb_luminaires")),
+        commission_HT: commissionEnabled ? commissionPerLed * nbLuminaires : 0,
+        nbLuminaires: nbLuminaires,
         fraisAdditionnels: additionalCosts,
       };
       
@@ -1154,6 +1162,58 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                   </>
                 )}
                 
+                {/* Commission fields (Éclairage) */}
+                {isEclairage && (
+                  <FormField
+                    control={control}
+                    name="commission_eur_per_led_enabled"
+                    render={({ field }) => (
+                      <FormItem className="col-span-full">
+                        <div className="flex items-start gap-3 rounded-lg border border-dashed p-3">
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={(checked) => {
+                              field.onChange(checked);
+                            }}
+                            disabled={disableInputs}
+                          />
+                          <div className="space-y-2 flex-1">
+                            <FormLabel>Commission commerciale (€ par LED installé)</FormLabel>
+                            <p className="text-xs text-muted-foreground">
+                              Activez pour ajouter une commission calculée par luminaire installé.
+                            </p>
+                            <FormField
+                              control={control}
+                              name="commission_eur_per_led"
+                              render={({ field: amountField }) => (
+                                <FormItem>
+                                  <FormLabel>Montant commission (€/LED)</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      {...amountField}
+                                      value={amountField.value ?? ""}
+                                      onBlur={(event) => {
+                                        amountField.onBlur();
+                                        handleBlurSave();
+                                      }}
+                                      disabled={!field.value || disableInputs}
+                                      readOnly={isEditingLocked}
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                )}
+
                 {/* Commission block - only show for Isolation */}
                 {!isEclairage && (
                   <FormField
@@ -1713,7 +1773,7 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                     </span>
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    CA - Coût chantier{!isEclairage && " - Commission"}
+                    CA - Coût chantier - Commission
                   </div>
                 </div>
                 
@@ -1786,11 +1846,11 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
       
       {/* Floating save button */}
       {formState.isDirty && !isEditingLocked && (
-        <div className="fixed bottom-6 right-6 z-50">
+        <div className="fixed bottom-6 right-6 z-[9999] pointer-events-auto">
           <Button
             type="button"
             size="lg"
-            className="shadow-lg"
+            className="shadow-lg pointer-events-auto"
             onClick={handleBlurSave}
             disabled={isUpdating}
           >

@@ -1169,6 +1169,8 @@ export type Database = {
           commission_commerciale_ht: string | null
           commission_commerciale_ht_montant: number | null
           commission_commerciale_par_m2: number | null
+          commission_eur_per_led: number | null
+          commission_eur_per_led_enabled: boolean | null
           commission_eur_per_m2: number | null
           commission_eur_per_m2_enabled: boolean | null
           cout_chantier_ttc: number | null
@@ -1233,6 +1235,8 @@ export type Database = {
           commission_commerciale_ht?: string | null
           commission_commerciale_ht_montant?: number | null
           commission_commerciale_par_m2?: number | null
+          commission_eur_per_led?: number | null
+          commission_eur_per_led_enabled?: boolean | null
           commission_eur_per_m2?: number | null
           commission_eur_per_m2_enabled?: boolean | null
           cout_chantier_ttc?: number | null
@@ -1297,6 +1301,8 @@ export type Database = {
           commission_commerciale_ht?: string | null
           commission_commerciale_ht_montant?: number | null
           commission_commerciale_par_m2?: number | null
+          commission_eur_per_led?: number | null
+          commission_eur_per_led_enabled?: boolean | null
           commission_eur_per_m2?: number | null
           commission_eur_per_m2_enabled?: boolean | null
           cout_chantier_ttc?: number | null
