@@ -230,27 +230,26 @@ export const StartChantierDialog = ({
         throw new Error("Organisation non trouvée");
       }
 
-      const response = await fetch(`/api/chantiers/${projectId}/start`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify({
+      const { data, error } = await supabase.functions.invoke('start-chantier', {
+        body: {
+          projectId,
           dateDebut: values.startDate,
           dateFinPrevue: values.endDate?.trim() || null,
           subcontractorId: values.subcontractorId,
-          notes: values.notes,
-        }),
+          notes: serializeSiteNotes(values.notes, null, []),
+        },
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: "Erreur inconnue" }));
-        throw new Error(errorData.message || "Impossible de créer le chantier");
+      if (error) {
+        console.error('Edge function error:', error);
+        throw new Error(error.message || 'Impossible de créer le chantier');
       }
 
-      const result: StartChantierResponse = await response.json();
-      return result;
+      if (!data) {
+        throw new Error('Aucune donnée retournée');
+      }
+
+      return data as StartChantierResponse;
     },
   });
 

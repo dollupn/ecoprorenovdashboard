@@ -1,1 +1,4 @@
 project_id = "yhydnoyjrxyryregbkei"
+
+[functions.start-chantier]
+verify_jwt = true
