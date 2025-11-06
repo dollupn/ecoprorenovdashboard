@@ -47,8 +47,8 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
-import { calculateRentability, buildRentabilityInputFromSite, isLedProduct, calculateCategoryRentability, normalizeCategory } from "@/lib/rentability";
-import { getProjectStatusBadgeStyle } from "@/lib/projects";
+import { calculateRentability, buildRentabilityInputFromSite, isLedProduct, calculateCategoryRentability } from "@/lib/rentability";
+import { getProjectStatusBadgeStyle, deriveProjectCategory } from "@/lib/projects";
 import { parseSiteNotes, serializeSiteNotes, type SiteNoteAttachment } from "@/lib/sites";
 import { cn } from "@/lib/utils";
 import { ClipboardList, Loader2, Lock, Info, Save } from "lucide-react";
@@ -230,12 +230,9 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
   const projectStatusValue = project?.status ?? null;
   const isEditingLocked = projectStatusValue !== "CHANTIER_TERMINE";
   
-  // Detect category: Priority 1) explicit project category, 2) product name heuristic
-  const productName = watchedProductName ?? chantier?.product_name ?? project?.product_name ?? "";
-  const explicitCategory = project?.product_cee_categories;
-  const normalizedCategory = normalizeCategory(explicitCategory);
-  const isEclairage = normalizedCategory === 'eclairage' || normalizedCategory === 'lighting'
-    || (!explicitCategory && isLedProduct(productName));
+  // Use the same category detection logic as the Projects list
+  const projectCategory = deriveProjectCategory(project ?? {});
+  const isEclairage = projectCategory === "EQ";
   const projectStatusConfig = useMemo(
     () =>
       projectStatusValue
@@ -320,6 +317,7 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
     project?.product_name,
     project?.project_ref,
     reset,
+    isEclairage,
   ]);
 
   const rentabilityMetrics = useMemo(() => {
@@ -552,11 +550,9 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
       }),
     );
     
-    // Determine category - use same detection as form display
-    const explicitCat = project?.product_cee_categories;
-    const normCat = normalizeCategory(explicitCat);
-    const isEclairageProduct = normCat === 'eclairage' || normCat === 'lighting'
-      || (!explicitCat && isLedProduct(values.product_name ?? project?.product_name));
+    // Use the same category detection logic as the form display
+    const projectCategory = deriveProjectCategory(project ?? {});
+    const isEclairageProduct = projectCategory === "EQ";
     
     // Common values
     const primeCee = sanitizeNumber(
@@ -748,9 +744,7 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
     const fraisAdditionnels = sanitizeNumber(rentabilityMetrics.additionalCostsTotal);
     
     return calculateCategoryRentability({
-      category: normalizedCategory === 'eclairage' || normalizedCategory === 'lighting' || isEclairage 
-        ? "Eclairage" 
-        : "Isolation",
+      category: isEclairage ? "Eclairage" : "Isolation",
       prime_cee: primeCee,
       travaux_non_subventionnes_client: travauxClient,
       frais_additionnels_total: fraisAdditionnels,

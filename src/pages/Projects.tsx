@@ -21,6 +21,9 @@ import {
   getProjectClientName,
   getProjectStatusBadgeStyle,
   type ProjectStatusSetting,
+  deriveProjectCategory,
+  detectCategoryFromValue,
+  type ProjectCategoryValue,
 } from "@/lib/projects";
 import {
   Search,
@@ -164,66 +167,11 @@ type ViewMode = "card" | "list";
 const VIEW_MODE_STORAGE_KEY = "projects:view-mode";
 const PROJECT_CATEGORY_VALUES = ["EQ", "EN"] as const;
 
-type ProjectCategoryValue = (typeof PROJECT_CATEGORY_VALUES)[number];
 type CategoryFilterValue = "all" | ProjectCategoryValue;
 type StatusFilterValue = "active" | "archived" | "all" | ProjectStatusSetting["value"];
 
 const ARCHIVED_STATUS_VALUES = ["ARCHIVED"] as const;
 const ARCHIVED_STATUS_SET = new Set<string>(ARCHIVED_STATUS_VALUES);
-
-const normalizeCategorySource = (value: string) =>
-  value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toUpperCase();
-
-const detectCategoryFromValue = (value?: string | null): ProjectCategoryValue | null => {
-  if (!value) {
-    return null;
-  }
-
-  const normalized = normalizeCategorySource(value);
-  const directMatch = normalized.match(/\b(EQ|EN)\b/);
-  if (directMatch) {
-    return directMatch[1] as ProjectCategoryValue;
-  }
-
-  const hyphenMatch = normalized.match(/BAT-(EQ|EN)/);
-  if (hyphenMatch) {
-    return hyphenMatch[1] as ProjectCategoryValue;
-  }
-
-  const segments = normalized.split(/[^A-Z]/).filter(Boolean);
-  for (const segment of segments) {
-    if (segment === "EQ" || segment === "EN") {
-      return segment as ProjectCategoryValue;
-    }
-  }
-
-  return null;
-};
-
-const deriveProjectCategory = (
-  project: ProjectWithRelations,
-  projectProducts: ProjectProduct[],
-): ProjectCategoryValue | null => {
-  const candidates: Array<string | null | undefined> = [
-    project.usage,
-    project.project_ref,
-    project.product_name,
-    ...projectProducts.map((item) => item.product?.code),
-    ...projectProducts.map((item) => item.product?.name),
-  ];
-
-  for (const candidate of candidates) {
-    const detected = detectCategoryFromValue(candidate);
-    if (detected) {
-      return detected;
-    }
-  }
-
-  return null;
-};
 
 const buildProjectProductDisplayMap = (
   projectProducts?: ProjectProduct[],
@@ -712,7 +660,7 @@ const Projects = ({
         .toLowerCase();
 
       const surfaceFactureeValue = surfaceFactureeByProject[project.id] ?? 0;
-      const category = deriveProjectCategory(project, project.project_products ?? []);
+      const category = deriveProjectCategory(project);
       const hasEnCode = displayedProducts.some((item) =>
         (item.product?.code ?? "").toUpperCase().includes("EN"),
       );

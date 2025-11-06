@@ -12,6 +12,62 @@ export type ProjectStatus =
   | "ANNULE"
   | "FACTURE";
 
+// Category detection types and functions
+export type ProjectCategoryValue = "EQ" | "EN";
+
+const normalizeCategorySource = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+
+export const detectCategoryFromValue = (value?: string | null): ProjectCategoryValue | null => {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = normalizeCategorySource(value);
+  const directMatch = normalized.match(/\b(EQ|EN)\b/);
+  if (directMatch) {
+    return directMatch[1] as ProjectCategoryValue;
+  }
+
+  const hyphenMatch = normalized.match(/BAT-(EQ|EN)/);
+  if (hyphenMatch) {
+    return hyphenMatch[1] as ProjectCategoryValue;
+  }
+
+  const segments = normalized.split(/[^A-Z]/).filter(Boolean);
+  for (const segment of segments) {
+    if (segment === "EQ" || segment === "EN") {
+      return segment as ProjectCategoryValue;
+    }
+  }
+
+  return null;
+};
+
+export const deriveProjectCategory = (
+  project: { usage?: string | null; project_ref?: string; product_name?: string; project_products?: Array<{ product?: { code?: string; name?: string } | null }> },
+): ProjectCategoryValue | null => {
+  const candidates: Array<string | null | undefined> = [
+    project.usage,
+    project.project_ref,
+    project.product_name,
+    ...(project.project_products ?? []).map((item) => item.product?.code),
+    ...(project.project_products ?? []).map((item) => item.product?.name),
+  ];
+
+  for (const candidate of candidates) {
+    const detected = detectCategoryFromValue(candidate);
+    if (detected) {
+      return detected;
+    }
+  }
+
+  return null;
+};
+
 type ProjectNameFields = {
   client_first_name?: string | null;
   client_last_name?: string | null;
