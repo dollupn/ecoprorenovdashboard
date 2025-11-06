@@ -343,6 +343,12 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
       cout_total_materiaux_eclairage: isEclairage 
         ? (chantier.cout_total_materiaux_eclairage !== null ? sanitizeNumber(chantier.cout_total_materiaux_eclairage) : 0)
         : sanitizeNumber(chantier.cout_total_materiaux_eclairage),
+      commission_eur_per_led_enabled: isEclairage 
+        ? Boolean(chantier.commission_eur_per_led_enabled)
+        : false,
+      commission_eur_per_led: isEclairage
+        ? sanitizeNumber(chantier.commission_eur_per_led)
+        : 0,
     };
     reset(defaults, { keepDefaultValues: false });
     setSiteAttachments(parsedNotes.attachments);
@@ -663,6 +669,8 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
         cout_total_mo: coutTotalMo,
         cout_total_materiaux_eclairage: coutTotalMateriauxEclairage,
         cout_total_materiaux: coutTotalMateriauxEclairage,
+        commission_eur_per_led_enabled: Boolean(values.commission_eur_per_led_enabled),
+        commission_eur_per_led: sanitizeNumber(values.commission_eur_per_led),
         surface_facturee_m2: null,
         surface_posee_m2: null,
         cout_mo_par_m2: null,
