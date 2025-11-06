@@ -1,3 +1,16 @@
+/**
+ * Normalize category string: remove diacritics, lowercase, trim
+ * Returns: 'isolation' | 'eclairage' | 'heating' | 'ventilation' | 'other' | ''
+ */
+export function normalizeCategory(value?: string | null): string {
+  if (!value) return '';
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
 export type RentabilityMeasurementMode = "surface" | "luminaire";
 
 export type RentabilityTravauxOption = "NA" | "CLIENT" | "MARGE" | "PARTAGE";

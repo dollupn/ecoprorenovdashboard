@@ -47,7 +47,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
-import { calculateRentability, buildRentabilityInputFromSite, isLedProduct, calculateCategoryRentability } from "@/lib/rentability";
+import { calculateRentability, buildRentabilityInputFromSite, isLedProduct, calculateCategoryRentability, normalizeCategory } from "@/lib/rentability";
 import { getProjectStatusBadgeStyle } from "@/lib/projects";
 import { parseSiteNotes, serializeSiteNotes, type SiteNoteAttachment } from "@/lib/sites";
 import { cn } from "@/lib/utils";
@@ -230,9 +230,12 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
   const projectStatusValue = project?.status ?? null;
   const isEditingLocked = projectStatusValue !== "CHANTIER_TERMINE";
   
-  // Detect category: Isolation vs Éclairage
+  // Detect category: Priority 1) explicit project category, 2) product name heuristic
   const productName = watchedProductName ?? chantier?.product_name ?? project?.product_name ?? "";
-  const isEclairage = isLedProduct(productName);
+  const explicitCategory = project?.product_cee_categories;
+  const normalizedCategory = normalizeCategory(explicitCategory);
+  const isEclairage = normalizedCategory === 'eclairage' || normalizedCategory === 'lighting'
+    || (!explicitCategory && isLedProduct(productName));
   const projectStatusConfig = useMemo(
     () =>
       projectStatusValue
@@ -296,10 +299,16 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
       cout_materiaux_par_m2: sanitizeNumber(chantier.cout_materiaux_par_m2),
       cout_total_materiaux: sanitizeNumber(chantier.cout_total_materiaux),
       commission_commerciale_par_m2: sanitizeNumber(chantier.commission_commerciale_par_m2),
-      // Éclairage fields
-      nb_luminaires: sanitizeNumber(chantier.nb_luminaires),
-      cout_total_mo: sanitizeNumber(chantier.cout_total_mo),
-      cout_total_materiaux_eclairage: sanitizeNumber(chantier.cout_total_materiaux_eclairage),
+      // Éclairage fields - provide 0 default if this is an Éclairage project
+      nb_luminaires: isEclairage 
+        ? (chantier.nb_luminaires !== null ? sanitizeNumber(chantier.nb_luminaires) : 0)
+        : sanitizeNumber(chantier.nb_luminaires),
+      cout_total_mo: isEclairage 
+        ? (chantier.cout_total_mo !== null ? sanitizeNumber(chantier.cout_total_mo) : 0)
+        : sanitizeNumber(chantier.cout_total_mo),
+      cout_total_materiaux_eclairage: isEclairage 
+        ? (chantier.cout_total_materiaux_eclairage !== null ? sanitizeNumber(chantier.cout_total_materiaux_eclairage) : 0)
+        : sanitizeNumber(chantier.cout_total_materiaux_eclairage),
     };
     reset(defaults, { keepDefaultValues: false });
     setSiteAttachments(parsedNotes.attachments);
@@ -543,8 +552,11 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
       }),
     );
     
-    // Determine category
-    const isEclairageProduct = isLedProduct(values.product_name ?? project?.product_name);
+    // Determine category - use same detection as form display
+    const explicitCat = project?.product_cee_categories;
+    const normCat = normalizeCategory(explicitCat);
+    const isEclairageProduct = normCat === 'eclairage' || normCat === 'lighting'
+      || (!explicitCat && isLedProduct(values.product_name ?? project?.product_name));
     
     // Common values
     const primeCee = sanitizeNumber(
@@ -736,7 +748,9 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
     const fraisAdditionnels = sanitizeNumber(rentabilityMetrics.additionalCostsTotal);
     
     return calculateCategoryRentability({
-      category: isEclairage ? "Eclairage" : "Isolation",
+      category: normalizedCategory === 'eclairage' || normalizedCategory === 'lighting' || isEclairage 
+        ? "Eclairage" 
+        : "Isolation",
       prime_cee: primeCee,
       travaux_non_subventionnes_client: travauxClient,
       frais_additionnels_total: fraisAdditionnels,
@@ -752,6 +766,30 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
       cout_total_materiaux_eclairage: sanitizeNumber(form.getValues("cout_total_materiaux_eclairage")),
     });
   }, [isEclairage, watchedTravauxEnabled, watchedTravaux, watchedTravauxMontant, rentabilityMetrics.additionalCostsTotal, chantier?.valorisation_cee, project?.prime_cee, form, rentabilityWatch]);
+
+  // Live recompute for Éclairage changes
+  useEffect(() => {
+    if (!isEclairage) return;
+    
+    const subscription = form.watch((values, { name }) => {
+      const relevantFields = [
+        'nb_luminaires',
+        'cout_total_mo',
+        'cout_total_materiaux_eclairage',
+        'travaux_non_subventionnes_client',
+        'tva_rate',
+        'frais_additionnels_total',
+        'valorisation_cee',
+      ];
+      
+      if (!name || !relevantFields.includes(name)) return;
+      
+      // Trigger recalculation by forcing rentabilityWatch update
+      // The useMemo for categoryRentability will automatically recalculate
+    });
+    
+    return () => subscription.unsubscribe();
+  }, [isEclairage, form]);
 
   return (
     <div className="space-y-6">
