@@ -2,6 +2,7 @@ import { Layout } from "@/components/layout/Layout";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
+import { KpiGoalsCard } from "@/app/(dashboard)/_components/KpiGoalsCard";
 import { useAuth } from "@/hooks/useAuth";
 import { useDashboardMetrics, useRevenueData } from "@/hooks/useDashboardData";
 import {
@@ -281,9 +282,12 @@ const DashboardPage = () => {
           />
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-[2fr_1fr] gap-6">
           <RevenueChart orgId={currentOrgId} enabled={queriesEnabled} />
-          <ActivityFeed orgId={currentOrgId} enabled={queriesEnabled} />
+          <div className="space-y-6">
+            <KpiGoalsCard orgId={currentOrgId} enabled={queriesEnabled} />
+            <ActivityFeed orgId={currentOrgId} enabled={queriesEnabled} />
+          </div>
         </div>
       </div>
     </Layout>
