@@ -45,6 +45,10 @@ import {
   type ProjectStatusSetting,
 } from "@/lib/projects";
 import {
+  buildProjectFormInitialValues,
+  type ProjectWithRelationsForForm,
+} from "@/lib/project-form";
+import {
   ArrowLeft,
   Calendar,
   Euro,
@@ -226,7 +230,7 @@ type UpcomingAppointmentDetail = {
   notes: string | null;
 };
 
-type ProjectWithRelations = Project & {
+type ProjectWithRelations = ProjectWithRelationsForForm & {
   project_products: ProjectProduct[];
   delegate?: DelegateSummary | null;
   lead?: Pick<Tables<"leads">, "email"> | null;
@@ -2396,6 +2400,14 @@ const ProjectDetails = () => {
     },
     enabled: !!id && !!user?.id && (!currentOrgId || !membersLoading),
   });
+
+  const editInitialValues = useMemo(() => {
+    if (!project) {
+      return undefined;
+    }
+
+    return buildProjectFormInitialValues(project);
+  }, [project]);
 
 
   const productCodes = useMemo(() => {
@@ -5282,6 +5294,7 @@ const ProjectDetails = () => {
             mode="edit"
             projectId={project.id}
             projectRef={project.project_ref}
+            initialValues={editInitialValues}
             open={editProjectDialogOpen}
             onOpenChange={setEditProjectDialogOpen}
             onProjectUpdated={() => {
