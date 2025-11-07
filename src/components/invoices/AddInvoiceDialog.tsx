@@ -43,7 +43,14 @@ const invoiceSchema = z.object({
   invoice_ref: z.string().min(3, "La référence est requise"),
   client_name: z.string().min(2, "Le nom du client est requis"),
   amount: z.coerce.number().min(0.01, "Le montant doit être supérieur à 0"),
-  status: z.enum(["DRAFT", "SENT", "PAID", "OVERDUE", "CANCELLED"]),
+  status: z.enum([
+    "PENDING_VALIDATION",
+    "DRAFT",
+    "SENT",
+    "PAID",
+    "OVERDUE",
+    "CANCELLED",
+  ]),
   project_id: z.string().optional(),
   quote_id: z.string().optional(),
   due_date: z.string().optional(),
@@ -103,7 +110,7 @@ export const AddInvoiceDialog = ({ onInvoiceAdded }: AddInvoiceDialogProps) => {
       invoice_ref: "",
       client_name: "",
       amount: undefined,
-      status: "DRAFT",
+      status: "PENDING_VALIDATION",
       project_id: undefined,
       quote_id: undefined,
       due_date: "",
@@ -247,6 +254,7 @@ export const AddInvoiceDialog = ({ onInvoiceAdded }: AddInvoiceDialogProps) => {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
+                        <SelectItem value="PENDING_VALIDATION">En attente de validation</SelectItem>
                         <SelectItem value="DRAFT">Brouillon</SelectItem>
                         <SelectItem value="SENT">Envoyée</SelectItem>
                         <SelectItem value="PAID">Payée</SelectItem>
