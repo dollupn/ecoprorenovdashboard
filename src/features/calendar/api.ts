@@ -283,7 +283,6 @@ export const fetchScheduledAppointments = async (
   const projectAppointmentsPromise = supabase
     .from("project_appointments")
     .select(
-      `id, project_id, status, appointment_date, appointment_time, appointment_type_id, assignee_id, notes,
       `id, project_id, appointment_date, appointment_time, appointment_type_id, assignee_id, notes, status, completed_at,
         appointment_type:appointment_types(id, name),
         project:projects(id, project_ref, status, assigned_to, address, city, postal_code, client_name, client_first_name, client_last_name, lead_id)`
