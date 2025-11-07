@@ -515,6 +515,7 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
         team_members: rest.team_members?.map(m => m.id) ?? [],
         // Ensure cout_total_materiaux is used for both categories
         cout_total_materiaux: payload.cout_total_materiaux ?? payload.cout_total_materiaux_eclairage ?? null,
+        cout_total_materiaux_eclairage: payload.cout_total_materiaux_eclairage ?? null,
       };
       
       const { error } = await supabase
