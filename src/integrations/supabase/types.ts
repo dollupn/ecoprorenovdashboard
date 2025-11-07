@@ -399,6 +399,44 @@ export type Database = {
         }
         Relationships: []
       }
+      kpi_goals: {
+        Row: {
+          created_at: string
+          id: string
+          month: number
+          org_id: string
+          surface_goal_m2: number
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          month: number
+          org_id: string
+          surface_goal_m2?: number
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          month?: number
+          org_id?: string
+          surface_goal_m2?: number
+          updated_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kpi_goals_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           address: string | null
@@ -1473,6 +1511,15 @@ export type Database = {
         Returns: boolean
       }
       lookup_user_id_by_email: { Args: { email: string }; Returns: string }
+      kpi_current_month_surface: {
+        Args: { _org_id: string }
+        Returns: {
+          month: number | null
+          surface_goal_m2: number | null
+          surface_real_m2: number | null
+          year: number | null
+        }[]
+      }
     }
     Enums: {
       app_role: "admin" | "commercial" | "user"
