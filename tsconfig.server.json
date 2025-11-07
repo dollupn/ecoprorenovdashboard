@@ -2,13 +2,17 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "outDir": "dist/server",
-    "rootDir": "src/server",
+    "rootDir": "src",                 // <- was "src/server"
     "module": "ESNext",
     "target": "ES2020",
     "moduleResolution": "Bundler",
     "resolveJsonModule": true,
     "esModuleInterop": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "noEmit": false
   },
-  "include": ["src/server/**/*.ts"]
+  "include": [
+    "src/server/**/*.ts",             // server runtime code
+    "src/integrations/**/*.ts"        // e.g. supabase/types.ts used by server
+  ]
 }
