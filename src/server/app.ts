@@ -25,7 +25,7 @@ export const createServer = () => {
 
   // When compiled, this file lives in dist/server/*
   // Vite client output is dist/*
-  const distDir = path.resolve(__dirname, "../../dist");
+  const distDir = path.resolve(process.cwd(), "dist");
 
   app.use(express.static(distDir)); // static assets (JS/CSS/images)
 
