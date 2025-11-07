@@ -15,6 +15,14 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   AlertTriangle,
   CalendarCheck,
   CheckCircle2,
@@ -24,10 +32,11 @@ import {
   MapPin,
   RefreshCw,
   ShieldCheck,
+  Trash,
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   addDays,
   format,
@@ -38,10 +47,16 @@ import {
   subMinutes,
 } from "date-fns";
 import { fr } from "date-fns/locale";
-import { fetchScheduledAppointments, type ScheduledAppointmentRecord } from "@/features/calendar/api";
+import {
+  deleteProjectAppointment,
+  fetchScheduledAppointments,
+  markProjectAppointmentDone,
+  type ScheduledAppointmentRecord,
+} from "@/features/calendar/api";
 import { useOrg } from "@/features/organizations/OrgContext";
+import { useToast } from "@/hooks/use-toast";
 
-type EventStatus = "confirmed" | "pending" | "reschedule";
+type EventStatus = "confirmed" | "pending" | "reschedule" | "done";
 type EventSource = "crm" | "google";
 
 type CalendarEvent = {
@@ -124,6 +139,10 @@ const determineEventStatus = (leadStatus: string | null | undefined): EventStatu
   if (!leadStatus) return "confirmed";
 
   const normalized = leadStatus.toLowerCase();
+
+  if (normalized.includes("done") || normalized.includes("termin")) {
+    return "done";
+  }
 
   if (normalized.includes("replan") || normalized.includes("report") || normalized.includes("annul")) {
     return "reschedule";
@@ -245,6 +264,11 @@ const statusConfig: Record<
     className: "text-rose-600",
     icon: AlertTriangle,
   },
+  done: {
+    label: "Terminé",
+    className: "text-emerald-600",
+    icon: CheckCircle2,
+  },
 };
 
 const googleIntegration = {
@@ -258,6 +282,7 @@ const capitalize = (value: string) => value.charAt(0).toUpperCase() + value.slic
 
 const CalendarPage = () => {
   const { currentOrgId } = useOrg();
+  const { toast } = useToast();
 
   const {
     data: appointments = [],
@@ -282,10 +307,12 @@ const CalendarPage = () => {
 
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [hasInitializedSelection, setHasInitializedSelection] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
 
   useEffect(() => {
     setSelectedDate(new Date());
     setHasInitializedSelection(false);
+    setSelectedEvent(null);
   }, [currentOrgId]);
 
   useEffect(() => {
@@ -294,6 +321,14 @@ const CalendarPage = () => {
       setHasInitializedSelection(true);
     }
   }, [events, hasInitializedSelection]);
+
+  useEffect(() => {
+    if (!selectedEvent) return;
+    const matchingEvent = events.find((event) => event.id === selectedEvent.id);
+    if (!matchingEvent) {
+      setSelectedEvent(null);
+    }
+  }, [events, selectedEvent]);
 
   const sortedEvents = useMemo(
     () => [...events].sort((a, b) => a.start.getTime() - b.start.getTime()),
@@ -318,41 +353,155 @@ const CalendarPage = () => {
     [sortedEvents],
   );
 
+  const markAppointmentDoneMutation = useMutation<
+    void,
+    Error,
+    { appointmentId: string; orgId: string; appointmentTitle: string }
+  >({
+    mutationFn: async ({ appointmentId, orgId }) => {
+      await markProjectAppointmentDone({ appointmentId, orgId });
+    },
+    onSuccess: (_, variables) => {
+      toast({
+        title: "Rendez-vous marqué comme terminé",
+        description: `Le rendez-vous "${variables.appointmentTitle}" a été marqué comme terminé.`,
+      });
+      setSelectedEvent(null);
+    },
+    onError: (mutationError) => {
+      toast({
+        variant: "destructive",
+        title: "Impossible de mettre à jour le rendez-vous",
+        description: mutationError.message,
+      });
+    },
+    onSettled: () => {
+      void refetch();
+    },
+  });
+
+  const deleteAppointmentMutation = useMutation<
+    void,
+    Error,
+    { appointmentId: string; orgId: string; appointmentTitle: string }
+  >({
+    mutationFn: async ({ appointmentId, orgId }) => {
+      await deleteProjectAppointment({ appointmentId, orgId });
+    },
+    onSuccess: (_, variables) => {
+      toast({
+        title: "Rendez-vous supprimé",
+        description: `Le rendez-vous "${variables.appointmentTitle}" a été supprimé du planning.`,
+      });
+      setSelectedEvent(null);
+    },
+    onError: (mutationError) => {
+      toast({
+        variant: "destructive",
+        title: "Impossible de supprimer le rendez-vous",
+        description: mutationError.message,
+      });
+    },
+    onSettled: () => {
+      void refetch();
+    },
+  });
+
+  const handleMissingOrg = () => {
+    toast({
+      variant: "destructive",
+      title: "Organisation requise",
+      description: "Sélectionnez une organisation pour gérer les rendez-vous projet.",
+    });
+  };
+
+  const handleMarkEventDone = (event: CalendarEvent) => {
+    if (event.entityType !== "project") return;
+    if (!currentOrgId) {
+      handleMissingOrg();
+      return;
+    }
+    if (event.status === "done") {
+      toast({
+        title: "Rendez-vous déjà terminé",
+        description: "Ce rendez-vous est déjà marqué comme terminé.",
+      });
+      return;
+    }
+
+    markAppointmentDoneMutation.mutate({
+      appointmentId: event.id,
+      orgId: currentOrgId,
+      appointmentTitle: event.title,
+    });
+  };
+
+  const handleDeleteEvent = (event: CalendarEvent) => {
+    if (event.entityType !== "project") return;
+    if (!currentOrgId) {
+      handleMissingOrg();
+      return;
+    }
+
+    deleteAppointmentMutation.mutate({
+      appointmentId: event.id,
+      orgId: currentOrgId,
+      appointmentTitle: event.title,
+    });
+  };
+
+  const isMarkingAppointmentDone = markAppointmentDoneMutation.isPending;
+  const isDeletingAppointment = deleteAppointmentMutation.isPending;
+  const areProjectActionsDisabled = isMarkingAppointmentDone || isDeletingAppointment;
+
   const visitsThisWeek = useMemo(() => {
     const start = startOfDay(new Date());
     const end = addDays(start, 6);
     return sortedEvents.filter(
       (event) =>
         event.type.toLowerCase().includes("visite") &&
-        isWithinInterval(event.start, { start, end }),
+        isWithinInterval(event.start, { start, end }) &&
+        event.status !== "done",
     );
   }, [sortedEvents]);
 
   const pendingVisits = useMemo(
-    () => visitsThisWeek.filter((event) => event.status !== "confirmed"),
+    () =>
+      visitsThisWeek.filter(
+        (event) => event.status !== "confirmed" && event.status !== "done",
+      ),
     [visitsThisWeek],
   );
 
-  const confirmedCount = useMemo(
-    () => sortedEvents.filter((event) => event.status === "confirmed").length,
-    [sortedEvents],
-  );
+  const confirmedCount = useMemo(() =>
+    sortedEvents.filter((event) => event.status === "confirmed" || event.status === "done").length,
+  [sortedEvents]);
 
   const confirmationRate = sortedEvents.length
     ? Math.round((confirmedCount / sortedEvents.length) * 100)
     : 0;
 
-  const upcomingEvents = useMemo(() => {
-    const now = new Date();
-    return sortedEvents
-      .filter((event) => event.end.getTime() >= now.getTime())
-      .filter((event) => event.projectAppointmentStatus !== "done")
-      .slice(0, 6);
-  }, [sortedEvents]);
+const upcomingEvents = useMemo(() => {
+  const nowTs = Date.now();
+
+  const isDone = (e: {
+    status?: string | null;
+    projectAppointmentStatus?: string | null;
+  }) => {
+    const s =
+      (e.status ?? e.projectAppointmentStatus ?? "").toString().toLowerCase();
+    return s === "done";
+  };
+
+  return sortedEvents
+    .filter((event) => event.end.getTime() >= nowTs && !isDone(event))
+    .slice(0, 6);
+}, [sortedEvents]);
+
 
   const nowTimestamp = Date.now();
   const nextTodayEvent = eventsToday.find(
-    (event) => event.end.getTime() >= nowTimestamp,
+    (event) => event.end.getTime() >= nowTimestamp && event.status !== "done",
   );
 
   const statCards = [
@@ -541,10 +690,13 @@ const CalendarPage = () => {
                       {eventsForSelectedDate.map((event) => {
                         const StatusIcon = statusConfig[event.status].icon;
                         const isPlaceholderLocation = event.location === "Adresse à confirmer";
+                        const isProjectEvent = event.entityType === "project";
+                        const isDone = event.status === "done";
                         return (
                           <div
                             key={event.id}
-                            className="rounded-2xl border bg-background/80 p-5 shadow-sm space-y-3"
+                            className={`rounded-2xl border bg-background/80 p-5 shadow-sm space-y-3 transition hover:border-primary/40 hover:shadow-md ${isDone ? "opacity-80" : ""} cursor-pointer`}
+                            onClick={() => setSelectedEvent(event)}
                           >
                             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                               <div>
@@ -566,7 +718,8 @@ const CalendarPage = () => {
                                 size="sm"
                                 className="h-auto p-0 inline-flex items-center gap-1.5 hover:text-primary"
                                 disabled={isPlaceholderLocation}
-                                onClick={() => {
+                                onClick={(clickEvent) => {
+                                  clickEvent.stopPropagation();
                                   if (isPlaceholderLocation) return;
                                   window.open(
                                     `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}`,
@@ -596,26 +749,58 @@ const CalendarPage = () => {
                                   {sourceLabels[event.source].label}
                                 </Badge>
                               </span>
-                              {event.detailUrl && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-auto p-0 inline-flex items-center gap-1.5 hover:text-primary"
-                                  asChild
-                                >
-                                  <Link to={event.detailUrl}>
-                                    <ExternalLink className="h-4 w-4" />
-                                    {event.detailLabel ?? (event.entityType === "project" ? "Voir le projet" : "Voir le lead")}
-                                  </Link>
-                                </Button>
+                                {event.detailUrl && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-auto p-0 inline-flex items-center gap-1.5 hover:text-primary"
+                                    asChild
+                                    onClick={(clickEvent) => clickEvent.stopPropagation()}
+                                  >
+                                    <Link to={event.detailUrl}>
+                                      <ExternalLink className="h-4 w-4" />
+                                      {event.detailLabel ?? (event.entityType === "project" ? "Voir le projet" : "Voir le lead")}
+                                    </Link>
+                                  </Button>
                               )}
                             </div>
 
-                            {event.notes && (
-                              <p className="text-sm leading-relaxed text-muted-foreground/90">
-                                {event.notes}
-                              </p>
-                            )}
+                              {isProjectEvent && (
+                                <div className="flex flex-wrap items-center gap-2 pt-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="inline-flex items-center gap-1.5 text-emerald-600 hover:text-emerald-700"
+                                    disabled={areProjectActionsDisabled || isDone}
+                                    onClick={(clickEvent) => {
+                                      clickEvent.stopPropagation();
+                                      handleMarkEventDone(event);
+                                    }}
+                                  >
+                                    <CheckCircle2 className="h-4 w-4" />
+                                    Marquer comme fait
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="inline-flex items-center gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
+                                    disabled={areProjectActionsDisabled}
+                                    onClick={(clickEvent) => {
+                                      clickEvent.stopPropagation();
+                                      handleDeleteEvent(event);
+                                    }}
+                                  >
+                                    <Trash className="h-4 w-4" />
+                                    Supprimer
+                                  </Button>
+                                </div>
+                              )}
+
+                              {event.notes && (
+                                <p className="text-sm leading-relaxed text-muted-foreground/90">
+                                  {event.notes}
+                                </p>
+                              )}
                           </div>
                         );
                       })}
@@ -650,55 +835,92 @@ const CalendarPage = () => {
                     </div>
                   ) : (
                     <div className="space-y-4 pr-2">
-                      {upcomingEvents.map((event) => (
-                        <div
-                          key={event.id}
-                          className="rounded-xl border bg-background/80 p-4 shadow-sm space-y-3"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                                {capitalize(format(event.start, "EEEE d MMMM", { locale: fr }))}
-                              </p>
-                              <h4 className="text-sm font-semibold text-foreground mt-1">
-                                {event.title}
-                              </h4>
+                      {upcomingEvents.map((event) => {
+                        const isProjectEvent = event.entityType === "project";
+                        const isDone = event.status === "done";
+                        return (
+                          <div
+                            key={event.id}
+                            className={`rounded-xl border bg-background/80 p-4 shadow-sm space-y-3 transition hover:border-primary/40 hover:shadow-md cursor-pointer ${isDone ? "opacity-80" : ""}`}
+                            onClick={() => setSelectedEvent(event)}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-xs text-muted-foreground uppercase tracking-wide">
+                                  {capitalize(format(event.start, "EEEE d MMMM", { locale: fr }))}
+                                </p>
+                                <h4 className="text-sm font-semibold text-foreground mt-1">
+                                  {event.title}
+                                </h4>
+                              </div>
+                              <Badge variant="outline" className={event.typeColor}>
+                                {event.type}
+                              </Badge>
                             </div>
-                            <Badge variant="outline" className={event.typeColor}>
-                              {event.type}
-                            </Badge>
+                            <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                              <span className="inline-flex items-center gap-1.5">
+                                <Clock className="h-4 w-4" />
+                                {format(event.start, "HH:mm", { locale: fr })} – {format(event.end, "HH:mm", { locale: fr })}
+                              </span>
+                              <span className="inline-flex items-center gap-1.5">
+                                <MapPin className="h-4 w-4" />
+                                {event.location}
+                              </span>
+                              <Badge
+                                variant="outline"
+                                className={`${sourceLabels[event.source].className} px-2 py-0`}
+                              >
+                                {sourceLabels[event.source].label}
+                              </Badge>
+                            </div>
+                            {event.detailUrl && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-auto p-0 inline-flex items-center gap-1.5 text-primary hover:text-primary"
+                                asChild
+                                onClick={(clickEvent) => clickEvent.stopPropagation()}
+                              >
+                                <Link to={event.detailUrl}>
+                                  <ExternalLink className="h-4 w-4" />
+                                  {event.detailLabel ?? (event.entityType === "project" ? "Voir le projet" : "Voir le lead")}
+                                </Link>
+                              </Button>
+                            )}
+
+                            {isProjectEvent && (
+                              <div className="flex flex-wrap items-center gap-2 pt-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="inline-flex items-center gap-1.5 text-emerald-600 hover:text-emerald-700"
+                                  disabled={areProjectActionsDisabled || isDone}
+                                  onClick={(clickEvent) => {
+                                    clickEvent.stopPropagation();
+                                    handleMarkEventDone(event);
+                                  }}
+                                >
+                                  <CheckCircle2 className="h-4 w-4" />
+                                  Marquer comme fait
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="inline-flex items-center gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
+                                  disabled={areProjectActionsDisabled}
+                                  onClick={(clickEvent) => {
+                                    clickEvent.stopPropagation();
+                                    handleDeleteEvent(event);
+                                  }}
+                                >
+                                  <Trash className="h-4 w-4" />
+                                  Supprimer
+                                </Button>
+                              </div>
+                            )}
                           </div>
-                          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                            <span className="inline-flex items-center gap-1.5">
-                              <Clock className="h-4 w-4" />
-                              {format(event.start, "HH:mm", { locale: fr })} – {format(event.end, "HH:mm", { locale: fr })}
-                            </span>
-                            <span className="inline-flex items-center gap-1.5">
-                              <MapPin className="h-4 w-4" />
-                              {event.location}
-                            </span>
-                            <Badge
-                              variant="outline"
-                              className={`${sourceLabels[event.source].className} px-2 py-0`}
-                            >
-                              {sourceLabels[event.source].label}
-                            </Badge>
-                          </div>
-                          {event.detailUrl && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-auto p-0 inline-flex items-center gap-1.5 text-primary hover:text-primary"
-                              asChild
-                            >
-                              <Link to={event.detailUrl}>
-                                <ExternalLink className="h-4 w-4" />
-                                {event.detailLabel ?? (event.entityType === "project" ? "Voir le projet" : "Voir le lead")}
-                              </Link>
-                            </Button>
-                          )}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </ScrollArea>
@@ -797,6 +1019,91 @@ const CalendarPage = () => {
           </div>
         </div>
       </div>
+      <Dialog open={Boolean(selectedEvent)} onOpenChange={(open) => !open && setSelectedEvent(null)}>
+        <DialogContent className="max-w-lg">
+          {selectedEvent && (() => {
+            const SelectedStatusIcon = statusConfig[selectedEvent.status].icon;
+            return (
+              <div className="space-y-4">
+                <DialogHeader>
+                  <DialogTitle>{selectedEvent.title}</DialogTitle>
+                  <DialogDescription>
+                    {capitalize(format(selectedEvent.start, "EEEE d MMMM", { locale: fr }))} ·
+                    {" "}
+                    {format(selectedEvent.start, "HH:mm", { locale: fr })} – {format(selectedEvent.end, "HH:mm", { locale: fr })}
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <Badge variant="outline" className={selectedEvent.typeColor}>
+                    {selectedEvent.type}
+                  </Badge>
+                  <Badge
+                    variant="outline"
+                    className={`${sourceLabels[selectedEvent.source].className} px-2 py-0`}
+                  >
+                    {sourceLabels[selectedEvent.source].label}
+                  </Badge>
+                  <span className="inline-flex items-center gap-1.5 text-sm">
+                    <SelectedStatusIcon className={`h-4 w-4 ${statusConfig[selectedEvent.status].className}`} />
+                    <span className={`font-medium ${statusConfig[selectedEvent.status].className}`}>
+                      {statusConfig[selectedEvent.status].label}
+                    </span>
+                  </span>
+                </div>
+
+                <div className="space-y-3 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-foreground" />
+                    <span>{selectedEvent.location}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-foreground" />
+                    <span>{selectedEvent.assignedTo}</span>
+                  </div>
+                  {selectedEvent.detailUrl && (
+                    <div className="flex items-center gap-2 text-primary">
+                      <ExternalLink className="h-4 w-4" />
+                      <Link to={selectedEvent.detailUrl} className="underline">
+                        {selectedEvent.detailLabel ?? (selectedEvent.entityType === "project" ? "Voir le projet" : "Voir le lead")}
+                      </Link>
+                    </div>
+                  )}
+                </div>
+
+                {selectedEvent.notes && (
+                  <div className="rounded-md border bg-muted/40 p-3 text-sm leading-relaxed text-muted-foreground">
+                    {selectedEvent.notes}
+                  </div>
+                )}
+
+                {selectedEvent.entityType === "project" && (
+                  <DialogFooter className="flex flex-col items-stretch gap-2 pt-2 sm:flex-row sm:justify-between">
+                    <Button
+                      variant="ghost"
+                      className="inline-flex items-center gap-1.5 text-emerald-600 hover:text-emerald-700"
+                      disabled={areProjectActionsDisabled || selectedEvent.status === "done"}
+                      onClick={() => handleMarkEventDone(selectedEvent)}
+                    >
+                      <CheckCircle2 className="h-4 w-4" />
+                      Marquer comme fait
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="inline-flex items-center gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
+                      disabled={areProjectActionsDisabled}
+                      onClick={() => handleDeleteEvent(selectedEvent)}
+                    >
+                      <Trash className="h-4 w-4" />
+                      Supprimer le rendez-vous
+                    </Button>
+                  </DialogFooter>
+                )}
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 };
