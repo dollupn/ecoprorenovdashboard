@@ -1,11 +1,14 @@
-import { 
-  useCallback, 
-  useMemo, 
-  useRef, 
-  useState, 
-  useEffect, 
-  type ChangeEvent, 
-  type DragEvent 
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  useEffect,
+  type ChangeEvent,
+  type DragEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
 } from "react";
 
 import { Layout } from "@/components/layout/Layout";
@@ -782,6 +785,368 @@ const formatInitials = (fullName: string) => {
   return initials.toUpperCase();
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const toTrimmedString = (value: unknown): string | null => {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value.toString();
+  }
+  return null;
+};
+
+const toNumberValue = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const normalized = value.replace(/,/g, ".").trim();
+    if (!normalized) return null;
+    const parsed = Number.parseFloat(normalized);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  return null;
+};
+
+const toStringArray = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => toTrimmedString(item))
+    .filter((item): item is string => Boolean(item));
+};
+
+const numberFormatter = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 });
+
+const formatMetric = (value: number | null | undefined, unit?: string) => {
+  if (value === null || value === undefined) return null;
+  return `${numberFormatter.format(value)}${unit ? ` ${unit}` : ""}`;
+};
+
+const formatDateValue = (value: string | null) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleDateString("fr-FR");
+};
+
+type BuildingDetails = {
+  order: number;
+  label: string | null;
+  length: number | null;
+  width: number | null;
+  height: number | null;
+  area: number | null;
+  volume: number | null;
+};
+
+type LeadDetailsDialogProps = {
+  lead: LeadWithExtras | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  resolveAssignee?: (assigneeId: string | null) => string;
+};
+
+const DetailItem = ({ label, value }: { label: string; value?: ReactNode }) => (
+  <div className="space-y-1">
+    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+    <div className="text-sm font-medium text-foreground">
+      {value ?? <span className="text-muted-foreground">Non renseigné</span>}
+    </div>
+  </div>
+);
+
+const LeadDetailsDialog = ({ lead, open, onOpenChange, resolveAssignee }: LeadDetailsDialogProps) => {
+  const extras = isRecord(lead?.extra_fields) ? (lead!.extra_fields as Record<string, unknown>) : null;
+
+  const remarks =
+    toTrimmedString(extras?.remarks) ??
+    toTrimmedString(extras?.notes) ??
+    toTrimmedString(extras?.terrain_notes) ??
+    toTrimmedString(lead?.commentaire ?? null);
+
+  const buildingsRaw = extras && Array.isArray(extras.buildings) ? (extras.buildings as unknown[]) : [];
+
+  const buildings: BuildingDetails[] = buildingsRaw
+    .map((item, index) => {
+      if (!isRecord(item)) return null;
+      const orderValue = toNumberValue(item.order);
+      const label =
+        toTrimmedString(item.label) ??
+        toTrimmedString(item.name) ??
+        toTrimmedString(item.title) ??
+        null;
+      const length =
+        toNumberValue(item.length) ??
+        toNumberValue(item.longueur) ??
+        toNumberValue(item.long) ??
+        toNumberValue(item.l);
+      const width =
+        toNumberValue(item.width) ??
+        toNumberValue(item.largeur) ??
+        toNumberValue(item.larg) ??
+        toNumberValue(item.w);
+      const height =
+        toNumberValue(item.height) ??
+        toNumberValue(item.hauteur) ??
+        toNumberValue(item.h);
+      const area = length !== null && width !== null ? length * width : null;
+      const volume = area !== null && height !== null ? area * height : null;
+
+      return {
+        order: orderValue ?? index + 1,
+        label,
+        length,
+        width,
+        height,
+        area,
+        volume,
+      };
+    })
+    .filter((item): item is BuildingDetails => Boolean(item));
+
+  const buildingArea =
+    toNumberValue(extras?.buildingArea) ??
+    toNumberValue(extras?.building_area) ??
+    toNumberValue(extras?.surface_batiment_m2) ??
+    toNumberValue(extras?.surface_batiment);
+
+  const insulationArea =
+    toNumberValue(extras?.insultationArea) ??
+    toNumberValue(extras?.insulationArea) ??
+    toNumberValue(extras?.insulation_area) ??
+    toNumberValue(extras?.surface_isolation_m2) ??
+    toNumberValue(extras?.surface_a_isoler);
+
+  const coverageRatio =
+    buildingArea && buildingArea > 0 && insulationArea !== null
+      ? (insulationArea / buildingArea) * 100
+      : null;
+
+  const remainingArea =
+    buildingArea !== null && insulationArea !== null ? buildingArea - insulationArea : null;
+
+  const contactRole = toTrimmedString(extras?.contactRole ?? extras?.contact_role);
+  const subsidyReceivedRaw = toTrimmedString(extras?.subsidyReceived ?? extras?.subsidy_received);
+  const subsidyDetails = toTrimmedString(extras?.subsidyDetails ?? extras?.subsidy_details);
+  const luminaireCountRaw = toTrimmedString(extras?.luminaireCount ?? extras?.luminaire_count);
+  const luminaireCountNumber = toNumberValue(extras?.luminaireCount ?? extras?.luminaire_count);
+  const luminaireDisplay =
+    luminaireCountNumber !== null ? numberFormatter.format(luminaireCountNumber) : luminaireCountRaw ?? null;
+
+  const visitDateRaw = toTrimmedString(extras?.visitDate ?? extras?.visit_date);
+  const creationDateRaw = toTrimmedString(extras?.creationDate ?? extras?.creation_date);
+  const visitDate = formatDateValue(visitDateRaw);
+  const creationDate = formatDateValue(creationDateRaw);
+  const buildingType = toTrimmedString(extras?.buildingType ?? extras?.building_type);
+  const buildingUsage = toTrimmedString(extras?.buildingUsage ?? extras?.building_usage);
+  const selectedProducts = toStringArray(extras?.selectedProducts ?? extras?.selected_products);
+
+  const subsidyReceived = subsidyReceivedRaw
+    ? subsidyReceivedRaw.toLowerCase() === "yes"
+      ? "Oui"
+      : subsidyReceivedRaw.toLowerCase() === "no"
+        ? "Non"
+        : subsidyReceivedRaw
+    : null;
+
+  const addressLine = [
+    toTrimmedString(lead?.address ?? null),
+    toTrimmedString(lead?.city ?? null),
+    toTrimmedString(lead?.postal_code ?? null),
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join(" • ");
+
+  const assigneeDisplay = lead
+    ? resolveAssignee?.(lead.assigned_to ?? null) ?? lead.assigned_to ?? "Non assigné"
+    : "Non assigné";
+
+  const createdAt = lead?.created_at ? formatDateValue(lead.created_at) : null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {lead ? (
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>
+              <div className="flex flex-col gap-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span>{lead.full_name || "Lead sans nom"}</span>
+                  <Badge
+                    className="border px-2 py-1 font-medium"
+                    style={getLeadStatusBadgeStyles(lead.status)}
+                  >
+                    {getLeadStatusLabel(lead.status)}
+                  </Badge>
+                </div>
+                {lead.company ? (
+                  <span className="text-sm font-normal text-muted-foreground">{lead.company}</span>
+                ) : null}
+              </div>
+            </DialogTitle>
+            {(addressLine || lead.product_name || assigneeDisplay || createdAt) && (
+              <DialogDescription className="space-y-1">
+                {addressLine ? <div>{addressLine}</div> : null}
+                {lead.product_name ? (
+                  <div>
+                    Produit : <span className="font-medium text-foreground">{lead.product_name}</span>
+                    {lead.surface_m2 ? (
+                      <span className="text-muted-foreground">
+                        {" "}— Surface estimée : {formatMetric(lead.surface_m2, "m²")}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
+                {assigneeDisplay ? <div>Suivi par : {assigneeDisplay}</div> : null}
+                {createdAt ? <div>Créé le {createdAt}</div> : null}
+              </DialogDescription>
+            )}
+          </DialogHeader>
+          <div className="space-y-6">
+            {(buildingArea !== null || insulationArea !== null || coverageRatio !== null || remainingArea !== null) && (
+              <section className="space-y-3">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  Indicateurs clés
+                </h3>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <DetailItem
+                    label="Surface bâtiment"
+                    value={buildingArea !== null ? <span>{formatMetric(buildingArea, "m²")}</span> : undefined}
+                  />
+                  <DetailItem
+                    label="Surface à isoler"
+                    value={insulationArea !== null ? <span>{formatMetric(insulationArea, "m²")}</span> : undefined}
+                  />
+                  <DetailItem
+                    label="Taux de couverture"
+                    value={
+                      coverageRatio !== null ? `${numberFormatter.format(coverageRatio)} %` : undefined
+                    }
+                  />
+                  <DetailItem
+                    label="Surface restante"
+                    value={remainingArea !== null ? <span>{formatMetric(remainingArea, "m²")}</span> : undefined}
+                  />
+                </div>
+              </section>
+            )}
+
+            <section className="space-y-3">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Coordonnées
+              </h3>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <DetailItem label="Téléphone" value={toTrimmedString(lead.phone_raw) ?? undefined} />
+                <DetailItem label="Email" value={toTrimmedString(lead.email) ?? undefined} />
+                <DetailItem label="Source" value={toTrimmedString(lead.utm_source) ?? undefined} />
+                <DetailItem label="Adresse" value={addressLine || undefined} />
+              </div>
+            </section>
+
+            <section className="space-y-3">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Informations terrain
+              </h3>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <DetailItem label="Fonction interlocuteur" value={contactRole ?? undefined} />
+                <DetailItem label="Date de visite" value={visitDate ?? undefined} />
+                <DetailItem label="Date de création terrain" value={creationDate ?? undefined} />
+                <DetailItem label="Type bâtiment" value={buildingType ?? undefined} />
+                <DetailItem label="Usage bâtiment" value={buildingUsage ?? undefined} />
+                <DetailItem label="Nombre de luminaires" value={luminaireDisplay ?? undefined} />
+                <DetailItem label="Subvention reçue" value={subsidyReceived ?? undefined} />
+                <DetailItem label="Détails de la subvention" value={subsidyDetails ?? undefined} />
+              </div>
+            </section>
+
+            <section className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  Bâtiments ({buildings.length})
+                </h3>
+                {buildings.length === 0 ? (
+                  <span className="text-xs text-muted-foreground">Aucun bâtiment renseigné</span>
+                ) : null}
+              </div>
+              {buildings.length > 0 ? (
+                <div className="space-y-3">
+                  {buildings.map((building) => (
+                    <div
+                      key={`${building.order}-${building.label ?? "building"}`}
+                      className="rounded-lg border bg-muted/30 p-4"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-medium text-foreground">
+                          Bâtiment {building.order}
+                          {building.label ? ` — ${building.label}` : ""}
+                        </span>
+                        {building.area !== null || building.volume !== null ? (
+                          <span className="text-sm text-muted-foreground">
+                            {building.area !== null ? `Surface : ${formatMetric(building.area, "m²")}` : ""}
+                            {building.volume !== null
+                              ? `${building.area !== null ? " • " : ""}Volume : ${formatMetric(building.volume, "m³")}`
+                              : ""}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                        <DetailItem
+                          label="Longueur"
+                          value={building.length !== null ? `${formatMetric(building.length, "m")}` : undefined}
+                        />
+                        <DetailItem
+                          label="Largeur"
+                          value={building.width !== null ? `${formatMetric(building.width, "m")}` : undefined}
+                        />
+                        <DetailItem
+                          label="Hauteur"
+                          value={building.height !== null ? `${formatMetric(building.height, "m")}` : undefined}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </section>
+
+            {selectedProducts.length > 0 ? (
+              <section className="space-y-3">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  Produits sélectionnés
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {selectedProducts.map((product) => (
+                    <Badge key={product} variant="secondary" className="px-3 py-1 text-sm">
+                      {product}
+                    </Badge>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {remarks ? (
+              <section className="space-y-3">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  Remarques
+                </h3>
+                <p className="whitespace-pre-wrap rounded-lg border bg-muted/30 p-4 text-sm text-foreground">
+                  {remarks}
+                </p>
+              </section>
+            ) : null}
+          </div>
+        </DialogContent>
+      ) : null}
+    </Dialog>
+  );
+};
+
 const Leads = () => {
   const { user } = useAuth();
   const { currentOrgId } = useOrg();
@@ -796,6 +1161,8 @@ const Leads = () => {
   const [isCsvDragActive, setIsCsvDragActive] = useState(false);
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [assigningLeadId, setAssigningLeadId] = useState<string | null>(null);
+  const [selectedLead, setSelectedLead] = useState<LeadWithExtras | null>(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const orgId = currentOrgId;
 
   const statusOptions = useMemo(
@@ -919,6 +1286,45 @@ const Leads = () => {
     },
     [assignmentLabelById]
   );
+
+  const handleLeadCardOpen = useCallback((lead: LeadWithExtras) => {
+    setSelectedLead(lead);
+    setIsDetailsOpen(true);
+  }, []);
+
+  const handleLeadCardContainerClick = useCallback(
+    (event: MouseEvent<HTMLDivElement>, lead: LeadWithExtras) => {
+      if (event.defaultPrevented) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("[data-lead-dialog-ignore]")) {
+        return;
+      }
+      handleLeadCardOpen(lead);
+    },
+    [handleLeadCardOpen]
+  );
+
+  const handleLeadCardKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>, lead: LeadWithExtras) => {
+      if (event.defaultPrevented) return;
+      if (event.key === "Enter" || event.key === " ") {
+        const target = event.target as HTMLElement | null;
+        if (target?.closest("[data-lead-dialog-ignore]")) {
+          return;
+        }
+        event.preventDefault();
+        handleLeadCardOpen(lead);
+      }
+    },
+    [handleLeadCardOpen]
+  );
+
+  const handleDetailsOpenChange = useCallback((open: boolean) => {
+    setIsDetailsOpen(open);
+    if (!open) {
+      setSelectedLead(null);
+    }
+  }, []);
 
   const handleAssignmentChange = useCallback(
     async (leadId: string, newAssignee: string | null) => {
@@ -1504,45 +1910,56 @@ const Leads = () => {
                   const appointmentTypeInfo = lead.appointment_type_id
                     ? appointmentTypeMap.get(lead.appointment_type_id)
                     : null;
+                  const isLeadSelected = isDetailsOpen && selectedLead?.id === lead.id;
 
                   return (
                     <div
                       key={lead.id}
-                      className="p-4 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
+                      role="button"
+                      tabIndex={0}
+                      aria-haspopup="dialog"
+                      aria-expanded={isLeadSelected}
+                      aria-label={`Voir les détails du lead ${lead.full_name || "sans nom"}`}
+                      onClick={(event) => handleLeadCardContainerClick(event, leadWithExtras)}
+                      onKeyDown={(event) => handleLeadCardKeyDown(event, leadWithExtras)}
+                      className={cn(
+                        "p-4 rounded-lg border bg-card transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                        isLeadSelected ? "border-primary bg-primary/5" : "hover:bg-muted/50"
+                      )}
                     >
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
-                          <span className="font-semibold text-primary">
-                            {formatInitials(lead.full_name)}
-                          </span>
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
+                            <span className="font-semibold text-primary">
+                              {formatInitials(lead.full_name)}
+                            </span>
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-foreground">
+                              {lead.full_name}
+                            </h3>
+                            {lead.company && (
+                              <p className="text-sm text-muted-foreground flex items-center gap-1">
+                                <Building className="w-3 h-3" />
+                                {lead.company}
+                              </p>
+                            )}
+                            {lead.siren && (
+                              <p className="text-xs text-muted-foreground uppercase tracking-wide">
+                                SIREN : {lead.siren}
+                              </p>
+                            )}
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="font-semibold text-foreground">
-                            {lead.full_name}
-                          </h3>
-                          {lead.company && (
-                            <p className="text-sm text-muted-foreground flex items-center gap-1">
-                              <Building className="w-3 h-3" />
-                              {lead.company}
-                            </p>
-                          )}
-                          {lead.siren && (
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                              SIREN : {lead.siren}
-                            </p>
-                          )}
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          <Badge
+                            className="border px-2 py-1 font-medium"
+                            style={getLeadStatusBadgeStyles(lead.status)}
+                          >
+                            {getLeadStatusLabel(lead.status)}
+                          </Badge>
                         </div>
                       </div>
-                      <div className="flex flex-wrap items-center justify-end gap-2">
-                        <Badge
-                          className="border px-2 py-1 font-medium"
-                          style={getLeadStatusBadgeStyles(lead.status)}
-                        >
-                          {getLeadStatusLabel(lead.status)}
-                        </Badge>
-                      </div>
-                    </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
                       <div className="space-y-2">
@@ -1606,7 +2023,10 @@ const Leads = () => {
                         <span className="text-xs text-muted-foreground">
                           Créé le {new Date(lead.created_at).toLocaleDateString("fr-FR")}
                         </span>
-                        <div className="flex flex-wrap items-center gap-2 text-sm">
+                        <div
+                          className="flex flex-wrap items-center gap-2 text-sm"
+                          data-lead-dialog-ignore
+                        >
                           <UserCircle className="h-4 w-4 text-muted-foreground" />
                           <span className="text-xs uppercase tracking-wide text-muted-foreground">
                             Assigné à
@@ -1614,7 +2034,7 @@ const Leads = () => {
                           {renderAssignmentControl(lead, "card")}
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-2 justify-end">
+                      <div className="flex flex-wrap gap-2 justify-end" data-lead-dialog-ignore>
                         <LeadPhoningDialog
                           lead={leadWithExtras}
                           onCompleted={handlePhoningCompleted}
@@ -1821,6 +2241,12 @@ const Leads = () => {
           </CardContent>
         </Card>
       </div>
+      <LeadDetailsDialog
+        lead={selectedLead}
+        open={isDetailsOpen}
+        onOpenChange={handleDetailsOpenChange}
+        resolveAssignee={getAssigneeDisplay}
+      />
     </Layout>
   );
 };
