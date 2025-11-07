@@ -8,6 +8,8 @@ type ProjectAppointmentRow = Tables<"project_appointments"> & {
 };
 type AppointmentTypeRow = Tables<"appointment_types">;
 
+type ProjectAppointmentStatus = ProjectAppointmentRow["status"];
+
 type ProjectAppointmentProject = Pick<
   ProjectRow,
   | "id"
@@ -46,7 +48,9 @@ export type ScheduledAppointmentRecord = {
   city: NullableString;
   postalCode: NullableString;
   commentaire: NullableString;
-  status: string;
+  status: string | null;
+  projectAppointmentStatus: ProjectAppointmentStatus | null;
+  completedAt: NullableString;
   assignedTo: NullableString;
   productName: NullableString;
   location: NullableString;
@@ -280,6 +284,7 @@ export const fetchScheduledAppointments = async (
     .from("project_appointments")
     .select(
       `id, project_id, status, appointment_date, appointment_time, appointment_type_id, assignee_id, notes,
+      `id, project_id, appointment_date, appointment_time, appointment_type_id, assignee_id, notes, status, completed_at,
         appointment_type:appointment_types(id, name),
         project:projects(id, project_ref, status, assigned_to, address, city, postal_code, client_name, client_first_name, client_last_name, lead_id)`
     )
@@ -346,7 +351,9 @@ export const fetchScheduledAppointments = async (
       city: getString(lead.city),
       postalCode: getString(lead.postal_code),
       commentaire: getString(lead.commentaire),
-      status: lead.status,
+      status: getString(lead.status),
+      projectAppointmentStatus: null,
+      completedAt: null,
       assignedTo: getString(lead.assigned_to),
       productName: getString(lead.product_name),
       location,
@@ -391,6 +398,11 @@ export const fetchScheduledAppointments = async (
     const appointmentAssignee = getString(appointment.assignee_id);
     const assignedTo = projectAssignedTo ?? (looksLikeUuid(appointmentAssignee) ? null : appointmentAssignee);
 
+    const projectAppointmentStatus: ProjectAppointmentStatus | null =
+      appointment.status ?? null;
+
+    const completedAt = getString(appointment.completed_at);
+
     const fullName =
       deriveProjectClientName(project) ?? getString(project?.project_ref) ?? "Projet";
 
@@ -403,7 +415,11 @@ export const fetchScheduledAppointments = async (
       city: getString(project?.city ?? null),
       postalCode: getString(project?.postal_code ?? null),
       commentaire: getString(appointment.notes),
-      status: getString((appointment as ProjectAppointmentRow).status ?? null) ?? "confirmed",
+      status:
+         getString((appointment as ProjectAppointmentRow).status ?? null) ??
+         "confirmed",
+          projectAppointmentStatus,  // keep as a separate field if your type includes it
+      completedAt,
       assignedTo,
       productName: null,
       location: location ?? "Adresse à confirmer",

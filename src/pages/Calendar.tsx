@@ -76,6 +76,8 @@ type CalendarEvent = {
   projectId: string | null;
   detailUrl?: string;
   detailLabel?: string;
+  projectAppointmentStatus: ScheduledAppointmentRecord["projectAppointmentStatus"];
+  completedAt: ScheduledAppointmentRecord["completedAt"];
 };
 const DEFAULT_APPOINTMENT_TYPE_COLOR = "bg-slate-500/10 text-slate-600 border-slate-200";
 
@@ -232,6 +234,8 @@ const mapAppointmentsToEvents = (
         projectId,
         detailUrl,
         detailLabel,
+        projectAppointmentStatus: record.projectAppointmentStatus,
+        completedAt: record.completedAt,
       } satisfies CalendarEvent;
     })
     .filter((event) => event !== null) as CalendarEvent[];
@@ -477,15 +481,23 @@ const CalendarPage = () => {
     ? Math.round((confirmedCount / sortedEvents.length) * 100)
     : 0;
 
-  const upcomingEvents = useMemo(() => {
-    const now = new Date();
-    return sortedEvents
-      .filter(
-        (event) =>
-          event.end.getTime() >= now.getTime() && event.status !== "done",
-      )
-      .slice(0, 6);
-  }, [sortedEvents]);
+const upcomingEvents = useMemo(() => {
+  const nowTs = Date.now();
+
+  const isDone = (e: {
+    status?: string | null;
+    projectAppointmentStatus?: string | null;
+  }) => {
+    const s =
+      (e.status ?? e.projectAppointmentStatus ?? "").toString().toLowerCase();
+    return s === "done";
+  };
+
+  return sortedEvents
+    .filter((event) => event.end.getTime() >= nowTs && !isDone(event))
+    .slice(0, 6);
+}, [sortedEvents]);
+
 
   const nowTimestamp = Date.now();
   const nextTodayEvent = eventsToday.find(
