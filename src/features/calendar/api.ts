@@ -3,7 +3,9 @@ import type { Tables } from "@/integrations/supabase/types";
 
 type LeadRow = Tables<"leads">;
 type ProjectRow = Tables<"projects">;
-type ProjectAppointmentRow = Tables<"project_appointments">;
+type ProjectAppointmentRow = Tables<"project_appointments"> & {
+  status?: string | null;
+};
 type AppointmentTypeRow = Tables<"appointment_types">;
 
 type ProjectAppointmentProject = Pick<
@@ -277,7 +279,7 @@ export const fetchScheduledAppointments = async (
   const projectAppointmentsPromise = supabase
     .from("project_appointments")
     .select(
-      `id, project_id, appointment_date, appointment_time, appointment_type_id, assignee_id, notes,
+      `id, project_id, status, appointment_date, appointment_time, appointment_type_id, assignee_id, notes,
         appointment_type:appointment_types(id, name),
         project:projects(id, project_ref, status, assigned_to, address, city, postal_code, client_name, client_first_name, client_last_name, lead_id)`
     )
@@ -401,7 +403,7 @@ export const fetchScheduledAppointments = async (
       city: getString(project?.city ?? null),
       postalCode: getString(project?.postal_code ?? null),
       commentaire: getString(appointment.notes),
-      status: "confirmed",
+      status: getString((appointment as ProjectAppointmentRow).status ?? null) ?? "confirmed",
       assignedTo,
       productName: null,
       location: location ?? "Adresse à confirmer",
@@ -432,5 +434,31 @@ export const fetchScheduledAppointments = async (
   return combinedRecords.sort(
     (a, b) => getRecordTimestamp(a) - getRecordTimestamp(b),
   );
+};
+
+export const markProjectAppointmentDone = async (
+  params: { appointmentId: string; orgId: string },
+) => {
+  const { appointmentId, orgId } = params;
+  const { error } = await supabase
+    .from("project_appointments")
+    .update({ status: "done" })
+    .eq("id", appointmentId)
+    .eq("org_id", orgId);
+
+  if (error) throw error;
+};
+
+export const deleteProjectAppointment = async (
+  params: { appointmentId: string; orgId: string },
+) => {
+  const { appointmentId, orgId } = params;
+  const { error } = await supabase
+    .from("project_appointments")
+    .delete()
+    .eq("id", appointmentId)
+    .eq("org_id", orgId);
+
+  if (error) throw error;
 };
 
