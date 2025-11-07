@@ -39,7 +39,14 @@ import {
 } from "lucide-react";
 
 /** ---- Status & Types ---- */
-const INVOICE_STATUSES = ["DRAFT", "SENT", "PAID", "OVERDUE", "CANCELLED"] as const;
+const INVOICE_STATUSES = [
+  "PENDING_VALIDATION",
+  "DRAFT",
+  "SENT",
+  "PAID",
+  "OVERDUE",
+  "CANCELLED",
+] as const;
 type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
 
 type InvoiceRecord = Tables<"invoices"> & {
@@ -48,6 +55,10 @@ type InvoiceRecord = Tables<"invoices"> & {
 };
 
 const statusMeta: Record<InvoiceStatus, { label: string; className: string }> = {
+  PENDING_VALIDATION: {
+    label: "En attente de validation",
+    className: "bg-amber-500/10 text-amber-700 border-amber-200",
+  },
   DRAFT: {
     label: "Brouillon",
     className: "bg-gray-500/10 text-gray-700 border-gray-200",
@@ -120,11 +131,15 @@ const Invoices = () => {
       .reduce((sum, invoice) => sum + Number(invoice.amount || 0), 0);
 
     const outstanding = invoices
-      .filter((invoice) => ["SENT", "OVERDUE"].includes((invoice.status || "").toUpperCase()))
+      .filter((invoice) =>
+        ["SENT", "OVERDUE"].includes((invoice.status || "").toUpperCase()),
+      )
       .reduce((sum, invoice) => sum + Number(invoice.amount || 0), 0);
 
     const overdue = invoices.filter((invoice) => invoice.status === "OVERDUE");
-    const draft = invoices.filter((invoice) => invoice.status === "DRAFT");
+    const draft = invoices.filter((invoice) =>
+      ["DRAFT", "PENDING_VALIDATION"].includes((invoice.status || "").toUpperCase()),
+    );
     const paidCount = invoices.filter((invoice) => invoice.status === "PAID");
 
     const totalBilled = invoices.reduce((sum, inv) => sum + Number(inv.amount || 0), 0);
@@ -141,8 +156,8 @@ const Invoices = () => {
   }, [invoices]);
 
   const renderStatus = (status: string) => {
-    const normalized = (status?.toUpperCase() as InvoiceStatus) || "DRAFT";
-    const meta = statusMeta[normalized] ?? statusMeta.DRAFT;
+    const normalized = (status?.toUpperCase() as InvoiceStatus) || "PENDING_VALIDATION";
+    const meta = statusMeta[normalized] ?? statusMeta.PENDING_VALIDATION;
     return <Badge className={meta.className}>{meta.label}</Badge>;
   };
 
@@ -312,7 +327,9 @@ const Invoices = () => {
                             <TableCell className="text-right">
                               {formatCurrency(Number(invoice.amount || 0))}
                             </TableCell>
-                            <TableCell>{renderStatus(invoice.status || "DRAFT")}</TableCell>
+                            <TableCell>
+                              {renderStatus(invoice.status || "PENDING_VALIDATION")}
+                            </TableCell>
                             <TableCell>{formatDate(invoice.due_date)}</TableCell>
                             <TableCell>{formatDate(invoice.paid_date)}</TableCell>
                           </TableRow>

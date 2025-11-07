@@ -152,7 +152,7 @@ export const generateInvoiceForProject = async (orgId: string, projectId: string
     client_first_name: project.client_first_name,
     client_last_name: project.client_last_name,
     amount: invoiceAmount,
-    status: "DRAFT",
+    status: "PENDING_VALIDATION",
     due_date: dueDate.toISOString(),
     notes: formatNotes({
       quoteRef: latestQuote.quote_ref,
