@@ -120,6 +120,7 @@ type ProjectWithRelations = Project & {
   project_products: ProjectProduct[];
   lead?: Pick<Tables<"leads">, "email"> | null;
   delegate?: Pick<Tables<"delegates">, "id" | "name" | "price_eur_per_mwh"> | null;
+  hasChantiers: boolean;
 };
 
 type ProjectsProps = {
@@ -325,7 +326,7 @@ const Projects = ({
       let query = supabase
         .from("projects")
         .select(
-          "*, delegate:delegates(id, name, price_eur_per_mwh), lead:leads(email), project_products(id, product_id, quantity, dynamic_params, product:product_catalog(id, code, name, category, params_schema, cee_config, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))"
+          "*, delegate:delegates(id, name, price_eur_per_mwh), lead:leads(email), project_products(id, product_id, quantity, dynamic_params, product:product_catalog(id, code, name, category, params_schema, cee_config, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac))), sites(id)"
         )
         .order("created_at", { ascending: false });
 
@@ -355,15 +356,23 @@ const Projects = ({
 
       if (error) throw error;
 
-      const sanitized = (data ?? []).map((project) => ({
-        ...project,
-        project_products: (project.project_products ?? []).map((pp) => ({
-          ...pp,
-          product: pp.product
-            ? withDefaultProductCeeConfig(pp.product)
-            : null,
-        })),
-      }));
+      const sanitized = (data ?? []).map((project) => {
+        const projectWithSites = project as typeof project & {
+          sites?: Pick<Tables<"sites">, "id">[] | null;
+        };
+        const { sites, ...projectWithoutSites } = projectWithSites;
+
+        return {
+          ...projectWithoutSites,
+          project_products: (project.project_products ?? []).map((pp) => ({
+            ...pp,
+            product: pp.product
+              ? withDefaultProductCeeConfig(pp.product)
+              : null,
+          })),
+          hasChantiers: (sites?.length ?? 0) > 0,
+        } satisfies ProjectWithRelations;
+      });
 
       return sanitized as ProjectWithRelations[];
     },
@@ -775,7 +784,7 @@ const Projects = ({
   );
 
   const handleOpenProjectTab = useCallback(
-    (projectId: string, tab: "journal" | "media") => {
+    (projectId: string, tab: "journal" | "media" | "chantiers") => {
       navigate(`/projects/${projectId}?tab=${tab}`);
     },
     [navigate],
@@ -809,9 +818,17 @@ const Projects = ({
   const [selectedProjectForChantier, setSelectedProjectForChantier] =
     useState<ProjectWithRelations | null>(null);
 
-  const handleStartChantier = useCallback((project: ProjectWithRelations) => {
-    setSelectedProjectForChantier(project);
-  }, []);
+  const handleStartChantier = useCallback(
+    (project: ProjectWithRelations) => {
+      if (project.hasChantiers) {
+        handleOpenProjectTab(project.id, "chantiers");
+        return;
+      }
+
+      setSelectedProjectForChantier(project);
+    },
+    [handleOpenProjectTab],
+  );
 
   if (isLoading || membersLoading || isRestrictionLoading || restrictionNotReady) {
     return (
