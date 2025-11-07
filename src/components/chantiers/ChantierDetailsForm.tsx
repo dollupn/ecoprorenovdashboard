@@ -326,13 +326,27 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
       notes: parsedNotes.text ?? "",
       additional_costs: normalizeAdditionalCostsArray(chantier.additional_costs ?? []),
       // Isolation fields - use correct column names
-      surface_facturee_m2: sanitizeNumber(chantier.surface_facturee_m2),
-      surface_posee_m2: sanitizeNumber(chantier.surface_posee_m2),
-      cout_mo_par_m2: sanitizeNumber(chantier.cout_mo_par_m2),
-      cout_isolant_par_m2: sanitizeNumber(chantier.cout_isolant_par_m2),
-      cout_materiaux_par_m2: sanitizeNumber(chantier.cout_materiaux_par_m2),
-      cout_total_materiaux: sanitizeNumber(chantier.cout_total_materiaux),
-      commission_commerciale_par_m2: sanitizeNumber(chantier.commission_commerciale_par_m2),
+      surface_facturee_m2: isEclairage
+        ? null
+        : sanitizeNumber(chantier.surface_facturee_m2),
+      surface_posee_m2: isEclairage
+        ? null
+        : sanitizeNumber(chantier.surface_posee_m2),
+      cout_mo_par_m2: isEclairage
+        ? null
+        : sanitizeNumber(chantier.cout_mo_par_m2),
+      cout_isolant_par_m2: isEclairage
+        ? null
+        : sanitizeNumber(chantier.cout_isolant_par_m2),
+      cout_materiaux_par_m2: isEclairage
+        ? null
+        : sanitizeNumber(chantier.cout_materiaux_par_m2),
+      cout_total_materiaux: isEclairage
+        ? null
+        : sanitizeNumber(chantier.cout_total_materiaux),
+      commission_commerciale_par_m2: isEclairage
+        ? null
+        : sanitizeNumber(chantier.commission_commerciale_par_m2),
       // Éclairage fields - provide 0 default if this is an Éclairage project
       nb_luminaires: isEclairage 
         ? (chantier.nb_luminaires !== null ? sanitizeNumber(chantier.nb_luminaires) : 0)
