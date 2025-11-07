@@ -664,12 +664,14 @@ export type Database = {
           appointment_time: string
           appointment_type_id: string | null
           assignee_id: string | null
+          completed_at: string | null
           created_at: string
           created_by: string
           id: string
           notes: string | null
           org_id: string
           project_id: string
+          status: "scheduled" | "done"
           updated_at: string
         }
         Insert: {
@@ -677,12 +679,14 @@ export type Database = {
           appointment_time: string
           appointment_type_id?: string | null
           assignee_id?: string | null
+          completed_at?: string | null
           created_at?: string
           created_by: string
           id?: string
           notes?: string | null
           org_id: string
           project_id: string
+          status?: "scheduled" | "done"
           updated_at?: string
         }
         Update: {
@@ -690,12 +694,14 @@ export type Database = {
           appointment_time?: string
           appointment_type_id?: string | null
           assignee_id?: string | null
+          completed_at?: string | null
           created_at?: string
           created_by?: string
           id?: string
           notes?: string | null
           org_id?: string
           project_id?: string
+          status?: "scheduled" | "done"
           updated_at?: string
         }
         Relationships: [
