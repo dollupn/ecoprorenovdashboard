@@ -93,6 +93,8 @@ const formatFileSize = (sizeInBytes: number) => {
   return `${(sizeInKb / 1024).toFixed(1)} Mo`;
 };
 
+const INSULATION_KEYWORDS = ["isol", "isolation", "ite", "bardage"];
+
 const CommercialLeadPOS = () => {
   const { currentOrgId } = useOrg();
   const orgId = currentOrgId;
@@ -143,6 +145,17 @@ const CommercialLeadPOS = () => {
     [formState.selectedProducts],
   );
 
+  const isInsulationSelected = useMemo(
+    () =>
+      formState.selectedProducts.some((product) => {
+        const normalizedName = product.toLowerCase();
+        return INSULATION_KEYWORDS.some((keyword) => normalizedName.includes(keyword));
+      }),
+    [formState.selectedProducts],
+  );
+
+  const shouldHideInsulationArea = isLedSelected && !isInsulationSelected;
+
   useEffect(() => {
     if (!isLedSelected && formState.luminaireCount) {
       setFormState((prev) => ({
@@ -153,13 +166,13 @@ const CommercialLeadPOS = () => {
   }, [isLedSelected, formState.luminaireCount]);
 
   useEffect(() => {
-    if (isLedSelected && formState.insultationArea) {
+    if (shouldHideInsulationArea && formState.insultationArea) {
       setFormState((prev) => ({
         ...prev,
         insultationArea: "",
       }));
     }
-  }, [isLedSelected, formState.insultationArea]);
+  }, [shouldHideInsulationArea, formState.insultationArea]);
 
   useEffect(() => {
     if (!formState.address) {
@@ -568,7 +581,7 @@ const CommercialLeadPOS = () => {
                         className="h-12"
                       />
                     </div>
-                    {!isLedSelected && (
+                    {!shouldHideInsulationArea && (
                       <div className="grid gap-2">
                         <Label htmlFor="insultationArea">Surface à isoler (m²)</Label>
                         <Input
