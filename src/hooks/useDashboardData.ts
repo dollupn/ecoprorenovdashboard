@@ -1,7 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { getProjectClientName } from "@/lib/projects";
-import type { Tables } from "@/integrations/supabase/types";
+import {
+  DEFAULT_PROJECT_STATUSES,
+  getProjectClientName,
+  sanitizeProjectStatuses,
+  type ProjectStatusSetting,
+} from "@/lib/projects";
 import type { ProjectStatus } from "@/lib/projects";
 import {
   addDays,
@@ -18,12 +22,10 @@ import {
 import { fr } from "date-fns/locale";
 
 import { getLeadStatusLabel, LEAD_STATUSES } from "@/components/leads/status";
-import { DEFAULT_PROJECT_STATUSES } from "@/lib/projects";
 
 const ACTIVE_LEAD_STATUSES = LEAD_STATUSES.filter((status) => status !== "Non éligible");
 const QUALIFIED_LEAD_STATUS = "Éligible" as const;
 
-const PROJECT_STATUS_VALUES = DEFAULT_PROJECT_STATUSES.map((status) => status.value);
 const PROJECT_STATUS_LABELS = DEFAULT_PROJECT_STATUSES.reduce<Record<string, string>>(
   (acc, status) => {
     acc[status.value] = status.label;
@@ -31,10 +33,6 @@ const PROJECT_STATUS_LABELS = DEFAULT_PROJECT_STATUSES.reduce<Record<string, str
   },
   {}
 );
-
-const ACTIVE_PROJECT_STATUSES = DEFAULT_PROJECT_STATUSES.filter(
-  (status) => status.isActive !== false,
-).map((status) => status.value);
 
 const PROJECT_SURFACE_STATUS_SET = new Set([
   "CHANTIER_EN_COURS",
@@ -45,10 +43,6 @@ const PROJECT_SURFACE_STATUS_SET = new Set([
   "AAF",
   "CLOTURE",
 ]);
-
-const PROJECT_SURFACE_STATUSES = PROJECT_STATUS_VALUES.filter((status) =>
-  PROJECT_SURFACE_STATUS_SET.has(status),
-);
 
 const ACCEPTED_PROJECT_STATUS =
   DEFAULT_PROJECT_STATUSES.find((status) => status.value === "DEVIS_SIGNE")?.value ?? "DEVIS_SIGNE";
@@ -198,6 +192,61 @@ export const useDashboardMetrics = (
         throw new Error("Organisation non définie");
       }
 
+      const {
+        data: projectStatusSettings,
+        error: projectStatusError,
+      } = (await supabase
+        .from("settings" as any)
+        .select("statuts_projets")
+        .eq("org_id", orgId)
+        .maybeSingle()) as {
+        data: { statuts_projets: ProjectStatusSetting[] | null } | null;
+        error: { code?: string } | null;
+      };
+
+      if (projectStatusError && projectStatusError.code !== "PGRST116") {
+        throw projectStatusError;
+      }
+
+      const rawProjectStatuses =
+        Array.isArray(projectStatusSettings?.statuts_projets) &&
+        projectStatusSettings.statuts_projets.length > 0
+          ? (projectStatusSettings.statuts_projets as ProjectStatusSetting[])
+          : DEFAULT_PROJECT_STATUSES;
+
+      const sanitizedProjectStatuses = sanitizeProjectStatuses(rawProjectStatuses);
+
+      const activeProjectStatusValues = sanitizedProjectStatuses
+        .filter((status) => status.isActive !== false)
+        .map((status) => status.value);
+
+      const projectSurfaceStatuses = Array.from(
+        new Set(
+          sanitizedProjectStatuses
+            .filter(
+              (status) =>
+                status.isActive !== false || PROJECT_SURFACE_STATUS_SET.has(status.value),
+            )
+            .map((status) => status.value),
+        ),
+      );
+
+      const projectStatusesToFetch = Array.from(
+        new Set([...activeProjectStatusValues, ...projectSurfaceStatuses]),
+      );
+
+      const projectsQuery = supabase
+        .from("projects")
+        .select(
+          `id, status, updated_at, surface_isolee_m2, city, client_name, building_type,
+            project_products(id, quantity, dynamic_params, product:product_catalog(id, code, category, cee_config, default_params, is_active, params_schema, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))`
+        )
+        .eq("org_id", orgId);
+
+      if (projectStatusesToFetch.length > 0) {
+        projectsQuery.in("status", projectStatusesToFetch as ProjectStatus[]);
+      }
+
       const now = new Date();
       const startWeek = startOfWeek(now, { weekStartsOn: 1 });
       const endWeek = endOfWeek(now, { weekStartsOn: 1 });
@@ -223,14 +272,7 @@ export const useDashboardMetrics = (
           .select("id", { count: "exact", head: true })
           .eq("org_id", orgId)
           .in("status", ACTIVE_LEAD_STATUSES),
-        supabase
-          .from("projects")
-          .select(
-            `id, status, updated_at, surface_isolee_m2, city, client_name, building_type,
-            project_products(id, quantity, dynamic_params, product:product_catalog(id, code, category, cee_config, default_params, is_active, params_schema, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))`
-          )
-          .eq("org_id", orgId)
-          .in("status", [...ACTIVE_PROJECT_STATUSES, ...PROJECT_SURFACE_STATUSES] as ProjectStatus[]),
+        projectsQuery,
         supabase
           .from("quotes")
           .select("id, status, valid_until")
@@ -334,7 +376,8 @@ export const useDashboardMetrics = (
         .reduce((acc, site) => acc + (site.nb_luminaires ?? 0), 0);
 
       const energyAggregation = aggregateEnergyByCategory(projets, {
-        shouldIncludeProject: (project) => isStatusValue(PROJECT_SURFACE_STATUSES, project.status),
+        shouldIncludeProject: (project) =>
+          isStatusValue(projectSurfaceStatuses, project.status),
       });
       const totalMwh = energyAggregation.totalMwh;
 
@@ -368,7 +411,7 @@ export const useDashboardMetrics = (
       const metrics: DashboardMetrics = {
         leadsActifs: activeLeads.count ?? 0,
         projetsEnCours: projets.filter((project) =>
-          isStatusValue(ACTIVE_PROJECT_STATUSES, project.status)
+          isStatusValue(activeProjectStatusValues, project.status)
         ).length,
         devisEnAttente: quotes.length,
         devisExpirantSous7Jours: quotes.filter((quote) => {
