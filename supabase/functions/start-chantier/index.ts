@@ -104,6 +104,20 @@ Deno.serve(async (req) => {
 
     console.log('Chantier created successfully:', chantier.id);
 
+    // Update project status to CHANTIER_PLANIFIE
+    const { error: statusError } = await supabaseClient
+      .from('projects')
+      .update({ status: 'CHANTIER_PLANIFIE' })
+      .eq('id', projectId)
+      .eq('org_id', project.org_id);
+
+    if (statusError) {
+      console.error('Failed to update project status:', statusError);
+      // Don't throw - chantier was created successfully
+    } else {
+      console.log('Project status updated to CHANTIER_PLANIFIE');
+    }
+
     return new Response(
       JSON.stringify({ chantier, project }),
       {
