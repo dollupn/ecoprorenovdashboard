@@ -61,6 +61,8 @@ type CalendarEvent = {
   projectId: string | null;
   detailUrl?: string;
   detailLabel?: string;
+  projectAppointmentStatus: ScheduledAppointmentRecord["projectAppointmentStatus"];
+  completedAt: ScheduledAppointmentRecord["completedAt"];
 };
 const DEFAULT_APPOINTMENT_TYPE_COLOR = "bg-slate-500/10 text-slate-600 border-slate-200";
 
@@ -213,6 +215,8 @@ const mapAppointmentsToEvents = (
         projectId,
         detailUrl,
         detailLabel,
+        projectAppointmentStatus: record.projectAppointmentStatus,
+        completedAt: record.completedAt,
       } satisfies CalendarEvent;
     })
     .filter((event) => event !== null) as CalendarEvent[];
@@ -342,6 +346,7 @@ const CalendarPage = () => {
     const now = new Date();
     return sortedEvents
       .filter((event) => event.end.getTime() >= now.getTime())
+      .filter((event) => event.projectAppointmentStatus !== "done")
       .slice(0, 6);
   }, [sortedEvents]);
 
