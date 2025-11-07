@@ -45,9 +45,9 @@ export const InformationsComplementairesCard = ({
   const InfoRow = ({ label, value }: { label: string; value: React.ReactNode }) => {
     if (!value) return null;
     return (
-      <div className="flex justify-between py-2 border-b last:border-0">
+      <div className="flex flex-col gap-1 py-2 border-b last:border-0 sm:flex-row sm:items-center sm:justify-between sm:gap-0">
         <span className="text-sm text-muted-foreground">{label}</span>
-        <span className="text-sm font-medium text-right">{value}</span>
+        <span className="text-sm font-medium sm:text-right">{value}</span>
       </div>
     );
   };
@@ -64,9 +64,9 @@ export const InformationsComplementairesCard = ({
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <CardTitle>Informations complémentaires</CardTitle>
-        <Button variant="outline" size="sm" onClick={onEdit}>
+        <Button className="w-full sm:w-auto" variant="outline" size="sm" onClick={onEdit}>
           <Edit className="mr-2 h-4 w-4" />
           Modifier le projet
         </Button>
