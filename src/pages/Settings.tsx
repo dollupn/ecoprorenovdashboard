@@ -24,6 +24,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrg } from "@/features/organizations/OrgContext";
+import { useMembers } from "@/features/members/api";
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 import { useProjectBuildingTypes } from "@/hooks/useProjectBuildingTypes";
 import { useProjectUsages } from "@/hooks/useProjectUsages";
@@ -56,6 +57,7 @@ import {
   FileText,
   List,
   Calendar,
+  Target,
 } from "lucide-react";
 import {
   DEFAULT_PROJECT_STATUSES,
@@ -86,6 +88,7 @@ import { LeadSettingsPanel } from "@/features/settings/LeadSettingsPanel";
 import { QuoteSettingsPanel } from "@/features/settings/QuoteSettingsPanel";
 import { SubcontractorSettingsPanel } from "@/features/settings/SubcontractorSettingsPanel";
 import { AppointmentSettingsPanel } from "@/features/settings/AppointmentSettingsPanel";
+import { KpiSettingsPanel } from "@/features/settings/KpiSettingsPanel";
 
 const SETTINGS_TABLE = "settings" as unknown as keyof Database["public"]["Tables"];
 const ROLE_OPTIONS = ["Administrateur", "Manager", "Commercial", "Technicien"] as const;
@@ -317,7 +320,13 @@ const sessionOptions = [
   { value: "120", label: "2 heures" },
 ];
 
-type SettingsSection = "general" | "lead" | "quotes" | "subcontractors" | "calendar";
+type SettingsSection =
+  | "general"
+  | "lead"
+  | "quotes"
+  | "subcontractors"
+  | "calendar"
+  | "kpi";
 
 const SETTINGS_SECTIONS: Array<{
   id: SettingsSection;
@@ -328,6 +337,7 @@ const SETTINGS_SECTIONS: Array<{
   { id: "lead", label: "Paramètres Lead", icon: Settings2 },
   { id: "quotes", label: "Paramètres Devis", icon: FileText },
   { id: "subcontractors", label: "Paramètres sous-traitant", icon: Users },
+  { id: "kpi", label: "Paramètres KPI", icon: Target },
   { id: "calendar", label: "Types de RDV", icon: Calendar },
 ];
 
@@ -338,15 +348,40 @@ export default function Settings() {
   const location = useLocation();
   const navigate = useNavigate();
   const { currentOrgId } = useOrg();
+  const { data: members = [] } = useMembers(currentOrgId);
+
+  const currentMember = useMemo(
+    () => members.find((member) => member.user_id === user?.id) ?? null,
+    [members, user?.id],
+  );
+
+  const isAdmin = currentMember?.role === "owner" || currentMember?.role === "admin";
+
+  const availableSections = useMemo(
+    () =>
+      SETTINGS_SECTIONS.filter((section) =>
+        section.id === "kpi" ? isAdmin : true,
+      ),
+    [isAdmin],
+  );
+
   const activeSection = useMemo<SettingsSection>(() => {
     const params = new URLSearchParams(location.search);
     const section = params.get("section");
-    return SETTINGS_SECTIONS.some(({ id }) => id === section)
-      ? (section as SettingsSection)
-      : "general";
-  }, [location.search]);
+    const fallback = (availableSections[0]?.id ?? "general") as SettingsSection;
+
+    if (section && availableSections.some(({ id }) => id === section)) {
+      return section as SettingsSection;
+    }
+
+    return fallback;
+  }, [location.search, availableSections]);
 
   const handleSectionSelect = (section: SettingsSection) => {
+    if (!availableSections.some(({ id }) => id === section)) {
+      return;
+    }
+
     const params = new URLSearchParams(location.search);
     if (section === "general") {
       params.delete("section");
@@ -2450,7 +2485,7 @@ export default function Settings() {
 
           <div className="mb-6 border-b border-border">
             <nav className="flex gap-6">
-              {SETTINGS_SECTIONS.map(({ id, label, icon: Icon }) => (
+              {availableSections.map(({ id, label, icon: Icon }) => (
                 <button
                   key={id}
                   onClick={() => handleSectionSelect(id)}
@@ -2472,6 +2507,7 @@ export default function Settings() {
             {activeSection === "lead" && <LeadSettingsPanel />}
             {activeSection === "quotes" && <QuoteSettingsPanel />}
             {activeSection === "subcontractors" && <SubcontractorSettingsPanel />}
+            {activeSection === "kpi" && <KpiSettingsPanel />}
             {activeSection === "calendar" && <AppointmentSettingsPanel />}
           </div>
         </div>
