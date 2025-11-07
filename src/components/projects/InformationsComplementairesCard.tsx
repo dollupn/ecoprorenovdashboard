@@ -85,15 +85,6 @@ export const InformationsComplementairesCard = ({
               : "—"
           }
         />
-        <InfoRow
-          label="Surface isolée"
-          value={
-            typeof project.surface_isolee_m2 === "number" &&
-            Number.isFinite(project.surface_isolee_m2)
-              ? `${surfaceFormatter.format(project.surface_isolee_m2)} m²`
-              : "—"
-          }
-        />
         <InfoRow label="Nom signataire" value={project.signatory_name || "—"} />
         <InfoRow label="Titre signataire" value={project.signatory_title || "—"} />
         <InfoRow label="SIREN" value={project.siren || "—"} />
