@@ -178,6 +178,8 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -2228,6 +2230,7 @@ const ProjectDetails = () => {
     return isValidProjectTab(currentTab) ? currentTab : DEFAULT_PROJECT_TAB;
   });
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
+  const [quoteSummaryOpen, setQuoteSummaryOpen] = useState(false);
   const [quoteInitialValues, setQuoteInitialValues] = useState<
     Partial<QuoteFormValues>
   >({});
@@ -4183,8 +4186,22 @@ const ProjectDetails = () => {
       amount: project.estimated_value ?? undefined,
       quote_ref: project.project_ref ? `${project.project_ref}-DEV` : undefined,
     });
-    setQuoteDialogOpen(true);
+    setQuoteSummaryOpen(true);
   };
+
+  const handleConfirmQuoteSummary = useCallback(() => {
+    if (totalPrimeAmount === null) {
+      return;
+    }
+
+    setQuoteDialogOpen(true);
+    setQuoteSummaryOpen(false);
+  }, [setQuoteDialogOpen, setQuoteSummaryOpen, totalPrimeAmount]);
+
+  const handleCancelQuoteSummary = useCallback(() => {
+    setQuoteSummaryOpen(false);
+    setQuoteInitialValues({});
+  }, [setQuoteInitialValues, setQuoteSummaryOpen]);
 
   const resetSiteEditor = useCallback(() => {
     setSiteEditorMode(null);
@@ -4534,6 +4551,43 @@ const ProjectDetails = () => {
 
     return null;
   })();
+
+  const {
+    totalPrimeAmount,
+    formattedTotalPrimeAmount,
+    formattedEqEnAmount,
+    formattedEcoAdmnAmount,
+    formattedEcoFurnAmount,
+  } = useMemo(() => {
+    const totalPrime =
+      typeof displayedPrimeValue === "number"
+        ? displayedPrimeValue
+        : hasComputedCeeTotals
+          ? ceeTotals.totalPrime
+          : null;
+
+    if (typeof totalPrime === "number" && Number.isFinite(totalPrime)) {
+      const eqEnAmount = totalPrime * 0.8;
+      const ecoAdmnAmount = totalPrime * 0.15;
+      const ecoFurnAmount = totalPrime * 0.05;
+
+      return {
+        totalPrimeAmount: totalPrime,
+        formattedTotalPrimeAmount: formatCurrency(totalPrime),
+        formattedEqEnAmount: formatCurrency(eqEnAmount),
+        formattedEcoAdmnAmount: formatCurrency(ecoAdmnAmount),
+        formattedEcoFurnAmount: formatCurrency(ecoFurnAmount),
+      } as const;
+    }
+
+    return {
+      totalPrimeAmount: null,
+      formattedTotalPrimeAmount: null,
+      formattedEqEnAmount: null,
+      formattedEcoAdmnAmount: null,
+      formattedEcoFurnAmount: null,
+    } as const;
+  }, [ceeTotals.totalPrime, displayedPrimeValue, hasComputedCeeTotals]);
 
   const primeValueLabel =
     typeof displayedPrimeValue === "number"
@@ -5251,6 +5305,64 @@ const ProjectDetails = () => {
                 isSubmitting={isStartingChantier}
               />
             ) : null}
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={quoteSummaryOpen}
+          onOpenChange={(open) => {
+            setQuoteSummaryOpen(open);
+            if (!open && !quoteDialogOpen) {
+              setQuoteInitialValues({});
+            }
+          }}
+        >
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Résumé de la prime</DialogTitle>
+              <DialogDescription>
+                Vérifiez la répartition de la prime avant de créer le devis.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 text-sm">
+              <div className="flex items-center justify-between text-base font-medium">
+                <span>Total prime CEE</span>
+                <span>
+                  {formattedTotalPrimeAmount ?? "Non disponible"}
+                </span>
+              </div>
+              <div className="space-y-3 rounded-md border border-dashed bg-muted/40 p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">EQ/EN (80&nbsp;%)</span>
+                  <span className="font-medium">
+                    {formattedEqEnAmount ?? "Non disponible"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">ECO-ADMN (15&nbsp;%)</span>
+                  <span className="font-medium">
+                    {formattedEcoAdmnAmount ?? "Non disponible"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">ECO-FURN (5&nbsp;%)</span>
+                  <span className="font-medium">
+                    {formattedEcoFurnAmount ?? "Non disponible"}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={handleCancelQuoteSummary}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleConfirmQuoteSummary}
+                disabled={totalPrimeAmount === null}
+              >
+                Confirmer
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
 
