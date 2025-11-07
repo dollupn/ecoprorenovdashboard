@@ -1,10 +1,9 @@
 import { createServer } from "./app";
 
-const port = Number(process.env.PORT ?? 8787);
+const port = Number(process.env.PORT ?? 3000);
 
-if (process.env.NODE_ENV !== "test" && process.env.START_QUOTES_SERVER === "true") {
-  const app = createServer();
-  app.listen(port, () => {
-    console.info(`Serveur devis prêt sur http://localhost:${port}`);
-  });
-}
+// Always start the app in production; we don't gate behind START_QUOTES_SERVER
+const app = createServer();
+app.listen(port, () => {
+  console.info(`✅ Server running on http://localhost:${port}`);
+});
