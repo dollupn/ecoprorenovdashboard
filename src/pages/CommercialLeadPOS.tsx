@@ -153,6 +153,15 @@ const CommercialLeadPOS = () => {
   }, [isLedSelected, formState.luminaireCount]);
 
   useEffect(() => {
+    if (isLedSelected && formState.insultationArea) {
+      setFormState((prev) => ({
+        ...prev,
+        insultationArea: "",
+      }));
+    }
+  }, [isLedSelected, formState.insultationArea]);
+
+  useEffect(() => {
     if (!formState.address) {
       setIsManualAddress(false);
       return;
@@ -559,18 +568,20 @@ const CommercialLeadPOS = () => {
                         className="h-12"
                       />
                     </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="insultationArea">Surface à isoler (m²)</Label>
-                      <Input
-                        id="insultationArea"
-                        type="number"
-                        min="0"
-                        value={formState.insultationArea}
-                        onChange={handleInputChange("insultationArea")}
-                        placeholder="Surface à traiter"
-                        className="h-12"
-                      />
-                    </div>
+                    {!isLedSelected && (
+                      <div className="grid gap-2">
+                        <Label htmlFor="insultationArea">Surface à isoler (m²)</Label>
+                        <Input
+                          id="insultationArea"
+                          type="number"
+                          min="0"
+                          value={formState.insultationArea}
+                          onChange={handleInputChange("insultationArea")}
+                          placeholder="Surface à traiter"
+                          className="h-12"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-2">
