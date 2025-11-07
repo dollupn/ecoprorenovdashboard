@@ -2,11 +2,11 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 
-import quotesPdfRoute from "./routes/quotesPdfRoute";
-import googleDriveRoute from "./routes/googleDriveRoute";
-import projectsRoute from "./routes/projects";
-import chantierRoute from "./routes/chantier";
-import invoicesRoute from "./routes/invoices";
+import quotesPdfRoute from "./routes/quotesPdfRoute.js";
+import googleDriveRoute from "./routes/googleDriveRoute.js";
+import projectsRoute from "./routes/projects.js";
+import chantierRoute from "./routes/chantier.js";
+import invoicesRoute from "./routes/invoices.js";
 
 export const createServer = () => {
   const app = express();

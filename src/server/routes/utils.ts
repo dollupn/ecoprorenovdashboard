@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 
-import { ApiError } from "../errors";
+import { ApiError } from "../errors.js";
 
 export const getOrganizationId = (req: Request): string => {
   const orgId = req.headers["x-organization-id"] ?? req.headers["x-organisation-id"];

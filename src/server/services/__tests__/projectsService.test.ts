@@ -1,8 +1,8 @@
 import { describe, expect, it, beforeEach, vi } from "vitest";
 
-import { updateProjectStatusService } from "../../services/projectsService";
-import * as projectRepository from "../../repositories/projectRepository";
-import type { ProjectRow } from "../../repositories/projectRepository";
+import { updateProjectStatusService } from "../../services/projectsService.js";
+import * as projectRepository from "../../repositories/projectRepository.js";
+import type { ProjectRow } from "../../repositories/projectRepository.js";
 
 vi.mock("../../repositories/projectRepository", () => ({
   fetchProjectById: vi.fn(),

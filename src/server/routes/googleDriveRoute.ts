@@ -7,7 +7,7 @@ import {
   getDriveConnectionSummary,
   refreshDriveCredentials,
   uploadFileToDrive,
-} from "../services/googleDriveService";
+} from "../services/googleDriveService.js";
 
 const router = Router();
 const upload = multer({

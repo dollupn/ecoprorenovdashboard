@@ -1,8 +1,8 @@
 import { Router } from "express";
 
-import { ensureAuthenticated } from "./authentication";
-import { getOrganizationId, handleRouteError } from "./utils";
-import { getProjectDetails, updateProjectStatusService } from "../services/projectsService";
+import { ensureAuthenticated } from "./authentication.js";
+import { getOrganizationId, handleRouteError } from "./utils.js";
+import { getProjectDetails, updateProjectStatusService } from "../services/projectsService.js";
 
 const router = Router();
 
