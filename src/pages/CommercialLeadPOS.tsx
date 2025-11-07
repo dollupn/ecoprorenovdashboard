@@ -31,9 +31,11 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useOrg } from "@/features/organizations/OrgContext";
-import { useLeadProductTypes } from "@/features/leads/api";
+import { useCreateLead, useLeadProductTypes } from "@/features/leads/api";
 import { useProjectBuildingTypes } from "@/hooks/useProjectBuildingTypes";
 import { useProjectUsages } from "@/hooks/useProjectUsages";
+import { useAuth } from "@/hooks/useAuth";
+import type { TablesInsert } from "@/integrations/supabase/types";
 
 type BuildingMeasurement = {
   length: string;
@@ -94,13 +96,15 @@ const formatFileSize = (sizeInBytes: number) => {
 };
 
 const CommercialLeadPOS = () => {
+  const { user } = useAuth();
   const { currentOrgId } = useOrg();
   const orgId = currentOrgId;
   const { data: productTypes = [] } = useLeadProductTypes(orgId);
+  const createLead = useCreateLead(orgId);
+  const isSubmitting = createLead.isPending;
   const buildingTypes = useProjectBuildingTypes();
   const buildingUsages = useProjectUsages();
   const [formState, setFormState] = useState<FormState>(initialFormState);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentPhotoStep, setCurrentPhotoStep] = useState(0);
   const [photoSteps, setPhotoSteps] = useState<PhotoStep[]>([
     { id: 1, title: "Intérieur", description: "Photos de l'intérieur du bâtiment", maxPhotos: 3, photos: [] },
@@ -283,19 +287,120 @@ const CommercialLeadPOS = () => {
   const getMaxPhotos = () => photoSteps.reduce((sum, step) => sum + step.maxPhotos, 0);
   const getPhotoProgress = () => (getTotalPhotos() / getMaxPhotos()) * 100;
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setIsSubmitting(true);
+    if (!user?.id || !orgId) {
+      toast({
+        title: "Authentification requise",
+        description: "Connectez-vous pour enregistrer un lead",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setFormState(initialFormState);
+    const normalizeNumber = (value: string) => {
+      if (!value) return null;
+      const normalized = value.replace(/,/g, ".").trim();
+      if (!normalized) return null;
+      const parsed = Number(normalized);
+      return Number.isNaN(parsed) ? null : parsed;
+    };
+
+    const parseDimension = (value?: string) => {
+      if (!value) return null;
+      const normalized = value.replace(/,/g, ".").trim();
+      if (!normalized) return null;
+      const parsed = Number(normalized);
+      return Number.isNaN(parsed) ? null : parsed;
+    };
+
+    const sanitizedBuildings = formState.buildings
+      .map((building, index) => {
+        const length = parseDimension(building.length);
+        const width = parseDimension(building.width);
+        const height = parseDimension(building.height);
+
+        return {
+          order: index + 1,
+          length,
+          width,
+          height,
+        };
+      })
+      .filter((building) =>
+        building.length !== null || building.width !== null || building.height !== null
+      );
+
+    const primaryBuilding = sanitizedBuildings[0];
+
+    const normalizedSiren = formState.siren.replace(/\s+/g, "").trim();
+    const sirenValue = normalizedSiren ? normalizedSiren : null;
+    const fullName = `${formState.firstName} ${formState.lastName}`.replace(/\s+/g, " ").trim();
+    const selectedProducts = formState.selectedProducts
+      .map((product) => product.trim())
+      .filter((product) => product.length > 0);
+    const productName = selectedProducts[0] ?? null;
+
+    const extraFields = {
+      first_name: formState.firstName.trim(),
+      last_name: formState.lastName.trim(),
+      creation_date: formState.creationDate,
+      visit_date: formState.visitDate || null,
+      contact_role: formState.contactRole.trim() || null,
+      building_area: normalizeNumber(formState.buildingArea),
+      insultation_area: normalizeNumber(formState.insultationArea),
+      building_type: formState.buildingType || null,
+      building_usage: formState.buildingUsage || null,
+      subsidy_received: formState.subsidyReceived,
+      subsidy_details: formState.subsidyDetails.trim() || null,
+      luminaire_count: normalizeNumber(formState.luminaireCount),
+      notes: formState.notes.trim() || null,
+      selected_products: selectedProducts,
+      buildings: sanitizedBuildings.length > 0 ? sanitizedBuildings : null,
+      building_length: primaryBuilding?.length ?? null,
+      building_width: primaryBuilding?.width ?? null,
+      building_height: primaryBuilding?.height ?? null,
+    };
+
+    const payload: TablesInsert<"leads"> = {
+      full_name: fullName,
+      first_name: formState.firstName.trim() || null,
+      last_name: formState.lastName.trim() || null,
+      email: formState.email.trim(),
+      phone_raw: formState.phone.trim(),
+      address: formState.address.trim(),
+      city: formState.city.trim(),
+      postal_code: formState.postalCode.trim(),
+      company: formState.company.trim() ? formState.company.trim() : null,
+      siren: sirenValue,
+      product_name: productName,
+      commentaire: null,
+      extra_fields: extraFields,
+      user_id: user.id,
+      org_id: orgId,
+      assigned_to: user.id,
+      created_by: user.id,
+      status: "À rappeler",
+    };
+
+    try {
+      await createLead.mutateAsync(payload);
+
+      setFormState({
+        ...initialFormState,
+        creationDate: new Date().toISOString().split("T")[0],
+      });
       setIsManualAddress(false);
       setPhotoSteps([
         { id: 1, title: "Intérieur", description: "Photos de l'intérieur du bâtiment", maxPhotos: 3, photos: [] },
         { id: 2, title: "Plafond", description: "Photos du plafond", maxPhotos: 3, photos: [] },
         { id: 3, title: "Luminaires LED", description: "Photos des luminaires si LED", maxPhotos: 6, photos: [] },
       ]);
+      photoInputRefs.current.forEach((input) => {
+        if (input) {
+          input.value = "";
+        }
+      });
       setCurrentPhotoStep(0);
       toast({
         title: "Lead enregistré",
@@ -308,7 +413,14 @@ const CommercialLeadPOS = () => {
           </div>
         ),
       });
-    }, 800);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Une erreur inattendue est survenue";
+      toast({
+        title: "Erreur lors de l'enregistrement",
+        description: message,
+        variant: "destructive",
+      });
+    }
   };
 
   return (
