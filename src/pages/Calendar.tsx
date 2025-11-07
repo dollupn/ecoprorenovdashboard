@@ -20,7 +20,6 @@ import {
   CheckCircle2,
   Clock,
   ExternalLink,
-  Link2,
   MapPin,
   RefreshCw,
   ShieldCheck,
@@ -30,11 +29,13 @@ import type { LucideIcon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import {
   addDays,
+  differenceInMinutes,
   format,
   formatDistanceToNow,
   isSameDay,
   isWithinInterval,
   startOfDay,
+  startOfWeek,
   subMinutes,
 } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -276,17 +277,24 @@ const CalendarPage = () => {
     [appointments],
   );
 
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [currentWeekStart, setCurrentWeekStart] = useState(() =>
+    startOfWeek(new Date(), { weekStartsOn: 1 }),
+  );
+  const [activeDay, setActiveDay] = useState<Date>(new Date());
   const [hasInitializedSelection, setHasInitializedSelection] = useState(false);
 
   useEffect(() => {
-    setSelectedDate(new Date());
+    const today = new Date();
+    setActiveDay(today);
+    setCurrentWeekStart(startOfWeek(today, { weekStartsOn: 1 }));
     setHasInitializedSelection(false);
   }, [currentOrgId]);
 
   useEffect(() => {
     if (!hasInitializedSelection && events.length > 0) {
-      setSelectedDate(events[0].start);
+      const firstEventDate = events[0].start;
+      setActiveDay(firstEventDate);
+      setCurrentWeekStart(startOfWeek(firstEventDate, { weekStartsOn: 1 }));
       setHasInitializedSelection(true);
     }
   }, [events, hasInitializedSelection]);
@@ -302,11 +310,6 @@ const CalendarPage = () => {
         new Set(sortedEvents.map((event) => startOfDay(event.start).getTime())),
       ).map((timestamp) => new Date(timestamp)),
     [sortedEvents],
-  );
-
-  const eventsForSelectedDate = useMemo(
-    () => sortedEvents.filter((event) => isSameDay(event.start, selectedDate)),
-    [selectedDate, sortedEvents],
   );
 
   const eventsToday = useMemo(
@@ -397,6 +400,104 @@ const CalendarPage = () => {
   const showEmptyState = !isLoading && sortedEvents.length === 0;
   const noOrgSelected = !currentOrgId;
 
+  const weekDays = useMemo(
+    () => Array.from({ length: 7 }, (_, index) => addDays(currentWeekStart, index)),
+    [currentWeekStart],
+  );
+
+  const eventsForWeek = useMemo(() => {
+    const weekEnd = addDays(currentWeekStart, 7);
+    return sortedEvents.filter((event) =>
+      isWithinInterval(event.start, { start: currentWeekStart, end: weekEnd }),
+    );
+  }, [currentWeekStart, sortedEvents]);
+
+  const eventsByDay = useMemo(() => {
+    const groups = new Map<string, CalendarEvent[]>();
+    weekDays.forEach((day) => {
+      const key = format(day, "yyyy-MM-dd");
+      groups.set(key, []);
+    });
+
+    eventsForWeek.forEach((event) => {
+      const key = format(event.start, "yyyy-MM-dd");
+      const collection = groups.get(key);
+      if (collection) {
+        collection.push(event);
+      }
+    });
+
+    weekDays.forEach((day) => {
+      const key = format(day, "yyyy-MM-dd");
+      const collection = groups.get(key);
+      if (collection) {
+        collection.sort((a, b) => a.start.getTime() - b.start.getTime());
+      }
+    });
+
+    return groups;
+  }, [eventsForWeek, weekDays]);
+
+  const handleDaySelection = (date: Date) => {
+    setActiveDay(date);
+    setCurrentWeekStart(startOfWeek(date, { weekStartsOn: 1 }));
+  };
+
+  const goToPreviousWeek = () => {
+    const newStart = addDays(currentWeekStart, -7);
+    setCurrentWeekStart(newStart);
+    setActiveDay((previous) => {
+      const candidate = startOfDay(previous);
+      if (isWithinInterval(candidate, { start: newStart, end: addDays(newStart, 6) })) {
+        return previous;
+      }
+      return newStart;
+    });
+  };
+
+  const goToNextWeek = () => {
+    const newStart = addDays(currentWeekStart, 7);
+    setCurrentWeekStart(newStart);
+    setActiveDay((previous) => {
+      const candidate = startOfDay(previous);
+      if (isWithinInterval(candidate, { start: newStart, end: addDays(newStart, 6) })) {
+        return previous;
+      }
+      return newStart;
+    });
+  };
+
+  const eventsForActiveDay = useMemo(() => {
+    const key = format(activeDay, "yyyy-MM-dd");
+    return eventsByDay.get(key) ?? [];
+  }, [activeDay, eventsByDay]);
+
+  const DAY_START_HOUR = 8;
+  const DAY_END_HOUR = 20;
+  const TOTAL_DAY_MINUTES = (DAY_END_HOUR - DAY_START_HOUR) * 60;
+  const HOUR_LABELS = useMemo(
+    () => Array.from({ length: DAY_END_HOUR - DAY_START_HOUR + 1 }, (_, index) => DAY_START_HOUR + index),
+    [],
+  );
+
+  const computeEventPosition = (event: CalendarEvent) => {
+    const columnDayStart = new Date(event.start);
+    columnDayStart.setHours(DAY_START_HOUR, 0, 0, 0);
+    const columnDayEnd = new Date(event.start);
+    columnDayEnd.setHours(DAY_END_HOUR, 0, 0, 0);
+
+    const clampedStart = event.start.getTime() < columnDayStart.getTime() ? columnDayStart : event.start;
+    const clampedEnd = event.end.getTime() > columnDayEnd.getTime() ? columnDayEnd : event.end;
+
+    const topMinutes = Math.max(0, differenceInMinutes(clampedStart, columnDayStart));
+    const durationMinutes = Math.max(15, differenceInMinutes(clampedEnd, clampedStart));
+
+    return {
+      topPercent: (topMinutes / TOTAL_DAY_MINUTES) * 100,
+      heightPercent: (durationMinutes / TOTAL_DAY_MINUTES) * 100,
+    };
+  };
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -475,7 +576,7 @@ const CalendarPage = () => {
             <CardHeader className="pb-0">
               <CardTitle className="text-xl">Vue calendrier</CardTitle>
               <CardDescription>
-                Sélectionnez une date pour voir les rendez-vous associés et préparer vos équipes
+                Naviguez semaine par semaine, positionnez vos rendez-vous et synchronisez les équipes terrain en un coup d'œil
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-6">
@@ -484,9 +585,9 @@ const CalendarPage = () => {
                   <DayPicker
                     mode="single"
                     locale={fr}
-                    selected={selectedDate}
-                    onSelect={(date) => date && setSelectedDate(date)}
-                    defaultMonth={selectedDate}
+                    selected={activeDay}
+                    onSelect={(date) => date && handleDaySelection(date)}
+                    defaultMonth={activeDay}
                     modifiers={{ event: eventDates }}
                     modifiersClassNames={{
                       event: "bg-primary/10 text-primary font-semibold",
@@ -500,22 +601,22 @@ const CalendarPage = () => {
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <h3 className="text-lg font-semibold">
-                        Rendez-vous du {capitalize(format(selectedDate, "EEEE d MMMM", { locale: fr }))}
+                        Semaine du {capitalize(format(currentWeekStart, "d MMMM", { locale: fr }))}
                       </h3>
                       <p className="text-sm text-muted-foreground">
                         {isLoading
                           ? "Chargement des rendez-vous en cours..."
-                          : eventsForSelectedDate.length > 0
-                            ? "Organisez la journée de vos équipes et partagez les informations clés."
+                          : eventsForWeek.length > 0
+                            ? "Visualisez la répartition des créneaux sur la semaine et coordonnez vos équipes."
                             : noOrgSelected
                               ? "Sélectionnez une organisation pour afficher le planning."
-                              : "Aucun rendez-vous n'est planifié pour cette date pour le moment."}
+                              : "Aucun rendez-vous n'est planifié pour cette semaine pour le moment."}
                       </p>
                     </div>
                     <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20">
                       {isLoading
                         ? "Chargement..."
-                        : `${eventsForSelectedDate.length} ${eventsForSelectedDate.length > 1 ? "événements" : "événement"}`}
+                        : `${eventsForActiveDay.length} ${eventsForActiveDay.length > 1 ? "événements le jour sélectionné" : "événement le jour sélectionné"}`}
                     </Badge>
                   </div>
 
@@ -525,95 +626,150 @@ const CalendarPage = () => {
                         <Skeleton key={index} className="h-28 w-full rounded-2xl" />
                       ))}
                     </div>
-                  ) : eventsForSelectedDate.length === 0 ? (
+                  ) : eventsForWeek.length === 0 ? (
                     <div className="border border-dashed border-muted-foreground/30 rounded-2xl p-8 text-center text-muted-foreground">
                       {noOrgSelected
                         ? "Sélectionnez une organisation pour visualiser les rendez-vous planifiés."
-                        : "Sélectionnez une autre date ou créez un nouveau rendez-vous depuis un lead, un projet ou directement dans Google Calendar."}
+                        : "Ajoutez de nouveaux rendez-vous pour remplir votre planning hebdomadaire."}
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {eventsForSelectedDate.map((event) => {
-                        const StatusIcon = statusConfig[event.status].icon;
-                        const isPlaceholderLocation = event.location === "Adresse à confirmer";
-                        return (
-                          <div
-                            key={event.id}
-                            className="rounded-2xl border bg-background/80 p-5 shadow-sm space-y-3"
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" size="sm" onClick={goToPreviousWeek}>
+                            Semaine précédente
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={goToNextWeek}>
+                            Semaine suivante
+                          </Button>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {capitalize(format(currentWeekStart, "EEEE d MMMM", { locale: fr }))} – {capitalize(
+                            format(addDays(currentWeekStart, 6), "EEEE d MMMM", { locale: fr }),
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-7 gap-2">
+                        {weekDays.map((day) => (
+                          <button
+                            key={day.toISOString()}
+                            type="button"
+                            onClick={() => setActiveDay(day)}
+                            className={`rounded-xl border px-3 py-2 text-left text-sm transition ${
+                              isSameDay(day, activeDay)
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-border bg-background/70 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                            }`}
                           >
-                            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                              <div>
-                                <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                                  {format(event.start, "HH:mm", { locale: fr })} – {format(event.end, "HH:mm", { locale: fr })}
-                                </p>
-                                <h4 className="text-base font-semibold text-foreground mt-1">
-                                  {event.title}
-                                </h4>
-                              </div>
-                              <Badge variant="outline" className={event.typeColor}>
-                                {event.type}
-                              </Badge>
-                            </div>
+                            <p className="font-semibold">{capitalize(format(day, "EEE d MMM", { locale: fr }))}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {(eventsByDay.get(format(day, "yyyy-MM-dd")) ?? []).length} rendez-vous
+                            </p>
+                          </button>
+                        ))}
+                      </div>
 
-                            <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-auto p-0 inline-flex items-center gap-1.5 hover:text-primary"
-                                disabled={isPlaceholderLocation}
-                                onClick={() => {
-                                  if (isPlaceholderLocation) return;
-                                  window.open(
-                                    `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}`,
-                                    "_blank",
-                                  );
-                                }}
+                      <ScrollArea className="h-[720px]">
+                        <div className="min-w-[960px]">
+                          <div className="grid grid-cols-[80px_repeat(7,minmax(0,1fr))] gap-px rounded-2xl border bg-border/60">
+                            <div className="bg-background p-3 text-right text-xs font-semibold text-muted-foreground">
+                              Heures
+                            </div>
+                            {weekDays.map((day) => (
+                              <div
+                                key={`header-${day.toISOString()}`}
+                                className={`bg-background p-3 text-center text-sm font-semibold ${
+                                  isSameDay(day, activeDay) ? "text-primary" : "text-foreground"
+                                }`}
                               >
-                                <MapPin className="h-4 w-4" />
-                                {event.location}
-                              </Button>
-                              <span className="inline-flex items-center gap-1.5">
-                                <Users className="h-4 w-4" />
-                                {event.assignedTo}
-                              </span>
-                              <span className="inline-flex items-center gap-1.5">
-                                <StatusIcon className={`h-4 w-4 ${statusConfig[event.status].className}`} />
-                                <span className={`font-medium ${statusConfig[event.status].className}`}>
-                                  {statusConfig[event.status].label}
-                                </span>
-                              </span>
-                              <span className="inline-flex items-center gap-1.5">
-                                <Link2 className="h-4 w-4 text-muted-foreground" />
-                                <Badge
-                                  variant="outline"
-                                  className={`${sourceLabels[event.source].className} px-2 py-0`}
+                                {capitalize(format(day, "EEEE d MMM", { locale: fr }))}
+                              </div>
+                            ))}
+
+                            <div className="relative bg-background" style={{ height: `${TOTAL_DAY_MINUTES}px` }}>
+                              {HOUR_LABELS.map((hour) => (
+                                <div
+                                  key={`hour-${hour}`}
+                                  className="flex h-[60px] items-start justify-end pr-3 text-xs text-muted-foreground"
                                 >
-                                  {sourceLabels[event.source].label}
-                                </Badge>
-                              </span>
-                              {event.detailUrl && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-auto p-0 inline-flex items-center gap-1.5 hover:text-primary"
-                                  asChild
-                                >
-                                  <Link to={event.detailUrl}>
-                                    <ExternalLink className="h-4 w-4" />
-                                    {event.detailLabel ?? (event.entityType === "project" ? "Voir le projet" : "Voir le lead")}
-                                  </Link>
-                                </Button>
-                              )}
+                                  {`${hour.toString().padStart(2, "0")}:00`}
+                                </div>
+                              ))}
                             </div>
 
-                            {event.notes && (
-                              <p className="text-sm leading-relaxed text-muted-foreground/90">
-                                {event.notes}
-                              </p>
-                            )}
+                            {weekDays.map((day) => {
+                              const key = format(day, "yyyy-MM-dd");
+                              const eventsForDay = eventsByDay.get(key) ?? [];
+
+                              return (
+                                <div
+                                  key={`column-${day.toISOString()}`}
+                                  className="relative bg-background"
+                                  style={{ height: `${TOTAL_DAY_MINUTES}px` }}
+                                >
+                                  {HOUR_LABELS.map((hour, index) => (
+                                    <div
+                                      key={`gridline-${hour}-${index}`}
+                                      className="absolute left-0 right-0 border-b border-dashed border-border/60"
+                                      style={{ top: `${((hour - DAY_START_HOUR) * 60 * 100) / TOTAL_DAY_MINUTES}%` }}
+                                    />
+                                  ))}
+
+                                  {eventsForDay.map((event) => {
+                                    const StatusIcon = statusConfig[event.status].icon;
+                                    const { topPercent, heightPercent } = computeEventPosition(event);
+                                    const isPlaceholderLocation = event.location === "Adresse à confirmer";
+
+                                    return (
+                                      <div
+                                        key={event.id}
+                                        className="absolute left-2 right-2 rounded-xl border bg-background/95 p-3 shadow-sm transition hover:shadow-md"
+                                        style={{ top: `${topPercent}%`, height: `${heightPercent}%` }}
+                                      >
+                                        <div className="flex items-start justify-between gap-2 text-xs">
+                                          <span className="font-semibold text-foreground">
+                                            {format(event.start, "HH:mm", { locale: fr })} – {format(event.end, "HH:mm", { locale: fr })}
+                                          </span>
+                                          <Badge variant="outline" className={`${event.typeColor} px-2 py-0 text-[10px]`}>
+                                            {event.type}
+                                          </Badge>
+                                        </div>
+                                        <p className="mt-1 line-clamp-2 text-sm font-semibold text-foreground">
+                                          {event.title}
+                                        </p>
+                                        <p
+                                          className={`mt-1 text-xs text-muted-foreground ${
+                                            isPlaceholderLocation ? "italic" : ""
+                                          }`}
+                                        >
+                                          {event.location}
+                                        </p>
+                                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                                          <span className="inline-flex items-center gap-1">
+                                            <Users className="h-3.5 w-3.5" />
+                                            {event.assignedTo}
+                                          </span>
+                                          <span className={`inline-flex items-center gap-1 ${statusConfig[event.status].className}`}>
+                                            <StatusIcon className="h-3.5 w-3.5" />
+                                            {statusConfig[event.status].label}
+                                          </span>
+                                          <Badge
+                                            variant="outline"
+                                            className={`${sourceLabels[event.source].className} px-2 py-0 text-[10px]`}
+                                          >
+                                            {sourceLabels[event.source].label}
+                                          </Badge>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })}
                           </div>
-                        );
-                      })}
+                        </div>
+                      </ScrollArea>
                     </div>
                   )}
                 </div>
