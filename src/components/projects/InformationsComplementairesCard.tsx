@@ -45,9 +45,9 @@ export const InformationsComplementairesCard = ({
   const InfoRow = ({ label, value }: { label: string; value: React.ReactNode }) => {
     if (!value) return null;
     return (
-      <div className="flex justify-between py-2 border-b last:border-0">
+      <div className="flex flex-col gap-1 py-2 border-b last:border-0 sm:flex-row sm:items-center sm:justify-between sm:gap-0">
         <span className="text-sm text-muted-foreground">{label}</span>
-        <span className="text-sm font-medium text-right">{value}</span>
+        <span className="text-sm font-medium sm:text-right">{value}</span>
       </div>
     );
   };
