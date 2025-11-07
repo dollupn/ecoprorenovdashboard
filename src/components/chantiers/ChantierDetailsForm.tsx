@@ -1112,6 +1112,8 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                               type="number"
                               step="1"
                               {...field}
+                              value={field.value ?? 0}
+                              onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                               onBlur={(event) => {
                                 field.onBlur();
                               }}
@@ -1134,6 +1136,8 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                               type="number"
                               step="0.01"
                               {...field}
+                              value={field.value ?? 0}
+                              onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                               onBlur={(event) => {
                                 field.onBlur();
                               }}
@@ -1156,6 +1160,8 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                               type="number"
                               step="0.01"
                               {...field}
+                              value={field.value ?? 0}
+                              onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                               onBlur={(event) => {
                                 field.onBlur();
                               }}
