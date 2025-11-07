@@ -1,5 +1,5 @@
-import { createChantier, fetchProjectById, type ProjectRow } from "../repositories/projectRepository";
-import { NotFoundError, ValidationError } from "../errors";
+import { createChantier, fetchProjectById, type ProjectRow } from "../repositories/projectRepository.js";
+import { NotFoundError, ValidationError } from "../errors.js";
 
 type StartChantierInput = {
   siteRef?: string;
@@ -165,7 +165,7 @@ export const updateChantierService = async (
   siteId: string,
   input: UpdateChantierInput,
 ) => {
-  const { updateSite, fetchSiteById } = await import("../repositories/projectRepository");
+  const { updateSite, fetchSiteById } = await import("../repositories/projectRepository.js");
   
   const existingSite = await fetchSiteById(siteId, orgId);
   if (!existingSite) {

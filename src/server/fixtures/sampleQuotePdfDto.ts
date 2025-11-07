@@ -1,4 +1,4 @@
-import type { QuotePdfDTO } from "../types/quote-pdf";
+import type { QuotePdfDTO } from "../types/quote-pdf.js";
 
 export const sampleQuotePdfDto: QuotePdfDTO = {
   quote_number: 122,

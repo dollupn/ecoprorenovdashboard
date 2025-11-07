@@ -3,9 +3,9 @@ import {
   fetchChantiersForProject,
   fetchProjectById,
   fetchQuotesForProject,
-} from "../repositories/projectRepository";
-import { ForbiddenError, NotFoundError, ValidationError } from "../errors";
-import { type ProjectStatus } from "./statusHelpers";
+} from "../repositories/projectRepository.js";
+import { ForbiddenError, NotFoundError, ValidationError } from "../errors.js";
+import { type ProjectStatus } from "./statusHelpers.js";
 
 const ALLOWED_INVOICE_STATUSES: ProjectStatus[] = [
   "VISITE_TECHNIQUE",

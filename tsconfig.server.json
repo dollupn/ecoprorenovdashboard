@@ -3,9 +3,9 @@
   "compilerOptions": {
     "outDir": "dist/server",
     "rootDir": "src",                 // <- was "src/server"
-    "module": "ESNext",
+    "module": "NodeNext",
     "target": "ES2020",
-    "moduleResolution": "Bundler",
+    "moduleResolution": "NodeNext",
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -13,6 +13,6 @@
   },
   "include": [
     "src/server/**/*.ts",             // server runtime code
-    "src/integrations/**/*.ts"        // e.g. supabase/types.ts used by server
+    "src/integrations/supabase/types.ts" // shared Supabase types needed by the server
   ]
 }

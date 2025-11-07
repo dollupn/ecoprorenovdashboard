@@ -1,7 +1,7 @@
 import type { PostgrestSingleResponse } from "@supabase/supabase-js";
 
-import type { Database } from "../../integrations/supabase/types";
-import { getServiceSupabaseClient } from "./supabaseClient";
+import type { Database } from "../../integrations/supabase/types.js";
+import { getServiceSupabaseClient } from "./supabaseClient.js";
 
 export type ProjectRow = Database["public"]["Tables"]["projects"]["Row"];
 export type QuoteRow = Database["public"]["Tables"]["quotes"]["Row"];

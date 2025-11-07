@@ -5,9 +5,9 @@ import {
   fetchQuotesForProject,
   updateProjectStatus,
   type ProjectRow,
-} from "../repositories/projectRepository";
-import { NotFoundError, ValidationError } from "../errors";
-import { ensureProjectStatusTransition, type ProjectStatus } from "./statusHelpers";
+} from "../repositories/projectRepository.js";
+import { NotFoundError, ValidationError } from "../errors.js";
+import { ensureProjectStatusTransition, type ProjectStatus } from "./statusHelpers.js";
 
 export const getProjectDetails = async (orgId: string, projectId: string) => {
   const project = await fetchProjectById(projectId, orgId);

@@ -1,9 +1,9 @@
 import type { Request, Response } from "express";
 import { Router } from "express";
 
-import { quotesPdfService } from "../quotesPdfService";
-import { QuotePdfConfigurationError, QuotePdfError, QuotePdfNotFoundError } from "../errors";
-import { ensureAuthenticated } from "./authentication";
+import { quotesPdfService } from "../quotesPdfService.js";
+import { QuotePdfConfigurationError, QuotePdfError, QuotePdfNotFoundError } from "../errors.js";
+import { ensureAuthenticated } from "./authentication.js";
 
 const router = Router();
 

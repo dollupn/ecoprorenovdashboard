@@ -11,7 +11,7 @@ import {
   type DriveConnectionStatus,
   type DriveCredentialsRow,
   type DriveSettingsRow,
-} from "../repositories/googleDriveRepository";
+} from "../repositories/googleDriveRepository.js";
 
 export interface GoogleDriveUploadOptions {
   orgId: string;

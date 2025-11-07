@@ -1,4 +1,4 @@
-import { ValidationError } from "../errors";
+import { ValidationError } from "../errors.js";
 
 export type ProjectStatus =
   | "NOUVEAU"
