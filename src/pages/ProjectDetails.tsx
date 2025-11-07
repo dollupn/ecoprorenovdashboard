@@ -2749,6 +2749,7 @@ const ProjectDetails = () => {
     refetch: refetchProjectSites,
   } = useQuery<ProjectSite[]>({
     queryKey: ["project-sites", project?.id, projectRefFilter, currentOrgId],
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       if (!project?.id || !currentOrgId) return [] as ProjectSite[];
 

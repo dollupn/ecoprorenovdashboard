@@ -205,6 +205,7 @@ const ChantierDetails = () => {
   const chantierQuery = useQuery<ChantierQueryResult | null>({
     queryKey: ["chantier", id, currentOrgId],
     enabled: Boolean(id && user?.id),
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       if (!id || !user?.id) return null;
 
