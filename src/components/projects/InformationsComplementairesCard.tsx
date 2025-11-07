@@ -13,8 +13,8 @@ interface InformationsComplementairesCardProps {
     assigned_to?: string | null;
     building_type?: string | null;
     usage?: string | null;
-    surface_facturee?: number | null;
-    surface_isolee?: number | null;
+    surface_batiment_m2?: number | null;
+    surface_isolee_m2?: number | null;
     signatory_name?: string | null;
     signatory_title?: string | null;
     siren?: string | null;
@@ -79,16 +79,18 @@ export const InformationsComplementairesCard = ({
         <InfoRow
           label="Surface bâtiment"
           value={
-            project.surface_facturee
-              ? `${project.surface_facturee.toFixed(2)} m²`
+            typeof project.surface_batiment_m2 === "number" &&
+            Number.isFinite(project.surface_batiment_m2)
+              ? `${surfaceFormatter.format(project.surface_batiment_m2)} m²`
               : "—"
           }
         />
         <InfoRow
           label="Surface isolée"
           value={
-            typeof project.surface_isolee === "number"
-              ? `${surfaceFormatter.format(project.surface_isolee)} m²`
+            typeof project.surface_isolee_m2 === "number" &&
+            Number.isFinite(project.surface_isolee_m2)
+              ? `${surfaceFormatter.format(project.surface_isolee_m2)} m²`
               : "—"
           }
         />
