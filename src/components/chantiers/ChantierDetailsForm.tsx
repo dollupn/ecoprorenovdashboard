@@ -1202,10 +1202,12 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                                       step="0.01"
                                       min="0"
                                       {...amountField}
-                                      value={amountField.value ?? ""}
+                                      onChange={(e) => {
+                                        const val = e.target.value === "" ? 0 : parseFloat(e.target.value);
+                                        amountField.onChange(isNaN(val) ? 0 : val);
+                                      }}
                                       onBlur={(event) => {
                                         amountField.onBlur();
-                                        handleBlurSave();
                                       }}
                                       disabled={!field.value || disableInputs}
                                       readOnly={isEditingLocked}
