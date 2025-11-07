@@ -151,6 +151,9 @@ const formatDecimal = (value: number) => decimalFormatter.format(value);
 
 const SURFACE_FACTUREE_TARGETS = ["surface_facturee", "surface facturée"] as const;
 
+const formatSupabaseInFilter = (values: string[]) =>
+  `(${values.map((value) => `"${value.replace(/"/g, '\\"')}"`).join(",")})`;
+
 const resolvePrimeCeeEuro = (project: Project | null | undefined) => {
   if (!project) return null;
 
@@ -351,7 +354,7 @@ const Projects = ({
       if (statusFilter === "archived") {
         query = query.in("status", archivedStatuses as any);
       } else if (statusFilter === "active") {
-        query = query.not("status", "in", `(${archivedStatuses.join(",")})`);
+        query = query.not("status", "in", formatSupabaseInFilter(archivedStatuses));
       } else if (statusFilter !== "all") {
         query = query.eq("status", statusFilter as ProjectStatus);
       }
