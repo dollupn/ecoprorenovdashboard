@@ -29,6 +29,7 @@ import Accounting from "./pages/Accounting";
 import LeadSettings from "./pages/LeadSettings";
 import QuoteSettings from "./pages/QuoteSettings";
 import AppointmentSettings from "./pages/AppointmentSettings";
+import KpiSettings from "./pages/KpiSettings";
 import GoogleDriveCallback from "./pages/GoogleDriveCallback";
 
 const queryClient = new QueryClient();
@@ -84,6 +85,7 @@ const App = () => (
               <Route path="/calendar" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+              <Route path="/settings/kpi" element={<ProtectedRoute><KpiSettings /></ProtectedRoute>} />
               <Route path="/members" element={<ProtectedRoute><Members /></ProtectedRoute>} />
               <Route
                 path="/integrations/google-drive/callback"

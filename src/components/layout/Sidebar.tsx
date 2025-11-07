@@ -18,8 +18,11 @@ import {
   Settings2,
   ChevronDown,
   HardHat,
+  Target,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useOrg } from "@/features/organizations/OrgContext";
+import { useMembers } from "@/features/members/api";
 
 import {
   Sidebar,
@@ -85,8 +88,35 @@ export function AppSidebar() {
   const location = useLocation();
   const currentPath = location.pathname;
   const isCollapsed = state === "collapsed";
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
+  const { currentOrgId } = useOrg();
+  const { data: members = [] } = useMembers(currentOrgId);
   const [openGroups, setOpenGroups] = React.useState<Record<string, boolean>>({});
+
+  const currentMember = React.useMemo(
+    () => members.find((member) => member.user_id === user?.id) ?? null,
+    [members, user?.id],
+  );
+
+  const isAdmin = currentMember?.role === "owner" || currentMember?.role === "admin";
+
+  const computedBusinessItems = React.useMemo(() => {
+    return businessItems.map((item) => {
+      if (item.title !== "Paramètres" || !item.subItems) {
+        return item;
+      }
+
+      return {
+        ...item,
+        subItems: [
+          ...item.subItems,
+          ...(isAdmin
+            ? [{ title: "Paramètres KPI", url: "/settings?section=kpi", icon: Target }]
+            : []),
+        ],
+      };
+    });
+  }, [isAdmin]);
 
   const matchesPathWithSearch = (path: string) => {
     const [basePath, search] = path.split("?");
@@ -215,7 +245,7 @@ export function AppSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="px-2 space-y-1">
-              {businessItems.map((item) => (
+              {computedBusinessItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild className="h-11">
                     <NavLink
