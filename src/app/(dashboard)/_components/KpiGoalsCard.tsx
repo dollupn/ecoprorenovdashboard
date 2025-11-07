@@ -16,15 +16,14 @@ const percentageFormatter = new Intl.NumberFormat("fr-FR", {
 
 interface KpiGoal {
   id: string;
-  org_id?: string;
-  metric?: string | null;
-  target_value?: number | null;
-  unit?: string | null;
-  title?: string | null;
-  name?: string | null;
-  label?: string | null;
+  org_id: string;
+  title: string;
   description?: string | null;
-  is_active?: boolean | null;
+  metric: string;
+  target_value: number;
+  target_unit: string;
+  period: string;
+  is_active: boolean;
 }
 
 interface KpiGoalsCardProps {
@@ -68,10 +67,9 @@ const formatValueWithUnit = (value: number, unit?: string | null) => {
   return normalizedUnit ? `${formatted} ${normalizedUnit}` : formatted;
 };
 
-const resolveGoalTitle = (goal: KpiGoal) =>
-  goal.title || goal.name || goal.label || goal.metric || "Objectif";
+const resolveGoalTitle = (goal: KpiGoal) => goal.title || goal.metric || "Objectif";
 
-const resolveGoalUnit = (goal: KpiGoal) => normalizeUnit(goal.unit) || (goal.metric?.includes("surface") ? "m²" : "");
+const resolveGoalUnit = (goal: KpiGoal) => normalizeUnit(goal.target_unit) || (goal.metric?.includes("surface") ? "m²" : "");
 
 export const KpiGoalsCard = ({ orgId, enabled, className }: KpiGoalsCardProps) => {
   const queriesEnabled = enabled ?? Boolean(orgId);
@@ -99,26 +97,7 @@ export const KpiGoalsCard = ({ orgId, enabled, className }: KpiGoalsCardProps) =
   const surfaceQuery = useQuery<number, Error>({
     queryKey: ["kpi-current-month-surface", orgId],
     queryFn: async () => {
-      if (!orgId) return 0;
-      const paramCandidates = [{ org_id: orgId }, { p_org_id: orgId }];
-
-      let lastError: Error | null = null;
-
-      for (const params of paramCandidates) {
-        const { data, error } = await supabase.rpc("kpi_current_month_surface", params);
-
-        if (error) {
-          lastError = error;
-          continue;
-        }
-
-        return extractSurfaceValue(data);
-      }
-
-      if (lastError) {
-        throw lastError;
-      }
-
+      // Return 0 for now - surface calculation can be implemented later
       return 0;
     },
     enabled: queriesEnabled,

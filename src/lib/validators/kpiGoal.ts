@@ -13,28 +13,22 @@ export const kpiGoalSchema = z
       .string({ required_error: "Organisation requise" })
       .uuid("Organisation invalide")
       .optional(),
-    month: z
-      .coerce.number({ required_error: "Le mois est requis" })
-      .int("Le mois doit être un entier")
-      .min(1, { message: "Le mois doit être compris entre 1 et 12" })
-      .max(12, { message: "Le mois doit être compris entre 1 et 12" })
-      .default(currentMonth),
-    year: z
-      .coerce.number({ required_error: "L'année est requise" })
-      .int("L'année doit être un entier")
-      .min(2000, { message: "L'année doit être supérieure ou égale à 2000" })
-      .max(2100, { message: "L'année doit être inférieure ou égale à 2100" })
-      .default(currentYear),
-    surface_goal_m2: z
-      .coerce.number({ required_error: "La surface cible est requise" })
-      .min(0, { message: "La surface cible doit être positive" })
+    title: z.string().min(1, "Le titre est requis"),
+    description: z.string().optional(),
+    metric: z.string().min(1, "La métrique est requise"),
+    target_value: z
+      .coerce.number({ required_error: "La valeur cible est requise" })
+      .min(0, { message: "La valeur cible doit être positive" })
       .default(0),
+    target_unit: z.string().min(1, "L'unité est requise"),
+    period: z.enum(["daily", "weekly", "monthly", "quarterly", "yearly"]).default("monthly"),
+    is_active: z.boolean().default(true),
     created_at: z.string().optional(),
     updated_at: z.string().optional(),
   })
   .transform((value) => ({
     ...value,
-    surface_goal_m2: Number.isNaN(value.surface_goal_m2) ? 0 : value.surface_goal_m2,
+    target_value: Number.isNaN(value.target_value) ? 0 : value.target_value,
   }));
 
 type KpiGoalRow = Database["public"]["Tables"]["kpi_goals"]["Row"];
@@ -42,9 +36,13 @@ type KpiGoalRow = Database["public"]["Tables"]["kpi_goals"]["Row"];
 export interface KpiGoal {
   id: KpiGoalRow["id"];
   org_id: KpiGoalRow["org_id"];
-  month: KpiGoalRow["month"];
-  year: KpiGoalRow["year"];
-  surface_goal_m2: KpiGoalRow["surface_goal_m2"];
+  title: KpiGoalRow["title"];
+  description: KpiGoalRow["description"];
+  metric: KpiGoalRow["metric"];
+  target_value: KpiGoalRow["target_value"];
+  target_unit: KpiGoalRow["target_unit"];
+  period: KpiGoalRow["period"];
+  is_active: KpiGoalRow["is_active"];
   created_at: KpiGoalRow["created_at"];
   updated_at: KpiGoalRow["updated_at"];
 }
