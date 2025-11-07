@@ -1628,6 +1628,7 @@ const Leads = () => {
                           initialValues={{
                             client_first_name: nameParts.firstName,
                             client_last_name: nameParts.lastName,
+                            email: lead.email ?? "",
                             company: lead.company ?? "",
                             phone: lead.phone_raw ?? "",
                             siren: lead.siren ?? "",
@@ -1791,6 +1792,7 @@ const Leads = () => {
                                   initialValues={{
                                     client_first_name: nameParts.firstName,
                                     client_last_name: nameParts.lastName,
+                                    email: lead.email ?? "",
                                     company: lead.company ?? "",
                                     phone: lead.phone_raw ?? "",
                                     siren: lead.siren ?? "",
