@@ -1,8 +1,13 @@
 import { Parser } from "expr-eval";
 
+import {
+  LIGHTING_DEFAULT_LED_WATT,
+  LIGHTING_LED_WATT_SCALING_FACTOR,
+} from "./valorisation-formula";
+
 const DEFAULT_BONIFICATION = 2;
 const DEFAULT_COEFFICIENT = 1;
-const DEFAULT_LED_WATT = 1;
+const DEFAULT_LED_WATT = LIGHTING_DEFAULT_LED_WATT;
 const DEFAULT_MWH_DIVISOR = 1000;
 
 const roundToTwo = (value: number) => Math.round(value * 100) / 100;
@@ -187,13 +192,17 @@ const resolveMultiplier = (config: CeeConfig) => {
   return 0;
 };
 
-const resolveLedWatt = (config: CeeConfig) =>
-  toPositiveNumber(config.overrides?.ledWatt) ??
-  resolvePositiveFromRecord(
-    config.dynamicParams,
-    ["led_watt", "ledWatt", "LED_WATT"],
-    DEFAULT_LED_WATT,
-  );
+const resolveLedWatt = (config: CeeConfig) => {
+  const rawLedWatt =
+    toPositiveNumber(config.overrides?.ledWatt) ??
+    resolvePositiveFromRecord(
+      config.dynamicParams,
+      ["led_watt", "ledWatt", "LED_WATT"],
+      DEFAULT_LED_WATT,
+    );
+
+  return rawLedWatt * LIGHTING_LED_WATT_SCALING_FACTOR;
+};
 
 const resolveMwhDivisor = (config: CeeConfig) =>
   toPositiveNumber(config.overrides?.mwhDivisor) ?? DEFAULT_MWH_DIVISOR;
