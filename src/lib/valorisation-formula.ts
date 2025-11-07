@@ -33,12 +33,12 @@ export const LEGACY_QUANTITY_KEY = "__quantity__" as const;
 
 export const CATEGORY_MULTIPLIER_KEYS = {
   isolation: "surface_isolee",
-  eclairage: "nombre_led",
+  eclairage: "nombre_luminaire",
 } as const;
 
 const CATEGORY_MULTIPLIER_LABELS: Record<string, string> = {
   isolation: "Surface isolée",
-  eclairage: "Nombre de LED",
+  eclairage: "Nombre de luminaire",
 };
 
 type CategoryMultiplierKeyMap = typeof CATEGORY_MULTIPLIER_KEYS;
@@ -312,7 +312,10 @@ export type CalcCeeLightingResult = {
   warningMissingBase: boolean;
 };
 
-const DEFAULT_LED_WATT = 250;
+export const LIGHTING_LED_WATT_SCALING_FACTOR = 0.65;
+export const LIGHTING_DEFAULT_LED_WATT = 625 / 3; // ≈ 208.33 W
+const LIGHTING_NORMALIZED_REFERENCE =
+  LIGHTING_DEFAULT_LED_WATT * LIGHTING_LED_WATT_SCALING_FACTOR;
 
 const LIGHTING_LED_WATT_KEYS = [
   "led_watt",
@@ -361,19 +364,23 @@ export const calcCeeLighting = ({
     0,
   );
 
-  const ledWatt = resolvePositiveFromDynamicParams(
+  const rawLedWatt = resolvePositiveFromDynamicParams(
     dynamicParams,
     LIGHTING_LED_WATT_KEYS,
-    DEFAULT_LED_WATT,
+    LIGHTING_DEFAULT_LED_WATT,
   );
 
-  const adjustedBase =
-    !warningMissingBase && basePerLuminaire
-      ? (basePerLuminaire * bonification * ledWatt) / 1000
+  const normalizedLedWatt = rawLedWatt * LIGHTING_LED_WATT_SCALING_FACTOR;
+  const ledFactor =
+    normalizedLedWatt > 0 ? normalizedLedWatt / LIGHTING_NORMALIZED_REFERENCE : 0;
+
+  const baseKwh =
+    !warningMissingBase && basePerLuminaire && ledFactor > 0
+      ? basePerLuminaire * ledFactor
       : 0;
 
   const valorisationPerUnitMwh =
-    adjustedBase > 0 ? adjustedBase * coefficient : 0;
+    baseKwh > 0 ? (baseKwh * bonification * coefficient) / 1000 : 0;
 
   const valorisationPerUnitEur = valorisationPerUnitMwh * delegatePrice;
   const valorisationTotalMwh = valorisationPerUnitMwh * nombreLed;
@@ -384,9 +391,11 @@ export const calcCeeLighting = ({
       buildingType: buildingType ?? "",
       nombreLed,
       bonification,
-      ledWatt,
+      rawLedWatt,
+      normalizedLedWatt,
+      ledFactor,
       basePerLuminaire: basePerLuminaire ?? 0,
-      adjustedBase,
+      baseKwh,
       coefficient,
       valorisationPerUnitMwh,
       valorisationPerUnitEur,
@@ -398,7 +407,7 @@ export const calcCeeLighting = ({
   }
 
   return {
-    baseKwh: adjustedBase,
+    baseKwh,
     bonification,
     coefficient,
     valorisationPerUnitMwh,
