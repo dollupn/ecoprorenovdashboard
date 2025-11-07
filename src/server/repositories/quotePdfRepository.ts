@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { QuotePdfConfigurationError, QuotePdfNotFoundError, QuotePdfValidationError } from "../errors";
-import type { QuotePdfDTO, QuotePdfItem } from "../types/quote-pdf";
+import { QuotePdfConfigurationError, QuotePdfNotFoundError, QuotePdfValidationError } from "../errors.js";
+import type { QuotePdfDTO, QuotePdfItem } from "../types/quote-pdf.js";
 
 const DEFAULT_COMPANY: QuotePdfDTO["company"] = {
   label: "ECOPRORENOVE",

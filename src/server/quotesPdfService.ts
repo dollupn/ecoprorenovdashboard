@@ -2,10 +2,10 @@ import path from "node:path";
 import ejs from "ejs";
 import puppeteer from "puppeteer";
 
-import { fetchQuotePdfDto } from "./repositories/quotePdfRepository";
-import type { QuotePdfDTO } from "./types/quote-pdf";
-import { bankRound, formatCurrency, formatDate, formatNumber, toPercentageLabel } from "./utils/intl";
-import { convertMultilineTextToHtml } from "./utils/text";
+import { fetchQuotePdfDto } from "./repositories/quotePdfRepository.js";
+import type { QuotePdfDTO } from "./types/quote-pdf.js";
+import { bankRound, formatCurrency, formatDate, formatNumber, toPercentageLabel } from "./utils/intl.js";
+import { convertMultilineTextToHtml } from "./utils/text.js";
 
 interface QuotePdfViewModel {
   quote: {

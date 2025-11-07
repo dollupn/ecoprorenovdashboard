@@ -1,8 +1,8 @@
 import { Router } from "express";
 
-import { ensureAuthenticated } from "./authentication";
-import { getOrganizationId, handleRouteError } from "./utils";
-import { generateInvoiceForProject } from "../services/invoiceService";
+import { ensureAuthenticated } from "./authentication.js";
+import { getOrganizationId, handleRouteError } from "./utils.js";
+import { generateInvoiceForProject } from "../services/invoiceService.js";
 
 const router = Router();
 
