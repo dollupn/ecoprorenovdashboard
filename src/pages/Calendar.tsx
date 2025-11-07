@@ -138,10 +138,22 @@ const getAppointmentTypeColor = (label: string | null | undefined) => {
 const determineEventStatus = (leadStatus: string | null | undefined): EventStatus => {
   if (!leadStatus) return "confirmed";
 
-  const normalized = leadStatus.toLowerCase();
+  const normalized = leadStatus.trim().toLowerCase();
+  const accentStripped = normalized.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-  if (normalized.includes("done") || normalized.includes("termin")) {
-    return "done";
+  const indicatesNotDone = [
+    "non termine",
+    "pas termine",
+    "a terminer",
+    "a faire",
+  ].some((phrase) => accentStripped.includes(phrase));
+
+  if (!indicatesNotDone) {
+    const donePattern = /\btermin(e|ee|er|es|ez)\b/;
+
+    if (normalized.includes("done") || donePattern.test(accentStripped)) {
+      return "done";
+    }
   }
 
   if (normalized.includes("replan") || normalized.includes("report") || normalized.includes("annul")) {
