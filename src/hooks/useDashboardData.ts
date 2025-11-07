@@ -223,10 +223,7 @@ export const useDashboardMetrics = (
       const projectSurfaceStatuses = Array.from(
         new Set(
           sanitizedProjectStatuses
-            .filter(
-              (status) =>
-                status.isActive !== false || PROJECT_SURFACE_STATUS_SET.has(status.value),
-            )
+            .filter((status) => PROJECT_SURFACE_STATUS_SET.has(status.value))
             .map((status) => status.value),
         ),
       );
