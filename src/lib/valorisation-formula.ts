@@ -290,11 +290,19 @@ const resolveKwhForSurface = (
     return lt400 ?? gte400 ?? null;
   }
 
-  if (buildingSurface >= 400) {
-    return gte400 ?? lt400 ?? null;
+  const selected = buildingSurface >= 400 ? (gte400 ?? lt400) : (lt400 ?? gte400);
+
+  if (process.env.NODE_ENV !== "production") {
+    console.log('[resolveKwhForSurface]', {
+      buildingSurface,
+      isGte400: buildingSurface >= 400,
+      lt400,
+      gte400,
+      selected
+    });
   }
 
-  return lt400 ?? gte400 ?? null;
+  return selected;
 };
 
 export const getKwhCumacBasePerBuilding = (
@@ -324,7 +332,19 @@ export const getKwhCumacBasePerBuilding = (
       ? buildingSurface
       : null;
 
-  return resolveKwhForSurface(match, normalizedSurface);
+  const result = resolveKwhForSurface(match, normalizedSurface);
+
+  if (process.env.NODE_ENV !== "production") {
+    console.log('[getKwhCumacBasePerBuilding]', {
+      buildingType,
+      buildingSurface,
+      normalizedSurface,
+      matchFound: !!match,
+      result
+    });
+  }
+
+  return result;
 };
 
 export type CalcCeeLightingInput = {
@@ -335,6 +355,7 @@ export type CalcCeeLightingInput = {
   coefficient: number;
   delegatePrice: number;
   buildingSurface?: number | null;
+  ledWattConstant?: number | null;
 };
 
 export type CalcCeeLightingResult = {
@@ -392,6 +413,7 @@ export const calcCeeLighting = ({
   coefficient,
   delegatePrice,
   buildingSurface,
+  ledWattConstant,
 }: CalcCeeLightingInput): CalcCeeLightingResult => {
   const basePerLuminaire = getKwhCumacBasePerBuilding(
     kwhEntries,
@@ -406,33 +428,53 @@ export const calcCeeLighting = ({
     0,
   );
 
-  const rawLedWatt = resolvePositiveFromDynamicParams(
-    dynamicParams,
-    LIGHTING_LED_WATT_KEYS,
-    LIGHTING_DEFAULT_LED_WATT,
-  );
+  let baseKwh: number;
+  let valorisationPerUnitMwh: number;
 
-  const normalizedLedWatt = rawLedWatt * LIGHTING_LED_WATT_SCALING_FACTOR;
-  const ledFactor =
-    normalizedLedWatt > 0 ? normalizedLedWatt / LIGHTING_NORMALIZED_REFERENCE : 0;
+  // If ledWattConstant is provided, use simplified formula
+  if (typeof ledWattConstant === 'number' && ledWattConstant > 0 && basePerLuminaire) {
+    baseKwh = (basePerLuminaire * bonification * coefficient * ledWattConstant) / 1_000_000;
+    valorisationPerUnitMwh = baseKwh;
+  } else {
+    // Fallback to existing complex LED watt scaling
+    const rawLedWatt = resolvePositiveFromDynamicParams(
+      dynamicParams,
+      LIGHTING_LED_WATT_KEYS,
+      LIGHTING_DEFAULT_LED_WATT,
+    );
 
-  const baseKwh =
-    !warningMissingBase && basePerLuminaire && ledFactor > 0
-      ? basePerLuminaire * ledFactor
-      : 0;
+    const normalizedLedWatt = rawLedWatt * LIGHTING_LED_WATT_SCALING_FACTOR;
+    const ledFactor =
+      normalizedLedWatt > 0 ? normalizedLedWatt / LIGHTING_NORMALIZED_REFERENCE : 0;
 
-  const valorisationPerUnitMwh =
-    baseKwh > 0 ? (baseKwh * bonification * coefficient) / 1000 : 0;
+    baseKwh =
+      !warningMissingBase && basePerLuminaire && ledFactor > 0
+        ? basePerLuminaire * ledFactor
+        : 0;
+
+    valorisationPerUnitMwh =
+      baseKwh > 0 ? (baseKwh * bonification * coefficient) / 1000 : 0;
+  }
 
   const valorisationPerUnitEur = valorisationPerUnitMwh * delegatePrice;
   const valorisationTotalMwh = valorisationPerUnitMwh * nombreLed;
   const valorisationTotalEur = valorisationPerUnitEur * nombreLed;
 
   if (process.env.NODE_ENV !== "production") {
+    const rawLedWatt = resolvePositiveFromDynamicParams(
+      dynamicParams,
+      LIGHTING_LED_WATT_KEYS,
+      LIGHTING_DEFAULT_LED_WATT,
+    );
+    const normalizedLedWatt = rawLedWatt * LIGHTING_LED_WATT_SCALING_FACTOR;
+    const ledFactor = normalizedLedWatt > 0 ? normalizedLedWatt / LIGHTING_NORMALIZED_REFERENCE : 0;
+
     console.table({
       buildingType: buildingType ?? "",
+      buildingSurface: buildingSurface ?? 0,
       nombreLed,
       bonification,
+      ledWattConstant: ledWattConstant ?? 0,
       rawLedWatt,
       normalizedLedWatt,
       ledFactor,

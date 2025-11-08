@@ -486,6 +486,11 @@ export const computePrimeCee = ({
     const coefficient = resolveProductCoefficient();
 
     if (isLightingProduct(product)) {
+      const ledWattConstant = 
+        typeof product.cee_config?.ledWattConstant === 'number' 
+          ? product.cee_config.ledWattConstant 
+          : null;
+
       const lightingResult = calcCeeLighting({
         kwhEntries: product.kwh_cumac_values,
         buildingType,
@@ -494,6 +499,7 @@ export const computePrimeCee = ({
         coefficient,
         delegatePrice,
         buildingSurface,
+        ledWattConstant,
       });
 
       totalValorisationMwh += lightingResult.valorisationTotalMwh;
