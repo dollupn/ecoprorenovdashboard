@@ -496,23 +496,7 @@ export type Database = {
         Row: {
           base_price_ht: number | null
           category: string | null
-          cee_autres_gte_400: number | null
-          cee_autres_lt_400: number | null
-          cee_bureaux_gte_400: number | null
-          cee_bureaux_lt_400: number | null
-          cee_commerce_gte_400: number | null
-          cee_commerce_lt_400: number | null
           cee_config: Json | null
-          cee_enseignement_gte_400: number | null
-          cee_enseignement_lt_400: number | null
-          cee_entrepots_gte_400: number | null
-          cee_entrepots_lt_400: number | null
-          cee_hotellerie_gte_400: number | null
-          cee_hotellerie_lt_400: number | null
-          cee_restauration_gte_400: number | null
-          cee_restauration_lt_400: number | null
-          cee_sante_gte_400: number | null
-          cee_sante_lt_400: number | null
           code: string
           created_at: string
           custom_description_primary: string | null
@@ -543,23 +527,7 @@ export type Database = {
         Insert: {
           base_price_ht?: number | null
           category?: string | null
-          cee_autres_gte_400?: number | null
-          cee_autres_lt_400?: number | null
-          cee_bureaux_gte_400?: number | null
-          cee_bureaux_lt_400?: number | null
-          cee_commerce_gte_400?: number | null
-          cee_commerce_lt_400?: number | null
           cee_config?: Json | null
-          cee_enseignement_gte_400?: number | null
-          cee_enseignement_lt_400?: number | null
-          cee_entrepots_gte_400?: number | null
-          cee_entrepots_lt_400?: number | null
-          cee_hotellerie_gte_400?: number | null
-          cee_hotellerie_lt_400?: number | null
-          cee_restauration_gte_400?: number | null
-          cee_restauration_lt_400?: number | null
-          cee_sante_gte_400?: number | null
-          cee_sante_lt_400?: number | null
           code: string
           created_at?: string
           custom_description_primary?: string | null
@@ -590,23 +558,7 @@ export type Database = {
         Update: {
           base_price_ht?: number | null
           category?: string | null
-          cee_autres_gte_400?: number | null
-          cee_autres_lt_400?: number | null
-          cee_bureaux_gte_400?: number | null
-          cee_bureaux_lt_400?: number | null
-          cee_commerce_gte_400?: number | null
-          cee_commerce_lt_400?: number | null
           cee_config?: Json | null
-          cee_enseignement_gte_400?: number | null
-          cee_enseignement_lt_400?: number | null
-          cee_entrepots_gte_400?: number | null
-          cee_entrepots_lt_400?: number | null
-          cee_hotellerie_gte_400?: number | null
-          cee_hotellerie_lt_400?: number | null
-          cee_restauration_gte_400?: number | null
-          cee_restauration_lt_400?: number | null
-          cee_sante_gte_400?: number | null
-          cee_sante_lt_400?: number | null
           code?: string
           created_at?: string
           custom_description_primary?: string | null
@@ -649,8 +601,8 @@ export type Database = {
           building_type: string
           created_at: string
           id: string
-          kwh_cumac_gte_400: number | null
-          kwh_cumac_lt_400: number | null
+          kwh_cumac_gte_400: number
+          kwh_cumac_lt_400: number
           product_id: string
           updated_at: string
         }
@@ -658,8 +610,8 @@ export type Database = {
           building_type: string
           created_at?: string
           id?: string
-          kwh_cumac_gte_400?: number | null
-          kwh_cumac_lt_400?: number | null
+          kwh_cumac_gte_400: number
+          kwh_cumac_lt_400: number
           product_id: string
           updated_at?: string
         }
@@ -667,8 +619,8 @@ export type Database = {
           building_type?: string
           created_at?: string
           id?: string
-          kwh_cumac_gte_400?: number | null
-          kwh_cumac_lt_400?: number | null
+          kwh_cumac_gte_400?: number
+          kwh_cumac_lt_400?: number
           product_id?: string
           updated_at?: string
         }
@@ -715,14 +667,12 @@ export type Database = {
           appointment_time: string
           appointment_type_id: string | null
           assignee_id: string | null
-          completed_at: string | null
           created_at: string
           created_by: string
           id: string
           notes: string | null
           org_id: string
           project_id: string
-          status: "scheduled" | "done"
           updated_at: string
         }
         Insert: {
@@ -730,14 +680,12 @@ export type Database = {
           appointment_time: string
           appointment_type_id?: string | null
           assignee_id?: string | null
-          completed_at?: string | null
           created_at?: string
           created_by: string
           id?: string
           notes?: string | null
           org_id: string
           project_id: string
-          status?: "scheduled" | "done"
           updated_at?: string
         }
         Update: {
@@ -745,14 +693,12 @@ export type Database = {
           appointment_time?: string
           appointment_type_id?: string | null
           assignee_id?: string | null
-          completed_at?: string | null
           created_at?: string
           created_by?: string
           id?: string
           notes?: string | null
           org_id?: string
           project_id?: string
-          status?: "scheduled" | "done"
           updated_at?: string
         }
         Relationships: [

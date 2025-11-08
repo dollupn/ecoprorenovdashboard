@@ -4210,15 +4210,6 @@ const ProjectDetails = () => {
     setQuoteSummaryOpen(true);
   };
 
-  const handleConfirmQuoteSummary = useCallback(() => {
-    if (totalPrimeAmount === null) {
-      return;
-    }
-
-    setQuoteDialogOpen(true);
-    setQuoteSummaryOpen(false);
-  }, [setQuoteDialogOpen, setQuoteSummaryOpen, totalPrimeAmount]);
-
   const handleCancelQuoteSummary = useCallback(() => {
     setQuoteSummaryOpen(false);
     setQuoteInitialValues({});
@@ -4609,6 +4600,15 @@ const ProjectDetails = () => {
       formattedEcoFurnAmount: null,
     } as const;
   }, [ceeTotals.totalPrime, displayedPrimeValue, hasComputedCeeTotals]);
+
+  const handleConfirmQuoteSummary = useCallback(() => {
+    if (totalPrimeAmount === null) {
+      return;
+    }
+
+    setQuoteDialogOpen(true);
+    setQuoteSummaryOpen(false);
+  }, [setQuoteDialogOpen, setQuoteSummaryOpen, totalPrimeAmount]);
 
   const primeValueLabel =
     typeof displayedPrimeValue === "number"

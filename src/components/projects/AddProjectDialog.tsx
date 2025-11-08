@@ -873,19 +873,9 @@ export const AddProjectDialog = ({
   const sameAddress = form.watch("same_address");
 
   const normalizedBuildingSurface = useMemo(() => {
-    if (typeof watchedSurfaceBatiment === "number") {
+    if (typeof watchedSurfaceBatiment === "number" && Number.isFinite(watchedSurfaceBatiment)) {
       return watchedSurfaceBatiment;
     }
-
-    if (typeof watchedSurfaceBatiment === "string") {
-      const trimmed = watchedSurfaceBatiment.trim();
-      if (trimmed.length === 0) {
-        return null;
-      }
-      const parsed = Number(trimmed);
-      return Number.isFinite(parsed) ? parsed : null;
-    }
-
     return null;
   }, [watchedSurfaceBatiment]);
 

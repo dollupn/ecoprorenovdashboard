@@ -165,8 +165,8 @@ describe("computePrimeCee", () => {
         ? [
             {
               building_type: buildingType,
-              kwh_cumac_lt_400: lt400 ?? kwh_cumac ?? null,
-              kwh_cumac_gte_400: gte400 ?? kwh_cumac ?? null,
+              kwh_cumac_lt_400: lt400 ?? kwh_cumac ?? 0,
+              kwh_cumac_gte_400: gte400 ?? kwh_cumac ?? 0,
             },
           ]
         : []),
