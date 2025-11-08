@@ -496,7 +496,23 @@ export type Database = {
         Row: {
           base_price_ht: number | null
           category: string | null
+          cee_autres_gte_400: number | null
+          cee_autres_lt_400: number | null
+          cee_bureaux_gte_400: number | null
+          cee_bureaux_lt_400: number | null
+          cee_commerce_gte_400: number | null
+          cee_commerce_lt_400: number | null
           cee_config: Json | null
+          cee_enseignement_gte_400: number | null
+          cee_enseignement_lt_400: number | null
+          cee_entrepots_gte_400: number | null
+          cee_entrepots_lt_400: number | null
+          cee_hotellerie_gte_400: number | null
+          cee_hotellerie_lt_400: number | null
+          cee_restauration_gte_400: number | null
+          cee_restauration_lt_400: number | null
+          cee_sante_gte_400: number | null
+          cee_sante_lt_400: number | null
           code: string
           created_at: string
           custom_description_primary: string | null
@@ -527,7 +543,23 @@ export type Database = {
         Insert: {
           base_price_ht?: number | null
           category?: string | null
+          cee_autres_gte_400?: number | null
+          cee_autres_lt_400?: number | null
+          cee_bureaux_gte_400?: number | null
+          cee_bureaux_lt_400?: number | null
+          cee_commerce_gte_400?: number | null
+          cee_commerce_lt_400?: number | null
           cee_config?: Json | null
+          cee_enseignement_gte_400?: number | null
+          cee_enseignement_lt_400?: number | null
+          cee_entrepots_gte_400?: number | null
+          cee_entrepots_lt_400?: number | null
+          cee_hotellerie_gte_400?: number | null
+          cee_hotellerie_lt_400?: number | null
+          cee_restauration_gte_400?: number | null
+          cee_restauration_lt_400?: number | null
+          cee_sante_gte_400?: number | null
+          cee_sante_lt_400?: number | null
           code: string
           created_at?: string
           custom_description_primary?: string | null
@@ -558,7 +590,23 @@ export type Database = {
         Update: {
           base_price_ht?: number | null
           category?: string | null
+          cee_autres_gte_400?: number | null
+          cee_autres_lt_400?: number | null
+          cee_bureaux_gte_400?: number | null
+          cee_bureaux_lt_400?: number | null
+          cee_commerce_gte_400?: number | null
+          cee_commerce_lt_400?: number | null
           cee_config?: Json | null
+          cee_enseignement_gte_400?: number | null
+          cee_enseignement_lt_400?: number | null
+          cee_entrepots_gte_400?: number | null
+          cee_entrepots_lt_400?: number | null
+          cee_hotellerie_gte_400?: number | null
+          cee_hotellerie_lt_400?: number | null
+          cee_restauration_gte_400?: number | null
+          cee_restauration_lt_400?: number | null
+          cee_sante_gte_400?: number | null
+          cee_sante_lt_400?: number | null
           code?: string
           created_at?: string
           custom_description_primary?: string | null
