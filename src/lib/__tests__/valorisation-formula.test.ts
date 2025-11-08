@@ -55,11 +55,11 @@ describe("calcCeeLighting", () => {
       ledWattConstant: 250,
     });
 
-    // With ledWattConstant: (62 * 2 * 1 * 250) / 1,000,000 = 0.031 MWh per LED
-    expect(result.valorisationPerUnitMwh).toBeCloseTo(0.031, 3);
-    expect(result.valorisationTotalMwh).toBeCloseTo(1.24, 2); // 0.031 * 40
-    expect(result.valorisationPerUnitEur).toBeCloseTo(0.2077, 3); // 0.031 * 6.7
-    expect(result.valorisationTotalEur).toBeCloseTo(8.308, 2); // 1.24 * 6.7
+    // With ledWattConstant: (62 * 2 * 1 * 250) / 1,000 = 31 MWh per LED
+    expect(result.valorisationPerUnitMwh).toBeCloseTo(31, 2);
+    expect(result.valorisationTotalMwh).toBeCloseTo(1240, 1); // 31 * 40
+    expect(result.valorisationPerUnitEur).toBeCloseTo(207.7, 1); // 31 * 6.7
+    expect(result.valorisationTotalEur).toBeCloseTo(8308, 0); // 1240 * 6.7
     expect(result.multiplier).toBe(40);
     expect(result.warningMissingBase).toBe(false);
   });
@@ -95,8 +95,8 @@ describe("calcCeeLighting", () => {
       ledWattConstant: 250,
     });
 
-    // Should use kwh_cumac_gte_400 = 62
-    expect(resultGte400.valorisationPerUnitMwh).toBeCloseTo(0.031, 3);
+    // Should use kwh_cumac_gte_400 = 62: (62 * 2 * 1 * 250) / 1,000 = 31 MWh
+    expect(resultGte400.valorisationPerUnitMwh).toBeCloseTo(31, 2);
 
     // Test with surface < 400 m²
     const resultLt400 = calcCeeLighting({
@@ -110,7 +110,7 @@ describe("calcCeeLighting", () => {
       ledWattConstant: 250,
     });
 
-    // Should use kwh_cumac_lt_400 = 63
-    expect(resultLt400.valorisationPerUnitMwh).toBeCloseTo(0.0315, 4);
+    // Should use kwh_cumac_lt_400 = 63: (63 * 2 * 1 * 250) / 1,000 = 31.5 MWh
+    expect(resultLt400.valorisationPerUnitMwh).toBeCloseTo(31.5, 2);
   });
 });

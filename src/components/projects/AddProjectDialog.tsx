@@ -874,7 +874,19 @@ export const AddProjectDialog = ({
 
   const normalizedBuildingSurface = useMemo(() => {
     if (typeof watchedSurfaceBatiment === "number" && Number.isFinite(watchedSurfaceBatiment)) {
+      if (process.env.NODE_ENV !== "production") {
+        console.log('[normalizedBuildingSurface]', {
+          raw: watchedSurfaceBatiment,
+          normalized: watchedSurfaceBatiment
+        });
+      }
       return watchedSurfaceBatiment;
+    }
+    if (process.env.NODE_ENV !== "production") {
+      console.log('[normalizedBuildingSurface]', {
+        raw: watchedSurfaceBatiment,
+        normalized: null
+      });
     }
     return null;
   }, [watchedSurfaceBatiment]);

@@ -431,9 +431,9 @@ export const calcCeeLighting = ({
   let baseKwh: number;
   let valorisationPerUnitMwh: number;
 
-  // If ledWattConstant is provided, use simplified formula
-  if (typeof ledWattConstant === 'number' && ledWattConstant > 0 && basePerLuminaire) {
-    baseKwh = (basePerLuminaire * bonification * coefficient * ledWattConstant) / 1_000_000;
+    // If ledWattConstant is provided, use simplified formula
+    if (typeof ledWattConstant === 'number' && ledWattConstant > 0 && basePerLuminaire) {
+      baseKwh = (basePerLuminaire * bonification * coefficient * ledWattConstant) / 1_000;
     valorisationPerUnitMwh = baseKwh;
   } else {
     // Fallback to existing complex LED watt scaling
