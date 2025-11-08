@@ -77,7 +77,6 @@ type CalendarEvent = {
   detailUrl?: string;
   detailLabel?: string;
   projectAppointmentStatus: ScheduledAppointmentRecord["projectAppointmentStatus"];
-  completedAt: ScheduledAppointmentRecord["completedAt"];
 };
 const DEFAULT_APPOINTMENT_TYPE_COLOR = "bg-slate-500/10 text-slate-600 border-slate-200";
 
@@ -235,7 +234,6 @@ const mapAppointmentsToEvents = (
         detailUrl,
         detailLabel,
         projectAppointmentStatus: record.projectAppointmentStatus,
-        completedAt: record.completedAt,
       } satisfies CalendarEvent;
     })
     .filter((event) => event !== null) as CalendarEvent[];

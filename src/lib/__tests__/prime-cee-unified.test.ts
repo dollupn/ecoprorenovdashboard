@@ -7,6 +7,7 @@ import {
   type PrimeCeeComputation,
   type PrimeCeeProductCatalogEntry,
   type PrimeCeeProductDisplayMap,
+  type ProductKwhValue,
 } from "../prime-cee-unified";
 import { LIGHTING_DEFAULT_LED_WATT } from "../valorisation-formula";
 
@@ -145,11 +146,7 @@ describe("computePrimeCee", () => {
     kwh_cumac?: number | null;
     lt400?: number | null;
     gte400?: number | null;
-    entries?: {
-      building_type: string;
-      kwh_cumac_lt_400?: number | null;
-      kwh_cumac_gte_400?: number | null;
-    }[];
+    entries?: ProductKwhValue[];
   }): PrimeCeeProductCatalogEntry => ({
     id,
     name: `Lighting ${id}`,
@@ -162,13 +159,13 @@ describe("computePrimeCee", () => {
     kwh_cumac_values:
       entries ??
       (kwh_cumac != null || lt400 != null || gte400 != null
-        ? [
+        ? ([
             {
               building_type: buildingType,
               kwh_cumac_lt_400: lt400 ?? kwh_cumac ?? 0,
               kwh_cumac_gte_400: gte400 ?? kwh_cumac ?? 0,
             },
-          ]
+          ] as ProductKwhValue[])
         : []),
   });
 

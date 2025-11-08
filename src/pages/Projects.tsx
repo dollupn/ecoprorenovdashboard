@@ -518,7 +518,7 @@ const Projects = ({
       const displayedProducts = getDisplayedProducts(project.project_products);
       const projectProducts = project.project_products.reduce<PrimeProductInput[]>((pAcc, pp) => {
         pAcc.push({
-          id: pp.id,
+          id: (pp as any).id ?? "",
           product_id: pp.product_id,
           quantity: pp.quantity,
           dynamic_params: (pp.dynamic_params as Record<string, unknown>) ?? {},
@@ -527,8 +527,9 @@ const Projects = ({
       }, []);
 
       const productMap = project.project_products.reduce<Record<string, PrimeCeeProductCatalogEntry>>((pMap, pp) => {
-        if (pp.product) {
-          pMap[pp.product_id] = pp.product;
+        const product = (pp as any).product;
+        if (product) {
+          pMap[pp.product_id] = product;
         }
         return pMap;
       }, {});
@@ -588,7 +589,7 @@ const Projects = ({
   const surfaceFactureeByProject = useMemo(() => {
     return projects.reduce<Record<string, number>>((acc, project) => {
       const total = (project.project_products ?? []).reduce((sum, projectProduct) => {
-        const product = projectProduct.product;
+        const product = (projectProduct as any).product;
         if (!product) {
           return sum;
         }

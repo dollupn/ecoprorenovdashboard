@@ -24,7 +24,7 @@ export { DEFAULT_PRODUCT_CEE_CONFIG, formatProductCeeMultiplierLabel, normalizeP
 // ============================================================================
 
 type ProductCatalog = Tables<"product_catalog">;
-type ProductKwhValue = Pick<
+export type ProductKwhValue = Pick<
   Tables<"product_kwh_cumac">,
   "building_type" | "kwh_cumac_lt_400" | "kwh_cumac_gte_400"
 >;
