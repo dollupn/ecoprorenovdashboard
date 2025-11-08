@@ -399,14 +399,12 @@ export default function Settings() {
   };
   const isMounted = useRef(true);
 
-  // Disable Google Drive integration check temporarily to prevent white screen errors
-  // The backend server needs to be running for this to work
   const {
     data: driveConnection,
     isLoading: driveStatusLoading,
     isFetching: driveStatusFetching,
     error: driveStatusError,
-  } = useDriveConnectionStatus(null); // Pass null to disable the query
+  } = useDriveConnectionStatus(currentOrgId);
   const driveAuthUrlMutation = useDriveAuthUrl();
   const driveRefreshMutation = useDriveConnectionRefresh();
   const driveDisconnectMutation = useDriveDisconnect();

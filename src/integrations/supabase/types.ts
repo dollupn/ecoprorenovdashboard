@@ -112,6 +112,153 @@ export type Database = {
         }
         Relationships: []
       }
+      drive_credentials: {
+        Row: {
+          access_token: string | null
+          created_at: string
+          error_message: string | null
+          expires_at: string | null
+          id: string
+          org_id: string
+          refresh_token: string | null
+          scope: string[] | null
+          status: Database["public"]["Enums"]["drive_connection_status"] | null
+          token_type: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_token?: string | null
+          created_at?: string
+          error_message?: string | null
+          expires_at?: string | null
+          id?: string
+          org_id: string
+          refresh_token?: string | null
+          scope?: string[] | null
+          status?: Database["public"]["Enums"]["drive_connection_status"] | null
+          token_type?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string | null
+          created_at?: string
+          error_message?: string | null
+          expires_at?: string | null
+          id?: string
+          org_id?: string
+          refresh_token?: string | null
+          scope?: string[] | null
+          status?: Database["public"]["Enums"]["drive_connection_status"] | null
+          token_type?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "drive_credentials_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      drive_files: {
+        Row: {
+          created_at: string
+          drive_file_id: string
+          drive_file_name: string | null
+          entity_id: string | null
+          entity_type: string | null
+          icon_link: string | null
+          id: string
+          mime_type: string | null
+          org_id: string
+          uploaded_by: string | null
+          web_content_link: string | null
+          web_view_link: string | null
+        }
+        Insert: {
+          created_at?: string
+          drive_file_id: string
+          drive_file_name?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          icon_link?: string | null
+          id?: string
+          mime_type?: string | null
+          org_id: string
+          uploaded_by?: string | null
+          web_content_link?: string | null
+          web_view_link?: string | null
+        }
+        Update: {
+          created_at?: string
+          drive_file_id?: string
+          drive_file_name?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          icon_link?: string | null
+          id?: string
+          mime_type?: string | null
+          org_id?: string
+          uploaded_by?: string | null
+          web_content_link?: string | null
+          web_view_link?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "drive_files_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      drive_settings: {
+        Row: {
+          client_id: string | null
+          client_secret: string | null
+          created_at: string
+          id: string
+          org_id: string
+          redirect_uri: string | null
+          root_folder_id: string | null
+          shared_drive_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          client_id?: string | null
+          client_secret?: string | null
+          created_at?: string
+          id?: string
+          org_id: string
+          redirect_uri?: string | null
+          root_folder_id?: string | null
+          shared_drive_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string | null
+          client_secret?: string | null
+          created_at?: string
+          id?: string
+          org_id?: string
+          redirect_uri?: string | null
+          root_folder_id?: string | null
+          shared_drive_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "drive_settings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoices: {
         Row: {
           amount: number
@@ -1528,6 +1675,11 @@ export type Database = {
         | "guyane"
         | "reunion"
         | "mayotte"
+      drive_connection_status:
+        | "connected"
+        | "disconnected"
+        | "error"
+        | "pending"
       org_role: "owner" | "admin" | "member" | "commercial"
       project_media_category:
         | "PHOTOS"
@@ -1672,6 +1824,12 @@ export const Constants = {
         "guyane",
         "reunion",
         "mayotte",
+      ],
+      drive_connection_status: [
+        "connected",
+        "disconnected",
+        "error",
+        "pending",
       ],
       org_role: ["owner", "admin", "member", "commercial"],
       project_media_category: [
