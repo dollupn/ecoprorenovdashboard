@@ -906,6 +906,87 @@ export const ProductFormDialog = ({
                   </div>
                 </div>
 
+                <div className="space-y-4 rounded-lg border p-4">
+                  <div>
+                    <h3 className="text-sm font-medium">Tarifs Santé/Entrepôts/Commerce</h3>
+                    <p className="text-xs text-muted-foreground">
+                      Définissez les tarifs CEE en fonction de la surface du bâtiment (optionnel).
+                    </p>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <FormField
+                      control={form.control}
+                      name="valeur_sante_entrepot_commerce_ge_400"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Tarif ≥ 400m²</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min={0}
+                              value={field.value ?? ""}
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                if (value === "") {
+                                  field.onChange(null);
+                                  return;
+                                }
+                                const parsed = Number(value);
+                                if (Number.isNaN(parsed)) return;
+                                field.onChange(parsed);
+                              }}
+                              onBlur={field.onBlur}
+                              placeholder="0.00"
+                              disabled={isSubmitting}
+                            />
+                          </FormControl>
+                          <p className="text-xs text-muted-foreground px-1">
+                            Tarif appliqué pour les bâtiments de 400m² et plus.
+                          </p>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="valeur_sante_entrepot_commerce_lt_400"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Tarif &lt; 400m²</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min={0}
+                              value={field.value ?? ""}
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                if (value === "") {
+                                  field.onChange(null);
+                                  return;
+                                }
+                                const parsed = Number(value);
+                                if (Number.isNaN(parsed)) return;
+                                field.onChange(parsed);
+                              }}
+                              onBlur={field.onBlur}
+                              placeholder="0.00"
+                              disabled={isSubmitting}
+                            />
+                          </FormControl>
+                          <p className="text-xs text-muted-foreground px-1">
+                            Tarif appliqué pour les bâtiments de moins de 400m².
+                          </p>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                   <FormField
                     control={form.control}
@@ -1401,7 +1482,7 @@ export const ProductFormDialog = ({
                     />
                   </div>
 
-                   <div className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                  <div className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
                     <p className="font-medium text-foreground">Multiplicateur appliqué</p>
                     <p className="mt-1">{ceeMultiplierPreview}</p>
                     {selectedCeeTemplate?.isCustom ? (
@@ -1412,86 +1493,6 @@ export const ProductFormDialog = ({
                   </div>
                 </div>
 
-                <div className="space-y-4 rounded-lg border p-4">
-                  <div>
-                    <h3 className="text-sm font-medium">Tarifs Santé/Entrepôts/Commerce</h3>
-                    <p className="text-xs text-muted-foreground">
-                      Définissez les tarifs CEE en fonction de la surface du bâtiment (optionnel).
-                    </p>
-                  </div>
-
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <FormField
-                      control={form.control}
-                      name="valeur_sante_entrepot_commerce_ge_400"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Tarif ≥ 400m²</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min={0}
-                              value={field.value ?? ""}
-                              onChange={(event) => {
-                                const value = event.target.value;
-                                if (value === "") {
-                                  field.onChange(null);
-                                  return;
-                                }
-                                const parsed = Number(value);
-                                if (Number.isNaN(parsed)) return;
-                                field.onChange(parsed);
-                              }}
-                              onBlur={field.onBlur}
-                              placeholder="0.00"
-                              disabled={isSubmitting}
-                            />
-                          </FormControl>
-                          <p className="text-xs text-muted-foreground px-1">
-                            Tarif appliqué pour les bâtiments de 400m² et plus.
-                          </p>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="valeur_sante_entrepot_commerce_lt_400"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Tarif &lt; 400m²</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min={0}
-                              value={field.value ?? ""}
-                              onChange={(event) => {
-                                const value = event.target.value;
-                                if (value === "") {
-                                  field.onChange(null);
-                                  return;
-                                }
-                                const parsed = Number(value);
-                                if (Number.isNaN(parsed)) return;
-                                field.onChange(parsed);
-                              }}
-                              onBlur={field.onBlur}
-                              placeholder="0.00"
-                              disabled={isSubmitting}
-                            />
-                          </FormControl>
-                          <p className="text-xs text-muted-foreground px-1">
-                            Tarif appliqué pour les bâtiments de moins de 400m².
-                          </p>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
               </TabsContent>
 
               <TabsContent value="dynamic" className="space-y-6">
