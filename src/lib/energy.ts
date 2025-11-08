@@ -31,6 +31,7 @@ export type ProjectWithProducts = Pick<
   | "status"
   | "updated_at"
   | "surface_isolee_m2"
+  | "surface_batiment_m2"
   | "city"
   | "client_name"
   | "building_type"
@@ -85,10 +86,16 @@ export const aggregateEnergyByCategory = (
         continue;
       }
 
+      const buildingSurface =
+        typeof project.surface_batiment_m2 === "number" &&
+        Number.isFinite(project.surface_batiment_m2)
+          ? project.surface_batiment_m2
+          : null;
+
       const baseKwh = getKwhCumacBasePerBuilding(
         product.kwh_cumac_values ?? [],
         project.building_type,
-        null,
+        buildingSurface,
       );
 
       if (typeof baseKwh !== "number" || !Number.isFinite(baseKwh)) {
