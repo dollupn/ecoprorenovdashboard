@@ -873,18 +873,37 @@ export const AddProjectDialog = ({
   const sameAddress = form.watch("same_address");
 
   const normalizedBuildingSurface = useMemo(() => {
+    // Handle numeric values
     if (typeof watchedSurfaceBatiment === "number" && Number.isFinite(watchedSurfaceBatiment)) {
       if (process.env.NODE_ENV !== "production") {
         console.log('[normalizedBuildingSurface]', {
           raw: watchedSurfaceBatiment,
+          type: 'number',
           normalized: watchedSurfaceBatiment
         });
       }
       return watchedSurfaceBatiment;
     }
+    
+    // Handle string values (from form inputs)
+    if (typeof watchedSurfaceBatiment === "string") {
+      const parsed = Number(watchedSurfaceBatiment);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        if (process.env.NODE_ENV !== "production") {
+          console.log('[normalizedBuildingSurface]', {
+            raw: watchedSurfaceBatiment,
+            type: 'string',
+            normalized: parsed
+          });
+        }
+        return parsed;
+      }
+    }
+    
     if (process.env.NODE_ENV !== "production") {
       console.log('[normalizedBuildingSurface]', {
         raw: watchedSurfaceBatiment,
+        type: typeof watchedSurfaceBatiment,
         normalized: null
       });
     }
