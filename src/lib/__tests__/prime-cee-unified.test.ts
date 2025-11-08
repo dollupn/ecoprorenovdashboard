@@ -8,6 +8,7 @@ import {
   type PrimeCeeProductCatalogEntry,
   type PrimeCeeProductDisplayMap,
 } from "../prime-cee-unified";
+import { LIGHTING_DEFAULT_LED_WATT } from "../valorisation-formula";
 
 describe("buildPrimeCeeEntries", () => {
   const baseComputation: PrimeCeeComputation = {
@@ -103,10 +104,16 @@ describe("buildPrimeCeeEntries", () => {
 describe("computePrimeCee", () => {
   const baseProduct = ({
     id,
+    buildingType = "house",
     kwh_cumac,
+    lt400,
+    gte400,
   }: {
     id: string;
-    kwh_cumac: number;
+    buildingType?: string;
+    kwh_cumac?: number | null;
+    lt400?: number | null;
+    gte400?: number | null;
   }): PrimeCeeProductCatalogEntry => ({
     id,
     name: `Product ${id}`,
@@ -118,9 +125,9 @@ describe("computePrimeCee", () => {
     cee_config: DEFAULT_PRODUCT_CEE_CONFIG,
     kwh_cumac_values: [
       {
-        building_type: "house",
-        kwh_cumac_lt_400: kwh_cumac,
-        kwh_cumac_gte_400: kwh_cumac,
+        building_type: buildingType,
+        kwh_cumac_lt_400: lt400 ?? kwh_cumac ?? null,
+        kwh_cumac_gte_400: gte400 ?? kwh_cumac ?? null,
       },
     ],
   });
@@ -129,11 +136,15 @@ describe("computePrimeCee", () => {
     id,
     buildingType,
     kwh_cumac,
+    lt400,
+    gte400,
     entries,
   }: {
     id: string;
     buildingType: string;
     kwh_cumac?: number | null;
+    lt400?: number | null;
+    gte400?: number | null;
     entries?: {
       building_type: string;
       kwh_cumac_lt_400?: number | null;
@@ -150,12 +161,12 @@ describe("computePrimeCee", () => {
     cee_config: DEFAULT_PRODUCT_CEE_CONFIG,
     kwh_cumac_values:
       entries ??
-      (kwh_cumac != null
+      (kwh_cumac != null || lt400 != null || gte400 != null
         ? [
             {
               building_type: buildingType,
-              kwh_cumac_lt_400: kwh_cumac,
-              kwh_cumac_gte_400: kwh_cumac,
+              kwh_cumac_lt_400: lt400 ?? kwh_cumac ?? null,
+              kwh_cumac_gte_400: gte400 ?? kwh_cumac ?? null,
             },
           ]
         : []),
@@ -303,5 +314,109 @@ describe("computePrimeCee", () => {
     expect(product.valorisationTotalMwh).toBeCloseTo(0.6, 5);
     expect(product.valorisationTotalEur).toBeCloseTo(36, 5);
     expect(product.hasMissingKwhCumac).toBe(false);
+  });
+
+  it("selects the <400 base for non-lighting products when surface is below threshold", () => {
+    const productMap: Record<string, PrimeCeeProductCatalogEntry> = {
+      "prod-lt": baseProduct({ id: "prod-lt", lt400: 900, gte400: 1200 }),
+    };
+
+    const result = computePrimeCee({
+      products: [{ product_id: "prod-lt", quantity: 1 }],
+      productMap,
+      buildingType: "house",
+      buildingSurface: 350,
+      delegate: { price_eur_per_mwh: 50 } as any,
+      primeBonification: 2,
+    });
+
+    expect(result).not.toBeNull();
+    const [product] = result!.products;
+    expect(product.baseKwh).toBeCloseTo(900, 5);
+    expect(product.valorisationPerUnitMwh).toBeCloseTo((900 * 2) / 1000, 5);
+  });
+
+  it("selects the ≥400 base for non-lighting products when surface meets the threshold", () => {
+    const productMap: Record<string, PrimeCeeProductCatalogEntry> = {
+      "prod-gt": baseProduct({ id: "prod-gt", lt400: 800, gte400: 1400 }),
+    };
+
+    const result = computePrimeCee({
+      products: [{ product_id: "prod-gt", quantity: 1 }],
+      productMap,
+      buildingType: "house",
+      buildingSurface: 450,
+      delegate: { price_eur_per_mwh: 40 } as any,
+      primeBonification: 2,
+    });
+
+    expect(result).not.toBeNull();
+    const [product] = result!.products;
+    expect(product.baseKwh).toBeCloseTo(1400, 5);
+    expect(product.valorisationPerUnitMwh).toBeCloseTo((1400 * 2) / 1000, 5);
+  });
+
+  it("falls back to the available kWh value when only one surface value exists", () => {
+    const productMap: Record<string, PrimeCeeProductCatalogEntry> = {
+      "prod-single": baseProduct({ id: "prod-single", lt400: null, gte400: 1100 }),
+    };
+
+    const result = computePrimeCee({
+      products: [{ product_id: "prod-single", quantity: 1 }],
+      productMap,
+      buildingType: "house",
+      buildingSurface: 200,
+      delegate: { price_eur_per_mwh: 35 } as any,
+      primeBonification: 2,
+    });
+
+    expect(result).not.toBeNull();
+    const [product] = result!.products;
+    expect(product.baseKwh).toBeCloseTo(1100, 5);
+  });
+
+  it("uses surface-specific bases for lighting products", () => {
+    const productMap: Record<string, PrimeCeeProductCatalogEntry> = {
+      "light-surface": lightingProduct({
+        id: "light-surface",
+        buildingType: "tertiaire",
+        lt400: 120,
+        gte400: 180,
+      }),
+    };
+
+    const commonProductInput = {
+      product_id: "light-surface",
+      dynamic_params: {
+        nombre_luminaire: 1,
+        led_watt: LIGHTING_DEFAULT_LED_WATT,
+      },
+    } as const;
+
+    const belowThreshold = computePrimeCee({
+      products: [commonProductInput],
+      productMap,
+      buildingType: "tertiaire",
+      buildingSurface: 200,
+      delegate: { price_eur_per_mwh: 55 } as any,
+      primeBonification: 2,
+    });
+
+    expect(belowThreshold).not.toBeNull();
+    const [belowProduct] = belowThreshold!.products;
+    expect(belowProduct.baseKwh).toBeCloseTo(120, 5);
+
+    const aboveThreshold = computePrimeCee({
+      products: [commonProductInput],
+      productMap,
+      buildingType: "tertiaire",
+      buildingSurface: 650,
+      delegate: { price_eur_per_mwh: 55 } as any,
+      primeBonification: 2,
+    });
+
+    expect(aboveThreshold).not.toBeNull();
+    const [aboveProduct] = aboveThreshold!.products;
+    expect(aboveProduct.baseKwh).toBeCloseTo(180, 5);
   });
 });
