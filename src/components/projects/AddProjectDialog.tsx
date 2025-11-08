@@ -70,6 +70,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { getKwhCumacBasePerBuilding } from "@/lib/valorisation-formula";
 import { Calendar as CalendarIcon, GripVertical, Plus, X } from "lucide-react";
 import { DynamicFields } from "@/features/leads/DynamicFields";
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
@@ -620,7 +621,7 @@ export const AddProjectDialog = ({
       const { data, error } = await supabase
         .from("product_catalog")
         .select(
-          "id, name, code, category, is_active, params_schema, default_params, cee_config, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)"
+          "id, name, code, category, is_active, params_schema, default_params, cee_config, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac_lt_400, kwh_cumac_gte_400)"
         )
         .eq("org_id", currentOrgId)
         .eq("is_active", true)
@@ -871,6 +872,23 @@ export const AddProjectDialog = ({
   const watchedSurfaceBatiment = useWatch({ control: form.control, name: "surface_batiment_m2" });
   const sameAddress = form.watch("same_address");
 
+  const normalizedBuildingSurface = useMemo(() => {
+    if (typeof watchedSurfaceBatiment === "number") {
+      return watchedSurfaceBatiment;
+    }
+
+    if (typeof watchedSurfaceBatiment === "string") {
+      const trimmed = watchedSurfaceBatiment.trim();
+      if (trimmed.length === 0) {
+        return null;
+      }
+      const parsed = Number(trimmed);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    return null;
+  }, [watchedSurfaceBatiment]);
+
   const productMap = useMemo(() => {
     if (!productsData) return {};
 
@@ -907,9 +925,12 @@ export const AddProjectDialog = ({
         return acc;
       }
 
-      const hasKwhForBuilding = product.kwh_cumac_values?.some((value) => {
-        return value.building_type === watchedBuildingType && typeof value.kwh_cumac === "number";
-      });
+      const hasKwhForBuilding =
+        getKwhCumacBasePerBuilding(
+          product.kwh_cumac_values ?? [],
+          watchedBuildingType,
+          normalizedBuildingSurface,
+        ) !== null;
 
       if (!hasKwhForBuilding) {
         const label = product.code ?? product.name ?? product.id ?? "Produit";
@@ -920,7 +941,12 @@ export const AddProjectDialog = ({
 
       return acc;
     }, []);
-  }, [productMap, watchedBuildingType, watchedProducts]);
+  }, [
+    productMap,
+    watchedBuildingType,
+    watchedProducts,
+    normalizedBuildingSurface,
+  ]);
 
   const effectivePrimeBonification = useMemo(
     () => resolveBonificationFactor(primeBonification),
@@ -944,12 +970,19 @@ export const AddProjectDialog = ({
     return computePrimeCee({
       products: normalizedProducts,
       buildingType: watchedBuildingType,
-      buildingSurface: watchedSurfaceBatiment,
+      buildingSurface: normalizedBuildingSurface,
       delegate: selectedDelegate,
       primeBonification,
       productMap,
     });
-  }, [watchedProducts, watchedBuildingType, watchedSurfaceBatiment, selectedDelegate, primeBonification, productMap]);
+  }, [
+    watchedProducts,
+    watchedBuildingType,
+    normalizedBuildingSurface,
+    selectedDelegate,
+    primeBonification,
+    productMap,
+  ]);
 
   const primeCeeProducts = primeCeeComputation?.products ?? [];
   const hasPrimeCeeValue =

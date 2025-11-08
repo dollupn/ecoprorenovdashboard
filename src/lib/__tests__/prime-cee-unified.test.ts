@@ -119,7 +119,8 @@ describe("computePrimeCee", () => {
     kwh_cumac_values: [
       {
         building_type: "house",
-        kwh_cumac,
+        kwh_cumac_lt_400: kwh_cumac,
+        kwh_cumac_gte_400: kwh_cumac,
       },
     ],
   });
@@ -133,7 +134,11 @@ describe("computePrimeCee", () => {
     id: string;
     buildingType: string;
     kwh_cumac?: number | null;
-    entries?: { building_type: string; kwh_cumac: number }[];
+    entries?: {
+      building_type: string;
+      kwh_cumac_lt_400?: number | null;
+      kwh_cumac_gte_400?: number | null;
+    }[];
   }): PrimeCeeProductCatalogEntry => ({
     id,
     name: `Lighting ${id}`,
@@ -149,7 +154,8 @@ describe("computePrimeCee", () => {
         ? [
             {
               building_type: buildingType,
-              kwh_cumac,
+              kwh_cumac_lt_400: kwh_cumac,
+              kwh_cumac_gte_400: kwh_cumac,
             },
           ]
         : []),
@@ -259,8 +265,16 @@ describe("computePrimeCee", () => {
         id: "light-3",
         buildingType: "industrial",
         entries: [
-          { building_type: "tertiaire", kwh_cumac: 400 },
-          { building_type: "industrial", kwh_cumac: 300 },
+          {
+            building_type: "tertiaire",
+            kwh_cumac_lt_400: 400,
+            kwh_cumac_gte_400: 400,
+          },
+          {
+            building_type: "industrial",
+            kwh_cumac_lt_400: 300,
+            kwh_cumac_gte_400: 300,
+          },
         ],
       }),
     };

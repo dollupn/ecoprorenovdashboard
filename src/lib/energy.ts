@@ -5,6 +5,7 @@ import {
   type PrimeCeeProductCatalogEntry,
   type ProductCeeConfig,
 } from "@/lib/prime-cee-unified";
+import { getKwhCumacBasePerBuilding } from "@/lib/valorisation-formula";
 
 export type ProjectProductWithEnergy =
   Pick<Tables<"project_products">, "quantity" | "dynamic_params"> & {
@@ -15,7 +16,10 @@ export type ProjectProductWithEnergy =
         > & {
           cee_config: ProductCeeConfig;
           kwh_cumac_values?:
-            | (Pick<Tables<"product_kwh_cumac">, "building_type" | "kwh_cumac"> | null)[]
+            | (Pick<
+                Tables<"product_kwh_cumac">,
+                "building_type" | "kwh_cumac_lt_400" | "kwh_cumac_gte_400"
+              > | null)[]
             | null;
         })
       | null;
@@ -81,11 +85,13 @@ export const aggregateEnergyByCategory = (
         continue;
       }
 
-      const kwhEntry = product.kwh_cumac_values?.find(
-        (entry) => entry && entry.building_type === project.building_type
+      const baseKwh = getKwhCumacBasePerBuilding(
+        product.kwh_cumac_values ?? [],
+        project.building_type,
+        null,
       );
 
-      if (!kwhEntry || typeof kwhEntry.kwh_cumac !== "number") {
+      if (typeof baseKwh !== "number" || !Number.isFinite(baseKwh)) {
         continue;
       }
 
@@ -102,7 +108,7 @@ export const aggregateEnergyByCategory = (
         continue;
       }
 
-      const productMwh = (kwhEntry.kwh_cumac / 1000) * multiplier.value;
+      const productMwh = (baseKwh / 1000) * multiplier.value;
 
       if (!Number.isFinite(productMwh) || productMwh <= 0) {
         continue;

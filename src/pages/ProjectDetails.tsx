@@ -135,6 +135,7 @@ import {
   LEGACY_QUANTITY_KEY,
   resolveMultiplierKeyForCategory,
   FORMULA_QUANTITY_KEY,
+  getKwhCumacBasePerBuilding,
   type ValorisationFormulaConfig,
 } from "@/lib/valorisation-formula";
 import {
@@ -203,7 +204,7 @@ type ProductSummary = Pick<
   cee_config: ProductCeeConfig;
   kwh_cumac_values?: Pick<
     Tables<"product_kwh_cumac">,
-    "id" | "building_type" | "kwh_cumac"
+    "id" | "building_type" | "kwh_cumac_lt_400" | "kwh_cumac_gte_400"
   >[];
 };
 
@@ -795,19 +796,17 @@ const getSchemaFieldLabel = (
   return null;
 };
 
-const findKwhEntry = (
+const resolveProductKwhValue = (
   product: ProductSummary | null | undefined,
   buildingType: string | null | undefined,
+  buildingSurface: number | null | undefined,
 ) => {
   if (!product || !Array.isArray(product.kwh_cumac_values)) return null;
 
-  const normalized = normalizeKey(buildingType);
-  if (!normalized) return null;
-
-  return (
-    product.kwh_cumac_values.find(
-      (entry) => normalizeKey(entry.building_type) === normalized,
-    ) ?? null
+  return getKwhCumacBasePerBuilding(
+    product.kwh_cumac_values,
+    buildingType,
+    buildingSurface,
   );
 };
 
@@ -2371,7 +2370,7 @@ const ProjectDetails = () => {
       let query = supabase
         .from("projects")
         .select(
-          "*, delegate:delegates(id, name, price_eur_per_mwh), lead:leads(email), project_products(id, product_id, quantity, dynamic_params, product:product_catalog(id, code, name, category, params_schema, cee_config, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac))), project_appointments(id, project_id, org_id, appointment_date, appointment_time, appointment_type_id, assignee_id, notes, status, completed_at, created_at, updated_at, appointment_type:appointment_types(id, name))",
+          "*, delegate:delegates(id, name, price_eur_per_mwh), lead:leads(email), project_products(id, product_id, quantity, dynamic_params, product:product_catalog(id, code, name, category, params_schema, cee_config, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac_lt_400, kwh_cumac_gte_400))), project_appointments(id, project_id, org_id, appointment_date, appointment_time, appointment_type_id, assignee_id, notes, status, completed_at, created_at, updated_at, appointment_type:appointment_types(id, name))",
         )
         .eq("id", id);
 
@@ -3285,6 +3284,8 @@ const ProjectDetails = () => {
         : "";
     const delegatePrice = resolveDelegatePrice(project.delegate);
 
+    const buildingSurfaceValue = toNumber(project.surface_batiment_m2);
+
     const entries = projectProducts.map((item, index) => {
       const product = item.product;
       const entryId = item.id ?? item.product_id ?? `product-${index}`;
@@ -3312,8 +3313,12 @@ const ProjectDetails = () => {
       multiplierValue = multiplierDetails.value;
       missingDynamicParams = multiplierDetails.missingDynamicParams;
 
-      const kwhEntry = findKwhEntry(product, buildingType);
-      const kwhValue = toPositiveNumber(kwhEntry?.kwh_cumac);
+      const kwhValueRaw = resolveProductKwhValue(
+        product,
+        buildingType,
+        buildingSurfaceValue,
+      );
+      const kwhValue = toPositiveNumber(kwhValueRaw);
       missingKwh = !buildingType || !kwhValue;
 
       if (!missingKwh && multiplierValue && multiplierValue > 0 && kwhValue) {
