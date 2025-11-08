@@ -261,15 +261,46 @@ export const formatFormulaCoefficient = (value: number): string => {
 
 type ProductKwhCumacEntry = {
   building_type?: string | null;
-  kwh_cumac?: number | null;
+  kwh_cumac_lt_400?: number | null;
+  kwh_cumac_gte_400?: number | null;
 };
 
 const normalizeBuildingType = (value: string | null | undefined) =>
   (value ?? "").trim().toLowerCase();
 
+const normalizeKwhValue = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return value;
+  }
+  return null;
+};
+
+const resolveKwhForSurface = (
+  entry: ProductKwhCumacEntry,
+  buildingSurface: number | null,
+): number | null => {
+  const lt400 = normalizeKwhValue(entry.kwh_cumac_lt_400);
+  const gte400 = normalizeKwhValue(entry.kwh_cumac_gte_400);
+
+  if (buildingSurface === null || buildingSurface === undefined) {
+    return lt400 ?? gte400 ?? null;
+  }
+
+  if (!Number.isFinite(buildingSurface)) {
+    return lt400 ?? gte400 ?? null;
+  }
+
+  if (buildingSurface >= 400) {
+    return gte400 ?? lt400 ?? null;
+  }
+
+  return lt400 ?? gte400 ?? null;
+};
+
 export const getKwhCumacBasePerBuilding = (
   entries: ProductKwhCumacEntry[] | null | undefined,
   buildingType: string | null | undefined,
+  buildingSurface?: number | null,
 ): number | null => {
   if (!entries || entries.length === 0) {
     return null;
@@ -284,11 +315,16 @@ export const getKwhCumacBasePerBuilding = (
     (entry) => normalizeBuildingType(entry.building_type) === target,
   );
 
-  if (!match || !isFiniteNumber(match.kwh_cumac) || match.kwh_cumac <= 0) {
+  if (!match) {
     return null;
   }
 
-  return match.kwh_cumac;
+  const normalizedSurface =
+    typeof buildingSurface === "number" && Number.isFinite(buildingSurface)
+      ? buildingSurface
+      : null;
+
+  return resolveKwhForSurface(match, normalizedSurface);
 };
 
 export type CalcCeeLightingInput = {
@@ -298,6 +334,7 @@ export type CalcCeeLightingInput = {
   bonification: number;
   coefficient: number;
   delegatePrice: number;
+  buildingSurface?: number | null;
 };
 
 export type CalcCeeLightingResult = {
@@ -354,8 +391,13 @@ export const calcCeeLighting = ({
   bonification,
   coefficient,
   delegatePrice,
+  buildingSurface,
 }: CalcCeeLightingInput): CalcCeeLightingResult => {
-  const basePerLuminaire = getKwhCumacBasePerBuilding(kwhEntries, buildingType);
+  const basePerLuminaire = getKwhCumacBasePerBuilding(
+    kwhEntries,
+    buildingType,
+    buildingSurface,
+  );
   const warningMissingBase = basePerLuminaire === null;
 
   const nombreLed = resolveNonNegativeFromDynamicParams(

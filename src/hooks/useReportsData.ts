@@ -226,7 +226,7 @@ export const useReportsData = (orgId: string | null, options: QueryOptions = {})
           .from("projects")
           .select(
             `id, status, updated_at, surface_isolee_m2, city, client_name, building_type,
-            project_products(id, quantity, dynamic_params, product:product_catalog(id, code, category, cee_config, default_params, is_active, params_schema, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac)))`
+            project_products(id, quantity, dynamic_params, product:product_catalog(id, code, category, cee_config, default_params, is_active, params_schema, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac_lt_400, kwh_cumac_gte_400)))`
           )
           .eq("org_id", orgId)
           .in("status", PROJECT_SURFACE_STATUSES as ProjectStatus[]),

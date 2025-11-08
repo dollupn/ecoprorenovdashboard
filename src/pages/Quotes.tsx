@@ -163,7 +163,7 @@ const fetchQuotes = async ({
   let query = supabase
     .from("quotes")
     .select(
-      "*, projects(project_ref, client_name, client_first_name, client_last_name, product_name, project_products(product:product_catalog(code, cee_config, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac))))"
+      "*, projects(project_ref, client_name, client_first_name, client_last_name, product_name, project_products(product:product_catalog(code, cee_config, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac_lt_400, kwh_cumac_gte_400))))"
     )
     .eq("user_id", userId)
     .order("created_at", { ascending: false });

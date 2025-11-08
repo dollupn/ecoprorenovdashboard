@@ -7,6 +7,7 @@ import {
   LEGACY_QUANTITY_KEY,
   normalizeValorisationFormula,
   resolveMultiplierKeyForCategory,
+  getKwhCumacBasePerBuilding,
 } from "./valorisation-formula";
 import {
   DEFAULT_PRODUCT_CEE_CONFIG,
@@ -23,7 +24,10 @@ export { DEFAULT_PRODUCT_CEE_CONFIG, formatProductCeeMultiplierLabel, normalizeP
 // ============================================================================
 
 type ProductCatalog = Tables<"product_catalog">;
-type ProductKwhValue = Pick<Tables<"product_kwh_cumac">, "building_type" | "kwh_cumac">;
+type ProductKwhValue = Pick<
+  Tables<"product_kwh_cumac">,
+  "building_type" | "kwh_cumac_lt_400" | "kwh_cumac_gte_400"
+>;
 type Delegate = Pick<Tables<"delegates">, "price_eur_per_mwh">;
 type ProjectProduct = Pick<
   Tables<"project_products">,
@@ -489,6 +493,7 @@ export const computePrimeCee = ({
         bonification,
         coefficient,
         delegatePrice,
+        buildingSurface,
       });
 
       totalValorisationMwh += lightingResult.valorisationTotalMwh;
@@ -518,16 +523,15 @@ export const computePrimeCee = ({
       continue;
     }
 
-    const kwhEntry = product.kwh_cumac_values?.find(
-      (value) => value.building_type === buildingType && typeof value.kwh_cumac === "number",
+    const baseKwh = getKwhCumacBasePerBuilding(
+      product.kwh_cumac_values ?? [],
+      buildingType,
+      buildingSurface,
     );
 
-    if (!kwhEntry || typeof kwhEntry.kwh_cumac !== "number" || !Number.isFinite(kwhEntry.kwh_cumac)) {
+    if (typeof baseKwh !== "number" || !Number.isFinite(baseKwh) || baseKwh <= 0) {
       continue;
     }
-
-    const baseKwh = kwhEntry.kwh_cumac;
-    if (baseKwh <= 0) continue;
 
     const valorisationPerUnitMwh = (baseKwh * bonification * coefficient) / 1000;
     if (!Number.isFinite(valorisationPerUnitMwh) || valorisationPerUnitMwh <= 0) {

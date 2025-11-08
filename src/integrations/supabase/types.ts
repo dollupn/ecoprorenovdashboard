@@ -649,7 +649,8 @@ export type Database = {
           building_type: string
           created_at: string
           id: string
-          kwh_cumac: number
+          kwh_cumac_gte_400: number | null
+          kwh_cumac_lt_400: number | null
           product_id: string
           updated_at: string
         }
@@ -657,7 +658,8 @@ export type Database = {
           building_type: string
           created_at?: string
           id?: string
-          kwh_cumac: number
+          kwh_cumac_gte_400?: number | null
+          kwh_cumac_lt_400?: number | null
           product_id: string
           updated_at?: string
         }
@@ -665,7 +667,8 @@ export type Database = {
           building_type?: string
           created_at?: string
           id?: string
-          kwh_cumac?: number
+          kwh_cumac_gte_400?: number | null
+          kwh_cumac_lt_400?: number | null
           product_id?: string
           updated_at?: string
         }
