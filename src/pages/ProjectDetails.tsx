@@ -4562,6 +4562,7 @@ const ProjectDetails = () => {
 
   const {
     totalPrimeAmount,
+    eqEnAmount,
     formattedTotalPrimeAmount,
     formattedEqEnAmount,
     formattedEcoAdmnAmount,
@@ -4581,6 +4582,7 @@ const ProjectDetails = () => {
 
       return {
         totalPrimeAmount: totalPrime,
+        eqEnAmount,
         formattedTotalPrimeAmount: formatCurrency(totalPrime),
         formattedEqEnAmount: formatCurrency(eqEnAmount),
         formattedEcoAdmnAmount: formatCurrency(ecoAdmnAmount),
@@ -4590,12 +4592,91 @@ const ProjectDetails = () => {
 
     return {
       totalPrimeAmount: null,
+      eqEnAmount: null,
       formattedTotalPrimeAmount: null,
       formattedEqEnAmount: null,
       formattedEcoAdmnAmount: null,
       formattedEcoFurnAmount: null,
     } as const;
   }, [ceeTotals.totalPrime, displayedPrimeValue, hasComputedCeeTotals]);
+
+  const eqEnBreakdown = useMemo(() => {
+    if (projectProducts.length === 0) {
+      return [] as Array<{
+        id: string;
+        label: string;
+        code: string | null;
+        formattedAmount: string | null;
+        formattedPercent: string | null;
+      }>;
+    }
+
+    const resolvedEqEnAmount =
+      typeof eqEnAmount === "number" && Number.isFinite(eqEnAmount)
+        ? eqEnAmount
+        : null;
+
+    const entries = projectProducts.map((item, index) => {
+      const entryId = item.id ?? item.product_id ?? `product-${index}`;
+      const ceeEntry = ceeEntryMap[entryId];
+      const totalPrime =
+        typeof ceeEntry?.result?.totalPrime === "number" &&
+        Number.isFinite(ceeEntry.result.totalPrime)
+          ? ceeEntry.result.totalPrime
+          : null;
+
+      return {
+        id: entryId,
+        product: item.product,
+        totalPrime,
+      };
+    });
+
+    const positiveTotals = entries
+      .map((entry) => entry.totalPrime ?? 0)
+      .filter((value) => value > 0);
+    const totalPrimeSum = positiveTotals.reduce((sum, value) => sum + value, 0);
+
+    const shouldEvenlySplit =
+      resolvedEqEnAmount !== null &&
+      resolvedEqEnAmount > 0 &&
+      totalPrimeSum <= 0;
+
+    return entries.map((entry) => {
+      let shareAmount: number | null = null;
+      let sharePercent: number | null = null;
+
+      if (resolvedEqEnAmount !== null && resolvedEqEnAmount > 0) {
+        if (totalPrimeSum > 0 && entry.totalPrime !== null && entry.totalPrime > 0) {
+          const weight = entry.totalPrime / totalPrimeSum;
+          shareAmount = resolvedEqEnAmount * weight;
+          sharePercent = weight;
+        } else if (shouldEvenlySplit) {
+          const productCount = entries.length;
+          if (productCount > 0) {
+            const weight = 1 / productCount;
+            shareAmount = resolvedEqEnAmount * weight;
+            sharePercent = weight;
+          }
+        }
+      }
+
+      const label =
+        entry.product?.name ??
+        entry.product?.code ??
+        "Équipement EQ/EN";
+
+      return {
+        id: entry.id,
+        label,
+        code: entry.product?.code ?? null,
+        formattedAmount:
+          shareAmount !== null ? formatCurrency(shareAmount) : null,
+        formattedPercent:
+          sharePercent !== null ? percentFormatter.format(sharePercent) : null,
+      };
+    });
+  }, [ceeEntryMap, eqEnAmount, projectProducts]);
 
   const handleConfirmQuoteSummary = useCallback(() => {
     if (totalPrimeAmount === null) {
@@ -5349,12 +5430,36 @@ const ProjectDetails = () => {
                 </span>
               </div>
               <div className="space-y-3 rounded-md border border-dashed bg-muted/40 p-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">EQ/EN (80&nbsp;%)</span>
-                  <span className="font-medium">
-                    {formattedEqEnAmount ?? "Non disponible"}
-                  </span>
-                </div>
+                {eqEnBreakdown.length > 0 ? (
+                  eqEnBreakdown.map((item) => (
+                    <div
+                      key={`eq-en-${item.id}`}
+                      className="flex items-center justify-between gap-4"
+                    >
+                      <div className="flex flex-col">
+                        <span className="text-muted-foreground">
+                          {item.label}
+                          {item.code ? ` (${item.code})` : ""}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {item.formattedPercent ?? "Non disponible"}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="font-medium">
+                          {item.formattedAmount ?? "Non disponible"}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">EQ/EN (80&nbsp;%)</span>
+                    <span className="font-medium">
+                      {formattedEqEnAmount ?? "Non disponible"}
+                    </span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">ECO-ADMN (15&nbsp;%)</span>
                   <span className="font-medium">
