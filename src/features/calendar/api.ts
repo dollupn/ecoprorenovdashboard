@@ -318,8 +318,26 @@ export const fetchScheduledAppointments = async (
   const appointmentTypesByName = new Map<string, AppointmentTypeRow>();
 
   for (const type of appointmentTypes ?? []) {
-    appointmentTypesById.set(type.id, type);
-    appointmentTypesByName.set(type.name.toLowerCase(), type);
+    if (type.id !== null && type.id !== undefined) {
+      appointmentTypesById.set(type.id, type);
+    }
+
+    const normalizedName =
+      typeof type.name === "string"
+        ? type.name.trim().toLowerCase()
+        : null;
+
+    if (normalizedName) {
+      appointmentTypesByName.set(normalizedName, type);
+      continue;
+    }
+
+    if (type.id !== null && type.id !== undefined) {
+      const fallbackKey = String(type.id).trim().toLowerCase();
+      if (fallbackKey) {
+        appointmentTypesByName.set(fallbackKey, type);
+      }
+    }
   }
 
   const projectLookup = buildProjectLookup(projects);
