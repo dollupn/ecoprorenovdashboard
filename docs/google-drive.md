@@ -4,7 +4,7 @@ Cette application propose une intégration native avec Google Drive permettant d
 
 ## Connexion et autorisations
 
-1. **Paramétrage organisationnel** : renseignez dans Supabase (table `drive_settings`) le client OAuth (ID, secret), le dossier racine ou le Drive partagé cible et l'URL de redirection utilisée par l'application. Ces informations sont propres à chaque organisation.
+1. **Paramétrage organisationnel** : renseignez dans Supabase (table `drive_settings`) le client OAuth (ID, secret), le dossier racine ou le Drive partagé cible et l'URL de redirection utilisée par l'application. Ces informations sont propres à chaque organisation. Lorsque vous créez le client OAuth Google, copiez/collez l'URL `https://<votre-domaine>/integrations/google-drive/callback` dans le champ *Authorized redirect URI* afin que Google redirige correctement vers l'application.
 2. **Initialisation de la connexion** : dans l'interface (page *Settings* > *Intégrations & API*), déclenchez l'authentification Google. Une fenêtre Google s'ouvre pour consentir aux scopes `drive.file` et `drive.metadata.readonly`.
 3. **Gestion automatique des tokens** : le service backend conserve de façon sécurisée les access / refresh tokens dans la table `drive_credentials`. Les renouvellements sont gérés automatiquement ; en cas d'échec, une reconnexion est demandée.
 
