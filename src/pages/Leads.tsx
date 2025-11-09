@@ -1505,6 +1505,15 @@ const Leads = () => {
         return;
       }
 
+      if (!orgId) {
+        toast({
+          title: "Organisation requise",
+          description: "Sélectionnez une organisation avant d'importer des leads.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const payload = rows.map((row) => {
         const rowProductName =
           row.product_name && row.product_name.trim().length > 0 ? row.product_name.trim() : null;
@@ -1514,7 +1523,7 @@ const Leads = () => {
 
         return {
           user_id: user.id,
-          org_id: user.id,
+          org_id: orgId,
           created_by: user.id,
           assigned_to: user.id,
           full_name: row.full_name,
