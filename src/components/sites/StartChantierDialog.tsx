@@ -131,7 +131,7 @@ export const StartChantierDialog = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const driveConnection = useDriveConnectionStatus(currentOrgId ?? null);
-  const driveUpload = useDriveUpload();
+  const driveUpload = useDriveUpload(session?.access_token);
 
   const form = useForm<StartChantierFormValues>({
     resolver: zodResolver(startChantierSchema),

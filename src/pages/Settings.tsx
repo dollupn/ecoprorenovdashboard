@@ -408,8 +408,8 @@ export default function Settings() {
     error: driveStatusError,
   } = useDriveConnectionStatus(currentOrgId);
   const driveAuthUrlMutation = useDriveAuthUrl();
-  const driveRefreshMutation = useDriveConnectionRefresh();
-  const driveDisconnectMutation = useDriveDisconnect();
+  const driveRefreshMutation = useDriveConnectionRefresh(session?.access_token);
+  const driveDisconnectMutation = useDriveDisconnect(session?.access_token);
   const driveSettingsMutation = useDriveSettingsUpdate();
 
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);

@@ -1,5 +1,6 @@
 import type {
   CreateAuthUrlParams,
+  DriveConnectionMutationOptions,
   DriveConnectionStatus,
   DriveUploadOptions,
   DriveUploadResult,
@@ -60,6 +61,18 @@ const fetchJson = async <T>(input: RequestInfo, init?: RequestInit): Promise<T> 
   }
 };
 
+const buildAuthHeaders = (orgId: string, accessToken?: string | null): Record<string, string> => {
+  const headers: Record<string, string> = {
+    "x-organization-id": orgId,
+  };
+
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`;
+  }
+
+  return headers;
+};
+
 export const getDriveConnectionStatus = async (orgId: string): Promise<DriveConnectionStatus> => {
   if (!orgId) {
     throw new Error("L'identifiant d'organisation est requis");
@@ -107,11 +120,17 @@ export const exchangeDriveAuthCode = async (
   });
 };
 
-export const refreshDriveConnection = async (
-  orgId: string,
-): Promise<DriveConnectionStatus> => {
+export const refreshDriveConnection = async ({
+  orgId,
+  accessToken,
+}: DriveConnectionMutationOptions): Promise<DriveConnectionStatus> => {
+  if (!orgId) {
+    throw new Error("Organisation requise pour actualiser Drive");
+  }
+
   return await fetchJson<DriveConnectionStatus>(`${API_BASE_PATH}/connection/refresh`, {
     method: "POST",
+    headers: buildAuthHeaders(orgId, accessToken),
     body: JSON.stringify({ orgId }),
   });
 };
@@ -123,39 +142,46 @@ export const uploadFileToDrive = async (
     throw new Error("Organisation requise pour l'upload Drive");
   }
 
+  const { accessToken, ...rest } = options;
+
   const formData = new FormData();
-  formData.append("orgId", options.orgId);
-  formData.append("file", options.file);
+  formData.append("orgId", rest.orgId);
+  formData.append("file", rest.file);
 
-  if (options.parentFolderId) {
-    formData.append("parentFolderId", options.parentFolderId);
+  if (rest.parentFolderId) {
+    formData.append("parentFolderId", rest.parentFolderId);
   }
 
-  if (options.entityType) {
-    formData.append("entityType", options.entityType);
+  if (rest.entityType) {
+    formData.append("entityType", rest.entityType);
   }
 
-  if (options.entityId) {
-    formData.append("entityId", options.entityId);
+  if (rest.entityId) {
+    formData.append("entityId", rest.entityId);
   }
 
-  if (options.description) {
-    formData.append("description", options.description);
+  if (rest.description) {
+    formData.append("description", rest.description);
   }
 
   return await fetchJson<DriveUploadResult>(`${API_BASE_PATH}/upload`, {
     method: "POST",
+    headers: buildAuthHeaders(rest.orgId, accessToken),
     body: formData,
   });
 };
 
-export const disconnectDrive = async (orgId: string): Promise<DriveConnectionStatus> => {
+export const disconnectDrive = async ({
+  orgId,
+  accessToken,
+}: DriveConnectionMutationOptions): Promise<DriveConnectionStatus> => {
   if (!orgId) {
     throw new Error("Organisation requise pour déconnecter Drive");
   }
 
   return await fetchJson<DriveConnectionStatus>(`${API_BASE_PATH}/connection`, {
     method: "DELETE",
+    headers: buildAuthHeaders(orgId, accessToken),
     body: JSON.stringify({ orgId }),
   });
 };
@@ -165,17 +191,9 @@ export const updateDriveSettings = async ({ accessToken, ...payload }: UpdateDri
     throw new Error("Organisation requise pour configurer Google Drive");
   }
 
-  const headers: Record<string, string> = {
-    "x-organization-id": payload.orgId,
-  };
-
-  if (accessToken) {
-    headers.Authorization = `Bearer ${accessToken}`;
-  }
-
   return await fetchJson<DriveConnectionStatus>(`${API_BASE_PATH}/settings`, {
     method: "PUT",
-    headers,
+    headers: buildAuthHeaders(payload.orgId, accessToken),
     body: JSON.stringify(payload),
   });
 };

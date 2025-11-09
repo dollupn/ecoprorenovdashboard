@@ -53,30 +53,30 @@ export const useDriveAuthExchange = () => {
   });
 };
 
-export const useDriveConnectionRefresh = () => {
+export const useDriveConnectionRefresh = (accessToken?: string | null) => {
   const queryClient = useQueryClient();
   return useMutation<DriveConnectionStatus, Error, string>({
-    mutationFn: async (orgId) => await refreshDriveConnection(orgId),
+    mutationFn: async (orgId) => await refreshDriveConnection({ orgId, accessToken }),
     onSuccess: (data) => {
       queryClient.setQueryData(["google-drive", "connection", data.orgId], data);
     },
   });
 };
 
-export const useDriveUpload = () => {
+export const useDriveUpload = (accessToken?: string | null) => {
   const queryClient = useQueryClient();
   return useMutation<DriveUploadResult, Error, DriveUploadOptions>({
-    mutationFn: async (options) => await uploadFileToDrive(options),
+    mutationFn: async (options) => await uploadFileToDrive({ ...options, accessToken }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["google-drive", "connection", variables.orgId] });
     },
   });
 };
 
-export const useDriveDisconnect = () => {
+export const useDriveDisconnect = (accessToken?: string | null) => {
   const queryClient = useQueryClient();
   return useMutation<DriveConnectionStatus, Error, string>({
-    mutationFn: async (orgId) => await disconnectDrive(orgId),
+    mutationFn: async (orgId) => await disconnectDrive({ orgId, accessToken }),
     onSuccess: (data) => {
       queryClient.setQueryData(["google-drive", "connection", data.orgId], data);
     },

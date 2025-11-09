@@ -23,6 +23,8 @@ import {
   Pencil,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { useOrg } from "@/features/organizations/OrgContext";
 
 interface QuoteDetailsDrawerProps {
   quote: QuoteRecord | null;
@@ -42,6 +44,8 @@ const statusLabels: Record<string, string> = {
 export const QuoteDetailsDrawer = ({ quote, open, onOpenChange, onEdit }: QuoteDetailsDrawerProps) => {
   const metadata = useMemo(() => (quote ? parseQuoteMetadata(quote) : undefined), [quote]);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const { session } = useAuth();
+  const { currentOrgId } = useOrg();
 
   const handleSendEmail = () => {
     if (!quote || !metadata?.clientEmail) {
@@ -66,12 +70,32 @@ export const QuoteDetailsDrawer = ({ quote, open, onOpenChange, onEdit }: QuoteD
       return;
     }
 
+    if (!session?.access_token) {
+      toast({
+        title: "Session requise",
+        description: "Veuillez vous reconnecter pour télécharger le devis.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!currentOrgId) {
+      toast({
+        title: "Organisation introuvable",
+        description: "Sélectionnez une organisation avant de télécharger le devis.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       setIsDownloadingPdf(true);
       const response = await fetch(`/api/quotes/${quote.id}/pdf`, {
         method: "GET",
         headers: {
           Accept: "application/pdf",
+          Authorization: `Bearer ${session.access_token}`,
+          "x-organization-id": currentOrgId,
         },
         credentials: "include",
       });
