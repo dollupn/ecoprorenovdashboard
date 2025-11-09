@@ -30,6 +30,7 @@ import { useProjectBuildingTypes } from "@/hooks/useProjectBuildingTypes";
 import { useProjectUsages } from "@/hooks/useProjectUsages";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database, Tables } from "@/integrations/supabase/types";
+import type { PostgrestError } from "@supabase/supabase-js";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
 import {
@@ -2396,8 +2397,8 @@ export default function Settings() {
         const { error } = (await supabase
           .from("settings" as any)
           .upsert(payload, { onConflict: "org_id" })
-          .select("statuts_projets")
-          .single()) as { error: any };
+          .select("statuts_projets, backup_webhook_url, backup_daily_enabled, backup_time")
+          .single()) as { error: PostgrestError | null };
 
         if (error) {
           throw error;
