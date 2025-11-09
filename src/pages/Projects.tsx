@@ -475,7 +475,6 @@ const Projects = ({
       try {
         const response = await fetch(`/api/projects/${projectId}/status`, {
           method: "PATCH",
-          credentials: "include",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${accessToken}`,
