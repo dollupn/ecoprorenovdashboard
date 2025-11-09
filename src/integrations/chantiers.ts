@@ -12,6 +12,7 @@ type StartChantierPayload = {
   productName?: string | null;
   notes?: string | null;
   teamMembers?: unknown;
+  subcontractorId?: string | null;
 };
 
 type ChantierResponse = {

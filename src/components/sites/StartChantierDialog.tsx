@@ -43,6 +43,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrg } from "@/features/organizations/OrgContext";
+import { startChantier } from "@/integrations/chantiers";
 import {
   useDriveConnectionStatus,
   useDriveUpload,
@@ -230,26 +231,14 @@ export const StartChantierDialog = ({
         throw new Error("Organisation non trouvée");
       }
 
-      const { data, error } = await supabase.functions.invoke('start-chantier', {
-        body: {
-          projectId,
-          dateDebut: values.startDate,
-          dateFinPrevue: values.endDate?.trim() || null,
-          subcontractorId: values.subcontractorId,
-          notes: serializeSiteNotes(values.notes, null, []),
-        },
+      const result = await startChantier(projectId, {
+        dateDebut: values.startDate,
+        dateFinPrevue: values.endDate?.trim() || null,
+        subcontractorId: values.subcontractorId,
+        notes: serializeSiteNotes(values.notes, null, []),
       });
 
-      if (error) {
-        console.error('Edge function error:', error);
-        throw new Error(error.message || 'Impossible de créer le chantier');
-      }
-
-      if (!data) {
-        throw new Error('Aucune donnée retournée');
-      }
-
-      return data as StartChantierResponse;
+      return result;
     },
   });
 
