@@ -232,7 +232,8 @@ const Projects = ({
 }: ProjectsProps = {}) => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
+  const accessToken = session?.access_token ?? null;
   const { currentOrgId } = useOrg();
   const { data: members = [], isLoading: membersLoading } = useMembers(currentOrgId);
   const {
@@ -462,6 +463,13 @@ const Projects = ({
         return;
       }
 
+      if (!accessToken) {
+        showToast("Session expirée", {
+          description: "Veuillez vous reconnecter pour mettre à jour le statut du projet.",
+        });
+        return;
+      }
+
       setStatusUpdating((previous) => ({ ...previous, [projectId]: true }));
 
       try {
@@ -470,6 +478,8 @@ const Projects = ({
           credentials: "include",
           headers: {
             "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+            "X-Organization-Id": currentOrgId,
           },
           body: JSON.stringify({ status }),
         });
@@ -497,7 +507,7 @@ const Projects = ({
         setStatusUpdating((previous) => ({ ...previous, [projectId]: false }));
       }
     },
-    [currentOrgId, refetch, statusMap],
+    [accessToken, currentOrgId, refetch, statusMap],
   );
 
   type ProjectValorisationSummary = {
