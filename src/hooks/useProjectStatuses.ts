@@ -18,7 +18,7 @@ const SETTINGS_TABLE = "settings" as unknown as keyof Database["public"]["Tables
 
 type SettingsRow = Pick<
   Database["public"]["Tables"]["settings"]["Row"],
-  "statuts_projets" | "backup_webhook_url" | "backup_daily_enabled" | "backup_time"
+  "statuts_projets"
 >;
 
 const fetchProjectStatuses = async (
@@ -30,7 +30,7 @@ const fetchProjectStatuses = async (
 
   const { data, error } = (await supabase
     .from("settings" as any)
-    .select("statuts_projets, backup_webhook_url, backup_daily_enabled, backup_time")
+    .select("statuts_projets")
     .eq("org_id", orgId)
     .maybeSingle()) as { data: SettingsRow | null; error: PostgrestError | null };
 
