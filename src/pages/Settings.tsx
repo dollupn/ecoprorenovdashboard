@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -83,6 +83,7 @@ import {
   useDriveConnectionRefresh,
   useDriveConnectionStatus,
   useDriveDisconnect,
+  useDriveSettingsUpdate,
 } from "@/integrations/googleDrive";
 import { LeadSettingsPanel } from "@/features/settings/LeadSettingsPanel";
 import { QuoteSettingsPanel } from "@/features/settings/QuoteSettingsPanel";
@@ -343,7 +344,7 @@ const SETTINGS_SECTIONS: Array<{
 
 export default function Settings() {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryClient = useQueryClient();
   const location = useLocation();
   const navigate = useNavigate();
@@ -408,10 +409,19 @@ export default function Settings() {
   const driveAuthUrlMutation = useDriveAuthUrl();
   const driveRefreshMutation = useDriveConnectionRefresh();
   const driveDisconnectMutation = useDriveDisconnect();
+  const driveSettingsMutation = useDriveSettingsUpdate();
 
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [memberError, setMemberError] = useState<string | null>(null);
+
+  const [driveClientId, setDriveClientId] = useState("");
+  const [driveClientSecret, setDriveClientSecret] = useState("");
+  const [driveRedirectUri, setDriveRedirectUri] = useState("");
+  const [driveRootFolderId, setDriveRootFolderId] = useState("");
+  const [driveSharedDriveId, setDriveSharedDriveId] = useState("");
+  const [driveRootFolderTouched, setDriveRootFolderTouched] = useState(false);
+  const [driveSharedDriveTouched, setDriveSharedDriveTouched] = useState(false);
 
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>({
     name: "EcoProRenov",
@@ -548,6 +558,31 @@ export default function Settings() {
 
     navigate(location.pathname, { replace: true, state: {} });
   }, [location.pathname, location.state, navigate, toast]);
+
+  useEffect(() => {
+    setDriveClientId("");
+    setDriveClientSecret("");
+    setDriveRedirectUri("");
+    setDriveRootFolderId("");
+    setDriveSharedDriveId("");
+    setDriveRootFolderTouched(false);
+    setDriveSharedDriveTouched(false);
+  }, [currentOrgId]);
+
+  useEffect(() => {
+    if (!driveRootFolderTouched) {
+      setDriveRootFolderId(driveConnection?.rootFolderId ?? "");
+    }
+
+    if (!driveSharedDriveTouched) {
+      setDriveSharedDriveId(driveConnection?.sharedDriveId ?? "");
+    }
+  }, [
+    driveConnection?.rootFolderId,
+    driveConnection?.sharedDriveId,
+    driveRootFolderTouched,
+    driveSharedDriveTouched,
+  ]);
   const {
     statuses: syncedProjectStatuses,
     isLoading: projectStatusesLoading,
@@ -612,6 +647,95 @@ export default function Settings() {
   const driveConnectLoading = driveAuthUrlMutation.isPending;
   const driveRefreshLoading = driveRefreshMutation.isPending;
   const driveDisconnectLoading = driveDisconnectMutation.isPending;
+  const driveSettingsSaving = driveSettingsMutation.isPending;
+
+  const handleDriveSettingsSubmit = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+
+      if (!currentOrgId) {
+        toast({
+          title: "Organisation requise",
+          description: "Sélectionnez une organisation avant de configurer Google Drive.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!session?.access_token) {
+        toast({
+          title: "Authentification requise",
+          description: "Connectez-vous à nouveau pour modifier la configuration Drive.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const trimmedClientId = driveClientId.trim();
+      const trimmedClientSecret = driveClientSecret.trim();
+      const trimmedRedirectUri = driveRedirectUri.trim();
+      const trimmedRootFolder = driveRootFolderId.trim();
+      const trimmedSharedDrive = driveSharedDriveId.trim();
+
+      if (!trimmedClientId || !trimmedClientSecret) {
+        toast({
+          title: "Champs requis",
+          description: "Renseignez le client ID et le client secret Google Drive.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setDriveClientId(trimmedClientId);
+      setDriveRedirectUri(trimmedRedirectUri);
+      setDriveRootFolderId(trimmedRootFolder);
+      setDriveSharedDriveId(trimmedSharedDrive);
+
+      void driveSettingsMutation
+        .mutateAsync({
+          orgId: currentOrgId,
+          clientId: trimmedClientId,
+          clientSecret: trimmedClientSecret,
+          redirectUri: trimmedRedirectUri || undefined,
+          rootFolderId: trimmedRootFolder || undefined,
+          sharedDriveId: trimmedSharedDrive || undefined,
+          accessToken: session.access_token,
+        })
+        .then((summary) => {
+          toast({
+            title: "Configuration Google Drive enregistrée",
+            description: "Les paramètres OAuth ont été mis à jour pour cette organisation.",
+          });
+          setDriveClientSecret("");
+          setDriveRootFolderTouched(false);
+          setDriveSharedDriveTouched(false);
+          setDriveRootFolderId(summary.rootFolderId ?? "");
+          setDriveSharedDriveId(summary.sharedDriveId ?? "");
+        })
+        .catch((error) => {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "Impossible d'enregistrer les paramètres Google Drive.";
+          toast({
+            title: "Enregistrement impossible",
+            description: message,
+            variant: "destructive",
+          });
+        });
+    },
+    [
+      currentOrgId,
+      driveClientId,
+      driveClientSecret,
+      driveRedirectUri,
+      driveRootFolderId,
+      driveSettingsMutation,
+      driveSharedDriveId,
+      session?.access_token,
+      toast,
+    ],
+  );
 
   const handleDriveConnectClick = () => {
     if (!currentOrgId) {
@@ -1497,63 +1621,157 @@ export default function Settings() {
                     <p className="text-sm text-muted-foreground">{integration.description}</p>
                   </div>
                   {isDrive ? (
-                    <div className="flex flex-col gap-2 md:items-end">
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          variant={driveConnection?.connected ? "outline" : "secondary"}
-                          onClick={() =>
-                            driveConnection?.connected
-                              ? handleDriveRefreshClick()
-                              : handleDriveConnectClick()
-                          }
-                          disabled={
-                            driveConnectLoading ||
-                            driveRefreshLoading ||
-                            (!currentOrgId && !driveConnection?.connected)
-                          }
-                          className="gap-2"
+                    <div className="flex w-full flex-col gap-4 md:min-w-[320px] md:max-w-[420px] md:items-end">
+                      {isAdmin ? (
+                        <form
+                          onSubmit={handleDriveSettingsSubmit}
+                          className="w-full space-y-3 rounded-xl border border-border/60 bg-background/60 p-4 shadow-sm"
                         >
-                          {driveConnectLoading || driveRefreshLoading ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : driveConnection?.connected ? (
-                            <RefreshCw className="h-4 w-4" />
-                          ) : (
-                            <Plug className="h-4 w-4" />
-                          )}
-                          {driveConnection?.connected ? "Actualiser l'accès" : "Connecter"}
-                        </Button>
-                        {driveConnection?.connected ? (
+                          <div className="grid gap-3 md:grid-cols-2">
+                            <div className="space-y-1">
+                              <Label htmlFor="drive-client-id">Client ID</Label>
+                              <Input
+                                id="drive-client-id"
+                                value={driveClientId}
+                                onChange={(event) => setDriveClientId(event.target.value)}
+                                placeholder="google-client-id.apps.googleusercontent.com"
+                                autoComplete="off"
+                                required
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label htmlFor="drive-client-secret">Client secret</Label>
+                              <Input
+                                id="drive-client-secret"
+                                type="password"
+                                value={driveClientSecret}
+                                onChange={(event) => setDriveClientSecret(event.target.value)}
+                                placeholder="Client secret Google"
+                                autoComplete="new-password"
+                                required
+                              />
+                            </div>
+                            <div className="space-y-1 md:col-span-2">
+                              <Label htmlFor="drive-redirect-uri">Redirect URI</Label>
+                              <Input
+                                id="drive-redirect-uri"
+                                value={driveRedirectUri}
+                                onChange={(event) => setDriveRedirectUri(event.target.value)}
+                                placeholder="https://votre-app.com/api/google-drive/callback"
+                                autoComplete="off"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label htmlFor="drive-root-folder-id">Dossier racine</Label>
+                              <Input
+                                id="drive-root-folder-id"
+                                value={driveRootFolderId}
+                                onChange={(event) => {
+                                  setDriveRootFolderTouched(true);
+                                  setDriveRootFolderId(event.target.value);
+                                }}
+                                placeholder="ID du dossier Drive"
+                                autoComplete="off"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label htmlFor="drive-shared-drive-id">Drive partagé (optionnel)</Label>
+                              <Input
+                                id="drive-shared-drive-id"
+                                value={driveSharedDriveId}
+                                onChange={(event) => {
+                                  setDriveSharedDriveTouched(true);
+                                  setDriveSharedDriveId(event.target.value);
+                                }}
+                                placeholder="ID du drive partagé"
+                                autoComplete="off"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                            <p className="text-xs text-muted-foreground">
+                              Ces identifiants restent privés et permettent de générer l'URL d'authentification Drive.
+                            </p>
+                            <Button
+                              type="submit"
+                              variant="secondary"
+                              className="gap-2 md:w-auto"
+                              disabled={
+                                driveSettingsSaving ||
+                                !driveClientId.trim() ||
+                                !driveClientSecret.trim() ||
+                                !currentOrgId
+                              }
+                            >
+                              {driveSettingsSaving ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <KeyRound className="h-4 w-4" />
+                              )}
+                              Enregistrer
+                            </Button>
+                          </div>
+                        </form>
+                      ) : null}
+                      <div className="flex flex-col gap-2 md:items-end">
+                        <div className="flex flex-wrap gap-2">
                           <Button
-                            variant="ghost"
-                            onClick={handleDriveDisconnectClick}
-                            disabled={driveDisconnectLoading}
+                            variant={driveConnection?.connected ? "outline" : "secondary"}
+                            onClick={() =>
+                              driveConnection?.connected
+                                ? handleDriveRefreshClick()
+                                : handleDriveConnectClick()
+                            }
+                            disabled={
+                              driveConnectLoading ||
+                              driveRefreshLoading ||
+                              driveSettingsSaving ||
+                              (!currentOrgId && !driveConnection?.connected)
+                            }
                             className="gap-2"
                           >
-                            {driveDisconnectLoading ? (
+                            {driveConnectLoading || driveRefreshLoading ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : driveConnection?.connected ? (
+                              <RefreshCw className="h-4 w-4" />
                             ) : (
-                              <Trash2 className="h-4 w-4" />
+                              <Plug className="h-4 w-4" />
                             )}
-                            Déconnecter
+                            {driveConnection?.connected ? "Actualiser l'accès" : "Connecter"}
                           </Button>
+                          {driveConnection?.connected ? (
+                            <Button
+                              variant="ghost"
+                              onClick={handleDriveDisconnectClick}
+                              disabled={driveDisconnectLoading}
+                              className="gap-2"
+                            >
+                              {driveDisconnectLoading ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                              Déconnecter
+                            </Button>
+                          ) : null}
+                        </div>
+                        {driveConnection?.rootFolderId ? (
+                          <p className="text-xs text-muted-foreground">
+                            Dossier racine : {driveConnection.rootFolderId}
+                          </p>
+                        ) : null}
+                        {driveConnection?.sharedDriveId ? (
+                          <p className="text-xs text-muted-foreground">
+                            Drive partagé : {driveConnection.sharedDriveId}
+                          </p>
+                        ) : null}
+                        {driveErrorMessage ? (
+                          <p className="flex items-center gap-2 text-xs text-destructive">
+                            <AlertCircle className="h-3.5 w-3.5" />
+                            {driveErrorMessage}
+                          </p>
                         ) : null}
                       </div>
-                      {driveConnection?.rootFolderId ? (
-                        <p className="text-xs text-muted-foreground">
-                          Dossier racine : {driveConnection.rootFolderId}
-                        </p>
-                      ) : null}
-                      {driveConnection?.sharedDriveId ? (
-                        <p className="text-xs text-muted-foreground">
-                          Drive partagé : {driveConnection.sharedDriveId}
-                        </p>
-                      ) : null}
-                      {driveErrorMessage ? (
-                        <p className="flex items-center gap-2 text-xs text-destructive">
-                          <AlertCircle className="h-3.5 w-3.5" />
-                          {driveErrorMessage}
-                        </p>
-                      ) : null}
                     </div>
                   ) : (
                     <Button

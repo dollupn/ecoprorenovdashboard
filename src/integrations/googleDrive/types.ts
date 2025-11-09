@@ -46,3 +46,16 @@ export interface ExchangeAuthCodePayload {
   code: string;
   redirectUri?: string;
 }
+
+export interface DriveSettingsPayload {
+  orgId: string;
+  clientId: string;
+  clientSecret: string;
+  redirectUri?: string;
+  rootFolderId?: string;
+  sharedDriveId?: string;
+}
+
+export interface UpdateDriveSettingsRequest extends DriveSettingsPayload {
+  accessToken?: string | null;
+}
