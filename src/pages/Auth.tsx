@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -187,6 +187,13 @@ const Auth = () => {
             </Tabs>
           </CardContent>
         </Card>
+        <p className="mt-4 text-center text-sm text-muted-foreground">
+          En continuant, vous acceptez notre{" "}
+          <Link to="/legal/confidentialite" className="font-medium text-primary hover:underline">
+            politique de confidentialité
+          </Link>
+          .
+        </p>
       </div>
     </div>
   );

@@ -31,6 +31,7 @@ import QuoteSettings from "./pages/QuoteSettings";
 import AppointmentSettings from "./pages/AppointmentSettings";
 import KpiSettings from "./pages/KpiSettings";
 import GoogleDriveCallback from "./pages/GoogleDriveCallback";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 
 const queryClient = new QueryClient();
 
@@ -95,6 +96,7 @@ const App = () => (
                   </ProtectedRoute>
                 }
               />
+              <Route path="/legal/confidentialite" element={<PrivacyPolicy />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
