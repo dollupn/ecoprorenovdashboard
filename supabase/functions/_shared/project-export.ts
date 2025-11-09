@@ -197,12 +197,12 @@ export const fetchProjectExportBundle = async (
   const [invoicesResult, docsResult] = await Promise.all([
     client
       .from('invoices')
-      .select<InvoiceRow>('id, project_id, org_id, invoice_ref, status, amount, due_date, paid_date, created_at, updated_at, client_name, client_first_name, client_last_name, notes')
+      .select('id, project_id, org_id, invoice_ref, status, amount, due_date, paid_date, created_at, updated_at, client_name, client_first_name, client_last_name, notes')
       .eq('project_id', projectId)
       .order('created_at', { ascending: false }),
     client
       .from('project_media')
-      .select<ProjectMediaRow>('id, project_id, org_id, category, file_name, file_url, drive_url, preview_url, mime_type, created_at, updated_at')
+      .select('id, project_id, org_id, category, file_name, file_url, drive_url, preview_url, mime_type, created_at, updated_at')
       .eq('project_id', projectId)
       .order('created_at', { ascending: false }),
   ]);
@@ -215,8 +215,8 @@ export const fetchProjectExportBundle = async (
     throw docsResult.error;
   }
 
-  const invoices = (invoicesResult.data ?? []).map(sanitizeInvoice);
-  const docs = (docsResult.data ?? [])
+  const invoices = ((invoicesResult.data ?? []) as InvoiceRow[]).map(sanitizeInvoice);
+  const docs = ((docsResult.data ?? []) as ProjectMediaRow[])
     .filter((doc) => filterDocumentCategory(doc.category))
     .map(sanitizeDocument);
 

@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
         .from('projects')
         .select('id')
         .eq('project_ref', projectRef)
-        .maybeSingle({ abortSignal: createTimeoutSignal() });
+        .maybeSingle();
 
       if (resolveError) {
         console.error('Failed to resolve project ref', resolveError);
@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
         kpis:project_kpis(*)`
       )
       .eq('id', projectId)
-      .maybeSingle({ abortSignal: createTimeoutSignal() });
+      .maybeSingle();
 
     if (error) {
       console.error('Failed to fetch project', error);
