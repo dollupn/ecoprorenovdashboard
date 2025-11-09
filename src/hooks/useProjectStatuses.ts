@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { PostgrestError } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { useOrg } from "@/features/organizations/OrgContext";
@@ -15,11 +16,10 @@ import {
 const PROJECT_STATUSES_QUERY_KEY = "project-statuses" as const;
 const SETTINGS_TABLE = "settings" as unknown as keyof Database["public"]["Tables"];
 
-type SettingsRow = {
-  org_id: string;
-  statuts_projets: ProjectStatusSetting[] | null;
-  updated_at?: string | null;
-};
+type SettingsRow = Pick<
+  Database["public"]["Tables"]["settings"]["Row"],
+  "statuts_projets" | "backup_webhook_url" | "backup_daily_enabled" | "backup_time"
+>;
 
 const fetchProjectStatuses = async (
   orgId: string | null,
@@ -30,9 +30,9 @@ const fetchProjectStatuses = async (
 
   const { data, error } = (await supabase
     .from("settings" as any)
-    .select("statuts_projets")
+    .select("statuts_projets, backup_webhook_url, backup_daily_enabled, backup_time")
     .eq("org_id", orgId)
-    .maybeSingle()) as { data: { statuts_projets: ProjectStatusSetting[] | null } | null; error: any };
+    .maybeSingle()) as { data: SettingsRow | null; error: PostgrestError | null };
 
   if (error && error.code !== "PGRST116") {
     throw error;

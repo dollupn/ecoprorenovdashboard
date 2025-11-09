@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { PostgrestError } from "@supabase/supabase-js";
+import type { Database } from "@/integrations/supabase/types";
 import {
   DEFAULT_PROJECT_STATUSES,
   getProjectClientName,
@@ -60,6 +62,11 @@ const QUOTE_ACTIVITY_TITLES: Record<QuoteActivityStatus, string> = {
   ACCEPTED: "Devis accepté",
   REJECTED: "Devis refusé",
 };
+
+type SettingsRow = Pick<
+  Database["public"]["Tables"]["settings"]["Row"],
+  "statuts_projets" | "backup_webhook_url" | "backup_daily_enabled" | "backup_time"
+>;
 
 const SITE_STATUS_LABELS = {
   PLANIFIE: "Planifié",
@@ -197,11 +204,11 @@ export const useDashboardMetrics = (
         error: projectStatusError,
       } = (await supabase
         .from("settings" as any)
-        .select("statuts_projets")
+        .select("statuts_projets, backup_webhook_url, backup_daily_enabled, backup_time")
         .eq("org_id", orgId)
         .maybeSingle()) as {
-        data: { statuts_projets: ProjectStatusSetting[] | null } | null;
-        error: { code?: string } | null;
+        data: SettingsRow | null;
+        error: PostgrestError | null;
       };
 
       if (projectStatusError && projectStatusError.code !== "PGRST116") {
