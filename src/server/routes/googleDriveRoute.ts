@@ -82,17 +82,23 @@ router.put("/settings", ensureAuthenticated, async (req, res) => {
   }
 });
 
-router.post("/connection/refresh", async (req, res) => {
-  const { orgId } = req.body ?? {};
-
-  if (typeof orgId !== "string" || !orgId.trim()) {
-    return res.status(400).json({ error: "orgId requis" });
-  }
-
+router.post("/connection/refresh", ensureAuthenticated, async (req, res) => {
   try {
+    const headerOrgId = getOrganizationId(req);
+    const bodyOrgId = typeof req.body?.orgId === "string" ? req.body.orgId : undefined;
+
+    if (bodyOrgId && bodyOrgId !== headerOrgId) {
+      throw new ForbiddenError("Vous n'avez pas accès à cette organisation");
+    }
+
+    const orgId = bodyOrgId ?? headerOrgId;
     const summary = await refreshDriveCredentials(orgId);
     return res.json(summary);
   } catch (error) {
+    if (error instanceof ApiError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+
     console.error("[Drive] Refresh failed", error);
     const message =
       error instanceof Error
@@ -102,17 +108,23 @@ router.post("/connection/refresh", async (req, res) => {
   }
 });
 
-router.delete("/connection", async (req, res) => {
-  const { orgId } = req.body ?? {};
-
-  if (typeof orgId !== "string" || !orgId.trim()) {
-    return res.status(400).json({ error: "orgId requis" });
-  }
-
+router.delete("/connection", ensureAuthenticated, async (req, res) => {
   try {
+    const headerOrgId = getOrganizationId(req);
+    const bodyOrgId = typeof req.body?.orgId === "string" ? req.body.orgId : undefined;
+
+    if (bodyOrgId && bodyOrgId !== headerOrgId) {
+      throw new ForbiddenError("Vous n'avez pas accès à cette organisation");
+    }
+
+    const orgId = bodyOrgId ?? headerOrgId;
     const summary = await disconnectDrive(orgId);
     return res.json(summary);
   } catch (error) {
+    if (error instanceof ApiError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+
     console.error("[Drive] Disconnect failed", error);
     return res.status(500).json({
       error:
@@ -166,24 +178,28 @@ router.post("/auth/exchange", async (req, res) => {
   }
 });
 
-router.post("/upload", upload.single("file"), async (req, res) => {
-  const { orgId, parentFolderId, entityType, entityId, description } = req.body ?? {};
-  const file = req.file;
-
-  if (typeof orgId !== "string" || !orgId.trim()) {
-    return res.status(400).json({ error: "orgId requis" });
-  }
-
-  if (!file) {
-    return res.status(400).json({ error: "Aucun fichier fourni" });
-  }
-
+router.post("/upload", ensureAuthenticated, upload.single("file"), async (req, res) => {
   try {
+    const headerOrgId = getOrganizationId(req);
+    const { orgId, parentFolderId, entityType, entityId, description } = req.body ?? {};
+    const bodyOrgId = typeof orgId === "string" ? orgId : undefined;
+
+    if (bodyOrgId && bodyOrgId !== headerOrgId) {
+      throw new ForbiddenError("Vous n'avez pas accès à cette organisation");
+    }
+
+    const resolvedOrgId = bodyOrgId ?? headerOrgId;
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({ error: "Aucun fichier fourni" });
+    }
+
     const userHeader = req.headers["x-user-id"] || req.headers["x-user"];
     const userId = typeof userHeader === "string" ? userHeader : undefined;
 
     const result = await uploadFileToDrive({
-      orgId,
+      orgId: resolvedOrgId,
       file,
       parentFolderId: typeof parentFolderId === "string" ? parentFolderId : undefined,
       entityType: typeof entityType === "string" ? entityType : undefined,
@@ -194,6 +210,10 @@ router.post("/upload", upload.single("file"), async (req, res) => {
 
     return res.json(result);
   } catch (error) {
+    if (error instanceof ApiError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+
     console.error("[Drive] Upload failed", error);
     const status = error instanceof Error && /token|auth/i.test(error.message) ? 401 : 500;
     const message =

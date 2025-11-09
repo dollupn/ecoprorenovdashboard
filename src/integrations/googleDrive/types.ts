@@ -26,6 +26,7 @@ export interface DriveUploadOptions {
   entityType?: "lead" | "site" | "quote" | "invoice" | "product";
   entityId?: string;
   description?: string;
+  accessToken?: string | null;
 }
 
 export interface DriveUploadResult extends DriveFileMetadata {
@@ -57,5 +58,10 @@ export interface DriveSettingsPayload {
 }
 
 export interface UpdateDriveSettingsRequest extends DriveSettingsPayload {
+  accessToken?: string | null;
+}
+
+export interface DriveConnectionMutationOptions {
+  orgId: string;
   accessToken?: string | null;
 }

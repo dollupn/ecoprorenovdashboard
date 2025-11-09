@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
@@ -74,7 +75,8 @@ export const DriveMultiFileUploader = ({
   const [isBulkUploading, setIsBulkUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const { toast } = useToast();
-  const uploadMutation = useDriveUpload();
+  const { session } = useAuth();
+  const uploadMutation = useDriveUpload(session?.access_token);
   const { data: connection, isLoading: connectionLoading } = useDriveConnectionStatus(orgId ?? null);
 
   useEffect(() => {
