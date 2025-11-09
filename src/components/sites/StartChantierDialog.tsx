@@ -29,6 +29,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -61,6 +62,10 @@ const startChantierSchema = z.object({
   endDate: z.string().optional(),
   subcontractorId: z.string().uuid().optional().nullable(),
   notes: z.string().max(5000, "La note interne est trop longue").optional(),
+  siteRef: z
+    .string({ required_error: "La référence du chantier est requise" })
+    .trim()
+    .min(3, "La référence du chantier doit contenir au moins 3 caractères"),
 });
 
 type StartChantierFormValues = z.infer<typeof startChantierSchema>;
@@ -133,29 +138,37 @@ export const StartChantierDialog = ({
   const driveConnection = useDriveConnectionStatus(currentOrgId ?? null);
   const driveUpload = useDriveUpload(session?.access_token);
 
+  const computeDefaultSiteRef = useCallback(() => {
+    const trimmedProjectRef = projectRef?.trim();
+    if (trimmedProjectRef && trimmedProjectRef.length > 0) {
+      return `${trimmedProjectRef}-CHANTIER`;
+    }
+    return "CHANTIER";
+  }, [projectRef]);
+
+  const getDefaultFormValues = useCallback((): StartChantierFormValues => ({
+    startDate: format(new Date(), "yyyy-MM-dd"),
+    endDate: "",
+    subcontractorId: null,
+    notes: "",
+    siteRef: computeDefaultSiteRef(),
+  }), [computeDefaultSiteRef]);
+
   const form = useForm<StartChantierFormValues>({
     resolver: zodResolver(startChantierSchema),
-    defaultValues: {
-      startDate: format(new Date(), "yyyy-MM-dd"),
-      endDate: "",
-      subcontractorId: null,
-      notes: "",
-    },
+    defaultValues: getDefaultFormValues(),
   });
 
+  const resetForm = useCallback(() => {
+    form.reset(getDefaultFormValues());
+    setSelectedPhotos([]);
+    setPhotoPreviews([]);
+    setIsSubmitting(false);
+  }, [form, getDefaultFormValues]);
+
   useEffect(() => {
-    if (!open) {
-      form.reset({
-        startDate: format(new Date(), "yyyy-MM-dd"),
-        endDate: "",
-        subcontractorId: null,
-        notes: "",
-      });
-      setSelectedPhotos([]);
-      setPhotoPreviews([]);
-      setIsSubmitting(false);
-    }
-  }, [open, form]);
+    resetForm();
+  }, [open, resetForm]);
 
   useEffect(() => {
     const nextPreviews = selectedPhotos.map((file) => URL.createObjectURL(file));
@@ -249,6 +262,7 @@ export const StartChantierDialog = ({
       }
 
       const result = await startChantier(projectId, {
+        siteRef: values.siteRef,
         dateDebut: values.startDate,
         dateFinPrevue: values.endDate?.trim() || null,
         subcontractorId: values.subcontractorId,
@@ -373,6 +387,7 @@ export const StartChantierDialog = ({
 
 
   const remainingPhotos = MAX_PHOTO_COUNT - selectedPhotos.length;
+  const defaultSiteRef = computeDefaultSiteRef();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -381,7 +396,8 @@ export const StartChantierDialog = ({
           <DialogTitle>Démarrer le chantier</DialogTitle>
           <DialogDescription>
             Initialisez un chantier pour {projectRef ? `le projet ${projectRef}` : "ce projet"}.
-            {projectName ? ` (${projectName})` : ""}
+            {projectName ? ` (${projectName})` : ""} Par défaut, la référence proposée est {defaultSiteRef}.
+            Vous pouvez la modifier avant le lancement.
           </DialogDescription>
         </DialogHeader>
 
@@ -468,6 +484,20 @@ export const StartChantierDialog = ({
                     </FormItem>
                   );
                 }}
+              />
+
+              <FormField
+                control={form.control}
+                name="siteRef"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Référence du chantier</FormLabel>
+                    <FormControl>
+                      <Input placeholder={defaultSiteRef} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
             </div>
 
