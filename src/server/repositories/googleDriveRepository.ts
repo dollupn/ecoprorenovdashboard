@@ -1,3 +1,4 @@
+import "../env.js";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 export type DriveConnectionStatus = "connected" | "disconnected" | "error" | "pending";

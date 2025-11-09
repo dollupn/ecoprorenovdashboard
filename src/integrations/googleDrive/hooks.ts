@@ -6,6 +6,7 @@ import {
   refreshDriveConnection,
   uploadFileToDrive,
   disconnectDrive,
+  updateDriveSettings,
 } from "./client";
 import type {
   CreateAuthUrlParams,
@@ -13,6 +14,7 @@ import type {
   DriveUploadOptions,
   DriveUploadResult,
   ExchangeAuthCodePayload,
+  UpdateDriveSettingsRequest,
 } from "./types";
 
 export const useDriveConnectionStatus = (orgId: string | null | undefined) =>
@@ -77,6 +79,16 @@ export const useDriveDisconnect = () => {
     mutationFn: async (orgId) => await disconnectDrive(orgId),
     onSuccess: (data) => {
       queryClient.setQueryData(["google-drive", "connection", data.orgId], data);
+    },
+  });
+};
+
+export const useDriveSettingsUpdate = () => {
+  const queryClient = useQueryClient();
+  return useMutation<DriveConnectionStatus, Error, UpdateDriveSettingsRequest>({
+    mutationFn: async (payload) => await updateDriveSettings(payload),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["google-drive", "connection", data.orgId] });
     },
   });
 };

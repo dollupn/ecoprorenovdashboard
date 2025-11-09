@@ -4,6 +4,7 @@ import type {
   DriveUploadOptions,
   DriveUploadResult,
   ExchangeAuthCodePayload,
+  UpdateDriveSettingsRequest,
 } from "./types";
 
 const API_BASE_PATH = "/api/google-drive";
@@ -159,6 +160,26 @@ export const disconnectDrive = async (orgId: string): Promise<DriveConnectionSta
   });
 };
 
+export const updateDriveSettings = async ({ accessToken, ...payload }: UpdateDriveSettingsRequest) => {
+  if (!payload.orgId) {
+    throw new Error("Organisation requise pour configurer Google Drive");
+  }
+
+  const headers: Record<string, string> = {
+    "x-organization-id": payload.orgId,
+  };
+
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`;
+  }
+
+  return await fetchJson<DriveConnectionStatus>(`${API_BASE_PATH}/settings`, {
+    method: "PUT",
+    headers,
+    body: JSON.stringify(payload),
+  });
+};
+
 export const googleDriveClient = {
   getDriveConnectionStatus,
   createDriveAuthUrl,
@@ -166,6 +187,7 @@ export const googleDriveClient = {
   refreshDriveConnection,
   uploadFileToDrive,
   disconnectDrive,
+  updateDriveSettings,
 };
 
 export type GoogleDriveClient = typeof googleDriveClient;

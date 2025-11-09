@@ -2,6 +2,7 @@ import { Readable } from "node:stream";
 import type { OAuth2Client } from "google-auth-library";
 import { google } from "googleapis";
 import type { Express } from "express";
+import { ValidationError } from "../errors.js";
 import {
   deleteDriveCredentials,
   fetchDriveCredentials,
@@ -10,7 +11,6 @@ import {
   upsertDriveCredentials,
   type DriveConnectionStatus,
   type DriveCredentialsRow,
-  type DriveSettingsRow,
 } from "../repositories/googleDriveRepository.js";
 
 export interface GoogleDriveUploadOptions {
@@ -34,10 +34,79 @@ export interface GoogleDriveConnectionSummary {
   errorMessage: string | null;
 }
 
+export interface DriveSettingsPayload {
+  clientId?: unknown;
+  clientSecret?: unknown;
+  redirectUri?: unknown;
+  rootFolderId?: unknown;
+  sharedDriveId?: unknown;
+}
+
+export interface DriveSettingsConfig {
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string | null;
+  rootFolderId: string | null;
+  sharedDriveId: string | null;
+}
+
 const DRIVE_SCOPES = [
   "https://www.googleapis.com/auth/drive.file",
   "https://www.googleapis.com/auth/drive.metadata.readonly",
 ];
+
+const toOptionalString = (value: unknown): string | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const normaliseRedirectUri = (value: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const url = new URL(value);
+    if (!/^https?:$/i.test(url.protocol)) {
+      throw new Error("Unsupported protocol");
+    }
+    return url.toString();
+  } catch (error) {
+    throw new ValidationError(
+      "L'URL de redirection Google Drive est invalide. Utilisez une URL complète commençant par http ou https.",
+      error,
+    );
+  }
+};
+
+export const normalizeDriveSettingsInput = (payload: DriveSettingsPayload): DriveSettingsConfig => {
+  const clientId = toOptionalString(payload.clientId);
+  const clientSecret = toOptionalString(payload.clientSecret);
+
+  if (!clientId) {
+    throw new ValidationError("Le client ID Google Drive est requis");
+  }
+
+  if (!clientSecret) {
+    throw new ValidationError("Le client secret Google Drive est requis");
+  }
+
+  const redirectUri = normaliseRedirectUri(toOptionalString(payload.redirectUri));
+  const rootFolderId = toOptionalString(payload.rootFolderId);
+  const sharedDriveId = toOptionalString(payload.sharedDriveId);
+
+  return {
+    clientId,
+    clientSecret,
+    redirectUri,
+    rootFolderId,
+    sharedDriveId,
+  };
+};
 
 const toIsoDate = (value?: number | string | null) => {
   if (!value) {
@@ -71,9 +140,9 @@ const shouldRefreshToken = (credentials: DriveCredentialsRow | null) => {
   return !credentials.access_token || Number.isNaN(expiry) || expiry - now < 60_000;
 };
 
-const createOAuthClient = (settings: DriveSettingsRow, redirectUri?: string) => {
-  const clientId = settings.client_id;
-  const clientSecret = settings.client_secret;
+const createOAuthClient = (settings: DriveSettingsConfig, redirectUri?: string) => {
+  const clientId = settings.clientId;
+  const clientSecret = settings.clientSecret;
 
   if (!clientId || !clientSecret) {
     throw new Error(
@@ -81,20 +150,28 @@ const createOAuthClient = (settings: DriveSettingsRow, redirectUri?: string) => 
     );
   }
 
-  return new google.auth.OAuth2(clientId, clientSecret, redirectUri || settings.redirect_uri || undefined);
+  return new google.auth.OAuth2(clientId, clientSecret, redirectUri || settings.redirectUri || undefined);
 };
 
 const loadClientWithCredentials = async (
   orgId: string,
   redirectUri?: string,
-): Promise<{ oauthClient: OAuth2Client; settings: DriveSettingsRow; credentials: DriveCredentialsRow | null }> => {
-  const settings = await fetchDriveSettings(orgId);
+): Promise<{ oauthClient: OAuth2Client; settings: DriveSettingsConfig; credentials: DriveCredentialsRow | null }> => {
+  const settingsRow = await fetchDriveSettings(orgId);
 
-  if (!settings) {
+  if (!settingsRow) {
     throw new Error(
       "Configuration Google Drive introuvable. Ajoutez les identifiants OAuth et le dossier de destination dans les paramètres organisationnels.",
     );
   }
+
+  const settings = normalizeDriveSettingsInput({
+    clientId: settingsRow.client_id,
+    clientSecret: settingsRow.client_secret,
+    redirectUri: settingsRow.redirect_uri,
+    rootFolderId: settingsRow.root_folder_id,
+    sharedDriveId: settingsRow.shared_drive_id,
+  });
 
   const oauthClient = createOAuthClient(settings, redirectUri);
   const credentials = await fetchDriveCredentials(orgId);
@@ -130,8 +207,8 @@ export const getDriveConnectionSummary = async (
     status,
     hasRefreshToken: Boolean(credentials?.refresh_token),
     expiresAt: credentials?.expires_at ?? null,
-    rootFolderId: settings?.root_folder_id ?? null,
-    sharedDriveId: settings?.shared_drive_id ?? null,
+    rootFolderId: settings ? toOptionalString(settings.root_folder_id) : null,
+    sharedDriveId: settings ? toOptionalString(settings.shared_drive_id) : null,
     errorMessage: credentials?.error_message ?? null,
   };
 };
@@ -245,7 +322,7 @@ export const uploadFileToDrive = async (
   }
 
   const drive = google.drive({ version: "v3", auth: oauthClient });
-  const parentId = options.parentFolderId || settings.root_folder_id || undefined;
+  const parentId = options.parentFolderId || settings.rootFolderId || undefined;
 
   const requestBody: Record<string, unknown> = {
     name: options.file.originalname,
@@ -268,7 +345,7 @@ export const uploadFileToDrive = async (
     requestBody,
     media,
     fields: "id, name, mimeType, webViewLink, webContentLink, iconLink, parents",
-    supportsAllDrives: Boolean(settings.shared_drive_id),
+    supportsAllDrives: Boolean(settings.sharedDriveId),
   });
 
   if (!data.id) {
