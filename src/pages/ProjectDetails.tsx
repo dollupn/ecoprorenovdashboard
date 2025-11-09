@@ -2504,6 +2504,28 @@ const ProjectDetails = () => {
       return;
     }
 
+    if (!session?.access_token) {
+      const message = "Session invalide";
+      setExportBackupError(message);
+      toast({
+        title: "Export impossible",
+        description: message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!currentOrgId) {
+      const message = "Aucune organisation active";
+      setExportBackupError(message);
+      toast({
+        title: "Export impossible",
+        description: message,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setExportBackupError(null);
     setIsExportingBackup(true);
 
@@ -2511,7 +2533,11 @@ const ProjectDetails = () => {
     let anchor: HTMLAnchorElement | null = null;
 
     try {
-      const payload = await exportProjectBackup({ projectId: project.id });
+      const payload = await exportProjectBackup({
+        projectId: project.id,
+        orgId: currentOrgId,
+        accessToken: session.access_token,
+      });
       const serialized = JSON.stringify(payload, null, 2);
       const blob = new Blob([serialized], { type: "application/json" });
       downloadUrl = URL.createObjectURL(blob);
@@ -2554,7 +2580,13 @@ const ProjectDetails = () => {
 
       setIsExportingBackup(false);
     }
-  }, [project?.id, projectFileSlug, toast]);
+  }, [
+    currentOrgId,
+    project?.id,
+    projectFileSlug,
+    session?.access_token,
+    toast,
+  ]);
 
   const handleSyncBackup = useCallback(async () => {
     if (!project?.id) {
@@ -2573,11 +2605,37 @@ const ProjectDetails = () => {
       return;
     }
 
+    if (!session?.access_token) {
+      const message = "Session invalide";
+      setSyncBackupError(message);
+      toast({
+        title: "Échec de la synchronisation",
+        description: message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!currentOrgId) {
+      const message = "Aucune organisation active";
+      setSyncBackupError(message);
+      toast({
+        title: "Échec de la synchronisation",
+        description: message,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setSyncBackupError(null);
     setIsSyncingBackup(true);
 
     try {
-      await syncProjectBackup({ projectId: project.id });
+      await syncProjectBackup({
+        projectId: project.id,
+        orgId: currentOrgId,
+        accessToken: session.access_token,
+      });
       toast({
         title: "Synchronisation lancée",
         description: "Le webhook Google Sheet a été déclenché avec succès.",
@@ -2596,7 +2654,13 @@ const ProjectDetails = () => {
     } finally {
       setIsSyncingBackup(false);
     }
-  }, [isSyncActionEnabled, project?.id, toast]);
+  }, [
+    currentOrgId,
+    isSyncActionEnabled,
+    project?.id,
+    session?.access_token,
+    toast,
+  ]);
 
   useEffect(() => {
     if (isSyncActionEnabled) {

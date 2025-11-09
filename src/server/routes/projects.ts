@@ -49,36 +49,44 @@ router.patch("/:projectId/status", ensureAuthenticated, async (req, res) => {
   }
 });
 
-router.get("/:projectId/export", ensureAuthenticated, async (req, res) => {
-  try {
-    const orgId = getOrganizationId(req);
-    const { projectId } = req.params;
+router.post(
+  "/:projectId/backup/export",
+  ensureAuthenticated,
+  async (req, res) => {
+    try {
+      const orgId = getOrganizationId(req);
+      const { projectId } = req.params;
 
-    if (!projectId) {
-      return res.status(400).json({ message: "Identifiant projet manquant" });
+      if (!projectId) {
+        return res.status(400).json({ message: "Identifiant projet manquant" });
+      }
+
+      const payload = await exportProjectBundle(orgId, projectId);
+      return res.json(payload);
+    } catch (error) {
+      return handleRouteError(res, error, "Impossible d'exporter le projet");
     }
+  },
+);
 
-    const payload = await exportProjectBundle(orgId, projectId);
-    return res.json(payload);
-  } catch (error) {
-    return handleRouteError(res, error, "Impossible d'exporter le projet");
-  }
-});
+router.post(
+  "/:projectId/backup/sync",
+  ensureAuthenticated,
+  async (req, res) => {
+    try {
+      const orgId = getOrganizationId(req);
+      const { projectId } = req.params;
 
-router.post("/:projectId/sync", ensureAuthenticated, async (req, res) => {
-  try {
-    const orgId = getOrganizationId(req);
-    const { projectId } = req.params;
+      if (!projectId) {
+        return res.status(400).json({ message: "Identifiant projet manquant" });
+      }
 
-    if (!projectId) {
-      return res.status(400).json({ message: "Identifiant projet manquant" });
+      const result = await syncProjectToWebhook(orgId, projectId);
+      return res.json(result);
+    } catch (error) {
+      return handleRouteError(res, error, "Impossible de synchroniser le projet");
     }
-
-    const result = await syncProjectToWebhook(orgId, projectId);
-    return res.json(result);
-  } catch (error) {
-    return handleRouteError(res, error, "Impossible de synchroniser le projet");
-  }
-});
+  },
+);
 
 export default router;
