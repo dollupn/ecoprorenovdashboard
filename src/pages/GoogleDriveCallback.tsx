@@ -6,7 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { useOrg } from "@/features/organizations/OrgContext";
-import { useDriveAuthExchange, buildDriveAuthStateKey } from "@/integrations/googleDrive";
+import {
+  clearDriveAuthState,
+  decodeDriveAuthStatePayload,
+  retrieveDriveAuthState,
+  useDriveAuthExchange,
+} from "@/integrations/googleDrive";
 
 const getRedirectUri = () =>
   typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}` : undefined;
@@ -49,6 +54,8 @@ const GoogleDriveCallback = () => {
   const stateParam = searchParams.get("state");
   const fallbackOrgId = searchParams.get("orgId");
 
+  const decodedState = useMemo(() => decodeDriveAuthStatePayload(stateParam), [stateParam]);
+
   const redirectUri = useMemo(() => getRedirectUri(), []);
 
   useEffect(() => {
@@ -80,26 +87,28 @@ const GoogleDriveCallback = () => {
       return;
     }
 
+    const storageTokens = Array.from(
+      new Set(
+        [decodedState?.nonce, stateParam].filter(
+          (value): value is string => typeof value === "string" && value.length > 0,
+        ),
+      ),
+    );
+
     let storedOrgId: string | null = null;
 
-    if (stateParam) {
-      const storageKey = buildDriveAuthStateKey(stateParam);
-      const stored = sessionStorage.getItem(storageKey);
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored) as { orgId?: string };
-          if (parsed?.orgId) {
-            storedOrgId = parsed.orgId;
-          }
-        } catch (error) {
-          console.warn("Unable to parse stored Google Drive auth state", error);
-        } finally {
-          sessionStorage.removeItem(storageKey);
-        }
+    for (const token of storageTokens) {
+      const stored = retrieveDriveAuthState(token);
+      if (!storedOrgId && stored?.orgId) {
+        storedOrgId = stored.orgId;
       }
     }
 
-    const resolvedOrgId = storedOrgId ?? fallbackOrgId ?? currentOrgId;
+    for (const token of storageTokens) {
+      clearDriveAuthState(token);
+    }
+
+    const resolvedOrgId = decodedState?.orgId ?? storedOrgId ?? fallbackOrgId ?? currentOrgId;
 
     if (!resolvedOrgId) {
       const message =
@@ -149,6 +158,7 @@ const GoogleDriveCallback = () => {
     authError,
     code,
     currentOrgId,
+    decodedState,
     exchangeAuth,
     fallbackOrgId,
     navigate,

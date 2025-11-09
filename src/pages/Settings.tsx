@@ -86,6 +86,7 @@ import {
   useDriveConnectionStatus,
   useDriveDisconnect,
   useDriveSettingsUpdate,
+  encodeDriveAuthStatePayload,
   createDriveStateToken,
   storeDriveAuthState,
 } from "@/integrations/googleDrive";
@@ -749,12 +750,17 @@ export default function Settings() {
 
     void (async () => {
       try {
-        const stateToken = createDriveStateToken();
-        storeDriveAuthState(stateToken, currentOrgId);
-        
+        const nonce = createDriveStateToken();
+        const statePayload = encodeDriveAuthStatePayload({
+          nonce,
+          orgId: currentOrgId,
+        });
+
+        storeDriveAuthState(nonce, currentOrgId);
+
         const { url } = await driveAuthUrlMutation.mutateAsync({
           orgId: currentOrgId,
-          state: stateToken,
+          state: statePayload,
         });
         
         if (typeof window !== "undefined") {
