@@ -233,6 +233,7 @@ const Projects = ({
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, session } = useAuth();
+  const accessToken = session?.access_token ?? null;
   const { currentOrgId } = useOrg();
   const { data: members = [], isLoading: membersLoading } = useMembers(currentOrgId);
   const {
@@ -469,19 +470,27 @@ const Projects = ({
         return;
       }
 
+      if (!accessToken) {
+        showToast("Session expirée", {
+          description: "Veuillez vous reconnecter pour mettre à jour le statut du projet.",
+        });
+        return;
+      }
+
       setStatusUpdating((previous) => ({ ...previous, [projectId]: true }));
 
       try {
         const response = await fetch(`/api/projects/${projectId}/status`, {
-          method: "PATCH",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-            "x-organization-id": currentOrgId,
-          },
-          body: JSON.stringify({ status }),
-        });
+  method: "PATCH",
+  headers: {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${accessToken ?? session?.access_token ?? ""}`,
+    "x-organization-id": currentOrgId ?? "",
+  },
+  body: JSON.stringify({ status }),
+});
+
+    
 
         if (!response.ok) {
           const payload = await response.json().catch(() => ({}));
@@ -503,11 +512,9 @@ const Projects = ({
           description: error instanceof Error ? error.message : undefined,
         });
       } finally {
-        setStatusUpdating((previous) => ({ ...previous, [projectId]: false }));
-      }
-    },
-    [currentOrgId, refetch, session?.access_token, statusMap],
-  );
+       
+setStatusUpdating((previous) => ({ ...previous, [projectId]: false }));
+  }, [accessToken, currentOrgId, refetch, session?.access_token, statusMap]);
 
   type ProjectValorisationSummary = {
     computation: PrimeCeeComputation | null;
