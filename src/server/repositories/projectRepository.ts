@@ -7,6 +7,11 @@ export type ProjectRow = Database["public"]["Tables"]["projects"]["Row"];
 export type QuoteRow = Database["public"]["Tables"]["quotes"]["Row"];
 export type SiteRow = Database["public"]["Tables"]["sites"]["Row"];
 export type InvoiceRow = Database["public"]["Tables"]["invoices"]["Row"];
+export type ProjectWithRelations = ProjectRow & {
+  sites: SiteRow[];
+  quotes: QuoteRow[];
+  invoices: InvoiceRow[];
+};
 
 type Nullable<T> = T | null;
 
@@ -182,4 +187,37 @@ export const createInvoice = async (
   }
 
   return response.data;
+};
+
+type ProjectsPageResponse = {
+  data: ProjectWithRelations[];
+  count: number;
+};
+
+export const fetchProjectsPage = async (
+  orgId: string,
+  from: number,
+  to: number,
+): Promise<ProjectsPageResponse> => {
+  const { data, error, count } = await client()
+    .from("projects")
+    .select(
+      `*,
+      sites(*),
+      quotes(*),
+      invoices(*)`,
+      { count: "exact" },
+    )
+    .eq("org_id", orgId)
+    .order("created_at", { ascending: true })
+    .range(from, to);
+
+  if (error) {
+    throw error;
+  }
+
+  return {
+    data: (data as ProjectWithRelations[]) ?? [],
+    count: typeof count === "number" ? count : ((data?.length ?? 0) + from),
+  };
 };

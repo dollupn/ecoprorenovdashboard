@@ -7,6 +7,7 @@ import googleDriveRoute from "./routes/googleDriveRoute.js";
 import projectsRoute from "./routes/projects.js";
 import chantierRoute from "./routes/chantier.js";
 import invoicesRoute from "./routes/invoices.js";
+import backupsRoute from "./routes/backups.js";
 
 export const createServer = () => {
   const app = express();
@@ -18,6 +19,7 @@ export const createServer = () => {
   app.use("/api/projects", projectsRoute);
   app.use("/api/chantiers", chantierRoute);
   app.use("/api/invoices", invoicesRoute);
+  app.use("/api/backups", backupsRoute);
 
   // --- Serve the built Vite client and enable SPA refresh
   const __filename = fileURLToPath(import.meta.url);
