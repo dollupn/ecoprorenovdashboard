@@ -1,6 +1,7 @@
 import type { PostgrestSingleResponse } from "@supabase/supabase-js";
 
 import type { Database } from "../../integrations/supabase/types.js";
+import { parseResponseBody } from "../utils/http.js";
 import { getServiceSupabaseClient } from "./supabaseClient.js";
 
 export type ProjectRow = Database["public"]["Tables"]["projects"]["Row"];
@@ -13,9 +14,18 @@ export type ProjectWithRelations = ProjectRow & {
   invoices: InvoiceRow[];
 };
 
+export type ProjectExportBundle = Record<string, unknown>;
+
 type Nullable<T> = T | null;
 
 const client = () => getServiceSupabaseClient();
+
+type EdgeFunctionResponse = {
+  ok: boolean;
+  status: number;
+  body: unknown;
+  rawBody: string;
+};
 
 export const fetchProjectById = async (
   projectId: string,
@@ -172,6 +182,61 @@ export const updateSite = async (
   return response.data;
 };
 
+export const invokeProjectExportFunction = async (projectId: string): Promise<EdgeFunctionResponse> => {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const exportKey = process.env.ECOPRO_EXPORT_KEY;
+
+  if (!supabaseUrl) {
+    throw new Error("SUPABASE_URL non configurée pour l'export des projets");
+  }
+
+  if (!exportKey) {
+    throw new Error("ECOPRO_EXPORT_KEY non configurée pour l'export des projets");
+  }
+
+  const endpoint = new URL("/functions/v1/export-project", supabaseUrl);
+  endpoint.searchParams.set("project_id", projectId);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60_000);
+
+  try {
+    const response = await fetch(endpoint.toString(), {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "x-ecopro-key": exportKey,
+      },
+      signal: controller.signal,
+    });
+
+    const { body, text } = await parseResponseBody(response);
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      body,
+      rawBody: text,
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.name === "AbortError"
+          ? "Le service d'export n'a pas répondu à temps"
+          : error.message
+        : "Erreur inconnue lors de l'appel à la fonction export-project";
+
+    return {
+      ok: false,
+      status: 500,
+      body: { message },
+      rawBody: message,
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
+
 export const createInvoice = async (
   values: Partial<InvoiceRow> &
     Pick<InvoiceRow, "project_id" | "invoice_ref" | "client_name" | "amount" | "status" | "user_id" | "org_id">,
@@ -216,8 +281,10 @@ export const fetchProjectsPage = async (
     throw error;
   }
 
+  const projects = (data ?? []) as ProjectWithRelations[];
+
   return {
-    data: (data as ProjectWithRelations[]) ?? [],
-    count: typeof count === "number" ? count : ((data?.length ?? 0) + from),
+    data: projects,
+    count: typeof count === "number" ? count : projects.length + from,
   };
 };
