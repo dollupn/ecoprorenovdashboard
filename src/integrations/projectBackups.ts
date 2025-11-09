@@ -1,5 +1,20 @@
 const API_BASE_PATH = "/api/projects";
 
+const buildHeaders = (orgId: string, accessToken: string) => {
+  if (!orgId) {
+    throw new Error("Identifiant d'organisation requis pour l'opération de sauvegarde");
+  }
+
+  if (!accessToken) {
+    throw new Error("Jeton d'authentification requis pour l'opération de sauvegarde");
+  }
+
+  return {
+    Authorization: `Bearer ${accessToken}`,
+    "x-organization-id": orgId,
+  } satisfies Record<string, string>;
+};
+
 const parseError = async (response: Response) => {
   try {
     const data = await response.json();
@@ -43,39 +58,45 @@ export type ProjectBackupExportPayload = Record<string, unknown>;
 
 export const exportProjectBackup = async ({
   projectId,
+  orgId,
+  accessToken,
 }: {
   projectId: string;
+  orgId: string;
+  accessToken: string;
 }): Promise<ProjectBackupExportPayload> => {
   if (!projectId) {
     throw new Error("Identifiant du projet requis pour l'export");
   }
 
   const url = `${API_BASE_PATH}/${encodeURIComponent(projectId)}/backup/export`;
+  const headers = buildHeaders(orgId, accessToken);
 
   return await fetchJson<ProjectBackupExportPayload>(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers,
   });
 };
 
 export const syncProjectBackup = async ({
   projectId,
+  orgId,
+  accessToken,
 }: {
   projectId: string;
+  orgId: string;
+  accessToken: string;
 }): Promise<{ success: boolean }> => {
   if (!projectId) {
     throw new Error("Identifiant du projet requis pour la synchronisation");
   }
 
   const url = `${API_BASE_PATH}/${encodeURIComponent(projectId)}/backup/sync`;
+  const headers = buildHeaders(orgId, accessToken);
 
   return await fetchJson<{ success: boolean }>(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers,
   });
 };
 
