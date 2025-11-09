@@ -232,7 +232,7 @@ const Projects = ({
 }: ProjectsProps = {}) => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const { currentOrgId } = useOrg();
   const { data: members = [], isLoading: membersLoading } = useMembers(currentOrgId);
   const {
@@ -455,6 +455,13 @@ const Projects = ({
 
   const handleProjectStatusChange = useCallback(
     async (projectId: string, status: ProjectStatusSetting["value"]) => {
+      if (!session?.access_token) {
+        showToast("Session requise", {
+          description: "Veuillez vous reconnecter pour mettre à jour le statut du projet.",
+        });
+        return;
+      }
+
       if (!currentOrgId) {
         showToast("Organisation introuvable", {
           description: "Impossible de mettre à jour le statut du projet.",
@@ -470,6 +477,8 @@ const Projects = ({
           credentials: "include",
           headers: {
             "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+            "x-organization-id": currentOrgId,
           },
           body: JSON.stringify({ status }),
         });
@@ -497,7 +506,7 @@ const Projects = ({
         setStatusUpdating((previous) => ({ ...previous, [projectId]: false }));
       }
     },
-    [currentOrgId, refetch, statusMap],
+    [currentOrgId, refetch, session?.access_token, statusMap],
   );
 
   type ProjectValorisationSummary = {

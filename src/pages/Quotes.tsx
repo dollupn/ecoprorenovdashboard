@@ -206,7 +206,7 @@ const fetchQuotes = async ({
 };
 
 const Quotes = () => {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const { currentOrgId } = useOrg();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
@@ -382,11 +382,31 @@ const Quotes = () => {
       return;
     }
 
+    if (!session?.access_token) {
+      toast({
+        title: "Session requise",
+        description: "Veuillez vous reconnecter pour télécharger le devis.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!currentOrgId) {
+      toast({
+        title: "Organisation introuvable",
+        description: "Sélectionnez une organisation avant de télécharger le devis.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       const response = await fetch(`/api/quotes/${value.id}/pdf`, {
         method: "GET",
         headers: {
           Accept: "application/pdf",
+          Authorization: `Bearer ${session.access_token}`,
+          "x-organization-id": currentOrgId,
         },
         credentials: "include",
       });
