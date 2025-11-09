@@ -481,16 +481,14 @@ const Projects = ({
 
       try {
         const response = await fetch(`/api/projects/${projectId}/status`, {
-  method: "PATCH",
-  headers: {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${accessToken ?? session?.access_token ?? ""}`,
-    "x-organization-id": currentOrgId ?? "",
-  },
-  body: JSON.stringify({ status }),
-});
-
-    
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken ?? session?.access_token ?? ""}`,
+            "x-organization-id": currentOrgId ?? "",
+          },
+          body: JSON.stringify({ status }),
+        });
 
         if (!response.ok) {
           const payload = await response.json().catch(() => ({}));
@@ -512,9 +510,11 @@ const Projects = ({
           description: error instanceof Error ? error.message : undefined,
         });
       } finally {
-       
-setStatusUpdating((previous) => ({ ...previous, [projectId]: false }));
-  }, [accessToken, currentOrgId, refetch, session?.access_token, statusMap]);
+        setStatusUpdating((previous) => ({ ...previous, [projectId]: false }));
+      }
+    },
+    [accessToken, currentOrgId, refetch, session?.access_token, statusMap],
+  );
 
   type ProjectValorisationSummary = {
     computation: PrimeCeeComputation | null;
