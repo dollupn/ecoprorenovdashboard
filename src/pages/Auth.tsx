@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -187,6 +187,12 @@ const Auth = () => {
             </Tabs>
           </CardContent>
         </Card>
+
+        <div className="mt-8 text-center text-sm text-muted-foreground">
+          <Link to="/legal/conditions" className="text-primary hover:underline">
+            Conditions d&apos;utilisation
+          </Link>
+        </div>
       </div>
     </div>
   );
