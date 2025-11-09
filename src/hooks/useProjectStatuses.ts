@@ -38,8 +38,8 @@ const fetchProjectStatuses = async (
     throw error;
   }
 
-  const rawStatuses = Array.isArray(data?.statuts_projets) && data.statuts_projets.length > 0
-    ? (data?.statuts_projets as ProjectStatusSetting[])
+      const rawStatuses = Array.isArray(data?.statuts_projets) && data.statuts_projets.length > 0
+    ? (data?.statuts_projets as unknown as ProjectStatusSetting[])
     : DEFAULT_PROJECT_STATUSES;
 
   return sanitizeProjectStatuses(rawStatuses);

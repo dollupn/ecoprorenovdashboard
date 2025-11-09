@@ -2426,17 +2426,11 @@ const ProjectDetails = () => {
         .eq("org_id", currentOrgId)
         .maybeSingle();
 
-      if (error) {
-        throw error;
+      if (error && error.code !== "PGRST116") {
+        console.error("Erreur lors du chargement du webhook de sauvegarde", error);
       }
 
-      return data as BackupSettingsRow | null;
-    },
-    onError: (settingsError) => {
-      console.error(
-        "Erreur lors du chargement du webhook de sauvegarde",
-        settingsError,
-      );
+      return data ? (data as unknown as BackupSettingsRow) : null;
     },
   });
 
@@ -2461,7 +2455,7 @@ const ProjectDetails = () => {
     [project?.project_products],
   );
 
-  const backupWebhookUrl = backupSettings?.backup_webhook_url?.trim() ?? "";
+  const backupWebhookUrl = (backupSettings as any)?.backup_webhook_url?.trim() ?? "";
   const isSyncActionEnabled = useMemo(
     () => backupWebhookUrl.length > 0,
     [backupWebhookUrl],

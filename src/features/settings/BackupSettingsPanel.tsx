@@ -54,18 +54,11 @@ export function BackupSettingsPanel() {
         .eq("org_id", currentOrgId!)
         .maybeSingle();
 
-      if (error) {
+      if (error && error.code !== "PGRST116") {
         throw error;
       }
 
-      return data as BackupSettings | null;
-    },
-    onError: () => {
-      toast({
-        title: "Chargement impossible",
-        description: "Les paramètres de sauvegarde n'ont pas pu être récupérés.",
-        variant: "destructive",
-      });
+      return data ? (data as unknown as BackupSettings) : null;
     },
   });
 
@@ -77,19 +70,23 @@ export function BackupSettingsPanel() {
       return;
     }
 
-    setWebhookUrl(settingsData.backup_webhook_url ?? "");
-    const isDailyEnabled = Boolean(settingsData.backup_daily_enabled);
+    const settings = settingsData as any;
+    setWebhookUrl(settings?.backup_webhook_url ?? "");
+    const isDailyEnabled = Boolean(settings?.backup_daily_enabled);
     setDailyEnabled(isDailyEnabled);
-    const formattedTime = formatTimeForInput(settingsData.backup_time);
+    const formattedTime = formatTimeForInput(settings?.backup_time);
     setBackupTime(formattedTime || "09:00");
   }, [settingsData]);
 
   const initialValues = useMemo(
-    () => ({
-      webhook: settingsData?.backup_webhook_url?.trim() ?? "",
-      daily: Boolean(settingsData?.backup_daily_enabled),
-      time: formatTimeForInput(settingsData?.backup_time) || "09:00",
-    }),
+    () => {
+      const settings = settingsData as any;
+      return {
+        webhook: settings?.backup_webhook_url?.trim() ?? "",
+        daily: Boolean(settings?.backup_daily_enabled),
+        time: formatTimeForInput(settings?.backup_time) || "09:00",
+      };
+    },
     [settingsData],
   );
 
@@ -186,7 +183,7 @@ export function BackupSettingsPanel() {
         throw error;
       }
 
-      return data as BackupSettings;
+      return data ? (data as unknown as BackupSettings) : null;
     },
     onSuccess: (data) => {
       queryClient.setQueryData(["backup-settings", currentOrgId], data);
@@ -213,7 +210,11 @@ export function BackupSettingsPanel() {
         throw new Error("Configurez un webhook valide avant de tester");
       }
 
-      await testBackupWebhook({ accessToken: session.access_token, orgId: currentOrgId });
+      await testBackupWebhook({ 
+        accessToken: session.access_token, 
+        orgId: currentOrgId,
+        webhookUrl: webhookUrl.trim()
+      });
     },
     onSuccess: () => {
       toast({ title: "Webhook testé", description: "Un appel de test a été envoyé au webhook de sauvegarde." });
@@ -239,7 +240,11 @@ export function BackupSettingsPanel() {
         throw new Error("Définissez un webhook valide avant l'export");
       }
 
-      await exportProjectsNow({ accessToken: session.access_token, orgId: currentOrgId });
+      await exportProjectsNow({ 
+        accessToken: session.access_token, 
+        orgId: currentOrgId,
+        webhookUrl: webhookUrl.trim()
+      });
     },
     onSuccess: () => {
       toast({

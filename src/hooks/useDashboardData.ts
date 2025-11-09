@@ -218,7 +218,7 @@ export const useDashboardMetrics = (
       const rawProjectStatuses =
         Array.isArray(projectStatusSettings?.statuts_projets) &&
         projectStatusSettings.statuts_projets.length > 0
-          ? (projectStatusSettings.statuts_projets as ProjectStatusSetting[])
+          ? (projectStatusSettings.statuts_projets as unknown as ProjectStatusSetting[])
           : DEFAULT_PROJECT_STATUSES;
 
       const sanitizedProjectStatuses = sanitizeProjectStatuses(rawProjectStatuses);
