@@ -5,9 +5,14 @@ import {
   exchangeDriveAuthCode,
   generateDriveAuthUrl,
   getDriveConnectionSummary,
+  normalizeDriveSettingsInput,
   refreshDriveCredentials,
   uploadFileToDrive,
 } from "../services/googleDriveService.js";
+import { upsertDriveSettings } from "../repositories/googleDriveRepository.js";
+import { ensureAuthenticated } from "./authentication.js";
+import { getOrganizationId } from "./utils.js";
+import { ApiError, ForbiddenError, ValidationError } from "../errors.js";
 
 const router = Router();
 const upload = multer({
@@ -33,6 +38,47 @@ router.get("/connection", async (req, res) => {
           ? error.message
           : "Impossible de récupérer l'état de la connexion Google Drive",
     });
+  }
+});
+
+router.put("/settings", ensureAuthenticated, async (req, res) => {
+  try {
+    const headerOrgId = getOrganizationId(req);
+    const { orgId, clientId, clientSecret, redirectUri, rootFolderId, sharedDriveId } = req.body ?? {};
+
+    if (typeof orgId !== "string" || !orgId.trim()) {
+      throw new ValidationError("Identifiant d'organisation requis pour configurer Google Drive");
+    }
+
+    if (orgId !== headerOrgId) {
+      throw new ForbiddenError("Vous n'avez pas accès à cette organisation");
+    }
+
+    const normalized = normalizeDriveSettingsInput({
+      clientId,
+      clientSecret,
+      redirectUri,
+      rootFolderId,
+      sharedDriveId,
+    });
+
+    await upsertDriveSettings(orgId, {
+      client_id: normalized.clientId,
+      client_secret: normalized.clientSecret,
+      redirect_uri: normalized.redirectUri,
+      root_folder_id: normalized.rootFolderId,
+      shared_drive_id: normalized.sharedDriveId,
+    });
+
+    const summary = await getDriveConnectionSummary(orgId);
+    return res.json(summary);
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+
+    console.error("[Drive] Unable to save settings", error);
+    return res.status(500).json({ error: "Impossible d'enregistrer la configuration Google Drive" });
   }
 });
 
