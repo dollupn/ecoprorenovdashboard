@@ -85,6 +85,8 @@ import {
   useDriveConnectionStatus,
   useDriveDisconnect,
   useDriveSettingsUpdate,
+  createDriveStateToken,
+  storeDriveAuthState,
 } from "@/integrations/googleDrive";
 import { LeadSettingsPanel } from "@/features/settings/LeadSettingsPanel";
 import { QuoteSettingsPanel } from "@/features/settings/QuoteSettingsPanel";
@@ -242,13 +244,6 @@ const generateDelegataireId = () => {
   }
 
   return Math.random().toString(36).slice(2, 11);
-};
-
-const createDriveStateToken = () => {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 };
 
 type SettingsLocationState = {
@@ -754,16 +749,13 @@ export default function Settings() {
     void (async () => {
       try {
         const stateToken = createDriveStateToken();
-        if (typeof window !== "undefined") {
-          sessionStorage.setItem(
-            buildDriveAuthStateKey(stateToken),
-            JSON.stringify({ orgId: currentOrgId }),
-          );
-        }
+        storeDriveAuthState(stateToken, currentOrgId);
+        
         const { url } = await driveAuthUrlMutation.mutateAsync({
           orgId: currentOrgId,
           state: stateToken,
         });
+        
         if (typeof window !== "undefined") {
           window.location.href = url;
         }

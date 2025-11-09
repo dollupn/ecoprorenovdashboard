@@ -6,9 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { useOrg } from "@/features/organizations/OrgContext";
-import { useDriveAuthExchange } from "@/integrations/googleDrive";
-
-const buildDriveAuthStorageKey = (state: string) => `drive-auth:${state}`;
+import { useDriveAuthExchange, buildDriveAuthStateKey } from "@/integrations/googleDrive";
 
 const getRedirectUri = () =>
   typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}` : undefined;
@@ -85,7 +83,7 @@ const GoogleDriveCallback = () => {
     let storedOrgId: string | null = null;
 
     if (stateParam) {
-      const storageKey = buildDriveAuthStorageKey(stateParam);
+      const storageKey = buildDriveAuthStateKey(stateParam);
       const stored = sessionStorage.getItem(storageKey);
       if (stored) {
         try {
