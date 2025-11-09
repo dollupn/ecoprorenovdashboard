@@ -43,6 +43,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrg } from "@/features/organizations/OrgContext";
+import { useAuth } from "@/hooks/useAuth";
 import { startChantier } from "@/integrations/chantiers";
 import {
   useDriveConnectionStatus,
@@ -122,6 +123,7 @@ export const StartChantierDialog = ({
   onChantierStarted,
 }: StartChantierDialogProps) => {
   const { currentOrgId } = useOrg();
+  const { session } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedPhotos, setSelectedPhotos] = useState<File[]>([]);
@@ -228,7 +230,22 @@ export const StartChantierDialog = ({
   const creationMutation = useMutation<StartChantierResponse, Error, StartChantierFormValues>({
     mutationFn: async (values) => {
       if (!currentOrgId) {
-        throw new Error("Organisation non trouvée");
+        toast({
+          title: "Organisation introuvable",
+          description: "Connectez-vous à une organisation avant de démarrer un chantier.",
+          variant: "destructive",
+        });
+        throw new Error("Organisation introuvable");
+      }
+
+      const accessToken = session?.access_token;
+      if (!accessToken) {
+        toast({
+          title: "Authentification requise",
+          description: "Reconnectez-vous pour démarrer un chantier.",
+          variant: "destructive",
+        });
+        throw new Error("Jeton d'authentification manquant");
       }
 
       const result = await startChantier(projectId, {
@@ -236,7 +253,7 @@ export const StartChantierDialog = ({
         dateFinPrevue: values.endDate?.trim() || null,
         subcontractorId: values.subcontractorId,
         notes: serializeSiteNotes(values.notes, null, []),
-      });
+      }, currentOrgId, accessToken);
 
       return result;
     },

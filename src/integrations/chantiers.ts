@@ -69,14 +69,28 @@ const fetchJson = async <T>(input: RequestInfo, init?: RequestInit): Promise<T> 
 export const startChantier = async (
   projectId: string,
   payload: StartChantierPayload,
+  orgId: string,
+  accessToken: string,
 ): Promise<ChantierResponse> => {
   if (!projectId) {
     throw new Error("Identifiant du projet requis pour démarrer un chantier");
   }
 
+  if (!orgId) {
+    throw new Error("Identifiant d'organisation requis pour démarrer un chantier");
+  }
+
+  if (!accessToken) {
+    throw new Error("Jeton d'authentification requis pour démarrer un chantier");
+  }
+
   return await fetchJson<ChantierResponse>(`${API_BASE_PATH}/${projectId}/start`, {
     method: "POST",
     body: JSON.stringify(payload ?? {}),
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "x-organization-id": orgId,
+    },
   });
 };
 
@@ -112,14 +126,28 @@ type UpdateChantierPayload = {
 export const saveChantier = async (
   siteId: string,
   payload: UpdateChantierPayload,
+  orgId: string,
+  accessToken: string,
 ): Promise<Tables<"sites">> => {
   if (!siteId) {
     throw new Error("Identifiant du chantier requis");
   }
 
+  if (!orgId) {
+    throw new Error("Identifiant d'organisation requis pour mettre à jour un chantier");
+  }
+
+  if (!accessToken) {
+    throw new Error("Jeton d'authentification requis pour mettre à jour un chantier");
+  }
+
   return await fetchJson<Tables<"sites">>(`${API_BASE_PATH}/${siteId}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "x-organization-id": orgId,
+    },
   });
 };
 
