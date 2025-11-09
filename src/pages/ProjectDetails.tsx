@@ -2219,7 +2219,7 @@ const ProjectDetails = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const { currentOrgId } = useOrg();
   const { data: members = [], isLoading: membersLoading } =
     useMembers(currentOrgId);
@@ -3049,7 +3049,20 @@ const ProjectDetails = () => {
             : [],
       } satisfies Parameters<typeof startChantier>[1];
 
-      return await startChantier(project.id, payload);
+      if (!currentOrgId) {
+        throw new Error(
+          "Organisation introuvable. Connectez-vous à une organisation avant de démarrer un chantier.",
+        );
+      }
+
+      const accessToken = session?.access_token;
+      if (!accessToken) {
+        throw new Error(
+          "Authentification requise pour démarrer un chantier. Veuillez vous reconnecter.",
+        );
+      }
+
+      return await startChantier(project.id, payload, currentOrgId, accessToken);
     },
     onSuccess: async (result) => {
       setQuickStartOpen(false);
