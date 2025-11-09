@@ -1,3 +1,5 @@
+// backupClient.ts (merged)
+
 export type BackupTestRequest = {
   orgId: string;
   webhookUrl: string;
@@ -22,6 +24,7 @@ const API_BASE_PATH = "/api/backups";
 const parseError = async (response: Response) => {
   try {
     const payload = await response.json();
+    // Prefer explicit message → error → fallback
     if (payload && typeof payload.message === "string" && payload.message.trim().length > 0) {
       return payload.message.trim();
     }
@@ -31,7 +34,6 @@ const parseError = async (response: Response) => {
   } catch {
     // ignore JSON parse errors
   }
-
   return response.statusText || "Une erreur est survenue";
 };
 
@@ -53,6 +55,7 @@ const fetchJson = async <T>(input: RequestInfo, init: RequestInit): Promise<T> =
     throw new Error(message);
   }
 
+  // 204 No Content
   if (response.status === 204) {
     return {} as T;
   }
@@ -69,12 +72,12 @@ const buildHeaders = (orgId: string, accessToken: string) => {
   if (!orgId) {
     throw new Error("L'identifiant d'organisation est requis");
   }
-
   if (!accessToken) {
     throw new Error("Jeton d'accès requis pour les sauvegardes");
   }
 
   return {
+    "Content-Type": "application/json",
     Authorization: `Bearer ${accessToken}`,
     "x-organization-id": orgId,
   } satisfies HeadersInit;
@@ -103,9 +106,13 @@ export const exportBackups = async (options: BackupExportRequest) => {
   });
 };
 
+// Optional alias if you used this name elsewhere in the app:
+export const exportProjectsNow = exportBackups;
+
 export const backupClient = {
   testBackupWebhook,
   exportBackups,
+  exportProjectsNow,
 };
 
 export type BackupClient = typeof backupClient;

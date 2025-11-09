@@ -56,6 +56,7 @@ import {
   UserPlus,
   FileText,
   List,
+  Cloud,
   Calendar,
   Target,
 } from "lucide-react";
@@ -90,6 +91,7 @@ import { QuoteSettingsPanel } from "@/features/settings/QuoteSettingsPanel";
 import { SubcontractorSettingsPanel } from "@/features/settings/SubcontractorSettingsPanel";
 import { AppointmentSettingsPanel } from "@/features/settings/AppointmentSettingsPanel";
 import { KpiSettingsPanel } from "@/features/settings/KpiSettingsPanel";
+import { BackupSettingsPanel } from "@/features/settings/BackupSettingsPanel";
 
 const SETTINGS_TABLE = "settings" as unknown as keyof Database["public"]["Tables"];
 const ROLE_OPTIONS = ["Administrateur", "Manager", "Commercial", "Technicien"] as const;
@@ -327,7 +329,8 @@ type SettingsSection =
   | "quotes"
   | "subcontractors"
   | "calendar"
-  | "kpi";
+  | "kpi"
+  | "backups";
 
 const SETTINGS_SECTIONS: Array<{
   id: SettingsSection;
@@ -340,6 +343,7 @@ const SETTINGS_SECTIONS: Array<{
   { id: "subcontractors", label: "Paramètres sous-traitant", icon: Users },
   { id: "kpi", label: "Paramètres KPI", icon: Target },
   { id: "calendar", label: "Types de RDV", icon: Calendar },
+  { id: "backups", label: "Sauvegardes", icon: Cloud },
 ];
 
 export default function Settings() {
@@ -2725,6 +2729,7 @@ export default function Settings() {
             {activeSection === "subcontractors" && <SubcontractorSettingsPanel />}
             {activeSection === "kpi" && <KpiSettingsPanel />}
             {activeSection === "calendar" && <AppointmentSettingsPanel />}
+            {activeSection === "backups" && <BackupSettingsPanel />}
           </div>
         </div>
       </div>
