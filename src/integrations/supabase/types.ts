@@ -1330,7 +1330,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          backup_daily_enabled?: boolean
+          backup_daily_enabled?: boolean | null
           backup_time?: string | null
           backup_webhook_url?: string | null
           created_at?: string
@@ -1339,7 +1339,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          backup_daily_enabled?: boolean
+          backup_daily_enabled?: boolean | null
           backup_time?: string | null
           backup_webhook_url?: string | null
           created_at?: string
