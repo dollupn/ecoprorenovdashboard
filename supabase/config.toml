@@ -2,3 +2,6 @@ project_id = "yhydnoyjrxyryregbkei"
 
 [functions.start-chantier]
 verify_jwt = true
+
+[functions.export-all-projects]
+verify_jwt = false
