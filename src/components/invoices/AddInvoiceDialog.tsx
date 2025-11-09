@@ -149,6 +149,15 @@ export const AddInvoiceDialog = ({ onInvoiceAdded }: AddInvoiceDialogProps) => {
       return;
     }
 
+    if (!currentOrgId) {
+      toast({
+        title: "Organisation manquante",
+        description: "Veuillez sélectionner une organisation avant de créer une facture.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
     try {
       const driveFileUrl = invoiceDriveFile?.webViewLink ?? invoiceDriveFile?.webContentLink ?? undefined;
@@ -169,6 +178,7 @@ export const AddInvoiceDialog = ({ onInvoiceAdded }: AddInvoiceDialogProps) => {
       const { error } = await supabase.from("invoices").insert([
         {
           user_id: user.id,
+          org_id: currentOrgId,
           invoice_ref: data.invoice_ref,
           client_name: data.client_name,
           amount: data.amount,
