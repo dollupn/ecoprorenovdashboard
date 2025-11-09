@@ -1321,18 +1321,27 @@ export type Database = {
       }
       settings: {
         Row: {
+          backup_daily_enabled: boolean | null
+          backup_time: string | null
+          backup_webhook_url: string | null
           created_at: string
           org_id: string
           statuts_projets: Json | null
           updated_at: string
         }
         Insert: {
+          backup_daily_enabled?: boolean | null
+          backup_time?: string | null
+          backup_webhook_url?: string | null
           created_at?: string
           org_id: string
           statuts_projets?: Json | null
           updated_at?: string
         }
         Update: {
+          backup_daily_enabled?: boolean | null
+          backup_time?: string | null
+          backup_webhook_url?: string | null
           created_at?: string
           org_id?: string
           statuts_projets?: Json | null
