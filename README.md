@@ -71,6 +71,9 @@ project and application:
 - `VITE_SUPABASE_URL` – the Supabase REST URL, e.g. `https://<project-ref>.supabase.co`.
 - `ECOPRO_EXPORT_KEY` – a strong random string used to sign export operations. Rotate
   this key whenever a team member leaves or you suspect it may have been exposed.
+- `ECOPRO_WEBHOOK_SECRET` *(optional)* – an additional shared secret that is sent as
+  the `x-ecopro-webhook-secret` header when synchronising a project to a backup
+  webhook. Use this if your webhook endpoint expects layered authentication.
 - `APP_VERSION` – the semantic version displayed in diagnostics and generated exports.
 
 For production deployments (Lovable, Supabase Edge Functions, or any hosting
