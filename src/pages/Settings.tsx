@@ -1657,7 +1657,7 @@ export default function Settings() {
                                 id="drive-redirect-uri"
                                 value={driveRedirectUri}
                                 onChange={(event) => setDriveRedirectUri(event.target.value)}
-                                placeholder="https://votre-app.com/api/google-drive/callback"
+                                placeholder="https://<votre-domaine>/integrations/google-drive/callback"
                                 autoComplete="off"
                               />
                             </div>
