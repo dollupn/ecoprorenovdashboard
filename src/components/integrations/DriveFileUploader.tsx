@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CloudOff, ExternalLink, FileText, Loader2, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
@@ -50,7 +51,8 @@ export const DriveFileUploader = ({
   const [isDragActive, setIsDragActive] = useState(false);
   const [localFile, setLocalFile] = useState<DriveFileMetadata | null>(value ?? null);
   const { toast } = useToast();
-  const uploadMutation = useDriveUpload();
+  const { session } = useAuth();
+  const uploadMutation = useDriveUpload(session?.access_token);
   const { data: connection, isLoading: connectionLoading } = useDriveConnectionStatus(orgId ?? null);
 
   const uploading = uploadMutation.isPending;
