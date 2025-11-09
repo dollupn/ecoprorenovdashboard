@@ -38,6 +38,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database, Tables } from "@/integrations/supabase/types";
 import type { ProjectStatus } from "@/lib/projects";
 import { startChantier } from "@/integrations/chantiers";
+import { exportProjectBackup, syncProjectBackup } from "@/integrations/projectBackups";
 import { useAuth } from "@/hooks/useAuth";
 import {
   getProjectClientName,
@@ -68,6 +69,8 @@ import {
   Share2,
   FolderOpen,
   UploadCloud,
+  Download,
+  RefreshCw,
   CircleDot,
   StickyNote,
   Image as ImageIcon,
@@ -375,6 +378,8 @@ type ProjectUpdatesQueryResult = {
   tableAvailable: boolean;
   error?: PostgrestError | null;
 };
+
+type BackupSettingsRow = Pick<Tables<"settings">, "backup_webhook_url">;
 
 type HistoryEntry = {
   text: string;
@@ -2274,6 +2279,10 @@ const ProjectDetails = () => {
   const [quickUpdateText, setQuickUpdateText] = useState("");
   const [lightboxImage, setLightboxImage] = useState<ProductImage | null>(null);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const [isExportingBackup, setIsExportingBackup] = useState(false);
+  const [exportBackupError, setExportBackupError] = useState<string | null>(null);
+  const [isSyncingBackup, setIsSyncingBackup] = useState(false);
+  const [syncBackupError, setSyncBackupError] = useState<string | null>(null);
 
   const focusJournalFeed = useCallback(() => {
     setTimeout(() => {
@@ -2403,6 +2412,34 @@ const ProjectDetails = () => {
     enabled: !!id && !!user?.id && (!currentOrgId || !membersLoading),
   });
 
+  const { data: backupSettings } = useQuery({
+    queryKey: ["project-backup-settings", currentOrgId],
+    enabled: Boolean(currentOrgId),
+    queryFn: async () => {
+      if (!currentOrgId) {
+        return null;
+      }
+
+      const { data, error } = await supabase
+        .from("settings" as any)
+        .select("backup_webhook_url")
+        .eq("org_id", currentOrgId)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return data as BackupSettingsRow | null;
+    },
+    onError: (settingsError) => {
+      console.error(
+        "Erreur lors du chargement du webhook de sauvegarde",
+        settingsError,
+      );
+    },
+  });
+
   const editInitialValues = useMemo(() => {
     if (!project) {
       return undefined;
@@ -2423,6 +2460,155 @@ const ProjectDetails = () => {
     () => getDisplayedProducts(project?.project_products),
     [project?.project_products],
   );
+
+  const backupWebhookUrl = backupSettings?.backup_webhook_url?.trim() ?? "";
+  const isSyncActionEnabled = useMemo(
+    () => backupWebhookUrl.length > 0,
+    [backupWebhookUrl],
+  );
+
+  const exportButtonTitle = useMemo(
+    () =>
+      exportBackupError ??
+      "Télécharger la sauvegarde JSON du projet.",
+    [exportBackupError],
+  );
+
+  const syncButtonTitle = useMemo(() => {
+    if (!isSyncActionEnabled) {
+      return "Configurez l'URL du webhook de sauvegarde pour lancer la synchronisation Google Sheet.";
+    }
+
+    if (syncBackupError) {
+      return syncBackupError;
+    }
+
+    return "Synchroniser le projet vers Google Sheet immédiatement.";
+  }, [isSyncActionEnabled, syncBackupError]);
+
+  const projectFileSlug = useMemo(() => {
+    if (!project?.id) {
+      return "project";
+    }
+
+    const rawReference =
+      (typeof project.project_ref === "string" && project.project_ref.trim().length > 0
+        ? project.project_ref.trim()
+        : project.id) ?? "project";
+
+    const normalized = rawReference
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/gi, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
+
+    return normalized.length > 0 ? normalized : "project";
+  }, [project?.id, project?.project_ref]);
+
+  const handleExportBackup = useCallback(async () => {
+    if (!project?.id) {
+      return;
+    }
+
+    setExportBackupError(null);
+    setIsExportingBackup(true);
+
+    let downloadUrl: string | null = null;
+    let anchor: HTMLAnchorElement | null = null;
+
+    try {
+      const payload = await exportProjectBackup({ projectId: project.id });
+      const serialized = JSON.stringify(payload, null, 2);
+      const blob = new Blob([serialized], { type: "application/json" });
+      downloadUrl = URL.createObjectURL(blob);
+
+      const now = new Date();
+      const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+      const filename = `project-${projectFileSlug}-${stamp}.json`;
+
+      anchor = document.createElement("a");
+      anchor.href = downloadUrl;
+      anchor.download = filename;
+      anchor.rel = "noopener";
+      anchor.style.display = "none";
+      document.body.appendChild(anchor);
+      anchor.click();
+
+      toast({
+        title: "Export téléchargé",
+        description: "La sauvegarde du projet a été téléchargée.",
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Impossible de télécharger la sauvegarde du projet.";
+      setExportBackupError(message);
+      toast({
+        title: "Export impossible",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      if (anchor && anchor.parentNode) {
+        anchor.parentNode.removeChild(anchor);
+      }
+
+      if (downloadUrl) {
+        URL.revokeObjectURL(downloadUrl);
+      }
+
+      setIsExportingBackup(false);
+    }
+  }, [project?.id, projectFileSlug, toast]);
+
+  const handleSyncBackup = useCallback(async () => {
+    if (!project?.id) {
+      return;
+    }
+
+    if (!isSyncActionEnabled) {
+      const message =
+        "Configurez le webhook de sauvegarde pour lancer la synchronisation Google Sheet.";
+      setSyncBackupError(message);
+      toast({
+        title: "Synchronisation indisponible",
+        description: message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSyncBackupError(null);
+    setIsSyncingBackup(true);
+
+    try {
+      await syncProjectBackup({ projectId: project.id });
+      toast({
+        title: "Synchronisation lancée",
+        description: "Le webhook Google Sheet a été déclenché avec succès.",
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Impossible de synchroniser le projet avec Google Sheet.";
+      setSyncBackupError(message);
+      toast({
+        title: "Échec de la synchronisation",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncingBackup(false);
+    }
+  }, [isSyncActionEnabled, project?.id, toast]);
+
+  useEffect(() => {
+    if (isSyncActionEnabled) {
+      setSyncBackupError(null);
+    }
+  }, [isSyncActionEnabled]);
 
   const {
     data: projectUpdatesState,
@@ -4873,6 +5059,46 @@ const ProjectDetails = () => {
             <Button variant="outline" onClick={handleOpenQuote}>
               <FileText className="w-4 h-4 mr-2" />
               Générer un devis
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                void handleExportBackup();
+              }}
+              disabled={isExportingBackup}
+              title={exportButtonTitle}
+            >
+              {isExportingBackup ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Téléchargement...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4 mr-2" />
+                  Backup JSON
+                </>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                void handleSyncBackup();
+              }}
+              disabled={!isSyncActionEnabled || isSyncingBackup}
+              title={syncButtonTitle}
+            >
+              {isSyncingBackup ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Synchronisation...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Sync Google Sheet
+                </>
+              )}
             </Button>
             {(isAdmin || project.user_id === user?.id) &&
               !isProjectArchived && (
