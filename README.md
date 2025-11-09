@@ -60,6 +60,26 @@ This project is built with:
 - shadcn-ui
 - Tailwind CSS
 
+## Environment variables
+
+Copy the `.env.example` file to `.env` (and optionally `.env.local`) before running the
+application locally. Update each value with the credentials for your Supabase
+project and application:
+
+- `VITE_SUPABASE_PROJECT_ID` – the Supabase project reference.
+- `VITE_SUPABASE_PUBLISHABLE_KEY` – the anon/publishable Supabase key for the project.
+- `VITE_SUPABASE_URL` – the Supabase REST URL, e.g. `https://<project-ref>.supabase.co`.
+- `ECOPRO_EXPORT_KEY` – a strong random string used to sign export operations. Rotate
+  this key whenever a team member leaves or you suspect it may have been exposed.
+- `APP_VERSION` – the semantic version displayed in diagnostics and generated exports.
+
+For production deployments (Lovable, Supabase Edge Functions, or any hosting
+provider) configure the same variables in the platform’s secret manager. When you
+rotate `ECOPRO_EXPORT_KEY`, deploy the new value to every environment and restart
+running services to ensure the updated secret is used. Remember to also update your
+local `.env`/`.env.local` files when rotating secrets so development builds stay in
+sync.
+
 ## How can I deploy this project?
 
 Simply open [Lovable](https://lovable.dev/projects/c3d7fe31-cf4d-4a07-9284-7eafceb7da35) and click on Share -> Publish.
