@@ -1321,7 +1321,7 @@ export type Database = {
       }
       settings: {
         Row: {
-          backup_daily_enabled: boolean | null
+          backup_daily_enabled: boolean
           backup_time: string | null
           backup_webhook_url: string | null
           created_at: string
