@@ -193,6 +193,13 @@ const Auth = () => {
             Conditions d&apos;utilisation
           </Link>
         </div>
+        <p className="mt-4 text-center text-sm text-muted-foreground">
+          En continuant, vous acceptez notre{" "}
+          <Link to="/legal/confidentialite" className="font-medium text-primary hover:underline">
+            politique de confidentialité
+          </Link>
+          .
+        </p>
       </div>
     </div>
   );
