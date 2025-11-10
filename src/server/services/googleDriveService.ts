@@ -53,6 +53,9 @@ export interface DriveSettingsConfig {
 const DRIVE_SCOPES = [
   "https://www.googleapis.com/auth/drive.file",
   "https://www.googleapis.com/auth/drive.metadata.readonly",
+  "openid",
+  "email",
+  "profile",
 ];
 
 const toOptionalString = (value: unknown): string | null => {
@@ -232,6 +235,7 @@ export const generateDriveAuthUrl = async (
     include_granted_scopes: true,
     state: options.state,
     prompt: (options.prompt as "consent" | "select_account" | "none" | undefined) ?? "consent",
+    redirect_uri: redirectUri ?? undefined,
   });
 
   return { url, redirectUri };
