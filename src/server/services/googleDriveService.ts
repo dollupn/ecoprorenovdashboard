@@ -246,9 +246,15 @@ export const exchangeDriveAuthCode = async (
   code: string,
   redirectUri?: string,
 ): Promise<GoogleDriveConnectionSummary> => {
-  const { oauthClient, credentials: currentCredentials } = await loadClientWithCredentials(orgId, redirectUri);
+  const { oauthClient, credentials: currentCredentials, settings } = await loadClientWithCredentials(
+    orgId,
+    redirectUri,
+  );
 
-  const { tokens } = await oauthClient.getToken(code);
+  const { tokens } = await oauthClient.getToken({
+    code,
+    redirect_uri: redirectUri ?? settings.redirectUri ?? undefined,
+  });
   oauthClient.setCredentials(tokens);
 
   const scopeArray = Array.isArray(tokens.scope)
