@@ -313,7 +313,10 @@ export const LeadPhoningDialog = ({ lead, onCompleted }: LeadPhoningDialogProps)
           Phoning Lead
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="max-w-3xl max-h-[90vh] overflow-y-auto"
+        data-lead-dialog-ignore="true"
+      >
         <DialogHeader>
           <DialogTitle>Phoning Lead</DialogTitle>
           <DialogDescription>
