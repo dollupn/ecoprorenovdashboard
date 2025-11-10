@@ -69,11 +69,16 @@ export const aggregateEnergyByCategory = (
       continue;
     }
 
-    if (!project.building_type) {
-      continue;
-    }
-
     const projectProducts = project.project_products ?? [];
+    const projectCategoryTotals = new Map<string, number>();
+
+    const buildingSurface =
+      typeof project.surface_batiment_m2 === "number" &&
+      Number.isFinite(project.surface_batiment_m2)
+        ? project.surface_batiment_m2
+        : null;
+
+    let projectTotalMwh = 0;
 
     for (const projectProduct of projectProducts) {
       if (!projectProduct?.product) {
@@ -85,12 +90,6 @@ export const aggregateEnergyByCategory = (
       if (isProductExcluded(product)) {
         continue;
       }
-
-      const buildingSurface =
-        typeof project.surface_batiment_m2 === "number" &&
-        Number.isFinite(project.surface_batiment_m2)
-          ? project.surface_batiment_m2
-          : null;
 
       const baseKwh = getKwhCumacBasePerBuilding(
         product.kwh_cumac_values ?? [],
@@ -121,9 +120,20 @@ export const aggregateEnergyByCategory = (
         continue;
       }
 
+      projectTotalMwh += productMwh;
+
       const category = normalizeCategory(product.category);
+      const currentTotal = projectCategoryTotals.get(category) ?? 0;
+      projectCategoryTotals.set(category, currentTotal + productMwh);
+    }
+
+    if (projectTotalMwh <= 0) {
+      continue;
+    }
+
+    for (const [category, value] of projectCategoryTotals.entries()) {
       const currentTotal = categoryTotals.get(category) ?? 0;
-      categoryTotals.set(category, currentTotal + productMwh);
+      categoryTotals.set(category, currentTotal + value);
     }
   }
 
