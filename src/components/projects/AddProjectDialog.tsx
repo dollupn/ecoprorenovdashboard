@@ -1670,7 +1670,10 @@ export const AddProjectDialog = ({
       {shouldRenderTrigger ? (
         <DialogTrigger asChild>{dialogTrigger}</DialogTrigger>
       ) : null}
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        data-lead-dialog-ignore="true"
+        className="max-w-2xl max-h-[90vh] overflow-y-auto"
+      >
         <DialogHeader>
           <DialogTitle>
             {isEditMode ? "Modifier le projet" : "Ajouter un nouveau projet"}
