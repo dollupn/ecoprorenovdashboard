@@ -10,6 +10,7 @@ export type DriveAuthStatePayload = {
 type StoredDriveAuthState = {
   orgId: string;
   nonce?: string;
+  redirectUri?: string;
 };
 
 /**
@@ -62,12 +63,19 @@ export const buildDriveAuthStateKey = (state: string): string => {
 /**
  * Stores the organization ID in session storage for the OAuth callback
  */
-export const storeDriveAuthState = (stateToken: string, orgId: string): void => {
+export const storeDriveAuthState = (
+  stateToken: string,
+  orgId: string,
+  redirectUri?: string,
+): void => {
   if (typeof window !== "undefined") {
-    sessionStorage.setItem(
-      buildDriveAuthStateKey(stateToken),
-      JSON.stringify({ orgId, nonce: stateToken } satisfies StoredDriveAuthState),
-    );
+    const payload: StoredDriveAuthState = { orgId, nonce: stateToken };
+
+    if (typeof redirectUri === "string" && redirectUri.trim().length > 0) {
+      payload.redirectUri = redirectUri;
+    }
+
+    sessionStorage.setItem(buildDriveAuthStateKey(stateToken), JSON.stringify(payload));
   }
 };
 
@@ -89,6 +97,10 @@ export const retrieveDriveAuthState = (stateToken: string): StoredDriveAuthState
     return {
       orgId: parsed.orgId,
       nonce: typeof parsed.nonce === "string" ? parsed.nonce : undefined,
+      redirectUri:
+        typeof parsed.redirectUri === "string" && parsed.redirectUri
+          ? parsed.redirectUri
+          : undefined,
     } satisfies StoredDriveAuthState;
   } catch {
     return null;
@@ -102,4 +114,47 @@ export const clearDriveAuthState = (stateToken: string): void => {
   if (typeof window !== "undefined") {
     sessionStorage.removeItem(buildDriveAuthStateKey(stateToken));
   }
+};
+
+const OAUTH_RESPONSE_QUERY_KEYS = [
+  "code",
+  "scope",
+  "state",
+  "authuser",
+  "prompt",
+  "session_state",
+  "hd",
+  "from_login",
+  "flowName",
+  "authCode",
+  "error",
+  "error_description",
+];
+
+export const resolveDriveRedirectUri = (
+  storedRedirectUri?: string,
+  location?: { origin: string; pathname: string; search: string },
+): string | undefined => {
+  if (typeof storedRedirectUri === "string" && storedRedirectUri.trim().length > 0) {
+    return storedRedirectUri;
+  }
+
+  if (!location) {
+    return undefined;
+  }
+
+  const baseUrl = `${location.origin}${location.pathname}`;
+
+  if (!location.search) {
+    return baseUrl;
+  }
+
+  const params = new URLSearchParams(location.search);
+
+  for (const key of OAUTH_RESPONSE_QUERY_KEYS) {
+    params.delete(key);
+  }
+
+  const query = params.toString();
+  return query ? `${baseUrl}?${query}` : baseUrl;
 };

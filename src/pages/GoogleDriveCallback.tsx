@@ -10,11 +10,9 @@ import {
   clearDriveAuthState,
   decodeDriveAuthStatePayload,
   retrieveDriveAuthState,
+  resolveDriveRedirectUri,
   useDriveAuthExchange,
 } from "@/integrations/googleDrive";
-
-const getRedirectUri = () =>
-  typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}` : undefined;
 
 type CallbackStatus = "idle" | "processing" | "success" | "error";
 
@@ -55,8 +53,46 @@ const GoogleDriveCallback = () => {
   const fallbackOrgId = searchParams.get("orgId");
 
   const decodedState = useMemo(() => decodeDriveAuthStatePayload(stateParam), [stateParam]);
+  const storageTokens = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          [decodedState?.nonce, stateParam].filter(
+            (value): value is string => typeof value === "string" && value.length > 0,
+          ),
+        ),
+      ),
+    [decodedState?.nonce, stateParam],
+  );
 
-  const redirectUri = useMemo(() => getRedirectUri(), []);
+  const storedAuthState = useMemo(() => {
+    let storedOrgId: string | null = null;
+    let storedRedirectUri: string | undefined;
+
+    for (const token of storageTokens) {
+      const stored = retrieveDriveAuthState(token);
+      if (!storedOrgId && stored?.orgId) {
+        storedOrgId = stored.orgId;
+      }
+      if (!storedRedirectUri && stored?.redirectUri) {
+        storedRedirectUri = stored.redirectUri;
+      }
+    }
+
+    return { orgId: storedOrgId, redirectUri: storedRedirectUri };
+  }, [storageTokens]);
+
+  const redirectUri = useMemo(() => {
+    if (typeof window === "undefined") {
+      return resolveDriveRedirectUri(storedAuthState.redirectUri);
+    }
+
+    return resolveDriveRedirectUri(storedAuthState.redirectUri, {
+      origin: window.location.origin,
+      pathname: window.location.pathname,
+      search: window.location.search,
+    });
+  }, [storedAuthState.redirectUri]);
 
   useEffect(() => {
     if (authError) {
@@ -87,28 +123,12 @@ const GoogleDriveCallback = () => {
       return;
     }
 
-    const storageTokens = Array.from(
-      new Set(
-        [decodedState?.nonce, stateParam].filter(
-          (value): value is string => typeof value === "string" && value.length > 0,
-        ),
-      ),
-    );
-
-    let storedOrgId: string | null = null;
-
-    for (const token of storageTokens) {
-      const stored = retrieveDriveAuthState(token);
-      if (!storedOrgId && stored?.orgId) {
-        storedOrgId = stored.orgId;
-      }
-    }
-
     for (const token of storageTokens) {
       clearDriveAuthState(token);
     }
 
-    const resolvedOrgId = decodedState?.orgId ?? storedOrgId ?? fallbackOrgId ?? currentOrgId;
+    const resolvedOrgId =
+      decodedState?.orgId ?? storedAuthState.orgId ?? fallbackOrgId ?? currentOrgId;
 
     if (!resolvedOrgId) {
       const message =
@@ -124,8 +144,12 @@ const GoogleDriveCallback = () => {
     }
 
     setStatus("processing");
+    const payload = redirectUri
+      ? { orgId: resolvedOrgId, code, redirectUri }
+      : { orgId: resolvedOrgId, code };
+
     exchangeAuth
-      .mutateAsync({ orgId: resolvedOrgId, code, redirectUri })
+      .mutateAsync(payload)
       .then((summary) => {
         setStatus("success");
         setErrorMessage(null);
@@ -164,6 +188,8 @@ const GoogleDriveCallback = () => {
     navigate,
     redirectUri,
     setCurrentOrgId,
+    storageTokens,
+    storedAuthState.orgId,
     stateParam,
     toast,
   ]);
