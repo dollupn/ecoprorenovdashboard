@@ -892,7 +892,7 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
               <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
                 <Info className="mt-0.5 h-4 w-4 shrink-0" />
                 <div>
-                  <p className="font-medium">Chantier Terminé</p>
+                  <p className="font-medium">Veuillez changer le statut du projet pour modifier</p>
                 </div>
               </div>
             ) : null}
