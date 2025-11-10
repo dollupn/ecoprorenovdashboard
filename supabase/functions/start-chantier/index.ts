@@ -6,7 +6,7 @@ interface StartChantierRequest {
   dateDebut: string;
   dateFinPrevue?: string | null;
   subcontractorId?: string;
-  notes?: any;
+  notes?: unknown;
 }
 
 Deno.serve(async (req) => {
@@ -67,6 +67,31 @@ Deno.serve(async (req) => {
     // Normalize and validate data
     const siteRef = `${project.project_ref}-CHANTIER`;
     const normalizedDateDebut = dateDebut || new Date().toISOString().split('T')[0];
+
+    const { data: duplicateSite, error: duplicateCheckError } = await supabaseClient
+      .from('sites')
+      .select('id')
+      .eq('site_ref', siteRef)
+      .eq('org_id', project.org_id)
+      .eq('project_id', project.id)
+      .maybeSingle();
+
+    if (duplicateCheckError) {
+      console.error('Duplicate chantier check failed:', duplicateCheckError);
+      throw new Error("Impossible de vérifier l'existence du chantier");
+    }
+
+    if (duplicateSite) {
+      return new Response(
+        JSON.stringify({
+          message: `Un chantier avec la référence « ${siteRef} » existe déjà pour ce projet.`,
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 409,
+        },
+      );
+    }
 
     // Create chantier
     const chantierData = {

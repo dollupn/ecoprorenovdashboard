@@ -1,4 +1,9 @@
-import { createChantier, fetchProjectById, type ProjectRow } from "../repositories/projectRepository.js";
+import {
+  createChantier,
+  fetchChantierBySiteRef,
+  fetchProjectById,
+  type ProjectRow,
+} from "../repositories/projectRepository.js";
 import { NotFoundError, ValidationError } from "../errors.js";
 
 type StartChantierInput = {
@@ -94,6 +99,13 @@ export const startChantierService = async (orgId: string, projectId: string, inp
   const siteRef = (input.siteRef ?? `${project.project_ref}-CHANTIER`).trim();
   if (siteRef.length < 3) {
     throw new ValidationError("La référence chantier doit contenir au moins 3 caractères");
+  }
+
+  const existingChantier = await fetchChantierBySiteRef(project.id, project.org_id, siteRef);
+  if (existingChantier) {
+    throw new ValidationError(
+      `Un chantier avec la référence « ${siteRef} » existe déjà pour ce projet.`,
+    );
   }
 
   const address = (input.address ?? project.address ?? project.hq_address ?? "").trim();

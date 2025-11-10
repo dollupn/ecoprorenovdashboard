@@ -66,6 +66,26 @@ export const fetchChantiersForProject = async (
   return data ?? [];
 };
 
+export const fetchChantierBySiteRef = async (
+  projectId: string,
+  orgId: string,
+  siteRef: string,
+): Promise<Nullable<SiteRow>> => {
+  const response: PostgrestSingleResponse<SiteRow> = await client()
+    .from("sites")
+    .select("*")
+    .eq("project_id", projectId)
+    .eq("org_id", orgId)
+    .eq("site_ref", siteRef)
+    .maybeSingle();
+
+  if (response.error) {
+    throw response.error;
+  }
+
+  return response.data ?? null;
+};
+
 export const fetchQuotesForProject = async (
   projectId: string,
   orgId: string,
