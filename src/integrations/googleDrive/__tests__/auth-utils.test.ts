@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import { resolveDriveRedirectUri } from "@/integrations/googleDrive";
 
 describe("resolveDriveRedirectUri", () => {
-  it("returns the stored redirect URI when provided", () => {
-    const stored = "https://app.example.com/integrations/google-drive/callback/?withSlash=true";
+  it("returns the stored redirect URI when provided, even if the current location differs", () => {
+    const stored = "https://app.example.com/drive/custom-callback";
 
     expect(
       resolveDriveRedirectUri(stored, {

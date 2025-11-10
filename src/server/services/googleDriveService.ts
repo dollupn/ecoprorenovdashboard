@@ -140,7 +140,7 @@ const shouldRefreshToken = (credentials: DriveCredentialsRow | null) => {
   return !credentials.access_token || Number.isNaN(expiry) || expiry - now < 60_000;
 };
 
-const createOAuthClient = (settings: DriveSettingsConfig, redirectUri?: string) => {
+const createOAuthClient = (settings: DriveSettingsConfig, redirectUri?: string | null) => {
   const clientId = settings.clientId;
   const clientSecret = settings.clientSecret;
 
@@ -156,7 +156,12 @@ const createOAuthClient = (settings: DriveSettingsConfig, redirectUri?: string) 
 const loadClientWithCredentials = async (
   orgId: string,
   redirectUri?: string,
-): Promise<{ oauthClient: OAuth2Client; settings: DriveSettingsConfig; credentials: DriveCredentialsRow | null }> => {
+): Promise<{
+  oauthClient: OAuth2Client;
+  settings: DriveSettingsConfig;
+  credentials: DriveCredentialsRow | null;
+  redirectUri: string | null;
+}> => {
   const settingsRow = await fetchDriveSettings(orgId);
 
   if (!settingsRow) {
@@ -173,7 +178,9 @@ const loadClientWithCredentials = async (
     sharedDriveId: settingsRow.shared_drive_id,
   });
 
-  const oauthClient = createOAuthClient(settings, redirectUri);
+  const resolvedRedirectUri = redirectUri ?? settings.redirectUri ?? null;
+
+  const oauthClient = createOAuthClient(settings, resolvedRedirectUri);
   const credentials = await fetchDriveCredentials(orgId);
 
   if (credentials) {
@@ -186,7 +193,7 @@ const loadClientWithCredentials = async (
     });
   }
 
-  return { oauthClient, settings, credentials };
+  return { oauthClient, settings, credentials, redirectUri: resolvedRedirectUri };
 };
 
 export const getDriveConnectionSummary = async (
@@ -216,16 +223,18 @@ export const getDriveConnectionSummary = async (
 export const generateDriveAuthUrl = async (
   orgId: string,
   options: { redirectUri?: string; state?: string; prompt?: string },
-) => {
-  const { oauthClient } = await loadClientWithCredentials(orgId, options.redirectUri);
+): Promise<{ url: string; redirectUri: string | null }> => {
+  const { oauthClient, redirectUri } = await loadClientWithCredentials(orgId, options.redirectUri);
 
-  return oauthClient.generateAuthUrl({
+  const url = oauthClient.generateAuthUrl({
     access_type: "offline",
     scope: DRIVE_SCOPES,
     include_granted_scopes: true,
     state: options.state,
     prompt: (options.prompt as "consent" | "select_account" | "none" | undefined) ?? "consent",
   });
+
+  return { url, redirectUri };
 };
 
 export const exchangeDriveAuthCode = async (

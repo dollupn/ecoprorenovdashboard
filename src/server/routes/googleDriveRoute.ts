@@ -147,8 +147,12 @@ router.get("/auth/url", async (req, res) => {
   const prompt = typeof req.query.prompt === "string" ? req.query.prompt : undefined;
 
   try {
-    const url = await generateDriveAuthUrl(orgId, { redirectUri, state, prompt });
-    return res.json({ url });
+    const { url, redirectUri: resolvedRedirectUri } = await generateDriveAuthUrl(orgId, {
+      redirectUri,
+      state,
+      prompt,
+    });
+    return res.json({ url, redirectUri: resolvedRedirectUri });
   } catch (error) {
     console.error("[Drive] Unable to generate auth url", error);
     return res.status(500).json({
