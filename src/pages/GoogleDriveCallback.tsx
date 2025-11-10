@@ -83,11 +83,15 @@ const GoogleDriveCallback = () => {
   }, [storageTokens]);
 
   const redirectUri = useMemo(() => {
-    if (typeof window === "undefined") {
-      return resolveDriveRedirectUri(storedAuthState.redirectUri);
+    if (typeof storedAuthState.redirectUri === "string" && storedAuthState.redirectUri) {
+      return storedAuthState.redirectUri;
     }
 
-    return resolveDriveRedirectUri(storedAuthState.redirectUri, {
+    if (typeof window === "undefined") {
+      return resolveDriveRedirectUri();
+    }
+
+    return resolveDriveRedirectUri(undefined, {
       origin: window.location.origin,
       pathname: window.location.pathname,
       search: window.location.search,

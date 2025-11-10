@@ -10,6 +10,7 @@ import {
 } from "./client";
 import type {
   CreateAuthUrlParams,
+  CreateAuthUrlResponse,
   DriveConnectionStatus,
   DriveUploadOptions,
   DriveUploadResult,
@@ -39,7 +40,7 @@ export const useDriveConnectionStatus = (orgId: string | null | undefined) =>
   });
 
 export const useDriveAuthUrl = () =>
-  useMutation<{ url: string }, Error, CreateAuthUrlParams>({
+  useMutation<CreateAuthUrlResponse, Error, CreateAuthUrlParams>({
     mutationFn: async (params) => await createDriveAuthUrl(params),
   });
 

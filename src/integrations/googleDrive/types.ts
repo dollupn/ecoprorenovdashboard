@@ -42,6 +42,11 @@ export interface CreateAuthUrlParams {
   prompt?: "consent" | "none";
 }
 
+export interface CreateAuthUrlResponse {
+  url: string;
+  redirectUri: string | null;
+}
+
 export interface ExchangeAuthCodePayload {
   orgId: string;
   code: string;

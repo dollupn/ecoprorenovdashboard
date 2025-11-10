@@ -1,5 +1,6 @@
 import type {
   CreateAuthUrlParams,
+  CreateAuthUrlResponse,
   DriveConnectionMutationOptions,
   DriveConnectionStatus,
   DriveUploadOptions,
@@ -85,7 +86,7 @@ export const getDriveConnectionStatus = async (orgId: string): Promise<DriveConn
 
 export const createDriveAuthUrl = async (
   params: CreateAuthUrlParams,
-): Promise<{ url: string }> => {
+): Promise<CreateAuthUrlResponse> => {
   if (!params.orgId) {
     throw new Error("L'identifiant d'organisation est requis");
   }
@@ -104,7 +105,7 @@ export const createDriveAuthUrl = async (
     query.set("prompt", params.prompt);
   }
 
-  return await fetchJson<{ url: string }>(`${API_BASE_PATH}/auth/url?${query.toString()}`);
+  return await fetchJson<CreateAuthUrlResponse>(`${API_BASE_PATH}/auth/url?${query.toString()}`);
 };
 
 export const exchangeDriveAuthCode = async (

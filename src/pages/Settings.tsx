@@ -756,13 +756,13 @@ export default function Settings() {
           orgId: currentOrgId,
         });
 
-        storeDriveAuthState(nonce, currentOrgId);
-
-        const { url } = await driveAuthUrlMutation.mutateAsync({
+        const { url, redirectUri } = await driveAuthUrlMutation.mutateAsync({
           orgId: currentOrgId,
           state: statePayload,
         });
-        
+
+        storeDriveAuthState(nonce, currentOrgId, redirectUri ?? undefined);
+
         if (typeof window !== "undefined") {
           window.location.href = url;
         }
