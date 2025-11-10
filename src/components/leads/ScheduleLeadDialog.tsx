@@ -194,7 +194,7 @@ export const ScheduleLeadDialog = ({ lead, onScheduled }: ScheduleLeadDialogProp
           Planifier RDV
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent data-lead-dialog-ignore="true">
         <DialogHeader>
           <DialogTitle>Planifier un rendez-vous</DialogTitle>
           <DialogDescription>
