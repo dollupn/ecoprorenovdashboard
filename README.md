@@ -64,7 +64,9 @@ This project is built with:
 
 Copy the `.env.example` file to `.env` (and optionally `.env.local`) before running the
 application locally. Update each value with the credentials for your Supabase
-project and application:
+project and application.
+
+**Vite client configuration**
 
 - `VITE_SUPABASE_PROJECT_ID` – the Supabase project reference.
 - `VITE_SUPABASE_PUBLISHABLE_KEY` – the anon/publishable Supabase key for the project.
@@ -76,12 +78,18 @@ project and application:
   webhook. Use this if your webhook endpoint expects layered authentication.
 - `APP_VERSION` – the semantic version displayed in diagnostics and generated exports.
 
+**Server-side Supabase secrets**
+
+- `SUPABASE_URL` – the Supabase REST URL used by the server runtime (usually matches `VITE_SUPABASE_URL`).
+- `SUPABASE_SERVICE_ROLE_KEY` – the Supabase service role key used to perform privileged operations such as storing Google Drive credentials.
+- `SUPABASE_ANON_KEY` – the anon/publishable key used by server-side logic for less privileged operations.
+
 For production deployments (Lovable, Supabase Edge Functions, or any hosting
 provider) configure the same variables in the platform’s secret manager. When you
 rotate `ECOPRO_EXPORT_KEY`, deploy the new value to every environment and restart
 running services to ensure the updated secret is used. Remember to also update your
 local `.env`/`.env.local` files when rotating secrets so development builds stay in
-sync.
+sync. Verify that the secret manager also includes `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `SUPABASE_ANON_KEY` so Google Drive OAuth flows can reach Supabase successfully.
 
 ## How can I deploy this project?
 
