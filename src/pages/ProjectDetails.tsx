@@ -121,14 +121,15 @@ import {
 import { useProjectStatuses } from "@/hooks/useProjectStatuses";
 import { useOrganizationPrimeSettings } from "@/features/organizations/useOrganizationPrimeSettings";
 import {
-  computePrimeCeeEur,
   computeProjectCeeTotals,
-  type CeeConfig,
-  type DynamicParams,
   type PrimeCeeResult,
 } from "@/lib/cee";
 import {
+  computePrimeCee,
   withDefaultProductCeeConfig,
+  type PrimeCeeProductCatalogEntry,
+  type PrimeCeeProductResult,
+  type PrimeProductInput,
   type ProductCeeConfig,
 } from "@/lib/prime-cee-unified";
 import {
@@ -138,7 +139,6 @@ import {
   LEGACY_QUANTITY_KEY,
   resolveMultiplierKeyForCategory,
   FORMULA_QUANTITY_KEY,
-  getKwhCumacBasePerBuilding,
   type ValorisationFormulaConfig,
 } from "@/lib/valorisation-formula";
 import {
@@ -718,13 +718,17 @@ const resolvePrimeCeeEuro = (project: Project | null | undefined) => {
   return null;
 };
 
+type ProjectProductCeeResult = PrimeCeeResult & {
+  lighting?: PrimeCeeLightingDetails;
+};
+
 type ProjectProductCeeEntry = {
   projectProductId: string;
   productCode: string | null;
   productName: string | null;
   multiplierLabel: string | null;
   multiplierValue: number | null;
-  result: PrimeCeeResult | null;
+  result: ProjectProductCeeResult | null;
   warnings: {
     missingDynamicParams: boolean;
     missingKwh: boolean;
@@ -800,26 +804,6 @@ const getSchemaFieldLabel = (
 
   return null;
 };
-
-const resolveProductKwhValue = (
-  product: ProductSummary | null | undefined,
-  buildingType: string | null | undefined,
-  buildingSurface: number | null | undefined,
-) => {
-  if (!product || !Array.isArray(product.kwh_cumac_values)) return null;
-
-  return getKwhCumacBasePerBuilding(
-    product.kwh_cumac_values,
-    buildingType,
-    buildingSurface,
-  );
-};
-
-const resolveBonificationValue = (
-  primeBonification: number | null | undefined,
-) => toPositiveNumber(primeBonification) ?? 2;
-
-const resolveCoefficientValue = () => 1;
 
 const resolveMultiplierDetails = (
   product: ProductSummary,
@@ -977,9 +961,6 @@ const resolveMultiplierDetails = (
 
   return { value: null, label: null, missingDynamicParams: false };
 };
-
-const resolveDelegatePrice = (delegate?: DelegateSummary | null) =>
-  toNumber(delegate?.price_eur_per_mwh);
 
 const avantChantierSchema = z.object({
   siteRef: z
@@ -1996,12 +1977,7 @@ const ApresChantierTab = ({
               item.product?.category ?? ""
             ).toLowerCase();
             const isLightingProduct = productCategory === "lighting";
-            const lightingDetails =
-              (
-                ceeEntry.result as
-                  | (PrimeCeeResult & { lighting?: PrimeCeeLightingDetails })
-                  | null
-              )?.lighting ?? null;
+            const lightingDetails = ceeEntry.result?.lighting ?? null;
             const lightingPerLedEur = toNumber(lightingDetails?.per_led_eur);
             const lightingPerLedMwh = toNumber(lightingDetails?.per_led_mwh);
             const lightingTotalMwh = toNumber(lightingDetails?.total_mwh);
@@ -3535,86 +3511,121 @@ const ProjectDetails = () => {
       typeof project.building_type === "string"
         ? project.building_type.trim()
         : "";
-    const delegatePrice = resolveDelegatePrice(project.delegate);
-
     const buildingSurfaceValue = toNumber(project.surface_batiment_m2);
+
+    const primeProductInputs = projectProducts.reduce<PrimeProductInput[]>(
+      (acc, item, index) => {
+        const productId = item.product_id ?? null;
+        if (!productId) {
+          return acc;
+        }
+
+        const entryId = String(item.id ?? productId ?? `product-${index}`);
+        acc.push({
+          id: entryId,
+          product_id: productId,
+          quantity: typeof item.quantity === "number" ? item.quantity : undefined,
+          dynamic_params: isRecord(item.dynamic_params)
+            ? (item.dynamic_params as Record<string, unknown>)
+            : {},
+        });
+
+        return acc;
+      },
+      [],
+    );
+
+    const productCatalogMap = projectProducts.reduce<
+      Record<string, PrimeCeeProductCatalogEntry>
+    >((acc, item) => {
+      if (!item.product_id || !item.product) {
+        return acc;
+      }
+
+      acc[item.product_id] = withDefaultProductCeeConfig(item.product);
+      return acc;
+    }, {});
+
+    const computation = computePrimeCee({
+      products: primeProductInputs,
+      productMap: productCatalogMap,
+      buildingType,
+      buildingSurface: buildingSurfaceValue ?? null,
+      delegate: project.delegate ?? null,
+      primeBonification,
+    });
+
+    const resultsByProjectProductId = new Map<string, PrimeCeeProductResult>();
+    computation?.products?.forEach((result) => {
+      resultsByProjectProductId.set(String(result.projectProductId), result);
+    });
 
     const entries = projectProducts.map((item, index) => {
       const product = item.product;
-      const entryId = item.id ?? item.product_id ?? `product-${index}`;
+      const entryId = String(
+        item.id ?? item.product_id ?? `product-${index}`,
+      );
+      const primeResult = resultsByProjectProductId.get(entryId) ?? null;
 
       let multiplierLabel: string | null = null;
       let multiplierValue: number | null = null;
       let missingDynamicParams = false;
-      let missingKwh = !buildingType;
-      let result: PrimeCeeResult | null = null;
 
-      if (!product) {
-        return {
-          projectProductId: entryId,
-          productCode: null,
-          productName: null,
-          multiplierLabel,
-          multiplierValue,
-          result,
-          warnings: { missingDynamicParams, missingKwh },
-        } satisfies ProjectProductCeeEntry;
+      if (product) {
+        const multiplierDetails = resolveMultiplierDetails(product, item);
+        multiplierLabel =
+          primeResult?.multiplierLabel ?? multiplierDetails.label ?? null;
+        multiplierValue =
+          primeResult &&
+          typeof primeResult.multiplier === "number" &&
+          Number.isFinite(primeResult.multiplier)
+            ? primeResult.multiplier
+            : multiplierDetails.value;
+        missingDynamicParams = multiplierDetails.missingDynamicParams;
       }
 
-      const multiplierDetails = resolveMultiplierDetails(product, item);
-      multiplierLabel = multiplierDetails.label;
-      multiplierValue = multiplierDetails.value;
-      missingDynamicParams = multiplierDetails.missingDynamicParams;
+      const productCategory = (product?.category ?? "").toLowerCase();
+      const isLightingProduct = productCategory === "lighting";
 
-      const kwhValueRaw = resolveProductKwhValue(
-        product,
-        buildingType,
-        buildingSurfaceValue,
-      );
-      const kwhValue = toPositiveNumber(kwhValueRaw);
-      missingKwh = !buildingType || !kwhValue;
+      let result: ProjectProductCeeResult | null = null;
+      if (primeResult) {
+        result = {
+          multiplier: primeResult.multiplier,
+          valorisationPerUnitMwh: primeResult.valorisationPerUnitMwh,
+          valorisationTotalMwh: primeResult.valorisationTotalMwh,
+          delegatePrice: primeResult.delegatePrice,
+          valorisationPerUnitEur: primeResult.valorisationPerUnitEur,
+          valorisationTotalEur: primeResult.valorisationTotalEur,
+          totalPrime: primeResult.totalPrime,
+        } satisfies ProjectProductCeeResult;
 
-      if (!missingKwh && multiplierValue && multiplierValue > 0 && kwhValue) {
-        const bonification = resolveBonificationValue(primeBonification);
-        const coefficient = resolveCoefficientValue();
-        const quantityValue = toNumber(item.quantity);
-        const dynamicParams = isRecord(item.dynamic_params)
-          ? (item.dynamic_params as DynamicParams)
-          : null;
+        if (isLightingProduct) {
+          result = {
+            ...result,
+            lighting: {
+              per_led_mwh: primeResult.valorisationPerUnitMwh,
+              per_led_eur: primeResult.valorisationPerUnitEur,
+              total_mwh: primeResult.valorisationTotalMwh,
+              total_eur: primeResult.valorisationTotalEur,
+              missing_base: primeResult.hasMissingKwhCumac,
+            },
+          } satisfies ProjectProductCeeResult;
+        }
+      }
 
-        const rawFormulaExpression =
-          typeof product.cee_config?.formulaExpression === "string"
-            ? product.cee_config.formulaExpression.trim()
-            : "";
-        const valorisationFormula =
-          rawFormulaExpression.length > 0 ? rawFormulaExpression : null;
-        const ledWattConstant =
-          typeof product.cee_config?.ledWattConstant === "number" &&
-          Number.isFinite(product.cee_config.ledWattConstant)
-            ? product.cee_config.ledWattConstant
-            : null;
-
-        const config: CeeConfig = {
-          kwhCumac: kwhValue,
-          bonification: bonification ?? undefined,
-          coefficient: coefficient ?? undefined,
-          multiplier: multiplierValue,
-          quantity: quantityValue ?? null,
-          delegatePriceEurPerMwh: delegatePrice ?? null,
-          dynamicParams,
-          ...(valorisationFormula ? { valorisationFormula } : {}),
-          ...(ledWattConstant !== null
-            ? { overrides: { ledWatt: ledWattConstant } }
-            : {}),
-        };
-
-        result = computePrimeCeeEur(config);
+      let missingKwh = !buildingType;
+      if (product) {
+        if (primeResult) {
+          missingKwh = primeResult.hasMissingKwhCumac;
+        } else if (buildingType) {
+          missingKwh = true;
+        }
       }
 
       return {
         projectProductId: entryId,
-        productCode: product.code ?? null,
-        productName: product.name ?? null,
+        productCode: product?.code ?? null,
+        productName: product?.name ?? null,
         multiplierLabel,
         multiplierValue,
         result,
