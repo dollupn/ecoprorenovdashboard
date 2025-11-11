@@ -3133,10 +3133,19 @@ const ProjectDetails = () => {
         throw new Error("Session expirée. Veuillez vous reconnecter.");
       }
 
+      const derivedClientName = getProjectClientName(project).trim();
+      const fallbackClientName = project.project_ref
+        ? `Projet ${project.project_ref}`
+        : "Projet";
+      const clientName =
+        derivedClientName.length > 0
+          ? derivedClientName
+          : fallbackClientName;
+
       console.log("[Media Upload] Starting upload:", {
         projectId: project.id,
         projectRef: project.project_ref,
-        clientName: project.client_name,
+        clientName,
         orgId: currentOrgId,
         category: selectedMediaCategory,
         fileName: file.name,
@@ -3146,7 +3155,11 @@ const ProjectDetails = () => {
 
       // Get or create project folder in Drive
       const folderResponse = await fetch(
-        `/api/google-drive/project-folder/${project.id}?projectRef=${encodeURIComponent(project.project_ref)}&clientName=${encodeURIComponent(project.client_name)}`,
+        `/api/google-drive/project-folder/${
+          project.id
+        }?projectRef=${encodeURIComponent(
+          project.project_ref ?? "",
+        )}&clientName=${encodeURIComponent(clientName)}`,
         {
           headers: {
             Authorization: `Bearer ${session.access_token}`,
