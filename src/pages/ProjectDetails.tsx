@@ -3171,7 +3171,7 @@ const ProjectDetails = () => {
           file_url: fileUrl,
           preview_url: fileUrl,
           thumbnail_url: fileUrl,
-          storagePath,
+          storage_path: storagePath,
           mime_type: file.type || null,
           created_by: user.id,
         });
