@@ -63,7 +63,7 @@ import {
 import { getProjectStatusBadgeStyle, deriveProjectCategory } from "@/lib/projects";
 import { parseSiteNotes, serializeSiteNotes, type SiteNoteAttachment } from "@/lib/sites";
 import { cn } from "@/lib/utils";
-import { ClipboardList, Loader2, Lock, Info, Save } from "lucide-react";
+import { ClipboardList, Loader2, Lock, Info, Save, CircleDot } from "lucide-react";
 
 const currencyFormatter = new Intl.NumberFormat("fr-FR", {
   style: "currency",
@@ -139,6 +139,9 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
   const { statuses: statusOptions } = useProjectStatuses();
   const [siteAttachments, setSiteAttachments] = useState<SiteNoteAttachment[]>([]);
   
+  // Draft persistence key
+  const draftKey = `chantier-draft-${chantier.id}-${user?.id}`;
+  
   // HT/TTC toggle state (persisted in URL)
   const [searchParams, setSearchParams] = useSearchParams();
   const viewMode = searchParams.get("view") === "ttc" ? "ttc" : "ht";
@@ -212,6 +215,49 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
     name: "additional_costs",
   });
 
+  // Restore draft from localStorage on mount
+  useEffect(() => {
+    const savedDraft = localStorage.getItem(draftKey);
+    if (!savedDraft) return;
+    
+    try {
+      const { data, timestamp } = JSON.parse(savedDraft);
+      const age = Date.now() - timestamp;
+      
+      // Only restore if draft is less than 24 hours old
+      if (age < 24 * 60 * 60 * 1000) {
+        reset(data, { keepDefaultValues: false });
+        toast({
+          title: "Brouillon restauré",
+          description: "Vos modifications non enregistrées ont été restaurées.",
+        });
+      } else {
+        localStorage.removeItem(draftKey);
+      }
+    } catch (error) {
+      console.error("Failed to restore draft:", error);
+      localStorage.removeItem(draftKey);
+    }
+  }, [draftKey, reset, toast]);
+
+  // Save draft to localStorage when form changes (debounced)
+  useEffect(() => {
+    if (!formState.isDirty) return;
+    
+    const timeoutId = setTimeout(() => {
+      const formData = form.getValues();
+      localStorage.setItem(
+        draftKey,
+        JSON.stringify({
+          data: formData,
+          timestamp: Date.now(),
+        })
+      );
+    }, 1000); // Debounce: save 1 second after last change
+    
+    return () => clearTimeout(timeoutId);
+  }, [draftKey, formState.isDirty, form]);
+
   useEffect(() => {
     if (!Array.isArray(watchedAdditionalCosts)) return;
 
@@ -284,8 +330,16 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
     : false;
   const parsedNotes = useMemo(() => parseSiteNotes(chantier?.notes), [chantier?.notes]);
 
+  // Track chantier ID and form dirty state
+  const chantierId = chantier?.id;
+  const isFormDirty = formState.isDirty;
+
   useEffect(() => {
     if (!chantier) return;
+    
+    // Don't reset if user has unsaved changes
+    if (isFormDirty) return;
+    
     const defaults: Partial<SiteFormValues> = {
       ...defaultSiteFormValues,
       site_ref: chantier.site_ref,
@@ -367,7 +421,8 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
     reset(defaults, { keepDefaultValues: false });
     setSiteAttachments(parsedNotes.attachments);
   }, [
-    chantier,
+    chantierId, // Only track ID, not whole object
+    isFormDirty, // Prevent reset when form is dirty
     parsedNotes.attachments,
     parsedNotes.text,
     project?.client_name,
@@ -539,6 +594,7 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
       if (error) throw error;
     },
     onSuccess: async () => {
+      localStorage.removeItem(draftKey); // Clear draft after successful save
       toast({ title: "Chantier mis à jour", description: "Les informations ont été enregistrées." });
       onUpdate?.();
     },
@@ -896,6 +952,12 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                 </div>
               </div>
             ) : null}
+            {!isEditingLocked && formState.isDirty && (
+              <div className="flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-900">
+                <CircleDot className="h-3 w-3" />
+                <span className="font-medium">Modifications non enregistrées</span>
+              </div>
+            )}
             {!isEditingLocked && isUpdating ? (
               <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                 <Loader2 className="h-3 w-3 animate-spin" />
