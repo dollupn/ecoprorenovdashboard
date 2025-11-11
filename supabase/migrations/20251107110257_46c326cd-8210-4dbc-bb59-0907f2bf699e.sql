@@ -20,30 +20,22 @@ ALTER TABLE public.kpi_goals ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can view their org's KPI goals"
   ON public.kpi_goals
   FOR SELECT
-  USING (org_id = auth.uid() OR org_id IN (
-    SELECT org_id FROM auth.users WHERE id = auth.uid()
-  ));
+  USING (public.has_org_membership(auth.uid(), org_id));
 
 CREATE POLICY "Users can create KPI goals for their org"
   ON public.kpi_goals
   FOR INSERT
-  WITH CHECK (org_id = auth.uid() OR org_id IN (
-    SELECT org_id FROM auth.users WHERE id = auth.uid()
-  ));
+  WITH CHECK (public.has_org_membership(auth.uid(), org_id));
 
 CREATE POLICY "Users can update their org's KPI goals"
   ON public.kpi_goals
   FOR UPDATE
-  USING (org_id = auth.uid() OR org_id IN (
-    SELECT org_id FROM auth.users WHERE id = auth.uid()
-  ));
+  USING (public.has_org_membership(auth.uid(), org_id));
 
 CREATE POLICY "Users can delete their org's KPI goals"
   ON public.kpi_goals
   FOR DELETE
-  USING (org_id = auth.uid() OR org_id IN (
-    SELECT org_id FROM auth.users WHERE id = auth.uid()
-  ));
+  USING (public.has_org_membership(auth.uid(), org_id));
 
 -- Create index for performance
 CREATE INDEX IF NOT EXISTS idx_kpi_goals_org_id ON public.kpi_goals(org_id);
