@@ -3129,12 +3129,17 @@ const ProjectDetails = () => {
         throw new Error("Impossible de téléverser le fichier.");
       }
 
+      if (!session?.access_token) {
+        throw new Error("Session expirée. Veuillez vous reconnecter.");
+      }
+
       // Get or create project folder in Drive
       const folderResponse = await fetch(
         `/api/google-drive/project-folder/${project.id}?projectRef=${encodeURIComponent(project.project_ref)}&clientName=${encodeURIComponent(project.client_name)}`,
         {
           headers: {
-            "x-org-id": currentOrgId,
+            Authorization: `Bearer ${session.access_token}`,
+            "x-organization-id": currentOrgId,
           },
         }
       );
@@ -3156,7 +3161,8 @@ const ProjectDetails = () => {
       const uploadResponse = await fetch("/api/google-drive/upload", {
         method: "POST",
         headers: {
-          "x-org-id": currentOrgId,
+          Authorization: `Bearer ${session.access_token}`,
+          "x-organization-id": currentOrgId,
           "x-user-id": user.id,
         },
         body: formData,
