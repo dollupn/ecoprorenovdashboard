@@ -5,6 +5,7 @@ import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { KpiGoalsCard } from "@/app/(dashboard)/_components/KpiGoalsCard";
 import { useAuth } from "@/hooks/useAuth";
 import { useDashboardMetrics, useRevenueData } from "@/hooks/useDashboardData";
+import { useOrg } from "@/features/organizations/OrgContext";
 import {
   Users,
   FolderOpen,
@@ -44,9 +45,9 @@ const energyFormatter = new Intl.NumberFormat("fr-FR", {
 const formatPercentage = (value: number) => `${value.toFixed(1)}%`;
 
 const DashboardPage = () => {
-  const { session, loading: authLoading } = useAuth();
-  const currentOrgId = session?.user?.user_metadata?.org_id ?? session?.user?.id ?? null;
-  const queriesEnabled = !authLoading && Boolean(currentOrgId);
+  const { loading: authLoading } = useAuth();
+  const { currentOrgId, isLoading: orgLoading } = useOrg();
+  const queriesEnabled = !authLoading && !orgLoading && Boolean(currentOrgId);
 
   const metricsQuery = useDashboardMetrics(currentOrgId, { enabled: queriesEnabled });
   const revenueQuery = useRevenueData(currentOrgId, { enabled: queriesEnabled });
