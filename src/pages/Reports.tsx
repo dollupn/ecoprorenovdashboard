@@ -42,6 +42,7 @@ import { useReportsData, TopProjectSummary } from "@/hooks/useReportsData";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { useOrg } from "@/features/organizations/OrgContext";
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("fr-FR", {
@@ -84,9 +85,9 @@ const PROJECT_DURATION_TARGET_DAYS = 35;
 const ANNUAL_REVENUE_TARGET = 600000;
 
 const Reports = () => {
-  const { session, loading: authLoading } = useAuth();
-  const currentOrgId = session?.user?.user_metadata?.org_id ?? session?.user?.id ?? null;
-  const queriesEnabled = !authLoading && Boolean(currentOrgId);
+  const { loading: authLoading } = useAuth();
+  const { currentOrgId, isLoading: orgLoading } = useOrg();
+  const queriesEnabled = !authLoading && !orgLoading && Boolean(currentOrgId);
 
   const revenueQuery = useRevenueData(currentOrgId, { enabled: queriesEnabled });
   const reportsQuery = useReportsData(currentOrgId, { enabled: queriesEnabled });
