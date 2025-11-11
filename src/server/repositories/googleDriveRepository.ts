@@ -95,7 +95,7 @@ export const upsertDriveSettings = async (
     updated_at: new Date().toISOString(),
   };
 
-  const { data, error } = await client.from("drive_settings").upsert(payload).select("*").single();
+  const { data, error } = await client.from("drive_settings").upsert(payload, { onConflict: 'org_id' }).select("*").single();
 
   if (error) {
     throw error;
@@ -129,7 +129,7 @@ export const upsertDriveCredentials = async (
     updated_at: new Date().toISOString(),
   };
 
-  const { data, error } = await client.from("drive_credentials").upsert(payload).select("*").single();
+  const { data, error } = await client.from("drive_credentials").upsert(payload, { onConflict: 'org_id' }).select("*").single();
 
   if (error) {
     throw error;
