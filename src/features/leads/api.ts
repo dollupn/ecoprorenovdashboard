@@ -235,6 +235,22 @@ export const useUpdateLead = (_orgId: string | null) => {
   });
 };
 
+export const useDeleteLead = (orgId: string | null) => {
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: async (leadId: string) => {
+      const { error } = await supabase
+        .from("leads")
+        .delete()
+        .eq("id", leadId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["leads", orgId] });
+    },
+  });
+};
+
 export const getOrganizationProducts = async (orgId: string) => {
   const { data, error } = await supabase
     .from("product_catalog")

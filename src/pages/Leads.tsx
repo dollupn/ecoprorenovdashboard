@@ -43,6 +43,7 @@ import {
   useLeadProductTypes,
   useLeadsList,
   useUpdateLead,
+  useDeleteLead,
 } from "@/features/leads/api";
 import { useMembers, type MemberRole } from "@/features/members/api";
 import {
@@ -61,6 +62,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -91,6 +103,8 @@ import {
   List,
   Upload,
   UserCircle,
+  Eye,
+  Trash2,
 } from "lucide-react";
 import { getOrganizationProducts } from "@/features/leads/api";
 import { cn } from "@/lib/utils";
@@ -1207,6 +1221,7 @@ const Leads = () => {
   );
 
   const updateLeadMutation = useUpdateLead(orgId);
+  const deleteLeadMutation = useDeleteLead(orgId);
 
   const [isImportDialogOpen, setImportDialogOpen] = useState(false);
   const [selectedImportProductTypeId, setSelectedImportProductTypeId] = useState<string | null>(null);
@@ -1292,33 +1307,6 @@ const Leads = () => {
     setIsDetailsOpen(true);
   }, []);
 
-  const handleLeadCardContainerClick = useCallback(
-    (event: MouseEvent<HTMLDivElement>, lead: LeadWithExtras) => {
-      if (event.defaultPrevented) return;
-      const target = event.target as HTMLElement | null;
-      if (target?.closest("[data-lead-dialog-ignore]")) {
-        return;
-      }
-      handleLeadCardOpen(lead);
-    },
-    [handleLeadCardOpen]
-  );
-
-  const handleLeadCardKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLDivElement>, lead: LeadWithExtras) => {
-      if (event.defaultPrevented) return;
-      if (event.key === "Enter" || event.key === " ") {
-        const target = event.target as HTMLElement | null;
-        if (target?.closest("[data-lead-dialog-ignore]")) {
-          return;
-        }
-        event.preventDefault();
-        handleLeadCardOpen(lead);
-      }
-    },
-    [handleLeadCardOpen]
-  );
-
   const handleDetailsOpenChange = useCallback((open: boolean) => {
     setIsDetailsOpen(open);
     if (!open) {
@@ -1358,6 +1346,27 @@ const Leads = () => {
       }
     },
     [getAssigneeDisplay, toast, updateLeadMutation]
+  );
+
+  const handleDeleteLead = useCallback(
+    async (leadId: string, leadName: string) => {
+      try {
+        await deleteLeadMutation.mutateAsync(leadId);
+        toast({
+          title: "Lead supprimé",
+          description: `Le lead "${leadName}" a été supprimé avec succès.`,
+        });
+      } catch (error) {
+        console.error("Erreur lors de la suppression du lead", error);
+        const message = error instanceof Error ? error.message : "Réessayez plus tard.";
+        toast({
+          title: "Suppression impossible",
+          description: message,
+          variant: "destructive",
+        });
+      }
+    },
+    [deleteLeadMutation, toast]
   );
 
   const renderAssignmentControl = (lead: LeadRecord, variant: "card" | "table") => {
@@ -1924,16 +1933,9 @@ const Leads = () => {
                   return (
                     <div
                       key={lead.id}
-                      role="button"
-                      tabIndex={0}
-                      aria-haspopup="dialog"
-                      aria-expanded={isLeadSelected}
-                      aria-label={`Voir les détails du lead ${lead.full_name || "sans nom"}`}
-                      onClick={(event) => handleLeadCardContainerClick(event, leadWithExtras)}
-                      onKeyDown={(event) => handleLeadCardKeyDown(event, leadWithExtras)}
                       className={cn(
-                        "p-4 rounded-lg border bg-card transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                        isLeadSelected ? "border-primary bg-primary/5" : "hover:bg-muted/50"
+                        "p-4 rounded-lg border bg-card transition-colors",
+                        isLeadSelected ? "border-primary bg-primary/5" : ""
                       )}
                     >
                       <div className="flex items-start justify-between mb-3">
@@ -2034,7 +2036,6 @@ const Leads = () => {
                         </span>
                         <div
                           className="flex flex-wrap items-center gap-2 text-sm"
-                          data-lead-dialog-ignore
                         >
                           <UserCircle className="h-4 w-4 text-muted-foreground" />
                           <span className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -2043,7 +2044,41 @@ const Leads = () => {
                           {renderAssignmentControl(lead, "card")}
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-2 justify-end" data-lead-dialog-ignore>
+                      <div className="flex flex-wrap gap-2 justify-end">
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => handleLeadCardOpen(leadWithExtras)}
+                        >
+                          <Eye className="w-4 h-4 mr-1" />
+                          Voir Détails
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button size="sm" variant="outline">
+                              <Trash2 className="w-4 h-4 mr-1" />
+                              Supprimer
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Êtes-vous sûr de vouloir supprimer le lead "{lead.full_name}" ? 
+                                Cette action est irréversible.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Annuler</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDeleteLead(lead.id, lead.full_name)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                Supprimer
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                         <LeadPhoningDialog
                           lead={leadWithExtras}
                           onCompleted={handlePhoningCompleted}
@@ -2208,6 +2243,38 @@ const Leads = () => {
                                 Créé le {new Date(lead.created_at).toLocaleDateString("fr-FR")}
                               </span>
                               <div className="flex flex-wrap gap-2 justify-end">
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  onClick={() => handleLeadCardOpen(leadWithExtras)}
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </Button>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button size="sm" variant="outline">
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Êtes-vous sûr de vouloir supprimer le lead "{lead.full_name}" ? 
+                                        Cette action est irréversible.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => handleDeleteLead(lead.id, lead.full_name)}
+                                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                      >
+                                        Supprimer
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
                                 <LeadPhoningDialog
                                   lead={leadWithExtras}
                                   onCompleted={handlePhoningCompleted}
