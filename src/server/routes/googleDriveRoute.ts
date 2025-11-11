@@ -5,6 +5,7 @@ import {
   exchangeDriveAuthCode,
   generateDriveAuthUrl,
   getDriveConnectionSummary,
+  getOrCreateProjectFolder,
   normalizeDriveSettingsInput,
   refreshDriveCredentials,
   uploadFileToDrive,
@@ -239,6 +240,40 @@ router.post("/upload", ensureAuthenticated, upload.single("file"), async (req, r
     const status = error instanceof Error && /token|auth/i.test(error.message) ? 401 : 500;
     const message =
       error instanceof Error ? error.message : "Impossible d'uploader le fichier vers Google Drive";
+    return res.status(status).json({ error: message });
+  }
+});
+
+router.get("/project-folder/:projectId", ensureAuthenticated, async (req, res) => {
+  try {
+    const headerOrgId = getOrganizationId(req);
+    const { projectId } = req.params;
+    const projectRef = typeof req.query.projectRef === "string" ? req.query.projectRef : "";
+    const clientName = typeof req.query.clientName === "string" ? req.query.clientName : "";
+
+    if (!projectId || !projectRef || !clientName) {
+      return res.status(400).json({ 
+        error: "Project ID, reference, and client name are required" 
+      });
+    }
+
+    const result = await getOrCreateProjectFolder(
+      headerOrgId,
+      projectId,
+      projectRef,
+      clientName
+    );
+
+    return res.json(result);
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+
+    console.error("[Drive] Project folder creation failed", error);
+    const status = error instanceof Error && /token|auth/i.test(error.message) ? 401 : 500;
+    const message =
+      error instanceof Error ? error.message : "Failed to create project folder";
     return res.status(status).json({ error: message });
   }
 });

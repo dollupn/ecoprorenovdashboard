@@ -872,53 +872,89 @@ export type Database = {
           },
         ]
       }
+      project_drive_folders: {
+        Row: {
+          created_at: string
+          drive_folder_id: string
+          folder_name: string
+          id: string
+          org_id: string
+          project_id: string
+          updated_at: string
+          web_view_link: string | null
+        }
+        Insert: {
+          created_at?: string
+          drive_folder_id: string
+          folder_name: string
+          id?: string
+          org_id: string
+          project_id: string
+          updated_at?: string
+          web_view_link?: string | null
+        }
+        Update: {
+          created_at?: string
+          drive_folder_id?: string
+          folder_name?: string
+          id?: string
+          org_id?: string
+          project_id?: string
+          updated_at?: string
+          web_view_link?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_drive_folders_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_drive_folders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_media: {
         Row: {
           category: Database["public"]["Enums"]["project_media_category"]
           created_at: string
           created_by: string | null
-          drive_url: string | null
+          drive_url: string
           file_name: string
-          file_url: string | null
           id: string
           mime_type: string | null
           org_id: string
-          preview_url: string | null
           project_id: string
-          storage_path: string | null
-          thumbnail_url: string | null
           updated_at: string
         }
         Insert: {
           category?: Database["public"]["Enums"]["project_media_category"]
           created_at?: string
           created_by?: string | null
-          drive_url?: string | null
+          drive_url?: string
           file_name: string
-          file_url?: string | null
           id?: string
           mime_type?: string | null
           org_id: string
-          preview_url?: string | null
           project_id: string
-          storage_path?: string | null
-          thumbnail_url?: string | null
           updated_at?: string
         }
         Update: {
           category?: Database["public"]["Enums"]["project_media_category"]
           created_at?: string
           created_by?: string | null
-          drive_url?: string | null
+          drive_url?: string
           file_name?: string
-          file_url?: string | null
           id?: string
           mime_type?: string | null
           org_id?: string
-          preview_url?: string | null
           project_id?: string
-          storage_path?: string | null
-          thumbnail_url?: string | null
           updated_at?: string
         }
         Relationships: [

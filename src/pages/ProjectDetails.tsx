@@ -1348,8 +1348,7 @@ const ProjectMediaTab = ({
 
     filteredItems.forEach((item) => {
       const mime = item.mime_type?.toLowerCase() ?? "";
-      const looksLikeImage =
-        mime.startsWith("image/") || Boolean(item.thumbnail_url);
+      const looksLikeImage = mime.startsWith("image/");
       if (looksLikeImage) {
         images.push(item);
       } else {
@@ -1447,11 +1446,7 @@ const ProjectMediaTab = ({
                 </h3>
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                   {imageItems.map((item) => {
-                    const previewUrl =
-                      item.thumbnail_url ??
-                      item.preview_url ??
-                      item.file_url ??
-                      item.drive_url;
+                    const previewUrl = item.drive_url;
                     if (!previewUrl) {
                       return null;
                     }
@@ -1493,7 +1488,7 @@ const ProjectMediaTab = ({
                   Documents
                 </h3>
                 {documentItems.map((item) => {
-                  const link = item.file_url ?? item.drive_url;
+                  const link = item.drive_url;
                   return (
                     <div
                       key={item.id}
@@ -1513,17 +1508,15 @@ const ProjectMediaTab = ({
                               timeStyle: "short",
                             })}
                           </p>
-                          {item.drive_url && !item.file_url ? (
-                            <p className="text-xs text-muted-foreground">
-                              Stocké dans Google Drive
-                            </p>
-                          ) : null}
+                          <p className="text-xs text-muted-foreground">
+                            Stocké dans Google Drive
+                          </p>
                         </div>
                       </div>
                       {link ? (
                         <Button asChild variant="outline" size="sm">
                           <a href={link} target="_blank" rel="noreferrer">
-                            Ouvrir
+                            Ouvrir dans Drive
                           </a>
                         </Button>
                       ) : null}
@@ -1546,13 +1539,7 @@ const ProjectMediaTab = ({
             {lightboxItem ? (
               <div className="relative w-full overflow-hidden rounded-lg border border-border/40 bg-muted/40">
                 <img
-                  src={
-                    lightboxItem.file_url ??
-                    lightboxItem.preview_url ??
-                    lightboxItem.thumbnail_url ??
-                    lightboxItem.drive_url ??
-                    ""
-                  }
+                  src={lightboxItem.drive_url ?? ""}
                   alt={lightboxItem.file_name ?? "Aperçu"}
                   className="h-full w-full object-contain"
                 />
@@ -1690,12 +1677,9 @@ const ProjectJournalTab = ({
         actor: media.created_by
           ? (memberNameById[media.created_by] ?? null)
           : null,
-        metadata:
-          media.drive_url && !media.file_url
-            ? "Stocké dans Google Drive"
-            : null,
+        metadata: "Stocké dans Google Drive",
         date: media.created_at,
-        linkUrl: media.file_url ?? media.drive_url ?? null,
+        linkUrl: media.drive_url ?? null,
       });
     });
 
@@ -3145,34 +3129,55 @@ const ProjectDetails = () => {
         throw new Error("Impossible de téléverser le fichier.");
       }
 
-      const sanitizedName = file.name.replace(/\s+/g, "-");
-      const storagePath = `${project.id}/${Date.now()}-${sanitizedName}`;
-      const bucket = supabase.storage.from("project-media");
+      // Get or create project folder in Drive
+      const folderResponse = await fetch(
+        `/api/google-drive/project-folder/${project.id}?projectRef=${encodeURIComponent(project.project_ref)}&clientName=${encodeURIComponent(project.client_name)}`,
+        {
+          headers: {
+            "x-org-id": currentOrgId,
+          },
+        }
+      );
 
-      const { error: uploadError } = await bucket.upload(storagePath, file, {
-        upsert: false,
-        contentType: file.type || undefined,
-      });
-
-      if (uploadError) {
-        throw uploadError;
+      if (!folderResponse.ok) {
+        throw new Error("Impossible de créer le dossier projet dans Google Drive");
       }
 
-      const { data: publicUrlData } = bucket.getPublicUrl(storagePath);
-      const fileUrl = publicUrlData?.publicUrl ?? null;
+      const { folderId } = await folderResponse.json();
 
+      // Upload file to Drive
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("orgId", currentOrgId);
+      formData.append("parentFolderId", folderId);
+      formData.append("entityType", "project");
+      formData.append("entityId", project.id);
+
+      const uploadResponse = await fetch("/api/google-drive/upload", {
+        method: "POST",
+        headers: {
+          "x-org-id": currentOrgId,
+          "x-user-id": user.id,
+        },
+        body: formData,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error("Impossible de téléverser le fichier vers Google Drive");
+      }
+
+      const driveFile = await uploadResponse.json();
+
+      // Save to project_media
       const { error: insertError } = await supabase
         .from("project_media")
         .insert({
           project_id: project.id,
           org_id: currentOrgId,
           category: selectedMediaCategory,
-          file_name: file.name,
-          file_url: fileUrl,
-          preview_url: fileUrl,
-          thumbnail_url: fileUrl,
-          storage_path: storagePath,
-          mime_type: file.type || null,
+          file_name: driveFile.name,
+          drive_url: driveFile.webViewLink || driveFile.webContentLink,
+          mime_type: driveFile.mimeType || file.type || null,
           created_by: user.id,
         });
 

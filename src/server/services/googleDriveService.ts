@@ -370,6 +370,71 @@ export const disconnectDrive = async (orgId: string) => {
   return await getDriveConnectionSummary(orgId);
 };
 
+export const getOrCreateProjectFolder = async (
+  orgId: string,
+  projectId: string,
+  projectRef: string,
+  clientName: string,
+): Promise<{ folderId: string; folderName: string; webViewLink: string }> => {
+  let { oauthClient, settings, credentials } = await loadClientWithCredentials(orgId);
+
+  if (shouldRefreshToken(credentials || null)) {
+    await refreshDriveCredentials(orgId);
+    const refreshed = await loadClientWithCredentials(orgId);
+    oauthClient = refreshed.oauthClient;
+    settings = refreshed.settings;
+  }
+
+  const drive = google.drive({ version: "v3", auth: oauthClient });
+  const folderName = `${projectRef} - ${clientName}`;
+  const parentId = settings.rootFolderId || undefined;
+
+  // Search for existing folder with this name
+  const searchParams = {
+    q: `name='${folderName.replace(/'/g, "\\'")}' and mimeType='application/vnd.google-apps.folder' and trashed=false${parentId ? ` and '${parentId}' in parents` : ''}`,
+    fields: "files(id, name, webViewLink)",
+    supportsAllDrives: Boolean(settings.sharedDriveId),
+    includeItemsFromAllDrives: Boolean(settings.sharedDriveId),
+  };
+
+  const searchResult = await drive.files.list(searchParams);
+  
+  if (searchResult.data.files && searchResult.data.files.length > 0) {
+    const existingFolder = searchResult.data.files[0];
+    return {
+      folderId: existingFolder.id!,
+      folderName: existingFolder.name!,
+      webViewLink: existingFolder.webViewLink!,
+    };
+  }
+
+  // Create new folder
+  const fileMetadata: Record<string, unknown> = {
+    name: folderName,
+    mimeType: "application/vnd.google-apps.folder",
+  };
+
+  if (parentId) {
+    fileMetadata.parents = [parentId];
+  }
+
+  const { data } = await drive.files.create({
+    requestBody: fileMetadata,
+    fields: "id, name, webViewLink",
+    supportsAllDrives: Boolean(settings.sharedDriveId),
+  });
+
+  if (!data.id) {
+    throw new Error("Failed to create project folder in Google Drive");
+  }
+
+  return {
+    folderId: data.id,
+    folderName: data.name!,
+    webViewLink: data.webViewLink!,
+  };
+};
+
 export const uploadFileToDrive = async (
   options: GoogleDriveUploadOptions,
 ): Promise<{
