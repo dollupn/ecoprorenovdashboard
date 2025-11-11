@@ -135,6 +135,12 @@ const GoogleDriveCallback = () => {
       decodedState?.orgId ?? storedAuthState.orgId ?? fallbackOrgId ?? currentOrgId;
 
     if (!resolvedOrgId) {
+      console.error("[Drive] Callback - No org ID resolved:", {
+        decodedStateOrgId: decodedState?.orgId,
+        storedStateOrgId: storedAuthState.orgId,
+        urlParamOrgId: fallbackOrgId,
+        currentOrgId: currentOrgId,
+      });
       const message =
         "Impossible d'identifier l'organisation associée. Reprenez l'opération depuis votre espace Ecoprorenov.";
       setStatus("error");
@@ -147,6 +153,13 @@ const GoogleDriveCallback = () => {
       return;
     }
 
+    console.log("[Drive] Callback - Starting exchange:", {
+      code: code?.substring(0, 20) + "...",
+      redirectUri,
+      orgId: resolvedOrgId,
+      state: stateParam,
+    });
+
     setStatus("processing");
     const payload = redirectUri
       ? { orgId: resolvedOrgId, code, redirectUri }
@@ -155,6 +168,7 @@ const GoogleDriveCallback = () => {
     exchangeAuth
       .mutateAsync(payload)
       .then((summary) => {
+        console.log("[Drive] Callback - Exchange successful:", summary);
         setStatus("success");
         setErrorMessage(null);
         if (summary.orgId && summary.orgId !== currentOrgId) {
@@ -170,6 +184,11 @@ const GoogleDriveCallback = () => {
         }, 1200);
       })
       .catch((error) => {
+        console.error("[Drive] Callback - Exchange failed:", {
+          error: error,
+          message: error?.message,
+          response: error?.response?.data,
+        });
         const message =
           error instanceof Error
             ? error.message

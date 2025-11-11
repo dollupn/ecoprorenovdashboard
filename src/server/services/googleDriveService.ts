@@ -229,6 +229,14 @@ export const generateDriveAuthUrl = async (
 ): Promise<{ url: string; redirectUri: string | null }> => {
   const { oauthClient, redirectUri } = await loadClientWithCredentials(orgId, options.redirectUri);
 
+  console.log("[Drive] Generating auth URL:", {
+    orgId,
+    providedRedirectUri: options.redirectUri,
+    resolvedRedirectUri: redirectUri,
+    state: options.state,
+    prompt: options.prompt,
+  });
+
   const url = oauthClient.generateAuthUrl({
     access_type: "offline",
     scope: DRIVE_SCOPES,
@@ -236,6 +244,11 @@ export const generateDriveAuthUrl = async (
     state: options.state,
     prompt: (options.prompt as "consent" | "select_account" | "none" | undefined) ?? "consent",
     redirect_uri: redirectUri ?? undefined,
+  });
+
+  console.log("[Drive] Generated auth URL successfully:", { 
+    urlLength: url.length,
+    redirectUri 
   });
 
   return { url, redirectUri };
@@ -246,34 +259,72 @@ export const exchangeDriveAuthCode = async (
   code: string,
   redirectUri?: string,
 ): Promise<GoogleDriveConnectionSummary> => {
+  console.log("[Drive] Starting auth code exchange:", {
+    orgId,
+    codeLength: code.length,
+    codePrefix: code.substring(0, 20) + "...",
+    providedRedirectUri: redirectUri,
+  });
+
   const { oauthClient, credentials: currentCredentials, settings } = await loadClientWithCredentials(
     orgId,
     redirectUri,
   );
 
-  const { tokens } = await oauthClient.getToken({
-    code,
-    redirect_uri: redirectUri ?? settings.redirectUri ?? undefined,
-  });
-  oauthClient.setCredentials(tokens);
-
-  const scopeArray = Array.isArray(tokens.scope)
-    ? tokens.scope
-    : typeof tokens.scope === "string"
-    ? tokens.scope.split(/\s+/).filter(Boolean)
-    : undefined;
-
-  await upsertDriveCredentials(orgId, {
-    access_token: tokens.access_token ?? null,
-    refresh_token: tokens.refresh_token ?? currentCredentials?.refresh_token ?? null,
-    token_type: tokens.token_type ?? null,
-    scope: scopeArray ?? currentCredentials?.scope ?? null,
-    expires_at: toIsoDate(tokens.expiry_date),
-    status: "connected",
-    error_message: null,
+  const finalRedirectUri = redirectUri ?? settings.redirectUri ?? undefined;
+  
+  console.log("[Drive] Token exchange parameters:", {
+    orgId,
+    hasCode: !!code,
+    redirectUri: finalRedirectUri,
+    hasCurrentRefreshToken: !!currentCredentials?.refresh_token,
+    settingsRedirectUri: settings.redirectUri,
   });
 
-  return await getDriveConnectionSummary(orgId);
+  try {
+    const { tokens } = await oauthClient.getToken({
+      code,
+      redirect_uri: finalRedirectUri,
+    });
+    
+    console.log("[Drive] Token exchange successful:", {
+      orgId,
+      hasAccessToken: !!tokens.access_token,
+      hasRefreshToken: !!tokens.refresh_token,
+      tokenType: tokens.token_type,
+      expiryDate: tokens.expiry_date,
+    });
+    
+    oauthClient.setCredentials(tokens);
+
+    const scopeArray = Array.isArray(tokens.scope)
+      ? tokens.scope
+      : typeof tokens.scope === "string"
+      ? tokens.scope.split(/\s+/).filter(Boolean)
+      : undefined;
+
+    await upsertDriveCredentials(orgId, {
+      access_token: tokens.access_token ?? null,
+      refresh_token: tokens.refresh_token ?? currentCredentials?.refresh_token ?? null,
+      token_type: tokens.token_type ?? null,
+      scope: scopeArray ?? currentCredentials?.scope ?? null,
+      expires_at: toIsoDate(tokens.expiry_date),
+      status: "connected",
+      error_message: null,
+    });
+
+    console.log("[Drive] Credentials saved successfully for org:", orgId);
+
+    return await getDriveConnectionSummary(orgId);
+  } catch (error) {
+    console.error("[Drive] Token exchange failed:", {
+      orgId,
+      error: error instanceof Error ? error.message : String(error),
+      redirectUriUsed: finalRedirectUri,
+      fullError: error,
+    });
+    throw error;
+  }
 };
 
 export const refreshDriveCredentials = async (

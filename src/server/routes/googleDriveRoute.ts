@@ -165,12 +165,29 @@ router.get("/auth/url", async (req, res) => {
 router.post("/auth/exchange", async (req, res) => {
   const { orgId, code, redirectUri } = req.body ?? {};
 
+  console.log("[Drive] Exchange endpoint called:", {
+    orgId,
+    hasCode: !!code,
+    codeLength: code?.length,
+    providedRedirectUri: redirectUri,
+    headers: {
+      origin: req.headers.origin,
+      referer: req.headers.referer,
+    },
+  });
+
   if (typeof orgId !== "string" || !orgId.trim() || typeof code !== "string" || !code.trim()) {
+    console.error("[Drive] Invalid exchange parameters:", { orgId, hasCode: !!code });
     return res.status(400).json({ error: "Paramètres d'authentification Drive invalides" });
   }
 
   try {
     const summary = await exchangeDriveAuthCode(orgId, code, redirectUri);
+    console.log("[Drive] Exchange successful, returning summary:", {
+      orgId,
+      connected: summary.connected,
+      status: summary.status,
+    });
     return res.json(summary);
   } catch (error) {
     console.error("[Drive] Auth code exchange failed", error);
