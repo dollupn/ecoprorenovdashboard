@@ -3133,6 +3133,17 @@ const ProjectDetails = () => {
         throw new Error("Session expirée. Veuillez vous reconnecter.");
       }
 
+      console.log("[Media Upload] Starting upload:", {
+        projectId: project.id,
+        projectRef: project.project_ref,
+        clientName: project.client_name,
+        orgId: currentOrgId,
+        category: selectedMediaCategory,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+      });
+
       // Get or create project folder in Drive
       const folderResponse = await fetch(
         `/api/google-drive/project-folder/${project.id}?projectRef=${encodeURIComponent(project.project_ref)}&clientName=${encodeURIComponent(project.client_name)}`,
@@ -3144,11 +3155,23 @@ const ProjectDetails = () => {
         }
       );
 
+      console.log("[Media Upload] Folder response:", {
+        status: folderResponse.status,
+        statusText: folderResponse.statusText,
+        ok: folderResponse.ok,
+      });
+
       if (!folderResponse.ok) {
+        const errorText = await folderResponse.text();
+        console.error("[Media Upload] Folder creation failed:", {
+          status: folderResponse.status,
+          error: errorText,
+        });
         throw new Error("Impossible de créer le dossier projet dans Google Drive");
       }
 
       const { folderId } = await folderResponse.json();
+      console.log("[Media Upload] Folder ID obtained:", folderId);
 
       // Upload file to Drive
       const formData = new FormData();
@@ -3168,11 +3191,27 @@ const ProjectDetails = () => {
         body: formData,
       });
 
+      console.log("[Media Upload] Upload response:", {
+        status: uploadResponse.status,
+        statusText: uploadResponse.statusText,
+        ok: uploadResponse.ok,
+      });
+
       if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text();
+        console.error("[Media Upload] File upload failed:", {
+          status: uploadResponse.status,
+          error: errorText,
+        });
         throw new Error("Impossible de téléverser le fichier vers Google Drive");
       }
 
       const driveFile = await uploadResponse.json();
+      console.log("[Media Upload] Drive file created:", {
+        id: driveFile.id,
+        name: driveFile.name,
+        webViewLink: driveFile.webViewLink,
+      });
 
       // Save to project_media
       const { error: insertError } = await supabase
@@ -3199,6 +3238,12 @@ const ProjectDetails = () => {
       await Promise.all([refetchProjectMedia(), refetchStatusEvents()]);
     },
     onError: (error) => {
+      console.error("[Media Upload] Upload failed:", {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        projectId: project?.id,
+        orgId: currentOrgId,
+      });
       const message =
         error instanceof Error
           ? error.message

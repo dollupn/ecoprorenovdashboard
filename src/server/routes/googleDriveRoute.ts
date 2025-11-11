@@ -251,12 +251,26 @@ router.get("/project-folder/:projectId", ensureAuthenticated, async (req, res) =
     const projectRef = typeof req.query.projectRef === "string" ? req.query.projectRef : "";
     const clientName = typeof req.query.clientName === "string" ? req.query.clientName : "";
 
+    console.log("[Drive API] Project folder request received:", {
+      projectId,
+      projectRef,
+      clientName,
+      orgId: headerOrgId,
+      hasAuth: !!req.headers.authorization,
+    });
+
     if (!projectId || !projectRef || !clientName) {
+      console.error("[Drive API] Missing required parameters:", {
+        hasProjectId: !!projectId,
+        hasProjectRef: !!projectRef,
+        hasClientName: !!clientName,
+      });
       return res.status(400).json({ 
         error: "Project ID, reference, and client name are required" 
       });
     }
 
+    console.log("[Drive API] Calling getOrCreateProjectFolder...");
     const result = await getOrCreateProjectFolder(
       headerOrgId,
       projectId,
@@ -264,13 +278,28 @@ router.get("/project-folder/:projectId", ensureAuthenticated, async (req, res) =
       clientName
     );
 
+    console.log("[Drive API] Project folder created/found:", {
+      folderId: result.folderId,
+      folderName: result.folderName,
+    });
+
     return res.json(result);
   } catch (error) {
     if (error instanceof ApiError) {
+      console.error("[Drive API] ApiError:", {
+        statusCode: error.statusCode,
+        message: error.message,
+      });
       return res.status(error.statusCode).json({ error: error.message });
     }
 
-    console.error("[Drive] Project folder creation failed", error);
+    console.error("[Drive API] Project folder creation failed:", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      code: (error as any).code,
+      errors: (error as any).errors,
+      response: (error as any).response?.data,
+    });
     const status = error instanceof Error && /token|auth/i.test(error.message) ? 401 : 500;
     const message =
       error instanceof Error ? error.message : "Failed to create project folder";
