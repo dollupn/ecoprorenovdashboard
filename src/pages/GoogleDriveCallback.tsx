@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { CheckCircle2, Loader2, AlertTriangle } from "lucide-react";
 
@@ -46,6 +46,7 @@ const GoogleDriveCallback = () => {
 
   const [status, setStatus] = useState<CallbackStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const hasExchangeStarted = useRef(false);
 
   const code = searchParams.get("code");
   const authError = searchParams.get("error");
@@ -99,6 +100,12 @@ const GoogleDriveCallback = () => {
   }, [storedAuthState.redirectUri]);
 
   useEffect(() => {
+    // Prevent multiple exchange attempts
+    if (hasExchangeStarted.current) {
+      console.log("[Drive] Callback - Exchange already started, skipping");
+      return;
+    }
+
     if (authError) {
       const message =
         authError === "access_denied"
@@ -160,6 +167,7 @@ const GoogleDriveCallback = () => {
       state: stateParam,
     });
 
+    hasExchangeStarted.current = true;
     setStatus("processing");
     const payload = redirectUri
       ? { orgId: resolvedOrgId, code, redirectUri }
