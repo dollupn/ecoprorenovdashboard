@@ -4,9 +4,10 @@ import type { Tables } from "@/integrations/supabase/types";
 import type { ProjectStatus } from "@/lib/projects";
 import {
   differenceInCalendarDays,
+  endOfDay,
   isValid,
+  startOfDay,
   startOfYear,
-  subYears,
 } from "date-fns";
 import { aggregateEnergyByCategory, type EnergyBreakdownEntry, type ProjectWithProducts } from "@/lib/energy";
 import {
@@ -65,6 +66,11 @@ const toSiteStatus = (status: string | null | undefined): SiteStatus | null =>
 
 interface QueryOptions {
   enabled?: boolean;
+}
+
+interface ReportsQueryOptions extends QueryOptions {
+  startDate?: Date;
+  endDate?: Date;
 }
 
 export interface LeadSourceBreakdown {
@@ -194,11 +200,20 @@ const resolveSiteRentability = (site: SiteRow) => {
   };
 };
 
-export const useReportsData = (orgId: string | null, options: QueryOptions = {}) => {
-  const { enabled = true } = options;
+export const useReportsData = (
+  orgId: string | null,
+  options: ReportsQueryOptions = {},
+) => {
+  const { enabled = true, startDate, endDate } = options;
 
   return useQuery<ReportsData, Error>({
-    queryKey: ["reports", "metrics", orgId],
+    queryKey: [
+      "reports",
+      "metrics",
+      orgId,
+      startDate ? startDate.toISOString() : null,
+      endDate ? endDate.toISOString() : null,
+    ],
     enabled: Boolean(orgId) && enabled,
     queryFn: async () => {
       if (!orgId) {
@@ -206,22 +221,24 @@ export const useReportsData = (orgId: string | null, options: QueryOptions = {})
       }
 
       const now = new Date();
-      const currentYearStart = startOfYear(now);
-      const previousYearStart = startOfYear(subYears(now, 1));
+      const rangeEnd = endDate ? endOfDay(endDate) : now;
+      const rangeStart = startDate ? startOfDay(startDate) : startOfYear(rangeEnd);
 
       const [leadsRes, sitesRes, projectsRes] = await Promise.all([
         supabase
           .from("leads")
           .select("id, status, utm_source, created_at")
           .eq("org_id", orgId)
-          .gte("created_at", currentYearStart.toISOString()),
+          .gte("created_at", rangeStart.toISOString())
+          .lte("created_at", rangeEnd.toISOString()),
         supabase
           .from("sites")
           .select(
             "id, project_ref, site_ref, client_name, status, revenue, profit_margin, rentability_margin_rate, rentability_margin_total, rentability_total_costs, rentability_additional_costs_total, rentability_unit_label, cout_main_oeuvre_m2_ht, cout_isolation_m2, isolation_utilisee_m2, surface_facturee, montant_commission, travaux_non_subventionnes, additional_costs, product_name, date_debut, date_fin_prevue, created_at",
           )
           .eq("org_id", orgId)
-          .gte("created_at", previousYearStart.toISOString()),
+          .gte("created_at", rangeStart.toISOString())
+          .lte("created_at", rangeEnd.toISOString()),
         supabase
           .from("projects")
           .select(
@@ -229,7 +246,9 @@ export const useReportsData = (orgId: string | null, options: QueryOptions = {})
             project_products(id, quantity, dynamic_params, product:product_catalog(id, code, category, cee_config, default_params, is_active, params_schema, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac_lt_400, kwh_cumac_gte_400)))`
           )
           .eq("org_id", orgId)
-          .in("status", PROJECT_SURFACE_STATUSES as ProjectStatus[]),
+          .in("status", PROJECT_SURFACE_STATUSES as ProjectStatus[])
+          .gte("updated_at", rangeStart.toISOString())
+          .lte("updated_at", rangeEnd.toISOString()),
       ]);
 
       if (leadsRes.error) throw leadsRes.error;

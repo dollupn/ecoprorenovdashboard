@@ -32,17 +32,22 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Zap,
+  Calendar as CalendarIcon,
 } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAuth } from "@/hooks/useAuth";
 import { useRevenueData } from "@/hooks/useDashboardData";
 import { useReportsData, TopProjectSummary } from "@/hooks/useReportsData";
-import { format } from "date-fns";
+import { format, endOfYear, startOfYear, isSameDay, isSameMonth, isSameYear, subYears } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useOrg } from "@/features/organizations/OrgContext";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import type { DateRange } from "react-day-picker";
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("fr-FR", {
@@ -60,6 +65,26 @@ const formatPercent = (value: number) =>
 const energyFormatter = new Intl.NumberFormat("fr-FR", {
   maximumFractionDigits: 1,
 });
+
+const formatRangeDisplay = (range?: DateRange | null) => {
+  if (!range?.from || !range?.to) {
+    return "Sélectionnez une période";
+  }
+
+  if (isSameDay(range.from, range.to)) {
+    return format(range.from, "d MMM yyyy", { locale: fr });
+  }
+
+  if (isSameMonth(range.from, range.to) && isSameYear(range.from, range.to)) {
+    return `${format(range.from, "d", { locale: fr })}–${format(range.to, "d MMM yyyy", { locale: fr })}`;
+  }
+
+  if (isSameYear(range.from, range.to)) {
+    return `${format(range.from, "d MMM", { locale: fr })} – ${format(range.to, "d MMM yyyy", { locale: fr })}`;
+  }
+
+  return `${format(range.from, "d MMM yyyy", { locale: fr })} – ${format(range.to, "d MMM yyyy", { locale: fr })}`;
+};
 
 type Highlight = {
   title: string;
@@ -89,11 +114,49 @@ const Reports = () => {
   const { currentOrgId, isLoading: orgLoading } = useOrg();
   const queriesEnabled = !authLoading && !orgLoading && Boolean(currentOrgId);
 
-  const revenueQuery = useRevenueData(currentOrgId, { enabled: queriesEnabled });
-  const reportsQuery = useReportsData(currentOrgId, { enabled: queriesEnabled });
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => ({
+    from: startOfYear(new Date()),
+    to: endOfYear(new Date()),
+  }));
 
-  const currentYear = new Date().getFullYear();
-  const previousYear = currentYear - 1;
+  const rangeFilters = useMemo<
+    { startDate: Date; endDate: Date } | undefined
+  >(() => {
+    if (dateRange?.from && dateRange?.to) {
+      return { startDate: dateRange.from, endDate: dateRange.to };
+    }
+    return undefined;
+  }, [dateRange]);
+
+  const revenueQuery = useRevenueData(currentOrgId, {
+    enabled: queriesEnabled,
+    ...(rangeFilters ?? {}),
+  });
+  const reportsQuery = useReportsData(currentOrgId, {
+    enabled: queriesEnabled,
+    ...(rangeFilters ?? {}),
+  });
+
+  const rangeLabel = useMemo(() => formatRangeDisplay(dateRange), [dateRange]);
+  const hasCompleteRange = Boolean(rangeFilters);
+  const periodYearLabel = useMemo(() => {
+    if (!dateRange?.from || !dateRange?.to) {
+      return `${new Date().getFullYear()}`;
+    }
+    const startYear = dateRange.from.getFullYear();
+    const endYear = dateRange.to.getFullYear();
+    return startYear === endYear ? `${startYear}` : `${startYear}–${endYear}`;
+  }, [dateRange]);
+  const previousPeriodLabel = useMemo(() => {
+    if (!dateRange?.from || !dateRange?.to) {
+      return `${new Date().getFullYear() - 1}`;
+    }
+    return formatRangeDisplay({
+      from: subYears(dateRange.from, 1),
+      to: subYears(dateRange.to, 1),
+    });
+  }, [dateRange]);
+  const narrativePeriodLabel = hasCompleteRange ? rangeLabel : "la période courante";
 
   const lastUpdatedIso = reportsQuery.data?.generatedAt ?? revenueQuery.data?.generatedAt;
   const lastUpdatedLabel = lastUpdatedIso
@@ -116,7 +179,7 @@ const Reports = () => {
   const previousYearToDatePaid = revenueQuery.data?.previousYearToDatePaid ?? 0;
 
   const revenueYoYDelta = useMemo(() => {
-    if (!revenueQuery.data || previousYearToDatePaid === 0) {
+    if (!revenueQuery.data || previousYearToDatePaid <= 0) {
       return null;
     }
     const diff = yearToDatePaid - previousYearToDatePaid;
@@ -152,9 +215,13 @@ const Reports = () => {
   const highlightLoading = queriesEnabled && (revenueQuery.isLoading || reportsQuery.isLoading);
 
   const motivationHighlights = useMemo<Highlight[]>(() => {
+    const leadsPeriodNarrative = hasCompleteRange
+      ? `sur la période ${rangeLabel}`
+      : `pendant ${narrativePeriodLabel}`;
+
     return [
       {
-        title: `Objectif CA ${currentYear}`,
+        title: `Objectif CA ${periodYearLabel}`,
         value: `${revenueProgress}% atteint`,
         description:
           ANNUAL_REVENUE_TARGET > 0
@@ -173,7 +240,7 @@ const Reports = () => {
         description:
           totalLeads === 0
             ? "Aucun lead analysé pour le moment."
-            : `${qualifiedLeads} sur ${totalLeads} leads reçus en ${currentYear}.`,
+          : `${qualifiedLeads} sur ${totalLeads} leads reçus ${leadsPeriodNarrative}.`,
         emoji: "📈",
       },
       {
@@ -182,11 +249,22 @@ const Reports = () => {
         description:
           activeSites === 0
             ? "Aucun chantier en cours actuellement."
-            : `${activeSites} chantier(s) suivis en temps réel.`,
+            : `${activeSites} chantier(s) suivis ${hasCompleteRange ? `sur la période ${rangeLabel}` : `pendant ${narrativePeriodLabel}`}.`,
         emoji: "🏗️",
       },
     ];
-  }, [currentYear, revenueProgress, yearToDatePaid, revenueRemaining, qualifiedLeads, totalLeads, activeSites]);
+  }, [
+    hasCompleteRange,
+    rangeLabel,
+    periodYearLabel,
+    narrativePeriodLabel,
+    revenueProgress,
+    yearToDatePaid,
+    revenueRemaining,
+    qualifiedLeads,
+    totalLeads,
+    activeSites,
+  ]);
 
   const bestConversionSource = useMemo(() => {
     if (sourceBreakdown.length === 0) return null;
@@ -282,7 +360,7 @@ const Reports = () => {
   const revenueBadgeText =
     revenueYoYDelta === null
       ? "Historique insuffisant"
-      : `${revenueYoYDelta >= 0 ? "+" : ""}${revenueYoYDelta.toFixed(1)}% vs ${previousYear}`;
+      : `${revenueYoYDelta >= 0 ? "+" : ""}${revenueYoYDelta.toFixed(1)}% vs ${previousPeriodLabel}`;
 
   const durationBadgeClass = cn(
     "border",
@@ -313,9 +391,35 @@ const Reports = () => {
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3 text-sm">
-            <div>
+            <div className="space-y-2">
               <p className="text-muted-foreground">Période analysée</p>
-              <p className="font-medium">Année {currentYear}</p>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !hasCompleteRange && "text-muted-foreground",
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {rangeLabel}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                  <Calendar
+                    mode="range"
+                    numberOfMonths={2}
+                    locale={fr}
+                    selected={dateRange}
+                    defaultMonth={dateRange?.from ?? new Date()}
+                    onSelect={(range) => setDateRange(range ?? undefined)}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              <p className="text-xs text-muted-foreground">{periodYearLabel}</p>
             </div>
             <div>
               <p className="text-muted-foreground">Dernière actualisation</p>
@@ -387,7 +491,7 @@ const Reports = () => {
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Euro className="h-4 w-4 text-primary" />
-                CA cumulé {currentYear}
+                CA cumulé ({periodYearLabel})
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -683,7 +787,7 @@ const Reports = () => {
         <div className="grid gap-6 lg:grid-cols-7">
           <Card className="shadow-card border-0 bg-card/60 backdrop-blur lg:col-span-4">
             <CardHeader>
-              <CardTitle>Top projets du trimestre</CardTitle>
+              <CardTitle>Top projets de la période</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <Table>
