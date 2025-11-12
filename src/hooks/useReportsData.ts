@@ -104,6 +104,10 @@ export interface ReportsData {
     topProjects: TopProjectSummary[];
     activeCount: number;
     completedCount: number;
+    totalRevenue: number;
+    revenueSampleSize: number;
+    averageRevenuePerSite: number | null;
+    totalMargin: number;
   };
   energy: {
     totalMwh: number;
@@ -278,11 +282,15 @@ export const useReportsData = (orgId: string | null, options: QueryOptions = {})
         }))
         .sort((a, b) => b.leads - a.leads);
 
-      const marginValues = sites
-        .map((site) => {
-          const rentability = resolveSiteRentability(site);
-          return Number.isFinite(rentability.marginRate) ? rentability.marginRate : null;
-        })
+      const sitesWithRentability = sites.map((site) => ({
+        site,
+        rentability: resolveSiteRentability(site),
+      }));
+
+      const marginValues = sitesWithRentability
+        .map(({ rentability }) =>
+          Number.isFinite(rentability.marginRate) ? rentability.marginRate : null,
+        )
         .filter((value): value is number => value !== null);
 
       const averageMargin =
@@ -329,13 +337,32 @@ export const useReportsData = (orgId: string | null, options: QueryOptions = {})
         return status ? SITE_COMPLETED_STATUSES.includes(status) : false;
       }).length;
 
-      const topProjects: TopProjectSummary[] = sites
-        .filter((site) => typeof site.revenue === "number" && site.revenue !== null)
-        .sort((a, b) => (b.revenue ?? 0) - (a.revenue ?? 0))
-        .slice(0, 5)
-        .map((site) => {
-          const rentability = resolveSiteRentability(site);
+      const revenueTotals = sitesWithRentability.reduce(
+        (acc, { site, rentability }) => {
+          if (typeof site.revenue === "number" && Number.isFinite(site.revenue)) {
+            acc.totalRevenue += site.revenue;
+            acc.revenueSampleSize += 1;
+          }
 
+          if (Number.isFinite(rentability.marginTotal)) {
+            acc.totalMargin += rentability.marginTotal;
+          }
+
+          return acc;
+        },
+        { totalRevenue: 0, revenueSampleSize: 0, totalMargin: 0 },
+      );
+
+      const averageRevenuePerSite =
+        revenueTotals.revenueSampleSize > 0
+          ? revenueTotals.totalRevenue / revenueTotals.revenueSampleSize
+          : null;
+
+      const topProjects: TopProjectSummary[] = sitesWithRentability
+        .filter(({ site }) => typeof site.revenue === "number" && site.revenue !== null)
+        .sort((a, b) => (b.site.revenue ?? 0) - (a.site.revenue ?? 0))
+        .slice(0, 5)
+        .map(({ site, rentability }) => {
           return {
             id: site.id,
             projectRef: site.project_ref,
@@ -373,6 +400,10 @@ export const useReportsData = (orgId: string | null, options: QueryOptions = {})
           topProjects,
           activeCount,
           completedCount,
+          totalRevenue: revenueTotals.totalRevenue,
+          revenueSampleSize: revenueTotals.revenueSampleSize,
+          averageRevenuePerSite,
+          totalMargin: revenueTotals.totalMargin,
         },
         energy: {
           totalMwh: energyAggregation.totalMwh,
