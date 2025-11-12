@@ -62,6 +62,9 @@ const formatPercent = (value: number) =>
     maximumFractionDigits: 0,
   }).format(value);
 
+const formatCountLabel = (count: number, singular: string, plural: string) =>
+  `${new Intl.NumberFormat("fr-FR").format(count)} ${count > 1 ? plural : singular}`;
+
 const energyFormatter = new Intl.NumberFormat("fr-FR", {
   maximumFractionDigits: 1,
 });
@@ -207,6 +210,12 @@ const Reports = () => {
   const averageDuration = reportsQuery.data?.sites.averageDuration ?? null;
   const durationSampleSize = reportsQuery.data?.sites.durationSampleSize ?? 0;
   const activeSites = reportsQuery.data?.sites.activeCount ?? 0;
+  const completedSites = reportsQuery.data?.sites.completedCount ?? 0;
+  const totalSiteRevenue = reportsQuery.data?.sites.totalRevenue ?? 0;
+  const averageRevenuePerSite = reportsQuery.data?.sites.averageRevenuePerSite ?? null;
+  const revenueSampleSize = reportsQuery.data?.sites.revenueSampleSize ?? 0;
+  const totalMarginAnalyzed = reportsQuery.data?.sites.totalMargin ?? 0;
+  const marginSampleSize = reportsQuery.data?.margin.sampleSize ?? 0;
 
   const topProjects = reportsQuery.data?.sites.topProjects ?? [];
   const energyMetrics = reportsQuery.data?.energy;
@@ -595,6 +604,60 @@ const Reports = () => {
           <Card className="shadow-card border-0 bg-gradient-card">
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-sm text-muted-foreground">
+                <CheckCircle2 className="h-4 w-4 text-primary" />
+                Chantiers livrés
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {reportsQuery.isLoading ? (
+                <Skeleton className="h-9 w-24" />
+              ) : (
+                <>
+                  <p className="text-3xl font-semibold">
+                    {new Intl.NumberFormat("fr-FR").format(completedSites)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {completedSites === 0
+                      ? "Aucun chantier livré sur la période."
+                      : `${formatCountLabel(completedSites, "chantier livré", "chantiers livrés")} sur la période.`}
+                  </p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-card border-0 bg-gradient-card">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Euro className="h-4 w-4 text-primary" />
+                CA moyen par chantier
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {reportsQuery.isLoading ? (
+                <Skeleton className="h-9 w-28" />
+              ) : (
+                <>
+                  <p className="text-3xl font-semibold">
+                    {averageRevenuePerSite !== null ? formatCurrency(averageRevenuePerSite) : "—"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {revenueSampleSize === 0
+                      ? "Aucun chiffre d'affaires consolidé."
+                      : `${formatCountLabel(
+                          revenueSampleSize,
+                          "chantier facturé",
+                          "chantiers facturés",
+                        )}, soit ${formatCurrency(totalSiteRevenue)} cumulés.`}
+                  </p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-card border-0 bg-gradient-card">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Zap className="h-4 w-4 text-primary" />
                 Énergie cumulée
               </CardTitle>
@@ -632,6 +695,35 @@ const Reports = () => {
                       Aucune donnée par catégorie
                     </p>
                   )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-card border-0 bg-gradient-card">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-sm text-muted-foreground">
+                <TrendingUp className="h-4 w-4 text-primary" />
+                Marge totale analysée
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {reportsQuery.isLoading ? (
+                <Skeleton className="h-9 w-24" />
+              ) : (
+                <>
+                  <p className="text-3xl font-semibold">
+                    {marginSampleSize === 0 ? "—" : formatCurrency(totalMarginAnalyzed)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {marginSampleSize === 0
+                      ? "Aucune marge calculée sur la période."
+                      : `${formatCountLabel(
+                          marginSampleSize,
+                          "chantier analysé",
+                          "chantiers analysés",
+                        )} pour la rentabilité.`}
+                  </p>
                 </>
               )}
             </CardContent>
