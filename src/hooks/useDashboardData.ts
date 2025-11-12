@@ -12,8 +12,12 @@ import type { ProjectStatus } from "@/lib/projects";
 import {
   addDays,
   addMonths,
+  differenceInCalendarMonths,
+  endOfDay,
+  endOfMonth,
   endOfWeek,
   format,
+  startOfDay,
   startOfMonth,
   startOfWeek,
   startOfYear,
@@ -178,6 +182,11 @@ export interface ActivityItem {
 
 interface QueryOptions {
   enabled?: boolean;
+}
+
+interface RevenueQueryOptions extends QueryOptions {
+  startDate?: Date;
+  endDate?: Date;
 }
 
 const formatMonthLabel = (date: Date) => {
@@ -450,13 +459,18 @@ export const useDashboardMetrics = (
 
 export const useRevenueData = (
   orgId: string | null,
-  options: QueryOptions = {}
+  options: RevenueQueryOptions = {}
 ) => {
-  const { enabled = true } = options;
-
+  const { enabled = true, startDate, endDate } = options;
 
   return useQuery<RevenueData, Error>({
-    queryKey: ["dashboard", "revenue", orgId],
+    queryKey: [
+      "dashboard",
+      "revenue",
+      orgId,
+      startDate ? startDate.toISOString() : null,
+      endDate ? endDate.toISOString() : null,
+    ],
     enabled: Boolean(orgId) && enabled,
     queryFn: async () => {
       if (!orgId) {
@@ -464,20 +478,32 @@ export const useRevenueData = (
       }
 
       const now = new Date();
-      const trendStart = startOfMonth(subMonths(now, 11));
-      const startWeek = startOfWeek(now, { weekStartsOn: 1 });
-      const endWeek = endOfWeek(now, { weekStartsOn: 1 });
+      const rangeEnd = endDate ? endOfDay(endDate) : now;
+      const rangeStart = startDate ? startOfDay(startDate) : startOfYear(rangeEnd);
+      const previousRangeStart = subYears(rangeStart, 1);
+      const previousRangeEnd = subYears(rangeEnd, 1);
+      const trendStart = startDate
+        ? startOfMonth(rangeStart)
+        : startOfMonth(subMonths(rangeEnd, 11));
+      const monthsInTrend = startDate && endDate
+        ? Math.max(
+            1,
+            differenceInCalendarMonths(endOfMonth(rangeEnd), trendStart) + 1,
+          )
+        : 12;
+      const queryStart = previousRangeStart;
+      const queryEnd = rangeEnd;
+      const startWeek = startOfWeek(rangeEnd, { weekStartsOn: 1 });
+      const endWeek = endOfWeek(rangeEnd, { weekStartsOn: 1 });
       const previousWeekStart = subDays(startWeek, 7);
       const previousWeekEnd = subDays(startWeek, 1);
-      const currentYearStart = startOfYear(now);
-      const previousYearCutoff = subYears(now, 1);
-      const previousYearStart = startOfYear(previousYearCutoff);
 
       const { data, error } = await supabase
         .from("invoices")
         .select("id, amount, status, created_at, updated_at")
         .eq("org_id", orgId)
-        .gte("created_at", previousYearStart.toISOString())
+        .gte("created_at", queryStart.toISOString())
+        .lte("created_at", queryEnd.toISOString())
         .order("created_at", { ascending: true });
 
       if (error) throw error;
@@ -487,15 +513,23 @@ export const useRevenueData = (
         status: invoice.status ? invoice.status.toUpperCase() : null,
       }));
       const paidInvoices = invoices.filter((invoice) => invoice.status === "PAID");
+      const inRangeInvoices = invoices.filter((invoice) => {
+        const date = new Date(invoice.created_at);
+        return date >= rangeStart && date <= rangeEnd;
+      });
+      const inRangePaidInvoices = paidInvoices.filter((invoice) => {
+        const date = new Date(invoice.created_at);
+        return date >= rangeStart && date <= rangeEnd;
+      });
 
       const buckets: RevenuePoint[] = [];
-      for (let i = 0; i < 12; i += 1) {
+      for (let i = 0; i < monthsInTrend; i += 1) {
         const monthDate = addMonths(trendStart, i);
         const isoMonth = format(monthDate, "yyyy-MM");
-        const invoicedTotal = invoices
+        const invoicedTotal = inRangeInvoices
           .filter((invoice) => format(new Date(invoice.created_at), "yyyy-MM") === isoMonth)
           .reduce((acc, invoice) => acc + (invoice.amount ?? 0), 0);
-        const paidTotal = paidInvoices
+        const paidTotal = inRangePaidInvoices
           .filter((invoice) => format(new Date(invoice.created_at), "yyyy-MM") === isoMonth)
           .reduce((acc, invoice) => acc + (invoice.amount ?? 0), 0);
 
@@ -508,7 +542,7 @@ export const useRevenueData = (
       }
 
       const currentMonthTotal = buckets.at(-1)?.total ?? 0;
-      const previousMonthTotal = buckets.at(-2)?.total ?? 0;
+      const previousMonthTotal = monthsInTrend > 1 ? buckets.at(-2)?.total ?? 0 : 0;
 
       const sumInInterval = (records: typeof invoices, start: Date, end: Date) =>
         records
@@ -518,15 +552,15 @@ export const useRevenueData = (
           })
           .reduce((acc, invoice) => acc + (invoice.amount ?? 0), 0);
 
-      const currentWeekTotal = sumInInterval(paidInvoices, startWeek, endWeek);
-      const previousWeekTotal = sumInInterval(paidInvoices, previousWeekStart, previousWeekEnd);
-      const yearToDatePaid = sumInInterval(paidInvoices, currentYearStart, now);
-      const yearToDateInvoiced = sumInInterval(invoices, currentYearStart, now);
-      const previousYearToDatePaid = sumInInterval(paidInvoices, previousYearStart, previousYearCutoff);
+      const currentWeekTotal = sumInInterval(inRangePaidInvoices, startWeek, endWeek);
+      const previousWeekTotal = sumInInterval(inRangePaidInvoices, previousWeekStart, previousWeekEnd);
+      const yearToDatePaid = sumInInterval(inRangePaidInvoices, rangeStart, rangeEnd);
+      const yearToDateInvoiced = sumInInterval(inRangeInvoices, rangeStart, rangeEnd);
+      const previousYearToDatePaid = sumInInterval(paidInvoices, previousRangeStart, previousRangeEnd);
       const previousYearToDateInvoiced = sumInInterval(
         invoices,
-        previousYearStart,
-        previousYearCutoff,
+        previousRangeStart,
+        previousRangeEnd,
       );
 
       return {
@@ -535,7 +569,7 @@ export const useRevenueData = (
         previousMonthTotal,
         currentWeekTotal,
         previousWeekTotal,
-        hasData: paidInvoices.length > 0,
+        hasData: inRangePaidInvoices.length > 0,
         generatedAt: now.toISOString(),
         yearToDatePaid,
         yearToDateInvoiced,
