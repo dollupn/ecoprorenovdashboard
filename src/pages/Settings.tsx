@@ -1,27 +1,9 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
-import { Label } from "@/components/ui/label";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/use-toast";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { useMembers } from "@/features/members/api";
@@ -34,36 +16,22 @@ import type { PostgrestError } from "@supabase/supabase-js";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
 import {
-  Users,
-  Building2,
-  Bell,
-  Shield,
-  Database as DatabaseIcon,
-  Mail,
-  Phone,
   Settings as SettingsIcon,
   Settings2,
-  RefreshCw,
-  Plug,
-  ShieldCheck,
-  KeyRound,
-  MonitorSmartphone,
-  Clock,
-  AlertCircle,
-  Palette,
-  Plus,
-  Trash2,
-  Loader2,
-  UserPlus,
+  Users,
   FileText,
-  List,
   Cloud,
   Calendar,
   Target,
+  Palette,
+  List,
+  Building2,
+  Bell,
+  Plug,
+  ShieldCheck,
 } from "lucide-react";
 import {
   DEFAULT_PROJECT_STATUSES,
-  getProjectStatusBadgeStyle,
   getProjectStatusSettings,
   PROJECT_STATUS_UPDATED_EVENT,
   saveProjectStatuses,
@@ -96,11 +64,27 @@ import { SubcontractorSettingsPanel } from "@/features/settings/SubcontractorSet
 import { AppointmentSettingsPanel } from "@/features/settings/AppointmentSettingsPanel";
 import { KpiSettingsPanel } from "@/features/settings/KpiSettingsPanel";
 import { BackupSettingsPanel } from "@/features/settings/BackupSettingsPanel";
+import {
+  ROLE_OPTIONS,
+  type RoleOption,
+  type BusinessLocation,
+  type TeamMember,
+  type Integration,
+  type CompanyInfo,
+  type Delegataire,
+  type NotificationSettings,
+  type SecuritySettings,
+} from "@/features/settings/general/types";
+import { TeamManagementCard } from "@/features/settings/general/TeamManagementCard";
+import { ProjectStatusesCard } from "@/features/settings/general/ProjectStatusesCard";
+import { BuildingReferenceCard } from "@/features/settings/general/BuildingReferenceCard";
+import { CompanyInformationCard } from "@/features/settings/general/CompanyInformationCard";
+import { NotificationPreferencesCard } from "@/features/settings/general/NotificationPreferencesCard";
+import { IntegrationsCard } from "@/features/settings/general/IntegrationsCard";
+import { SecuritySettingsCard } from "@/features/settings/general/SecuritySettingsCard";
+import { GeneralOverviewCard } from "@/features/settings/general/GeneralOverviewCard";
 
-const SETTINGS_TABLE = "settings" as unknown as keyof Database["public"]["Tables"];
-const ROLE_OPTIONS = ["Administrateur", "Manager", "Commercial", "Technicien"] as const;
-type RoleOption = (typeof ROLE_OPTIONS)[number];
-type BusinessLocation = Database["public"]["Enums"]["business_location"];
+const SETTINGS_TABLE = "settings" as keyof Database["public"]["Tables"];
 
 const BUSINESS_LOCATIONS: { value: BusinessLocation; label: string; description: string }[] = [
   {
@@ -139,62 +123,6 @@ const DEFAULT_BUSINESS_LOCATION =
   BUSINESS_LOCATIONS[0]?.value ?? ("metropole" as BusinessLocation);
 
 type ProfileRecord = Tables<"profiles">;
-
-interface TeamMember {
-  id: string;
-  name: string;
-  role: RoleOption;
-  identifier: string;
-  email: string | null;
-  phone: string | null;
-  active: boolean;
-  lastConnection: string;
-}
-
-interface Integration {
-  id: string;
-  name: string;
-  description: string;
-  status: "connected" | "pending" | "disconnected";
-  lastSync: string;
-}
-
-interface CompanyInfo {
-  name: string;
-  legalName: string;
-  registration: string;
-  address: string;
-  city: string;
-  postalCode: string;
-  phone: string;
-  email: string;
-  description: string;
-}
-
-interface Delegataire {
-  id: string;
-  name: string;
-  contactName: string;
-  email: string;
-  phone: string;
-  textBlock: string;
-  pricePerMwh: string;
-}
-
-interface NotificationSettings {
-  commercialEmails: boolean;
-  operationalEmails: boolean;
-  smsReminders: boolean;
-  pushNotifications: boolean;
-  weeklyDigest: boolean;
-}
-
-interface SecuritySettings {
-  twoFactor: boolean;
-  passwordRotation: boolean;
-  loginAlerts: boolean;
-  sessionDuration: string;
-}
 
 const INACTIVE_KEYWORDS = new Set(["inactif", "inactive", "désactivé", "desactive", "disabled"]);
 
@@ -320,6 +248,27 @@ const sessionOptions = [
   { value: "120", label: "2 heures" },
 ];
 
+type GeneralTab =
+  | "overview"
+  | "team"
+  | "statuses"
+  | "catalog"
+  | "company"
+  | "notifications"
+  | "integrations"
+  | "security";
+
+const GENERAL_TABS: Array<{ id: GeneralTab; label: string; icon: typeof Users }> = [
+  { id: "overview", label: "Résumé", icon: SettingsIcon },
+  { id: "team", label: "Équipe", icon: Users },
+  { id: "statuses", label: "Statuts", icon: Palette },
+  { id: "catalog", label: "Référentiel", icon: List },
+  { id: "company", label: "Entreprise", icon: Building2 },
+  { id: "notifications", label: "Notifications", icon: Bell },
+  { id: "integrations", label: "Intégrations", icon: Plug },
+  { id: "security", label: "Sécurité", icon: ShieldCheck },
+];
+
 type SettingsSection =
   | "general"
   | "lead"
@@ -379,6 +328,17 @@ export default function Settings() {
     return fallback;
   }, [location.search, availableSections]);
 
+  const activeGeneralTab = useMemo<GeneralTab>(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get("generalTab");
+
+    if (tab && GENERAL_TABS.some(({ id }) => id === tab)) {
+      return tab as GeneralTab;
+    }
+
+    return "overview";
+  }, [location.search]);
+
   const handleSectionSelect = (section: SettingsSection) => {
     if (!availableSections.some(({ id }) => id === section)) {
       return;
@@ -389,6 +349,27 @@ export default function Settings() {
       params.delete("section");
     } else {
       params.set("section", section);
+    }
+
+    navigate(
+      {
+        pathname: location.pathname,
+        search: params.toString() ? `?${params.toString()}` : "",
+      },
+      { replace: true },
+    );
+  };
+
+  const handleGeneralTabSelect = (tab: GeneralTab) => {
+    if (!GENERAL_TABS.some(({ id }) => id === tab)) {
+      return;
+    }
+
+    const params = new URLSearchParams(location.search);
+    if (tab === "overview") {
+      params.delete("generalTab");
+    } else {
+      params.set("generalTab", tab);
     }
 
     navigate(
@@ -446,6 +427,36 @@ export default function Settings() {
   });
   const [loadingOrganizationSettings, setLoadingOrganizationSettings] = useState(false);
   const [savingOrganizationSettings, setSavingOrganizationSettings] = useState(false);
+
+  const handleCompanyInfoChange = useCallback((changes: Partial<CompanyInfo>) => {
+    setCompanyInfo((prev) => ({ ...prev, ...changes }));
+  }, []);
+
+  const handleCompanyAddressChange = useCallback(
+    (
+      address: string,
+      city: string,
+      postalCode: string,
+      options?: { manual?: boolean },
+    ) => {
+      const isManual = options?.manual ?? false;
+      setIsManualCompanyAddress(isManual);
+      setCompanyInfo((prev) => ({
+        ...prev,
+        address,
+        city,
+        postalCode,
+      }));
+    },
+    [],
+  );
+
+  const handleOrganizationPrimeChange = useCallback(
+    (changes: Partial<{ businessLocation: BusinessLocation; primeBonification: string }>) => {
+      setOrganizationPrimeSettings((prev) => ({ ...prev, ...changes }));
+    },
+    [],
+  );
 
   const [notifications, setNotifications] = useState<NotificationSettings>({
     commercialEmails: true,
@@ -645,6 +656,11 @@ export default function Settings() {
     [driveIntegration, integrations],
   );
 
+  const connectedIntegrationsCount = useMemo(
+    () => displayedIntegrations.filter((integration) => integration.status === "connected").length,
+    [displayedIntegrations],
+  );
+
   const driveConnectLoading = driveAuthUrlMutation.isPending;
   const driveRefreshLoading = driveRefreshMutation.isPending;
   const driveDisconnectLoading = driveDisconnectMutation.isPending;
@@ -737,6 +753,28 @@ export default function Settings() {
       toast,
     ],
   );
+
+  const handleDriveClientIdChange = (value: string) => {
+    setDriveClientId(value);
+  };
+
+  const handleDriveClientSecretChange = (value: string) => {
+    setDriveClientSecret(value);
+  };
+
+  const handleDriveRedirectUriChange = (value: string) => {
+    setDriveRedirectUri(value);
+  };
+
+  const handleDriveRootFolderChange = (value: string) => {
+    setDriveRootFolderTouched(true);
+    setDriveRootFolderId(value);
+  };
+
+  const handleDriveSharedDriveChange = (value: string) => {
+    setDriveSharedDriveTouched(true);
+    setDriveSharedDriveId(value);
+  };
 
   const handleDriveConnectClick = () => {
     if (!currentOrgId) {
@@ -840,1085 +878,155 @@ export default function Settings() {
           title: "Erreur lors de la déconnexion",
           description: message,
           variant: "destructive",
-        });
       });
+    });
   };
 
-  // Define as function component to avoid "used before declaration" errors
-  const GeneralSection = () => (
-    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.65fr,1fr]">
-      <div className="space-y-6">
-        <Card className="border border-border/60 bg-card/70 shadow-sm">
-          <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-lg font-semibold text-foreground">
-                <Users className="h-5 w-5 text-primary" />
-                Gestion des utilisateurs
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Administrez les accès, les rôles et le statut d&apos;activité de vos collaborateurs.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={handleManualRefresh}
-                disabled={loadingMembers}
-                className="h-9 w-9 border-border/60"
-                aria-label="Rafraîchir la liste des membres"
-              >
-                <RefreshCw className={`h-4 w-4 ${loadingMembers ? "animate-spin" : ""}`} />
-              </Button>
-              <Button onClick={handleInviteMember} variant="secondary">
-                Inviter un membre
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">{renderTeamMembers()}</CardContent>
-        </Card>
+  const GeneralSection = () => {
+    const catalogCount = buildingTypes.length + buildingUsages.length;
 
-        <Card className="border border-border/60 bg-card/70 shadow-sm">
-          <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-lg font-semibold text-foreground">
-                <Palette className="h-5 w-5 text-primary" />
-                Statuts des projets
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Personnalisez les libellés et les couleurs utilisés sur l&apos;ensemble du tableau de bord.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {projectStatusesBusy ? (
-                <span className="flex items-center gap-2 rounded-full border border-border/60 bg-background/60 px-3 py-1 text-xs text-muted-foreground">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Synchronisation…
-                </span>
-              ) : null}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleResetStatuses}
-                disabled={isDefaultProjectStatuses || projectStatusesBusy}
-              >
-                Réinitialiser
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                className="gap-2"
-                onClick={handleAddStatus}
-                disabled={projectStatusesBusy}
-              >
-                <Plus className="h-4 w-4" />
-                Ajouter un statut
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {projectStatusesBusy && projectStatuses.length === 0 ? (
-              <div className="space-y-4">
-                {Array.from({ length: 3 }).map((_, index) => (
-                  <div
-                    key={`project-status-skeleton-${index}`}
-                    className="space-y-4 rounded-2xl border border-border/60 bg-background/60 p-4"
-                  >
-                    <div className="flex items-center justify-between">
-                      <Skeleton className="h-6 w-40" />
-                      <Skeleton className="h-9 w-9" />
-                    </div>
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                      <Skeleton className="h-10 w-full" />
-                      <Skeleton className="h-10 w-full" />
-                      <Skeleton className="h-10 w-full" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : projectStatuses.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-border/60 bg-background/60 p-6 text-center text-sm text-muted-foreground">
-                Aucun statut n&apos;est configuré. Ajoutez un statut pour commencer.
-              </div>
-            ) : (
-              <>
-                {projectStatuses.map((status) => {
-                  const badgeStyle = getProjectStatusBadgeStyle(status.color);
-                  return (
-                    <div
-                      key={status.id}
-                      className="space-y-4 rounded-2xl border border-border/60 bg-background/60 p-4"
-                    >
-                      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                        <div className="flex items-center gap-3">
-                          <Badge variant="outline" style={badgeStyle} className="px-3 py-1">
-                            {status.label || status.value}
-                          </Badge>
-                          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                            {status.value}
-                          </span>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRemoveStatus(status.id)}
-                          disabled={projectStatuses.length <= 1 || projectStatusesBusy}
-                          aria-label={`Supprimer le statut ${status.label || status.value}`}
-                          className="h-9 w-9 text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                        <div className="space-y-2">
-                          <Label>Nom affiché</Label>
-                          <Input
-                            value={status.label}
-                            placeholder="Nom du statut"
-                            onChange={(event) => handleStatusLabelChange(status.id, event.target.value)}
-                            disabled={projectStatusesBusy}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Code interne</Label>
-                          <Input
-                            value={status.value}
-                            onChange={(event) => handleStatusValueChange(status.id, event.target.value)}
-                            placeholder="NOUVEAU"
-                            disabled={projectStatusesBusy}
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            Identifiant synchronisé avec vos exports et intégrations.
-                          </p>
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Couleur du badge</Label>
-                          <div className="flex items-center gap-3">
-                            <input
-                              type="color"
-                              value={status.color}
-                              onChange={(event) => handleStatusColorChange(status.id, event.target.value)}
-                              className="h-10 w-16 cursor-pointer rounded-md border border-border/60 bg-background p-1"
-                              aria-label={`Couleur du statut ${status.label || status.value}`}
-                              disabled={projectStatusesBusy}
-                            />
-                            <span className="text-sm text-muted-foreground">{status.color}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                {projectStatusesBusy ? (
-                  <div className="flex items-center gap-2 rounded-xl border border-dashed border-border/60 bg-background/60 px-3 py-2 text-xs text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Synchronisation des statuts en cours…
-                  </div>
-                ) : null}
-              </>
-            )}
-            <div className="rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-4 text-sm text-muted-foreground">
-              Les modifications sont appliquées instantanément aux listes, aux filtres et aux formulaires de création
-              de projet.
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border border-border/60 bg-card/70 shadow-sm">
-          <CardHeader className="flex flex-col gap-4">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-lg font-semibold text-foreground">
-                <List className="h-5 w-5 text-primary" />
-                Référentiel bâtiments
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Personnalisez les types de bâtiment et les usages proposés lors de la création de projet.
-              </p>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-8">
-            <div className="space-y-4">
-              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <h3 className="text-base font-medium text-foreground">Types de bâtiment</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Ces valeurs alimentent les formulaires de projets et les documents commerciaux.
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleResetBuildingTypes}
-                    disabled={isDefaultBuildingTypes}
-                  >
-                    Réinitialiser
-                  </Button>
-                  <Button size="sm" variant="secondary" className="gap-2" onClick={handleAddBuildingType}>
-                    <Plus className="h-4 w-4" />
-                    Ajouter
-                  </Button>
-                </div>
-              </div>
-              <div className="space-y-3">
-                {buildingTypes.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-border/60 bg-background/60 p-4 text-sm text-muted-foreground">
-                    Aucun type de bâtiment n&apos;est configuré. Ajoutez-en pour les proposer dans vos projets.
-                  </div>
-                ) : (
-                  buildingTypes.map((type, index) => (
-                    <div key={`${type}-${index}`} className="flex items-center gap-2">
-                      <Input
-                        value={type}
-                        onChange={(event) => handleBuildingTypeChange(index, event.target.value)}
-                        placeholder="Type de bâtiment"
-                      />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleRemoveBuildingType(index)}
-                        aria-label={`Supprimer le type ${type || index + 1}`}
-                        className="h-9 w-9 text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            <Separator className="bg-border/60" />
-
-            <div className="space-y-4">
-              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <h3 className="text-base font-medium text-foreground">Usages</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Gérez les usages disponibles lors de la qualification des projets.
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleResetUsages}
-                    disabled={isDefaultBuildingUsages}
-                  >
-                    Réinitialiser
-                  </Button>
-                  <Button size="sm" variant="secondary" className="gap-2" onClick={handleAddUsage}>
-                    <Plus className="h-4 w-4" />
-                    Ajouter
-                  </Button>
-                </div>
-              </div>
-              <div className="space-y-3">
-                {buildingUsages.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-border/60 bg-background/60 p-4 text-sm text-muted-foreground">
-                    Aucun usage n&apos;est configuré. Ajoutez un usage pour le rendre disponible.
-                  </div>
-                ) : (
-                  buildingUsages.map((usage, index) => (
-                    <div key={`${usage}-${index}`} className="flex items-center gap-2">
-                      <Input
-                        value={usage}
-                        onChange={(event) => handleUsageChange(index, event.target.value)}
-                        placeholder="Usage"
-                      />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleRemoveUsage(index)}
-                        aria-label={`Supprimer l'usage ${usage || index + 1}`}
-                        className="h-9 w-9 text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border border-border/60 bg-card/70 shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg font-semibold text-foreground">
-              <Building2 className="h-5 w-5 text-primary" />
-              Informations sur l&apos;entreprise
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Ces informations sont utilisées pour vos documents commerciaux et la communication client.
-            </p>
-          </CardHeader>
-          <CardContent>
-            <Tabs defaultValue="company" className="space-y-6">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="company">Entreprise</TabsTrigger>
-                <TabsTrigger value="delegataire">Délégataires</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="company" className="space-y-6">
-                <form className="space-y-6" onSubmit={handleCompanySubmit}>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="company-name">Nom d&apos;usage</Label>
-                      <Input
-                        id="company-name"
-                        value={companyInfo.name}
-                        onChange={(e) => setCompanyInfo((p) => ({ ...p, name: e.target.value }))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="company-legal">Raison sociale</Label>
-                      <Input
-                        id="company-legal"
-                        value={companyInfo.legalName}
-                        onChange={(e) => setCompanyInfo((p) => ({ ...p, legalName: e.target.value }))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="company-registration">Enregistrement</Label>
-                      <Input
-                        id="company-registration"
-                        value={companyInfo.registration}
-                        onChange={(e) =>
-                          setCompanyInfo((p) => ({ ...p, registration: e.target.value }))
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="company-phone">Téléphone</Label>
-                      <Input
-                        id="company-phone"
-                        value={companyInfo.phone}
-                        onChange={(e) => setCompanyInfo((p) => ({ ...p, phone: e.target.value }))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="company-email">Email principal</Label>
-                      <Input
-                        id="company-email"
-                        type="email"
-                        value={companyInfo.email}
-                        onChange={(e) => setCompanyInfo((p) => ({ ...p, email: e.target.value }))}
-                      />
-                    </div>
-                    <div className="md:col-span-2 space-y-2">
-                      <Label htmlFor="company-address">Adresse</Label>
-                        <AddressAutocomplete
-                          value={companyInfo.address}
-                          onChange={(address, city, postalCode, options) => {
-                            const isManual = options?.manual ?? false;
-                            setIsManualCompanyAddress(isManual);
-                            setCompanyInfo((p) => ({
-                              ...p,
-                              address,
-                              city,
-                              postalCode,
-                            }));
-                          }}
-                        />
-                    </div>
-                    <div className="grid gap-4 md:grid-cols-2 md:col-span-2">
-                        <div className="space-y-2">
-                          <Label htmlFor="company-city">Ville</Label>
-                          <Input
-                            id="company-city"
-                            value={companyInfo.city}
-                            readOnly={!isManualCompanyAddress}
-                            onChange={(e) =>
-                              setCompanyInfo((p) => ({ ...p, city: e.target.value }))
-                            }
-                            placeholder="Sélectionnez une adresse"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="company-postal">Code postal</Label>
-                          <Input
-                            id="company-postal"
-                            value={companyInfo.postalCode}
-                            readOnly={!isManualCompanyAddress}
-                            onChange={(e) =>
-                              setCompanyInfo((p) => ({ ...p, postalCode: e.target.value }))
-                            }
-                            placeholder="Sélectionnez une adresse"
-                          />
-                        </div>
-                    </div>
-                    <div className="grid gap-4 md:grid-cols-2 md:col-span-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="company-business-location">Zone géographique</Label>
-                        <Select
-                          value={organizationPrimeSettings.businessLocation}
-                          onValueChange={(value) =>
-                            setOrganizationPrimeSettings((prev) => ({
-                              ...prev,
-                              businessLocation: value as BusinessLocation,
-                            }))
-                          }
-                        >
-                          <SelectTrigger
-                            id="company-business-location"
-                            disabled={loadingOrganizationSettings || savingOrganizationSettings}
-                          >
-                            <SelectValue placeholder="Sélectionnez une zone" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {BUSINESS_LOCATIONS.map((location) => (
-                              <SelectItem key={location.value} value={location.value}>
-                                {location.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">
-                          {
-                            BUSINESS_LOCATIONS.find(
-                              (location) => location.value === organizationPrimeSettings.businessLocation,
-                            )?.description ??
-                              "Choisissez la zone utilisée pour calculer les primes."
-                          }
-                        </p>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="prime-bonification">Bonification Prime CEE (€)</Label>
-                        <Input
-                          id="prime-bonification"
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={organizationPrimeSettings.primeBonification}
-                          onChange={(event) =>
-                            setOrganizationPrimeSettings((prev) => ({
-                              ...prev,
-                              primeBonification: event.target.value,
-                            }))
-                          }
-                          disabled={loadingOrganizationSettings || savingOrganizationSettings}
-                          placeholder="0"
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Montant additionnel appliqué automatiquement lors des simulations de prime CEE.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="md:col-span-2 space-y-2">
-                      <Label htmlFor="company-description">Description publique</Label>
-                      <Textarea
-                        id="company-description"
-                        value={companyInfo.description}
-                        onChange={(e) =>
-                          setCompanyInfo((p) => ({ ...p, description: e.target.value }))
-                        }
-                        rows={3}
-                      />
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-end gap-3">
-                    <Button type="button" variant="ghost" disabled={savingOrganizationSettings}>
-                      Annuler
-                    </Button>
-                    <Button
-                      type="submit"
-                      disabled={savingOrganizationSettings || loadingOrganizationSettings}
-                    >
-                      {savingOrganizationSettings
-                        ? "Enregistrement..."
-                        : "Enregistrer les modifications"}
-                    </Button>
-                  </div>
-                </form>
-              </TabsContent>
-
-              <TabsContent value="delegataire" className="space-y-6">
-                <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground">
-                    Renseignez les délégataires avec leurs informations de contact et le bloc de texte qui sera
-                    automatiquement ajouté aux devis correspondants.
-                  </p>
-                  <div className="flex items-center justify-between rounded-xl border border-dashed border-primary/30 bg-primary/5 p-4 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-3">
-                      <UserPlus className="h-4 w-4 text-primary" />
-                      <span>Ajoutez un délégataire pour personnaliser vos documents commerciaux.</span>
-                    </div>
-                    <Button type="button" size="sm" onClick={handleAddDelegataire}>
-                      Nouveau délégataire
-                    </Button>
-                  </div>
-                </div>
-
-                {delegataires.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-border/60 bg-background/60 p-8 text-center text-sm text-muted-foreground">
-                    <FileText className="h-6 w-6 text-primary" />
-                    <p>Aucun délégataire n&apos;a encore été configuré.</p>
-                    <Button type="button" variant="secondary" onClick={handleAddDelegataire}>
-                      Ajouter un délégataire
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {delegataires.map((delegataire, index) => (
-                      <div
-                        key={delegataire.id}
-                        className="space-y-4 rounded-2xl border border-border/60 bg-background/60 p-5 shadow-sm"
-                      >
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <p className="text-sm font-medium text-foreground">
-                              Délégataire {index + 1}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              Ces informations seront reprises sur les devis associés.
-                            </p>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRemoveDelegataire(delegataire.id)}
-                            className="h-8 w-8 text-muted-foreground"
-                            aria-label={`Supprimer le délégataire ${index + 1}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-
-                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                          <div className="space-y-2">
-                            <Label htmlFor={`delegataire-name-${delegataire.id}`}>
-                              Nom du délégataire
-                            </Label>
-                            <Input
-                              id={`delegataire-name-${delegataire.id}`}
-                              value={delegataire.name}
-                              onChange={(event) =>
-                                handleDelegataireChange(
-                                  delegataire.id,
-                                  "name",
-                                  event.target.value,
-                                )
-                              }
-                              placeholder="Société partenaire"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor={`delegataire-contact-${delegataire.id}`}>
-                              Contact principal
-                            </Label>
-                            <Input
-                              id={`delegataire-contact-${delegataire.id}`}
-                              value={delegataire.contactName}
-                              onChange={(event) =>
-                                handleDelegataireChange(
-                                  delegataire.id,
-                                  "contactName",
-                                  event.target.value,
-                                )
-                              }
-                              placeholder="Nom et prénom"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor={`delegataire-email-${delegataire.id}`}>
-                              Email
-                            </Label>
-                            <Input
-                              id={`delegataire-email-${delegataire.id}`}
-                              type="email"
-                              value={delegataire.email}
-                              onChange={(event) =>
-                                handleDelegataireChange(
-                                  delegataire.id,
-                                  "email",
-                                  event.target.value,
-                                )
-                              }
-                              placeholder="delegataire@exemple.fr"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor={`delegataire-phone-${delegataire.id}`}>
-                              Téléphone
-                            </Label>
-                            <Input
-                              id={`delegataire-phone-${delegataire.id}`}
-                              value={delegataire.phone}
-                              onChange={(event) =>
-                                handleDelegataireChange(
-                                  delegataire.id,
-                                  "phone",
-                                  event.target.value,
-                                )
-                              }
-                              placeholder="+33 6 12 34 56 78"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor={`delegataire-price-${delegataire.id}`}>
-                              Tarif (€/MWh)
-                            </Label>
-                            <Input
-                              id={`delegataire-price-${delegataire.id}`}
-                              value={delegataire.pricePerMwh}
-                              onChange={(event) =>
-                                handleDelegataireChange(
-                                  delegataire.id,
-                                  "pricePerMwh",
-                                  event.target.value,
-                                )
-                              }
-                              placeholder="0,00"
-                            />
-                          </div>
-                          <div className="md:col-span-2 lg:col-span-3 space-y-2">
-                            <Label htmlFor={`delegataire-text-${delegataire.id}`}>
-                              Bloc de texte pour le devis
-                            </Label>
-                            <Textarea
-                              id={`delegataire-text-${delegataire.id}`}
-                              value={delegataire.textBlock}
-                              onChange={(event) =>
-                                handleDelegataireChange(
-                                  delegataire.id,
-                                  "textBlock",
-                                  event.target.value,
-                                )
-                              }
-                              rows={3}
-                              placeholder="Informations complémentaires affichées sur le devis"
-                            />
-                            <p className="text-xs text-muted-foreground">
-                              Ce contenu sera affiché automatiquement dans la section dédiée du devis.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {delegataires.length > 0 && (
-                  <div className="flex items-center justify-end">
-                    <Button type="button" onClick={handleSaveDelegataires}>
-                      Sauvegarder les délégataires
-                    </Button>
-                  </div>
-                )}
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
-
-        <Card className="border border-border/60 bg-card/70 shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg font-semibold text-foreground">
-              <Bell className="h-5 w-5 text-primary" />
-              Préférences de notifications
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Personnalisez les canaux de communication pour chaque événement métier important.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-4">
-              {[
-                {
-                  key: "commercialEmails" as const,
-                  title: "Suivi commercial",
-                  description:
-                    "Alertes sur les nouveaux leads, rappels de relance et devis en attente.",
-                },
-                {
-                  key: "operationalEmails" as const,
-                  title: "Opérations & chantiers",
-                  description:
-                    "Notifications de planification, pointages d'équipes et suivi de chantier.",
-                },
-                {
-                  key: "smsReminders" as const,
-                  title: "SMS automatiques",
-                  description:
-                    "Rappels de rendez-vous clients et confirmations d'interventions.",
-                },
-                {
-                  key: "pushNotifications" as const,
-                  title: "Notifications mobiles",
-                  description:
-                    "Alertes en temps réel sur mobile pour les demandes critiques.",
-                },
-                {
-                  key: "weeklyDigest" as const,
-                  title: "Rapport hebdomadaire",
-                  description:
-                    "Synthèse des indicateurs clés envoyée chaque lundi matin.",
-                },
-              ].map((item) => (
-                <div
-                  key={item.key}
-                  className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-background/60 p-4 md:flex-row md:items-center md:justify-between"
-                >
-                  <div>
-                    <p className="font-medium text-foreground">{item.title}</p>
-                    <p className="text-sm text-muted-foreground">{item.description}</p>
-                  </div>
-                  <Switch
-                    checked={notifications[item.key]}
-                    onCheckedChange={() => toggleNotification(item.key)}
-                  />
-                </div>
-              ))}
-            </div>
-            <div className="flex items-center justify-end">
-              <Button onClick={handleSaveNotifications}>Sauvegarder les préférences</Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="space-y-6">
-        <Card className="border border-border/60 bg-card/70 shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg font-semibold text-foreground">
-              <Plug className="h-5 w-5 text-primary" />
-              Intégrations & API
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Connectez vos outils métiers pour fluidifier vos process commerciaux et opérationnels.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {displayedIntegrations.map((integration) => {
-              const isDrive = integration.id === "google-drive";
-              const badgeLabel = isDrive && driveConnectionLoading
-                ? (
-                    <span className="flex items-center gap-2">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      Vérification
-                    </span>
-                  )
-                : integration.status === "connected"
-                ? "Connecté"
-                : integration.status === "pending"
-                ? "En attente"
-                : "Déconnecté";
-
-              return (
-                <div
-                  key={integration.id}
-                  className="space-y-3 rounded-2xl border border-border/60 bg-background/60 p-4"
-                >
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium text-foreground">{integration.name}</p>
-                      <Badge
-                        className={integrationStatusStyles[integration.status]}
-                        variant="outline"
-                      >
-                        {badgeLabel}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">{integration.description}</p>
-                  </div>
-                  {isDrive ? (
-                    <div className="flex w-full flex-col gap-4 md:min-w-[320px] md:max-w-[420px] md:items-end">
-                      {isAdmin ? (
-                        <form
-                          onSubmit={handleDriveSettingsSubmit}
-                          className="w-full space-y-3 rounded-xl border border-border/60 bg-background/60 p-4 shadow-sm"
-                        >
-                          <div className="grid gap-3 md:grid-cols-2">
-                            <div className="space-y-1">
-                              <Label htmlFor="drive-client-id">Client ID</Label>
-                              <Input
-                                id="drive-client-id"
-                                value={driveClientId}
-                                onChange={(event) => setDriveClientId(event.target.value)}
-                                placeholder="google-client-id.apps.googleusercontent.com"
-                                autoComplete="off"
-                                required
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <Label htmlFor="drive-client-secret">Client secret</Label>
-                              <Input
-                                id="drive-client-secret"
-                                type="password"
-                                value={driveClientSecret}
-                                onChange={(event) => setDriveClientSecret(event.target.value)}
-                                placeholder="Client secret Google"
-                                autoComplete="new-password"
-                                required
-                              />
-                            </div>
-                            <div className="space-y-1 md:col-span-2">
-                              <Label htmlFor="drive-redirect-uri">Redirect URI</Label>
-                              <Input
-                                id="drive-redirect-uri"
-                                value={driveRedirectUri}
-                                onChange={(event) => setDriveRedirectUri(event.target.value)}
-                                placeholder="https://<votre-domaine>/integrations/google-drive/callback"
-                                autoComplete="off"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <Label htmlFor="drive-root-folder-id">Dossier racine</Label>
-                              <Input
-                                id="drive-root-folder-id"
-                                value={driveRootFolderId}
-                                onChange={(event) => {
-                                  setDriveRootFolderTouched(true);
-                                  setDriveRootFolderId(event.target.value);
-                                }}
-                                placeholder="ID du dossier Drive"
-                                autoComplete="off"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <Label htmlFor="drive-shared-drive-id">Drive partagé (optionnel)</Label>
-                              <Input
-                                id="drive-shared-drive-id"
-                                value={driveSharedDriveId}
-                                onChange={(event) => {
-                                  setDriveSharedDriveTouched(true);
-                                  setDriveSharedDriveId(event.target.value);
-                                }}
-                                placeholder="ID du drive partagé"
-                                autoComplete="off"
-                              />
-                            </div>
-                          </div>
-                          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                            <p className="text-xs text-muted-foreground">
-                              Ces identifiants restent privés et permettent de générer l'URL d'authentification Drive.
-                            </p>
-                            <Button
-                              type="submit"
-                              variant="secondary"
-                              className="gap-2 md:w-auto"
-                              disabled={
-                                driveSettingsSaving ||
-                                !driveClientId.trim() ||
-                                !driveClientSecret.trim() ||
-                                !currentOrgId
-                              }
-                            >
-                              {driveSettingsSaving ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <KeyRound className="h-4 w-4" />
-                              )}
-                              Enregistrer
-                            </Button>
-                          </div>
-                        </form>
-                      ) : null}
-                      <div className="flex flex-col gap-2 md:items-end">
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            variant={driveConnection?.connected ? "outline" : "secondary"}
-                            onClick={() =>
-                              driveConnection?.connected
-                                ? handleDriveRefreshClick()
-                                : handleDriveConnectClick()
-                            }
-                            disabled={
-                              driveConnectLoading ||
-                              driveRefreshLoading ||
-                              driveSettingsSaving ||
-                              (!currentOrgId && !driveConnection?.connected)
-                            }
-                            className="gap-2"
-                          >
-                            {driveConnectLoading || driveRefreshLoading ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : driveConnection?.connected ? (
-                              <RefreshCw className="h-4 w-4" />
-                            ) : (
-                              <Plug className="h-4 w-4" />
-                            )}
-                            {driveConnection?.connected ? "Actualiser l'accès" : "Connecter"}
-                          </Button>
-                          {driveConnection?.connected ? (
-                            <Button
-                              variant="ghost"
-                              onClick={handleDriveDisconnectClick}
-                              disabled={driveDisconnectLoading}
-                              className="gap-2"
-                            >
-                              {driveDisconnectLoading ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="h-4 w-4" />
-                              )}
-                              Déconnecter
-                            </Button>
-                          ) : null}
-                        </div>
-                        {driveConnection?.rootFolderId ? (
-                          <p className="text-xs text-muted-foreground">
-                            Dossier racine : {driveConnection.rootFolderId}
-                          </p>
-                        ) : null}
-                        {driveConnection?.sharedDriveId ? (
-                          <p className="text-xs text-muted-foreground">
-                            Drive partagé : {driveConnection.sharedDriveId}
-                          </p>
-                        ) : null}
-                        {driveErrorMessage ? (
-                          <p className="flex items-center gap-2 text-xs text-destructive">
-                            <AlertCircle className="h-3.5 w-3.5" />
-                            {driveErrorMessage}
-                          </p>
-                        ) : null}
-                      </div>
-                    </div>
-                  ) : (
-                    <Button
-                      variant={integration.status === "connected" ? "ghost" : "secondary"}
-                      onClick={() => handleIntegrationAction(integration)}
-                      className="gap-2"
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                      {integration.status === "connected" ? "Désactiver" : "Connecter"}
-                    </Button>
-                  )}
-                </div>
-                <Separator className="bg-border/60" />
-                <p className="text-xs text-muted-foreground">
-                  Dernière synchronisation : {integration.lastSync}
-                </p>
-              </div>
-            );
-            })}
-            <div className="rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-4 text-sm text-muted-foreground">
-              Besoin d&apos;une intégration personnalisée ? Contactez notre équipe pour accéder à l&apos;API et aux
-              webhooks sécurisés.
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border border-border/60 bg-card/70 shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg font-semibold text-foreground">
-              <ShieldCheck className="h-5 w-5 text-primary" />
-              Sécurité & conformité
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Définissez des politiques de sécurité avancées pour protéger vos données sensibles.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="space-y-4">
-              {[
-                {
-                  key: "twoFactor" as const,
-                  title: "Double authentification",
-                  description:
-                    "Obliger l&apos;activation de la double authentification pour tous les comptes.",
-                  icon: KeyRound,
-                },
-                {
-                  key: "passwordRotation" as const,
-                  title: "Rotation des mots de passe",
-                  description: "Demander un renouvellement de mot de passe tous les 90 jours.",
-                  icon: RefreshCw,
-                },
-                {
-                  key: "loginAlerts" as const,
-                  title: "Alertes de connexion",
-                  description:
-                    "Notifier l&apos;équipe sécurité des connexions depuis de nouveaux appareils.",
-                  icon: MonitorSmartphone,
-                },
-              ].map((setting) => (
-                <div
-                  key={setting.key}
-                  className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-background/60 p-4 md:flex-row md:items-center md:justify-between"
-                >
-                  <div className="flex items-start gap-3">
-                    <setting.icon className="h-5 w-5 text-primary" />
-                    <div>
-                      <p className="font-medium text-foreground">{setting.title}</p>
-                      <p className="text-sm text-muted-foreground">{setting.description}</p>
-                    </div>
-                  </div>
-                  <Switch
-                    checked={securitySettings[setting.key]}
-                    onCheckedChange={(checked) =>
-                      setSecuritySettings((prev) => ({ ...prev, [setting.key]: checked }))
-                    }
-                  />
-                </div>
-              ))}
-            </div>
-
-            <div className="rounded-2xl border border-border/60 bg-background/60 p-4">
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div className="flex items-center gap-3">
-                  <Clock className="h-5 w-5 text-primary" />
-                  <div>
-                    <p className="font-medium text-foreground">Durée des sessions</p>
-                    <p className="text-sm text-muted-foreground">
-                      Limitez la durée des sessions inactives avant déconnexion automatique.
-                    </p>
-                  </div>
-                </div>
-                <Select
-                  value={securitySettings.sessionDuration}
-                  onValueChange={handleSessionDurationChange}
-                >
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Durée" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sessionOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-3 rounded-2xl border border-border/60 bg-background/60 p-4">
-              <p className="text-sm font-medium text-foreground">Sessions actives</p>
-              <div className="space-y-3 text-sm text-muted-foreground">
-                {activeSessions.map((session) => (
-                  <div
-                    key={session.device}
-                    className="flex flex-col gap-1 rounded-xl border border-border/50 bg-background p-3 md:flex-row md:items-center md:justify-between"
-                  >
-                    <div>
-                      <p className="font-medium text-foreground">{session.device}</p>
-                      <p>{session.browser}</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Badge
-                        variant="outline"
-                        className="border-emerald-200/60 bg-emerald-500/10 text-emerald-700"
-                      >
-                        Sécurisé
-                      </Badge>
-                      <span>{session.lastActive}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end">
-              <Button onClick={handleSecuritySave}>Appliquer les règles de sécurité</Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
+    return (
+      <Tabs
+        value={activeGeneralTab}
+        onValueChange={(value) => handleGeneralTabSelect(value as GeneralTab)}
+        className="space-y-6"
+      >
+        <TabsList className="flex w-full flex-wrap gap-2 overflow-x-auto rounded-xl bg-muted/40 p-1">
+          {GENERAL_TABS.map(({ id, label, icon: Icon }) => (
+            <TabsTrigger
+              key={id}
+              value={id}
+              className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm data-[state=active]:bg-background/80"
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        <TabsContent value="overview" className="space-y-6">
+          <GeneralOverviewCard
+            organizationName={companyInfo.name}
+            totalMembers={teamMembers.length}
+            activeMembers={activeMembers}
+            statusCount={projectStatuses.length}
+            catalogCount={catalogCount}
+            connectedIntegrations={connectedIntegrationsCount}
+            onSelectTab={handleGeneralTabSelect}
+          />
+        </TabsContent>
+        <TabsContent value="team">
+          <TeamManagementCard
+            members={teamMembers}
+            loading={loadingMembers}
+            error={memberError}
+            onRefresh={handleManualRefresh}
+            onInvite={handleInviteMember}
+            onRetry={() => {
+              void fetchTeamMembers();
+            }}
+            onRoleChange={(id, role) => {
+              void handleRoleChange(id, role);
+            }}
+            formatIdentifier={formatIdentifier}
+          />
+        </TabsContent>
+        <TabsContent value="statuses">
+          <ProjectStatusesCard
+            statuses={projectStatuses}
+            busy={projectStatusesBusy}
+            disableReset={isDefaultProjectStatuses}
+            onReset={handleResetStatuses}
+            onAdd={handleAddStatus}
+            onRemove={handleRemoveStatus}
+            onLabelChange={handleStatusLabelChange}
+            onValueChange={handleStatusValueChange}
+            onColorChange={handleStatusColorChange}
+          />
+        </TabsContent>
+        <TabsContent value="catalog">
+          <BuildingReferenceCard
+            buildingTypes={buildingTypes}
+            buildingUsages={buildingUsages}
+            disableResetTypes={isDefaultBuildingTypes}
+            disableResetUsages={isDefaultBuildingUsages}
+            onTypeChange={handleBuildingTypeChange}
+            onAddType={handleAddBuildingType}
+            onRemoveType={handleRemoveBuildingType}
+            onResetTypes={handleResetBuildingTypes}
+            onUsageChange={handleUsageChange}
+            onAddUsage={handleAddUsage}
+            onRemoveUsage={handleRemoveUsage}
+            onResetUsages={handleResetUsages}
+          />
+        </TabsContent>
+        <TabsContent value="company">
+          <CompanyInformationCard
+            companyInfo={companyInfo}
+            isManualAddress={isManualCompanyAddress}
+            onCompanyInfoChange={handleCompanyInfoChange}
+            onCompanySubmit={handleCompanySubmit}
+            businessLocations={BUSINESS_LOCATIONS}
+            organizationPrimeSettings={organizationPrimeSettings}
+            onOrganizationPrimeChange={handleOrganizationPrimeChange}
+            loadingOrganizationSettings={loadingOrganizationSettings}
+            savingOrganizationSettings={savingOrganizationSettings}
+            onAddressChange={handleCompanyAddressChange}
+            delegataires={delegataires}
+            onAddDelegataire={handleAddDelegataire}
+            onRemoveDelegataire={handleRemoveDelegataire}
+            onDelegataireChange={handleDelegataireChange}
+            onSaveDelegataires={handleSaveDelegataires}
+          />
+        </TabsContent>
+        <TabsContent value="notifications">
+          <NotificationPreferencesCard
+            settings={notifications}
+            onToggle={toggleNotification}
+            onSave={handleSaveNotifications}
+          />
+        </TabsContent>
+        <TabsContent value="integrations">
+          <IntegrationsCard
+            integrations={displayedIntegrations}
+            driveConnection={driveConnection}
+            driveConnectionLoading={driveConnectionLoading}
+            driveErrorMessage={driveErrorMessage}
+            isAdmin={Boolean(isAdmin)}
+            hasActiveOrg={Boolean(currentOrgId)}
+            driveClientId={driveClientId}
+            driveClientSecret={driveClientSecret}
+            driveRedirectUri={driveRedirectUri}
+            driveRootFolderId={driveRootFolderId}
+            driveSharedDriveId={driveSharedDriveId}
+            onDriveClientIdChange={handleDriveClientIdChange}
+            onDriveClientSecretChange={handleDriveClientSecretChange}
+            onDriveRedirectUriChange={handleDriveRedirectUriChange}
+            onDriveRootFolderChange={handleDriveRootFolderChange}
+            onDriveSharedDriveChange={handleDriveSharedDriveChange}
+            onDriveSettingsSubmit={handleDriveSettingsSubmit}
+            driveSettingsSaving={driveSettingsSaving}
+            driveConnectLoading={driveConnectLoading}
+            driveRefreshLoading={driveRefreshLoading}
+            driveDisconnectLoading={driveDisconnectLoading}
+            onDriveConnect={handleDriveConnectClick}
+            onDriveRefresh={handleDriveRefreshClick}
+            onDriveDisconnect={handleDriveDisconnectClick}
+            onIntegrationAction={handleIntegrationAction}
+          />
+        </TabsContent>
+        <TabsContent value="security">
+          <SecuritySettingsCard
+            settings={securitySettings}
+            onToggleSetting={handleSecuritySettingToggle}
+            sessionOptions={sessionOptions}
+            onSessionDurationChange={handleSessionDurationChange}
+            activeSessions={activeSessions}
+            onSave={handleSecuritySave}
+          />
+        </TabsContent>
+      </Tabs>
+    );
+  };
   useEffect(() => {
     return () => {
       isMounted.current = false;
@@ -2170,128 +1278,12 @@ export default function Settings() {
     setSecuritySettings((prev) => ({ ...prev, sessionDuration: value }));
   };
 
-  const renderTeamMembers = () => {
-    if (loadingMembers) {
-      return (
-        <div className="space-y-3">
-          {Array.from({ length: 3 }).map((_, index) => (
-            <div
-              key={index}
-              className="h-[116px] rounded-2xl border border-dashed border-border/60 bg-muted/20"
-            />
-          ))}
-        </div>
-      );
-    }
-
-    if (memberError) {
-      return (
-        <div className="flex flex-col items-center gap-3 rounded-2xl border border-destructive/40 bg-destructive/5 p-6 text-center text-sm text-destructive">
-          <AlertCircle className="h-6 w-6" />
-          <p>{memberError}</p>
-          <Button size="sm" variant="outline" onClick={() => void fetchTeamMembers()}>
-            Réessayer
-          </Button>
-        </div>
-      );
-    }
-
-    if (teamMembers.length === 0) {
-      return (
-        <div className="flex flex-col items-center gap-3 rounded-2xl border border-border/60 bg-background/40 p-6 text-center text-sm text-muted-foreground">
-          <Users className="h-6 w-6 text-muted-foreground" />
-          <p>Aucun collaborateur trouvé dans Supabase.</p>
-          <Button variant="secondary" size="sm" onClick={handleInviteMember}>
-            Inviter votre premier membre
-          </Button>
-        </div>
-      );
-    }
-
-    return teamMembers.map((member) => (
-      <div
-        key={member.id}
-        className="flex flex-col gap-4 rounded-2xl border border-border/60 bg-background/60 p-4 transition hover:border-primary/40 md:flex-row md:items-center md:justify-between"
-      >
-        <div className="flex items-center gap-4">
-          <Avatar className="h-12 w-12">
-            <AvatarFallback className="bg-primary/10 text-primary">
-              {member.name
-                .split(" ")
-                .map((part) => part[0])
-                .join("")}
-            </AvatarFallback>
-          </Avatar>
-          <div className="space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="font-medium text-foreground">{member.name}</p>
-              <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
-                ID {formatIdentifier(member.identifier)}
-              </Badge>
-              {!member.active && (
-                <Badge variant="destructive" className="text-xs font-normal">
-                  Désactivé
-                </Badge>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-x-4 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <Mail className="h-3.5 w-3.5" />
-                {member.email ?? "Email non renseigné"}
-              </span>
-              <span className="flex items-center gap-1">
-                <Phone className="h-3.5 w-3.5" />
-                {member.phone ?? "Téléphone non renseigné"}
-              </span>
-            </div>
-          </div>
-        </div>
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-6">
-          <div className="space-y-1">
-            <Label
-              htmlFor={`role-${member.id}`}
-              className="text-xs uppercase tracking-wide text-muted-foreground"
-            >
-              Rôle
-            </Label>
-            <Select
-              value={member.role}
-              onValueChange={(value: RoleOption) => {
-                void handleRoleChange(member.id, value);
-              }}
-            >
-              <SelectTrigger id={`role-${member.id}`} className="w-[180px]">
-                <SelectValue placeholder="Sélectionner" />
-              </SelectTrigger>
-              <SelectContent>
-                {ROLE_OPTIONS.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {option}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-              Dernière activité
-            </Label>
-            <p className="text-sm text-foreground">{member.lastConnection}</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Label
-              htmlFor={`active-${member.id}`}
-              className="text-sm text-muted-foreground"
-              title="Statut synchronisé automatiquement depuis Supabase"
-            >
-              {member.active ? "Actif" : "Inactif"}
-            </Label>
-            <Switch id={`active-${member.id}`} checked={member.active} disabled />
-          </div>
-        </div>
-      </div>
-    ));
-  };
+  const handleSecuritySettingToggle = useCallback(
+    (key: keyof SecuritySettings, value: boolean) => {
+      setSecuritySettings((prev) => ({ ...prev, [key]: value }));
+    },
+    [],
+  );
 
   const activeSessions = [
     {
@@ -2307,12 +1299,6 @@ export default function Settings() {
       secure: true,
     },
   ];
-
-  const integrationStatusStyles: Record<Integration["status"], string> = {
-    connected: "border-emerald-200/60 bg-emerald-500/10 text-emerald-700",
-    pending: "border-amber-200/60 bg-amber-500/10 text-amber-700",
-    disconnected: "border-red-200/60 bg-red-500/10 text-red-700",
-  };
 
   const isDefaultProjectStatuses = useMemo(() => {
     if (projectStatuses.length !== DEFAULT_PROJECT_STATUSES.length) {
@@ -2401,7 +1387,7 @@ export default function Settings() {
         };
 
         const { error } = (await supabase
-          .from("settings" as any)
+          .from(SETTINGS_TABLE)
           .upsert(payload, { onConflict: "org_id" })
           .select("statuts_projets, backup_webhook_url, backup_daily_enabled, backup_time")
           .single()) as { error: PostgrestError | null };
