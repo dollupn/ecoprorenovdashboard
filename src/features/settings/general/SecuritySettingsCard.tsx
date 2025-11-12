@@ -42,7 +42,7 @@ export const SecuritySettingsCard = ({
   onSave,
 }: SecuritySettingsCardProps) => {
   const toggles: Array<{
-    key: keyof SecuritySettings;
+    key: Exclude<keyof SecuritySettings, 'sessionDuration'>;
     title: string;
     description: string;
     icon: typeof KeyRound;

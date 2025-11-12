@@ -122,12 +122,7 @@ export function AddressAutocomplete({ value, onChange, disabled }: AddressAutoco
             ) : search.trim().length < 3 ? (
               "Tapez au moins 3 caractères"
             ) : (
-              <div className="flex flex-col items-center gap-3 p-4 text-center text-sm">
-                <p className="text-muted-foreground">Aucune adresse trouvée</p>
-                <Button size="sm" variant="secondary" onClick={handleManualSelect}>
-                  Utiliser cette adresse
-                </Button>
-              </div>
+              "Aucune adresse trouvée"
             )}
           </CommandEmpty>
           {suggestions.length > 0 && (
@@ -153,6 +148,18 @@ export function AddressAutocomplete({ value, onChange, disabled }: AddressAutoco
                 </CommandItem>
               ))}
             </CommandGroup>
+          )}
+          {search.trim().length >= 3 && (
+            <div className="border-t border-border p-2">
+              <Button 
+                size="sm" 
+                variant="secondary" 
+                className="w-full justify-start text-left"
+                onClick={handleManualSelect}
+              >
+                Utiliser cette adresse : <span className="ml-1 font-medium truncate">{search}</span>
+              </Button>
+            </div>
           )}
         </Command>
       </PopoverContent>
