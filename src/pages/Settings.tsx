@@ -891,18 +891,28 @@ export default function Settings() {
         onValueChange={(value) => handleGeneralTabSelect(value as GeneralTab)}
         className="space-y-6"
       >
-        <TabsList className="flex w-full flex-wrap gap-2 overflow-x-auto rounded-xl bg-muted/40 p-1">
-          {GENERAL_TABS.map(({ id, label, icon: Icon }) => (
-            <TabsTrigger
-              key={id}
-              value={id}
-              className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm data-[state=active]:bg-background/80"
-            >
-              <Icon className="h-4 w-4" />
-              {label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        <div className="relative">
+          <TabsList className="flex w-full flex-col gap-2 rounded-xl bg-muted/40 p-1 md:flex-row md:flex-nowrap md:overflow-x-auto md:[&::-webkit-scrollbar]:hidden md:[scrollbar-width:none]">
+            {GENERAL_TABS.map(({ id, label, icon: Icon }) => (
+              <TabsTrigger
+                key={id}
+                value={id}
+                className="flex w-full items-center gap-2 rounded-lg px-4 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background data-[state=active]:bg-background/80 data-[state=active]:text-foreground md:w-auto md:flex-shrink-0"
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 left-0 hidden w-10 bg-gradient-to-r from-background via-background/70 to-transparent md:block"
+          />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 right-0 hidden w-16 bg-gradient-to-l from-background via-background/70 to-transparent md:block"
+          />
+        </div>
         <TabsContent value="overview" className="space-y-6">
           <GeneralOverviewCard
             organizationName={companyInfo.name}
