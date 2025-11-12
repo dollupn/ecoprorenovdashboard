@@ -434,77 +434,82 @@ export function LeadSettingsPanel() {
                   Aucune source définie pour le moment. Ajoutez vos canaux d'acquisition principaux ci-dessus.
                 </p>
               ) : (
-                sources.map((source, index) => (
-                  <div key={source.id} className="space-y-4 rounded-md border border-border p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <Badge variant="secondary">Source #{index + 1}</Badge>
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={source.isActive}
-                            onCheckedChange={(checked) =>
-                              handleUpdateSource(source.id, { isActive: checked })
+                sources.map((source, index) => {
+                  const sourceLabel = source.name.trim() || `Source ${index + 1}`;
+
+                  return (
+                    <div key={source.id} className="space-y-4 rounded-md border border-border p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <Badge variant="secondary">Source #{index + 1}</Badge>
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={source.isActive}
+                              onCheckedChange={(checked) =>
+                                handleUpdateSource(source.id, { isActive: checked })
+                              }
+                            />
+                            <span className="text-sm text-muted-foreground">Active</span>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Supprimer la source ${sourceLabel}`}
+                            onClick={() => handleDeleteSource(source.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label>Nom</Label>
+                          <Input
+                            value={source.name}
+                            onChange={(event) =>
+                              handleUpdateSource(source.id, { name: event.target.value })
                             }
                           />
-                          <span className="text-sm text-muted-foreground">Active</span>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDeleteSource(source.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="space-y-2">
+                          <Label>Canal</Label>
+                          <Select
+                            value={source.channel}
+                            onValueChange={(value: LeadSourceChannel) =>
+                              handleUpdateSource(source.id, { channel: value })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Sélectionner" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {CHANNEL_OPTIONS.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            {CHANNEL_OPTIONS.find((option) => option.value === source.channel)?.description}
+                          </p>
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="grid gap-3 md:grid-cols-2">
                       <div className="space-y-2">
-                        <Label>Nom</Label>
-                        <Input
-                          value={source.name}
+                        <Label>Description</Label>
+                        <Textarea
+                          value={source.description ?? ""}
                           onChange={(event) =>
-                            handleUpdateSource(source.id, { name: event.target.value })
+                            handleUpdateSource(source.id, { description: event.target.value })
                           }
+                          rows={2}
                         />
                       </div>
-                      <div className="space-y-2">
-                        <Label>Canal</Label>
-                        <Select
-                          value={source.channel}
-                          onValueChange={(value: LeadSourceChannel) =>
-                            handleUpdateSource(source.id, { channel: value })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Sélectionner" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {CHANNEL_OPTIONS.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">
-                          {CHANNEL_OPTIONS.find((option) => option.value === source.channel)?.description}
-                        </p>
-                      </div>
                     </div>
-
-                    <div className="space-y-2">
-                      <Label>Description</Label>
-                      <Textarea
-                        value={source.description ?? ""}
-                        onChange={(event) =>
-                          handleUpdateSource(source.id, { description: event.target.value })
-                        }
-                        rows={2}
-                      />
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 
@@ -531,71 +536,77 @@ export function LeadSettingsPanel() {
               Ajustez le libellé, la couleur et les délais de suivi pour chacun des statuts disponibles.
             </p>
             <div className="space-y-4">
-              {statusSettings.map((status, index) => (
-                <div key={status.id} className="space-y-4 rounded-md border border-border p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline">{status.value}</Badge>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>Position</span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => handleMoveStatus(index, -1)}
-                          disabled={index === 0}
-                        >
-                          <ArrowUp className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => handleMoveStatus(index, 1)}
-                          disabled={index === statusSettings.length - 1}
-                        >
-                          <ArrowDown className="h-4 w-4" />
-                        </Button>
+              {statusSettings.map((status, index) => {
+                const statusLabel = status.label?.trim() || status.value;
+
+                return (
+                  <div key={status.id} className="space-y-4 rounded-md border border-border p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">{status.value}</Badge>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span>Position</span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            aria-label={`Monter le statut ${statusLabel}`}
+                            onClick={() => handleMoveStatus(index, -1)}
+                            disabled={index === 0}
+                          >
+                            <ArrowUp className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            aria-label={`Descendre le statut ${statusLabel}`}
+                            onClick={() => handleMoveStatus(index, 1)}
+                            disabled={index === statusSettings.length - 1}
+                          >
+                            <ArrowDown className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={status.isActive}
+                          onCheckedChange={(checked) =>
+                            handleUpdateStatus(status.id, { isActive: checked })
+                          }
+                        />
+                        <span className="text-sm text-muted-foreground">Visible</span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={status.isActive}
-                        onCheckedChange={(checked) =>
-                          handleUpdateStatus(status.id, { isActive: checked })
-                        }
-                      />
-                      <span className="text-sm text-muted-foreground">Visible</span>
-                    </div>
-                  </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Libellé affiché</Label>
-                      <Input
-                        value={status.label}
-                        onChange={(event) =>
-                          handleUpdateStatus(status.id, { label: event.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Couleur</Label>
-                      <div className="flex items-center gap-2">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>Libellé affiché</Label>
                         <Input
-                          type="color"
-                          value={status.color}
+                          value={status.label}
                           onChange={(event) =>
-                            handleUpdateStatus(status.id, { color: event.target.value })
-                          }
-                          className="h-10 w-16"
-                        />
-                        <Input
-                          value={status.color}
-                          onChange={(event) =>
-                            handleUpdateStatus(status.id, { color: event.target.value })
+                            handleUpdateStatus(status.id, { label: event.target.value })
                           }
                         />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Couleur</Label>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="color"
+                            value={status.color}
+                            onChange={(event) =>
+                              handleUpdateStatus(status.id, { color: event.target.value })
+                            }
+                            className="h-10 w-16"
+                          />
+                          <Input
+                            value={status.color}
+                            onChange={(event) =>
+                              handleUpdateStatus(status.id, { color: event.target.value })
+                            }
+                          />
+                        </div>
                       </div>
                     </div>
                     <div className="md:col-span-2 space-y-2">
@@ -632,15 +643,16 @@ export function LeadSettingsPanel() {
                           onChange={(event) => {
                             const raw = event.target.value;
                             handleUpdateStatus(status.id, {
-                              probability: raw === "" ? undefined : Math.min(100, Math.max(0, Number(raw))),
+                              probability:
+                                raw === "" ? undefined : Math.min(100, Math.max(0, Number(raw))),
                             });
                           }}
                         />
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="flex justify-end gap-2">
@@ -750,138 +762,150 @@ export function LeadSettingsPanel() {
                   Aucun champ dynamique défini. Ajoutez vos champs spécifiques (surface, usage, notes...) ci-dessus.
                 </p>
               ) : (
-                dynamicFields.map((field, index) => (
-                  <div key={field.id} className="space-y-4 rounded-md border border-border p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <Badge variant="outline">Champ #{index + 1}</Badge>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={field.isActive}
-                          onCheckedChange={(checked) => handleUpdateField(field.id, { isActive: checked })}
-                        />
-                        <span className="text-sm text-muted-foreground">Visible</span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => handleMoveField(index, -1)}
-                          disabled={index === 0}
-                        >
-                          <ArrowUp className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => handleMoveField(index, 1)}
-                          disabled={index === dynamicFields.length - 1}
-                        >
-                          <ArrowDown className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDeleteField(field.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label>Libellé</Label>
-                        <Input
-                          value={field.label}
-                          onChange={(event) => handleUpdateField(field.id, { label: event.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Type</Label>
-                        <Select
-                          value={field.type}
-                          onValueChange={(value: LeadDynamicFieldType) =>
-                            handleUpdateField(field.id, { type: value })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {FIELD_TYPE_OPTIONS.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label>Texte d'aide</Label>
-                        <Input
-                          value={field.placeholder ?? ""}
-                          onChange={(event) =>
-                            handleUpdateField(field.id, { placeholder: event.target.value })
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Obligatoire</Label>
+                dynamicFields.map((field, index) => {
+                  const fieldLabel = field.label?.trim() || field.name || `Champ ${index + 1}`;
+
+                  return (
+                    <div key={field.id} className="space-y-4 rounded-md border border-border p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <Badge variant="outline">Champ #{index + 1}</Badge>
                         <div className="flex items-center gap-2">
                           <Switch
-                            checked={field.required}
-                            onCheckedChange={(checked) => handleUpdateField(field.id, { required: checked })}
+                            checked={field.isActive}
+                            onCheckedChange={(checked) => handleUpdateField(field.id, { isActive: checked })}
                           />
-                          <span className="text-sm text-muted-foreground">
-                            Le champ doit être renseigné
-                          </span>
+                          <span className="text-sm text-muted-foreground">Visible</span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            aria-label={`Monter le champ ${fieldLabel}`}
+                            onClick={() => handleMoveField(index, -1)}
+                            disabled={index === 0}
+                          >
+                            <ArrowUp className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            aria-label={`Descendre le champ ${fieldLabel}`}
+                            onClick={() => handleMoveField(index, 1)}
+                            disabled={index === dynamicFields.length - 1}
+                          >
+                            <ArrowDown className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Supprimer le champ ${fieldLabel}`}
+                            onClick={() => handleDeleteField(field.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </div>
-                    </div>
-                    {field.type === "select" ? (
-                      <div className="space-y-2">
-                        <Label>Options (séparées par une virgule)</Label>
-                        <Textarea
-                          value={(field.options ?? []).join(", ")}
-                          onChange={(event) =>
-                            handleUpdateField(field.id, {
-                              options: event.target.value
-                                .split(",")
-                                .map((option) => option.trim())
-                                .filter((option) => option.length > 0),
-                            })
-                          }
-                          rows={2}
-                        />
-                      </div>
-                    ) : null}
-                    {field.type === "number" ? (
+
                       <div className="grid gap-3 md:grid-cols-2">
                         <div className="space-y-2">
-                          <Label>Valeur minimale</Label>
+                          <Label>Libellé</Label>
                           <Input
-                            type="number"
-                            value={field.min ?? ""}
+                            value={field.label}
+                            onChange={(event) => handleUpdateField(field.id, { label: event.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Type</Label>
+                          <Select
+                            value={field.type}
+                            onValueChange={(value: LeadDynamicFieldType) =>
+                              handleUpdateField(field.id, { type: value })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {FIELD_TYPE_OPTIONS.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label>Texte d'aide</Label>
+                          <Input
+                            value={field.placeholder ?? ""}
                             onChange={(event) =>
-                              handleUpdateField(field.id, {
-                                min: event.target.value === "" ? null : Number(event.target.value),
-                              })
+                              handleUpdateField(field.id, { placeholder: event.target.value })
                             }
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label>Valeur maximale</Label>
-                          <Input
-                            type="number"
-                            value={field.max ?? ""}
-                            onChange={(event) =>
-                              handleUpdateField(field.id, {
-                                max: event.target.value === "" ? null : Number(event.target.value),
-                              })
-                            }
-                          />
+                          <Label>Obligatoire</Label>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={field.required}
+                              onCheckedChange={(checked) => handleUpdateField(field.id, { required: checked })}
+                            />
+                            <span className="text-sm text-muted-foreground">
+                              Le champ doit être renseigné
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    ) : null}
-                  </div>
-                ))
+                      {field.type === "select" ? (
+                        <div className="space-y-2">
+                          <Label>Options (séparées par une virgule)</Label>
+                          <Textarea
+                            value={(field.options ?? []).join(", ")}
+                            onChange={(event) =>
+                              handleUpdateField(field.id, {
+                                options: event.target.value
+                                  .split(",")
+                                  .map((option) => option.trim())
+                                  .filter((option) => option.length > 0),
+                              })
+                            }
+                            rows={2}
+                          />
+                        </div>
+                      ) : null}
+                      {field.type === "number" ? (
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label>Valeur minimale</Label>
+                            <Input
+                              type="number"
+                              value={field.min ?? ""}
+                              onChange={(event) =>
+                                handleUpdateField(field.id, {
+                                  min: event.target.value === "" ? null : Number(event.target.value),
+                                })
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Valeur maximale</Label>
+                            <Input
+                              type="number"
+                              value={field.max ?? ""}
+                              onChange={(event) =>
+                                handleUpdateField(field.id, {
+                                  max: event.target.value === "" ? null : Number(event.target.value),
+                                })
+                              }
+                            />
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })
               )}
             </div>
 
