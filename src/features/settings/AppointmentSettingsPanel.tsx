@@ -35,7 +35,7 @@ export function AppointmentSettingsPanel() {
   const { currentOrgId } = useOrg();
   const queryClient = useQueryClient();
   const [newTypeName, setNewTypeName] = useState("");
-  const [newTypeEmailTemplate, setNewTypeEmailTemplate] = useState<string>("");
+  const [newTypeEmailTemplate, setNewTypeEmailTemplate] = useState<string>("none");
   const [isInitializing, setIsInitializing] = useState(false);
 
   const { data: appointmentTypes = [], isLoading } = useAppointmentTypes(currentOrgId);
@@ -94,7 +94,7 @@ export function AppointmentSettingsPanel() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["appointmentTypes", currentOrgId] });
       setNewTypeName("");
-      setNewTypeEmailTemplate("");
+      setNewTypeEmailTemplate("none");
       toast({ title: "Type de RDV créé avec succès" });
     },
     onError: () => {
@@ -132,9 +132,14 @@ export function AppointmentSettingsPanel() {
 
   const handleCreateType = () => {
     if (!newTypeName.trim()) return;
+    const emailTemplateId =
+      !newTypeEmailTemplate || newTypeEmailTemplate === "none"
+        ? null
+        : newTypeEmailTemplate;
+
     createAppointmentType.mutate({
       name: newTypeName.trim(),
-      email_template_id: newTypeEmailTemplate || null,
+      email_template_id: emailTemplateId,
     });
   };
 
