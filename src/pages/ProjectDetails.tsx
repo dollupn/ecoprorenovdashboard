@@ -1317,7 +1317,9 @@ type ProjectMediaTabProps = {
   selectedCategory: ProjectMediaCategory;
   onCategoryChange: (category: ProjectMediaCategory) => void;
   onUpload: (file: File) => Promise<void>;
+  onDelete: (mediaId: string) => Promise<void>;
   isUploading: boolean;
+  isDeleting: boolean;
   isLoading: boolean;
   driveFolderUrl?: string | null;
 };
@@ -1328,7 +1330,9 @@ const ProjectMediaTab = ({
   selectedCategory,
   onCategoryChange,
   onUpload,
+  onDelete,
   isUploading,
+  isDeleting,
   isLoading,
   driveFolderUrl,
 }: ProjectMediaTabProps) => {
@@ -1336,6 +1340,14 @@ const ProjectMediaTab = ({
   const [lightboxItem, setLightboxItem] = useState<ProjectMediaItem | null>(
     null,
   );
+  const [deleteConfirmItem, setDeleteConfirmItem] = useState<ProjectMediaItem | null>(null);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (deleteConfirmItem) {
+      await onDelete(deleteConfirmItem.id);
+      setDeleteConfirmItem(null);
+    }
+  }, [deleteConfirmItem, onDelete]);
 
   const filteredItems = useMemo(
     () => mediaItems.filter((item) => item.category === selectedCategory),
@@ -1452,30 +1464,46 @@ const ProjectMediaTab = ({
                     }
 
                     return (
-                      <button
+                      <div
                         key={item.id}
-                        type="button"
-                        onClick={() => setLightboxItem(item)}
                         className="group relative overflow-hidden rounded-lg border border-border/50 bg-background/60"
                       >
-                        <img
-                          src={previewUrl}
-                          alt={item.file_name ?? "Image du projet"}
-                          className="h-40 w-full object-cover transition-transform duration-200 group-hover:scale-105"
-                        />
-                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2 text-left">
-                          <p className="text-xs font-medium text-white line-clamp-1">
-                            {item.file_name ??
-                              MEDIA_CATEGORY_LABELS[item.category]}
-                          </p>
-                          <p className="text-[10px] text-white/70">
-                            {new Date(item.created_at).toLocaleString("fr-FR", {
-                              dateStyle: "short",
-                              timeStyle: "short",
-                            })}
-                          </p>
-                        </div>
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => setLightboxItem(item)}
+                          className="w-full"
+                        >
+                          <img
+                            src={previewUrl}
+                            alt={item.file_name ?? "Image du projet"}
+                            className="h-40 w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                          />
+                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2 text-left">
+                            <p className="text-xs font-medium text-white line-clamp-1">
+                              {item.file_name ??
+                                MEDIA_CATEGORY_LABELS[item.category]}
+                            </p>
+                            <p className="text-[10px] text-white/70">
+                              {new Date(item.created_at).toLocaleString("fr-FR", {
+                                dateStyle: "short",
+                                timeStyle: "short",
+                              })}
+                            </p>
+                          </div>
+                        </button>
+                        <Button
+                          variant="destructive"
+                          size="icon"
+                          className="absolute top-2 right-2 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteConfirmItem(item);
+                          }}
+                          disabled={isDeleting}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     );
                   })}
                 </div>
@@ -1513,13 +1541,24 @@ const ProjectMediaTab = ({
                           </p>
                         </div>
                       </div>
-                      {link ? (
-                        <Button asChild variant="outline" size="sm">
-                          <a href={link} target="_blank" rel="noreferrer">
-                            Ouvrir dans Drive
-                          </a>
+                      <div className="flex gap-2">
+                        {link ? (
+                          <Button asChild variant="outline" size="sm">
+                            <a href={link} target="_blank" rel="noreferrer">
+                              Ouvrir dans Drive
+                            </a>
+                          </Button>
+                        ) : null}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setDeleteConfirmItem(item)}
+                          disabled={isDeleting}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
                         </Button>
-                      ) : null}
+                      </div>
                     </div>
                   );
                 })}
@@ -1547,6 +1586,42 @@ const ProjectMediaTab = ({
             ) : null}
           </DialogContent>
         </Dialog>
+
+        <AlertDialog
+          open={Boolean(deleteConfirmItem)}
+          onOpenChange={(open) => setDeleteConfirmItem(open ? deleteConfirmItem : null)}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Supprimer ce fichier ?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Cette action est irréversible. Le fichier "{deleteConfirmItem?.file_name}" sera 
+                supprimé de la base de données.
+                <br />
+                <span className="text-xs text-muted-foreground mt-2 block">
+                  Note : Le fichier restera dans Google Drive et devra être supprimé manuellement si nécessaire.
+                </span>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Annuler</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmDelete}
+                className="bg-destructive hover:bg-destructive/90"
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Suppression...
+                  </>
+                ) : (
+                  "Supprimer"
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
   );
@@ -3313,6 +3388,50 @@ const ProjectDetails = () => {
       });
     },
   });
+
+  const deleteMediaMutation = useMutation({
+    mutationKey: ["project-media-delete"],
+    mutationFn: async (mediaId: string) => {
+      if (!currentOrgId) {
+        throw new Error("Organization ID manquant.");
+      }
+
+      const { error } = await supabase
+        .from("project_media")
+        .delete()
+        .eq("id", mediaId)
+        .eq("org_id", currentOrgId);
+
+      if (error) throw error;
+
+      return mediaId;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Fichier supprimé",
+        description: "Le fichier a été supprimé avec succès.",
+      });
+      void refetchProjectMedia();
+    },
+    onError: (error) => {
+      console.error("[Media Delete] Error:", error);
+      const message = error instanceof Error 
+        ? error.message 
+        : "Impossible de supprimer le fichier.";
+      toast({
+        title: "Erreur lors de la suppression",
+        description: message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleDeleteMedia = useCallback(
+    async (mediaId: string) => {
+      await deleteMediaMutation.mutateAsync(mediaId);
+    },
+    [deleteMediaMutation],
+  );
 
   const handleUploadMedia = useCallback(
     (file: File) => uploadMediaMutation.mutateAsync(file),
@@ -5659,7 +5778,9 @@ const ProjectDetails = () => {
               selectedCategory={selectedMediaCategory}
               onCategoryChange={setSelectedMediaCategory}
               onUpload={handleUploadMedia}
+              onDelete={handleDeleteMedia}
               isUploading={uploadMediaMutation.isPending}
+              isDeleting={deleteMediaMutation.isPending}
               isLoading={projectMediaLoading}
               driveFolderUrl={driveFolderUrl}
             />
