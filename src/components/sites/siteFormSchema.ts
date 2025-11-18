@@ -239,9 +239,19 @@ export const createBaseSiteSchema = () => {
     city: z.string().min(2, "Ville requise"),
     postal_code: z.string().min(4, "Code postal invalide"),
     cofrac_status: z.enum(["EN_ATTENTE", "CONFORME", "NON_CONFORME", "A_PLANIFIER"]),
-    date_debut: z.string().min(1, "Date de début requise"),
-    date_fin_prevue: z.string().optional(),
-    date_fin: z.string().optional().nullable(),
+    date_debut: z
+      .string()
+      .min(1, "Date de début requise")
+      .transform((v) => v.trim()),
+    date_fin_prevue: z
+      .string()
+      .optional()
+      .transform((v) => (v && v.trim().length > 0 ? v.trim() : undefined)),
+    date_fin: z
+      .string()
+      .optional()
+      .nullable()
+      .transform((v) => (v && v.trim().length > 0 ? v.trim() : null)),
     progress_percentage: z.coerce
       .number({ invalid_type_error: "Avancement invalide" })
       .min(0)

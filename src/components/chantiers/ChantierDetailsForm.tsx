@@ -352,6 +352,7 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
       cofrac_status: chantier.cofrac_status as "EN_ATTENTE" | "CONFORME" | "NON_CONFORME" | "A_PLANIFIER",
       date_debut: chantier.date_debut,
       date_fin_prevue: chantier.date_fin_prevue ?? "",
+      date_fin: chantier.date_fin ?? null,
       progress_percentage: chantier.progress_percentage ?? 0,
       revenue: sanitizeNumber(chantier.revenue),
       profit_margin: sanitizeNumber(chantier.profit_margin),
@@ -576,11 +577,31 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
         travaux_non_subventionnes_description,
         travaux_non_subventionnes_financement,
         travaux_non_subventionnes_enabled,
+        date_debut,
+        date_fin_prevue,
+        date_fin,
         ...rest 
       } = payload;
       
+      // Sanitize date fields: convert empty strings to null, fallback to existing for required fields
+      const normalizedDateDebut =
+        !date_debut || date_debut.trim().length === 0
+          ? chantier.date_debut
+          : date_debut;
+      const normalizedDateFinPrevue =
+        !date_fin_prevue || date_fin_prevue.trim().length === 0
+          ? null
+          : date_fin_prevue;
+      const normalizedDateFin =
+        !date_fin || date_fin.trim().length === 0
+          ? null
+          : date_fin;
+      
       const updatePayload: Partial<Tables<"sites">> = {
         ...rest,
+        date_debut: normalizedDateDebut,
+        date_fin_prevue: normalizedDateFinPrevue,
+        date_fin: normalizedDateFin,
         team_members: rest.team_members?.map(m => m.id) ?? [],
         // Ensure cout_total_materiaux is used for both categories
         cout_total_materiaux: payload.cout_total_materiaux ?? payload.cout_total_materiaux_eclairage ?? null,
@@ -1905,19 +1926,61 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                 <CardTitle>Informations projet</CardTitle>
                 <CardDescription>Référence et coordonnées principales.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Date début</span>
-                  <span className="font-medium text-foreground">
-                    {formatDate((chantier as any).date_debut ?? project?.date_debut_prevue ?? null)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Date fin prévisionnelle</span>
-                  <span className="font-medium text-foreground">
-                    {formatDate((chantier as any).date_fin_prevue ?? project?.date_fin_prevue ?? null)}
-                  </span>
-                </div>
+              <CardContent className="grid gap-4 md:grid-cols-2">
+                <FormField
+                  control={control}
+                  name="date_debut"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Date début</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="date"
+                          disabled={isEditingLocked}
+                          value={field.value ?? ""}
+                          onChange={(e) => field.onChange(e.target.value)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={control}
+                  name="date_fin_prevue"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Date fin prévisionnelle</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="date"
+                          disabled={isEditingLocked}
+                          value={field.value ?? ""}
+                          onChange={(e) => field.onChange(e.target.value)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={control}
+                  name="date_fin"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Date fin réelle</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="date"
+                          disabled={isEditingLocked}
+                          value={field.value ?? ""}
+                          onChange={(e) => field.onChange(e.target.value)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Sous-traitant</span>
                   <span className="font-medium text-foreground">
