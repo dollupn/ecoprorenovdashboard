@@ -319,9 +319,9 @@ export const useDashboardMetrics = (
           .gte("updated_at", previousPeriodStart.toISOString()),
         supabase
           .from("sites")
-          .select("id, ca_ttc, marge_totale_ttc, surface_facturee_m2, nb_luminaires, date_fin, project_id, projects!inner(product_cee_categories)")
+          .select("id, revenue, ca_ttc, marge_totale_ttc, surface_facturee_m2, nb_luminaires, date_fin, project_id, projects!inner(product_cee_categories)")
           .eq("org_id", orgId)
-          .eq("status", "TERMINE")
+          .or(`status.eq.TERMINE,and(date_fin.not.is.null,date_fin.gte.${startDate.toISOString()},date_fin.lte.${endDate.toISOString()})`)
           .gte("date_fin", startDate.toISOString())
           .lte("date_fin", endDate.toISOString()),
       ]);
@@ -361,7 +361,7 @@ export const useDashboardMetrics = (
       // Calculate KPIs from finished chantiers in the selected period
       const finishedPeriodSites = finishedSitesPeriod.data ?? [];
 
-      const caPeriode = finishedPeriodSites.reduce((acc, site) => acc + (site.ca_ttc ?? 0), 0);
+      const caPeriode = finishedPeriodSites.reduce((acc, site) => acc + (site.revenue || site.ca_ttc || 0), 0);
       const margeTotalePeriode = finishedPeriodSites.reduce(
         (acc, site) => acc + (site.marge_totale_ttc ?? 0),
         0
