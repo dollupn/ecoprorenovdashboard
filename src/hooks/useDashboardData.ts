@@ -367,11 +367,8 @@ export const useDashboardMetrics = (
         0
       );
 
+      // Surface totale facturée (tous les sites terminés, sans filtrage par catégorie)
       const surfaceIsoleePeriode = finishedPeriodSites
-        .filter((site) => {
-          const category = (site.projects as any)?.product_cee_categories;
-          return category === "Isolation";
-        })
         .reduce((acc, site) => acc + (site.surface_facturee_m2 ?? 0), 0);
 
       const ledInstalleesPeriode = finishedPeriodSites
