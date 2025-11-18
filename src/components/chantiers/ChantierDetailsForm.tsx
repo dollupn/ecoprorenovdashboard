@@ -206,6 +206,7 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
       "travaux_non_subventionnes_client",
       "tva_rate",
       "frais_additionnels_total",
+      "use_surface_posee_for_mo",
     ],
   });
   const watchedAdditionalCosts = useWatch({ control, name: "additional_costs" });
@@ -418,6 +419,7 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
       commission_eur_per_led: isEclairage
         ? sanitizeNumber(chantier.commission_eur_per_led)
         : 0,
+      use_surface_posee_for_mo: Boolean(chantier.use_surface_posee_for_mo),
     };
     reset(defaults, { keepDefaultValues: false });
     setSiteAttachments(parsedNotes.attachments);
@@ -920,6 +922,7 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
         MAT_HT: sanitizeNumber(form.getValues("cout_total_materiaux")),
         commission_HT: commissionEnabled ? commissionPerM2 * surfaceFacturee : 0,
         fraisAdditionnels: additionalCosts,
+        use_surface_posee_for_mo: Boolean(form.getValues("use_surface_posee_for_mo")),
       };
       
       return viewMode === "ht" ? calcIsolationHT(input) : calcIsolationTTC(input);
@@ -1195,6 +1198,32 @@ export const ChantierDetailsForm = ({ chantier, orgId, embedded = false, onUpdat
                         )}
                       />
                     </div>
+                    
+                    {/* Option to use surface_posee for MO calculation */}
+                    <FormField
+                      control={control}
+                      name="use_surface_posee_for_mo"
+                      render={({ field }) => (
+                        <FormItem className="col-span-full flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              disabled={disableInputs}
+                            />
+                          </FormControl>
+                          <div className="space-y-1 leading-none">
+                            <FormLabel>
+                              Utiliser la surface posée pour le calcul MO
+                            </FormLabel>
+                            <p className="text-sm text-muted-foreground">
+                              Par défaut, le coût MO est calculé avec la surface facturée.
+                              Cochez cette option pour utiliser la surface posée à la place.
+                            </p>
+                          </div>
+                        </FormItem>
+                      )}
+                    />
                   </>
                 ) : (
                   <>

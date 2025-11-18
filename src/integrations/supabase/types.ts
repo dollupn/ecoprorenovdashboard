@@ -1457,6 +1457,7 @@ export type Database = {
           travaux_non_subventionnes_montant: number | null
           tva_rate: number | null
           updated_at: string
+          use_surface_posee_for_mo: boolean | null
           user_id: string
           valorisation_cee: number | null
         }
@@ -1523,6 +1524,7 @@ export type Database = {
           travaux_non_subventionnes_montant?: number | null
           tva_rate?: number | null
           updated_at?: string
+          use_surface_posee_for_mo?: boolean | null
           user_id: string
           valorisation_cee?: number | null
         }
@@ -1589,6 +1591,7 @@ export type Database = {
           travaux_non_subventionnes_montant?: number | null
           tva_rate?: number | null
           updated_at?: string
+          use_surface_posee_for_mo?: boolean | null
           user_id?: string
           valorisation_cee?: number | null
         }

@@ -29,6 +29,7 @@ export interface IsolationRentabiliteInput extends BaseRentabiliteInput {
   surface_posee_m2: number;
   MO_HT_per_m2: number;
   MAT_HT: number;
+  use_surface_posee_for_mo?: boolean;
 }
 
 // Output Interface
@@ -154,13 +155,15 @@ export function calcIsolationHT(input: IsolationRentabiliteInput): RentabiliteOu
     MAT_HT,
     commission_HT,
     fraisAdditionnels,
+    use_surface_posee_for_mo = false,
   } = input;
 
   // CA_HT = (primeCEE_TTC / 1.085) + travauxNonSubv_HT
   const ca = primeCEE_TTC / TVA_TRAVAUX + travauxNonSubv_HT;
 
-  // MO_HT = surface_posee_m2 × MO_HT_per_m2
-  const MO_HT = surface_posee_m2 * MO_HT_per_m2;
+  // MO_HT = surface × MO_HT_per_m2 (use surface_facturee_m2 by default, or surface_posee_m2 if option enabled)
+  const surface_for_mo = use_surface_posee_for_mo ? surface_posee_m2 : surface_facturee_m2;
+  const MO_HT = surface_for_mo * MO_HT_per_m2;
 
   // FRAIS_ADDITIONNELS = sum(fraisAdd_HT)
   const frais_additionnels = fraisAdditionnels.reduce(
@@ -200,13 +203,15 @@ export function calcIsolationTTC(input: IsolationRentabiliteInput): RentabiliteO
     MAT_HT,
     commission_HT,
     fraisAdditionnels,
+    use_surface_posee_for_mo = false,
   } = input;
 
   // CA_TTC = primeCEE_TTC + (travauxNonSubv_HT × 1.085)
   const ca = primeCEE_TTC + travauxNonSubv_HT * TVA_TRAVAUX;
 
-  // MO_HT = surface_posee_m2 × MO_HT_per_m2
-  const MO_HT = surface_posee_m2 * MO_HT_per_m2;
+  // MO_HT = surface × MO_HT_per_m2 (use surface_facturee_m2 by default, or surface_posee_m2 if option enabled)
+  const surface_for_mo = use_surface_posee_for_mo ? surface_posee_m2 : surface_facturee_m2;
+  const MO_HT = surface_for_mo * MO_HT_per_m2;
 
   // MO_TTC = MO_HT × 1.021
   const MO_TTC = MO_HT * TVA_MO;
