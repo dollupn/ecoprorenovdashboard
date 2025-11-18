@@ -42,7 +42,7 @@ const PROJECT_STATUS_LABELS = DEFAULT_PROJECT_STATUSES.reduce<Record<string, str
 
 const PROJECT_SURFACE_STATUS_SET = new Set([
   "CHANTIER_EN_COURS",
-  "CHANTIER_TERMINE",
+  "TERMINE",
   "LIVRE",
   "FACTURE_ENVOYEE",
   "AH",
@@ -321,14 +321,14 @@ export const useDashboardMetrics = (
           .from("sites")
           .select("id, ca_ttc, marge_totale_ttc, surface_facturee_m2, nb_luminaires, date_fin, project_id, projects!inner(product_cee_categories)")
           .eq("org_id", orgId)
-          .eq("status", "CHANTIER_TERMINE")
+          .eq("status", "TERMINE")
           .gte("date_fin", startMonth.toISOString())
           .lt("date_fin", nextMonthStart.toISOString()),
         supabase
           .from("sites")
           .select("id, ca_ttc, date_fin")
           .eq("org_id", orgId)
-          .eq("status", "CHANTIER_TERMINE")
+          .eq("status", "TERMINE")
           .gte("date_fin", startWeek.toISOString())
           .lte("date_fin", endWeek.toISOString()),
       ]);
