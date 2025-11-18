@@ -9,6 +9,7 @@ import { fr } from "date-fns/locale";
 interface ActivityFeedProps {
   orgId: string | null;
   enabled?: boolean;
+  compact?: boolean;
 }
 
 // 🔹 Type → Icône
@@ -67,14 +68,14 @@ const getStatusBadgeClasses = (status?: string | null) => {
   }
 };
 
-export function ActivityFeed({ orgId, enabled = true }: ActivityFeedProps) {
+export function ActivityFeed({ orgId, enabled = true, compact = false }: ActivityFeedProps) {
   const { data, isLoading, error, isFetching } = useActivityFeed(orgId, { enabled });
 
   return (
     <Card className="shadow-card bg-gradient-card border-0">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Clock className="w-5 h-5 text-primary" />
+      <CardHeader className={compact ? "pb-3" : ""}>
+        <CardTitle className={`flex items-center gap-2 ${compact ? "text-base" : "text-lg"}`}>
+          <Clock className={`text-primary ${compact ? "h-4 w-4" : "h-5 w-5"}`} />
           Activité Récente
           {isFetching && !isLoading && (
             <Loader2 className="w-4 h-4 text-muted-foreground animate-spin ml-2" />
