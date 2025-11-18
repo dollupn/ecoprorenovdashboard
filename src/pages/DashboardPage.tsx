@@ -59,23 +59,27 @@ const DashboardPage = () => {
     to: endOfWeek(new Date(), { locale: fr }),
   });
 
-  const metricsQuery = useDashboardMetrics(currentOrgId, { enabled: queriesEnabled });
-  const revenueQuery = useRevenueData(currentOrgId, { enabled: queriesEnabled });
+  const metricsQuery = useDashboardMetrics(currentOrgId, dateRange, { enabled: queriesEnabled });
+  const revenueData = useRevenueData(currentOrgId, {
+    enabled: queriesEnabled,
+    startDate: dateRange.from,
+    endDate: dateRange.to,
+  });
   const comparativeQuery = useDashboardComparative(currentOrgId, periodType, dateRange, { enabled: queriesEnabled });
 
-  const lastUpdatedIso = metricsQuery.data?.generatedAt ?? revenueQuery.data?.generatedAt;
+  const lastUpdatedIso = metricsQuery.data?.generatedAt ?? revenueData.data?.generatedAt;
   const lastUpdatedLabel = lastUpdatedIso
     ? format(new Date(lastUpdatedIso), "dd MMM yyyy 'à' HH:mm", { locale: fr })
     : undefined;
 
   const revenueWeekDelta = useMemo(() => {
-    if (!revenueQuery.data || revenueQuery.data.previousWeekTotal === 0) {
+    if (!revenueData.data || revenueData.data.previousWeekTotal === 0) {
       return null;
     }
 
-    const diff = revenueQuery.data.currentWeekTotal - revenueQuery.data.previousWeekTotal;
-    return Number(((diff / revenueQuery.data.previousWeekTotal) * 100).toFixed(1));
-  }, [revenueQuery.data]);
+    const diff = revenueData.data.currentWeekTotal - revenueData.data.previousWeekTotal;
+    return Number(((diff / revenueData.data.previousWeekTotal) * 100).toFixed(1));
+  }, [revenueData.data]);
 
   const conversionDelta = metricsQuery.data?.tauxConversion.delta ?? null;
 
@@ -102,6 +106,22 @@ const DashboardPage = () => {
   const handlePeriodChange = (type: PeriodType, range: DateRange) => {
     setPeriodType(type);
     setDateRange(range);
+  };
+
+  // Dynamic titles based on period type
+  const getPeriodLabel = () => {
+    switch (periodType) {
+      case 'week':
+        return 'de la Semaine';
+      case 'month':
+        return 'du Mois';
+      case 'quarter':
+        return 'du Trimestre';
+      case 'custom':
+        return 'de la Période';
+      default:
+        return 'de la Période';
+    }
   };
 
   return (
@@ -196,9 +216,9 @@ const DashboardPage = () => {
           />
 
           <KPICard
-            title="CA du Mois"
-            value={currencyFormatter.format(metricsQuery.data?.caMois ?? 0)}
-            change="Chantiers terminés ce mois"
+            title={`CA ${getPeriodLabel()}`}
+            value={currencyFormatter.format(metricsQuery.data?.caPeriode ?? 0)}
+            change="Chantiers terminés"
             changeType="positive"
             icon={Euro}
             gradient="from-accent to-accent-hover"
@@ -208,17 +228,6 @@ const DashboardPage = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-          <KPICard
-            title="CA de la Semaine"
-            value={currencyFormatter.format(metricsQuery.data?.caSemaine ?? 0)}
-            change="Chantiers terminés cette semaine"
-            changeType="positive"
-            icon={BarChart3}
-            gradient="from-purple-500 to-purple-600"
-            isLoading={metricsQuery.isLoading || !queriesEnabled}
-            error={metricsQuery.error ? "Erreur" : undefined}
-          />
-
           <KPICard
             title="Chantiers Ouverts"
             value={numberFormatter.format(metricsQuery.data?.chantiersOuverts ?? 0)}
@@ -233,10 +242,19 @@ const DashboardPage = () => {
           <KPICard
             title="RDV Programmés"
             value={numberFormatter.format(metricsQuery.data?.rdvProgrammesSemaine ?? 0)}
-            change="Cette semaine"
+            change={`Période ${getPeriodLabel().toLowerCase()}`}
             changeType="neutral"
             icon={Calendar}
             gradient="from-indigo-500 to-indigo-600"
+            isLoading={metricsQuery.isLoading || !queriesEnabled}
+            error={metricsQuery.error ? "Erreur" : undefined}
+          />
+
+          <KPICard
+            title={`Chantiers Terminés ${getPeriodLabel()}`}
+            value={numberFormatter.format(metricsQuery.data?.finishedSitesPeriod ?? 0)}
+            icon={Building2}
+            gradient="from-purple-500 to-purple-600"
             isLoading={metricsQuery.isLoading || !queriesEnabled}
             error={metricsQuery.error ? "Erreur" : undefined}
           />
@@ -265,9 +283,9 @@ const DashboardPage = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
           <KPICard
-            title="Surface Isolée"
-            value={`${surfaceFormatter.format(metricsQuery.data?.surfaceIsoleeMois ?? 0)} m²`}
-            change="Chantiers terminés ce mois"
+            title={`Surface Isolée ${getPeriodLabel()}`}
+            value={`${surfaceFormatter.format(metricsQuery.data?.surfaceIsoleePeriode ?? 0)} m²`}
+            change={`Chantiers terminés ${getPeriodLabel().toLowerCase()}`}
             changeType="neutral"
             icon={Ruler}
             gradient="from-teal-500 to-teal-600"
@@ -295,9 +313,9 @@ const DashboardPage = () => {
           />
 
           <KPICard
-            title="Marge Totale"
-            value={currencyFormatter.format(metricsQuery.data?.margeTotaleMois ?? 0)}
-            change="Chantiers terminés ce mois"
+            title={`Marge ${getPeriodLabel()}`}
+            value={currencyFormatter.format(metricsQuery.data?.margeTotalePeriode ?? 0)}
+            change={`Chantiers terminés ${getPeriodLabel().toLowerCase()}`}
             changeType="positive"
             icon={Target}
             gradient="from-green-500 to-green-600"
@@ -306,9 +324,9 @@ const DashboardPage = () => {
           />
 
           <KPICard
-            title="LEDs Installées"
-            value={numberFormatter.format(metricsQuery.data?.ledInstalleesMois ?? 0)}
-            change="Chantiers terminés ce mois"
+            title={`LEDs Installées ${getPeriodLabel()}`}
+            value={numberFormatter.format(metricsQuery.data?.ledInstalleesPeriode ?? 0)}
+            change={`Chantiers terminés ${getPeriodLabel().toLowerCase()}`}
             changeType="neutral"
             icon={Zap}
             gradient="from-amber-500 to-amber-600"
