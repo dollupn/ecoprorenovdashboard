@@ -4802,6 +4802,7 @@ const ProjectDetails = () => {
       cofrac_status: values.cofrac_status,
       date_debut: values.date_debut,
       date_fin_prevue: values.date_fin_prevue || null,
+      date_fin: values.date_fin || null,
       progress_percentage: values.progress_percentage,
       revenue: values.revenue,
       profit_margin: values.rentability_margin_rate,
@@ -4845,6 +4846,13 @@ const ProjectDetails = () => {
       activeSite &&
       normalizedNextStatus &&
       normalizedNextStatus !== activeSite.status;
+    
+    // Auto-fill date_fin when status changes to TERMINE
+    if (statusChanged && normalizedNextStatus === "TERMINE") {
+      if (!values.date_fin || values.date_fin.trim().length === 0) {
+        baseSiteData.date_fin = new Date().toISOString().split('T')[0];
+      }
+    }
 
     try {
       if (siteEditorMode === "edit" && activeSite) {
