@@ -3,8 +3,11 @@ import { KPICard } from "@/components/dashboard/KPICard";
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { KpiGoalsCard } from "@/app/(dashboard)/_components/KpiGoalsCard";
+import { PeriodFilter, type PeriodType, type DateRange } from "@/components/dashboard/PeriodFilter";
+import { ComparativeCharts } from "@/components/dashboard/ComparativeCharts";
 import { useAuth } from "@/hooks/useAuth";
 import { useDashboardMetrics, useRevenueData } from "@/hooks/useDashboardData";
+import { useDashboardComparative } from "@/hooks/useDashboardComparative";
 import { useOrg } from "@/features/organizations/OrgContext";
 import {
   Users,
@@ -20,9 +23,9 @@ import {
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format } from "date-fns";
+import { format, startOfWeek, endOfWeek } from "date-fns";
 import { fr } from "date-fns/locale";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 const currencyFormatter = new Intl.NumberFormat("fr-FR", {
   style: "currency",
@@ -49,8 +52,16 @@ const DashboardPage = () => {
   const { currentOrgId, isLoading: orgLoading } = useOrg();
   const queriesEnabled = !authLoading && !orgLoading && Boolean(currentOrgId);
 
+  // Period filter state
+  const [periodType, setPeriodType] = useState<PeriodType>("week");
+  const [dateRange, setDateRange] = useState<DateRange>({
+    from: startOfWeek(new Date(), { locale: fr }),
+    to: endOfWeek(new Date(), { locale: fr }),
+  });
+
   const metricsQuery = useDashboardMetrics(currentOrgId, { enabled: queriesEnabled });
   const revenueQuery = useRevenueData(currentOrgId, { enabled: queriesEnabled });
+  const comparativeQuery = useDashboardComparative(currentOrgId, periodType, dateRange, { enabled: queriesEnabled });
 
   const lastUpdatedIso = metricsQuery.data?.generatedAt ?? revenueQuery.data?.generatedAt;
   const lastUpdatedLabel = lastUpdatedIso
@@ -88,6 +99,11 @@ const DashboardPage = () => {
         )
     : undefined;
 
+  const handlePeriodChange = (type: PeriodType, range: DateRange) => {
+    setPeriodType(type);
+    setDateRange(range);
+  };
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -109,6 +125,24 @@ const DashboardPage = () => {
             )}
           </div>
         </div>
+
+        {/* Period Filter */}
+        <div className="bg-gradient-card rounded-lg p-4 border-0 shadow-card">
+          <PeriodFilter
+            periodType={periodType}
+            dateRange={dateRange}
+            onPeriodChange={handlePeriodChange}
+          />
+        </div>
+
+        {/* Comparative Charts */}
+        <ComparativeCharts
+          revenueData={comparativeQuery.data?.revenueData || []}
+          projectsData={comparativeQuery.data?.projectsData || []}
+          leadsData={comparativeQuery.data?.leadsData || []}
+          isLoading={comparativeQuery.isLoading}
+          periodLabel={comparativeQuery.data?.periodLabel || ""}
+        />
 
         {metricsQuery.error && (
           <Alert variant="destructive" className="border-destructive/40 bg-destructive/10">
