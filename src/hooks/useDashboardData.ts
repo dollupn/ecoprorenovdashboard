@@ -130,17 +130,17 @@ export interface DashboardMetrics {
   chantiersOuverts: number;
   chantiersFinSemaine: number;
   rdvProgrammesSemaine: number;
-  surfaceIsoleeMois: number;
+  surfaceIsoleePeriode: number;
   totalMwh: number;
   energyByCategory: EnergyBreakdownEntry[];
   tauxConversion: {
     rate: number;
     delta: number | null;
   };
-  caMois: number;
-  caSemaine: number;
-  margeTotaleMois: number;
-  ledInstalleesMois: number;
+  caPeriode: number;
+  margeTotalePeriode: number;
+  ledInstalleesPeriode: number;
+  finishedSitesPeriod: number;
   generatedAt: string;
 }
 
@@ -196,12 +196,13 @@ const formatMonthLabel = (date: Date) => {
 
 export const useDashboardMetrics = (
   orgId: string | null,
+  dateRange?: { from: Date; to: Date },
   options: QueryOptions = {}
 ) => {
   const { enabled = true } = options;
 
   return useQuery<DashboardMetrics, Error>({
-    queryKey: ["dashboard", "metrics", orgId],
+    queryKey: ["dashboard", "metrics", orgId, dateRange],
     enabled: Boolean(orgId) && enabled,
     queryFn: async () => {
       if (!orgId) {
@@ -264,10 +265,10 @@ export const useDashboardMetrics = (
       }
 
       const now = new Date();
-      const startWeek = startOfWeek(now, { weekStartsOn: 1 });
-      const endWeek = endOfWeek(now, { weekStartsOn: 1 });
-      const startMonth = startOfMonth(now);
-      const nextMonthStart = addMonths(startMonth, 1);
+      // Use dateRange if provided, otherwise use default periods
+      const startDate = dateRange?.from || startOfMonth(now);
+      const endDate = dateRange?.to || endOfMonth(now);
+      
       const sevenDaysLater = addDays(now, 7);
       const ninetyDaysAgo = subDays(now, 90);
       const previousPeriodStart = subDays(ninetyDaysAgo, 90);
@@ -280,8 +281,7 @@ export const useDashboardMetrics = (
         leadsRdv,
         qualifiedLeads,
         acceptedProjects,
-        finishedSitesMonth,
-        finishedSitesWeek,
+        finishedSitesPeriod,
       ] = await Promise.all([
         supabase
           .from("leads")
@@ -303,8 +303,8 @@ export const useDashboardMetrics = (
           .from("leads")
           .select("id, date_rdv")
           .eq("org_id", orgId)
-          .gte("date_rdv", startWeek.toISOString())
-          .lte("date_rdv", endWeek.toISOString()),
+          .gte("date_rdv", startDate.toISOString())
+          .lte("date_rdv", endDate.toISOString()),
         supabase
           .from("leads")
           .select("id, updated_at")
@@ -322,15 +322,8 @@ export const useDashboardMetrics = (
           .select("id, ca_ttc, marge_totale_ttc, surface_facturee_m2, nb_luminaires, date_fin, project_id, projects!inner(product_cee_categories)")
           .eq("org_id", orgId)
           .eq("status", "TERMINE")
-          .gte("date_fin", startMonth.toISOString())
-          .lt("date_fin", nextMonthStart.toISOString()),
-        supabase
-          .from("sites")
-          .select("id, ca_ttc, date_fin")
-          .eq("org_id", orgId)
-          .eq("status", "TERMINE")
-          .gte("date_fin", startWeek.toISOString())
-          .lte("date_fin", endWeek.toISOString()),
+          .gte("date_fin", startDate.toISOString())
+          .lte("date_fin", endDate.toISOString()),
       ]);
 
       if (activeLeads.error) throw activeLeads.error;
@@ -340,8 +333,7 @@ export const useDashboardMetrics = (
       if (leadsRdv.error) throw leadsRdv.error;
       if (qualifiedLeads.error) throw qualifiedLeads.error;
       if (acceptedProjects.error) throw acceptedProjects.error;
-      if (finishedSitesMonth.error) throw finishedSitesMonth.error;
-      if (finishedSitesWeek.error) throw finishedSitesWeek.error;
+      if (finishedSitesPeriod.error) throw finishedSitesPeriod.error;
 
       const projets = (projectsData.data ?? []).map(
         (project): ProjectWithProducts => ({
@@ -366,25 +358,23 @@ export const useDashboardMetrics = (
         );
       }).length;
 
-      // Calculate KPIs from finished chantiers
-      const finishedMonthSites = finishedSitesMonth.data ?? [];
-      const finishedWeekSites = finishedSitesWeek.data ?? [];
+      // Calculate KPIs from finished chantiers in the selected period
+      const finishedPeriodSites = finishedSitesPeriod.data ?? [];
 
-      const caMois = finishedMonthSites.reduce((acc, site) => acc + (site.ca_ttc ?? 0), 0);
-      const caSemaine = finishedWeekSites.reduce((acc, site) => acc + (site.ca_ttc ?? 0), 0);
-      const margeTotaleMois = finishedMonthSites.reduce(
+      const caPeriode = finishedPeriodSites.reduce((acc, site) => acc + (site.ca_ttc ?? 0), 0);
+      const margeTotalePeriode = finishedPeriodSites.reduce(
         (acc, site) => acc + (site.marge_totale_ttc ?? 0),
         0
       );
 
-      const surfaceIsoleeMois = finishedMonthSites
+      const surfaceIsoleePeriode = finishedPeriodSites
         .filter((site) => {
           const category = (site.projects as any)?.product_cee_categories;
           return category === "Isolation";
         })
         .reduce((acc, site) => acc + (site.surface_facturee_m2 ?? 0), 0);
 
-      const ledInstalleesMois = finishedMonthSites
+      const ledInstalleesPeriode = finishedPeriodSites
         .filter((site) => {
           const category = (site.projects as any)?.product_cee_categories;
           return category === "Eclairage";
@@ -438,17 +428,17 @@ export const useDashboardMetrics = (
         chantiersOuverts: sites.length,
         chantiersFinSemaine,
         rdvProgrammesSemaine: rdv.length,
-        surfaceIsoleeMois,
         totalMwh: Number.isFinite(totalMwh) ? Number(totalMwh.toFixed(2)) : 0,
         energyByCategory: energyAggregation.breakdown,
         tauxConversion: {
           rate: Number(currentRate.toFixed(1)),
           delta: delta === null ? null : Number(delta.toFixed(1)),
         },
-        caMois,
-        caSemaine,
-        margeTotaleMois,
-        ledInstalleesMois,
+        caPeriode,
+        margeTotalePeriode,
+        ledInstalleesPeriode,
+        surfaceIsoleePeriode,
+        finishedSitesPeriod: finishedPeriodSites.length,
         generatedAt: now.toISOString(),
       };
 
