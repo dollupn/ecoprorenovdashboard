@@ -372,6 +372,7 @@ export const createBaseSiteSchema = () => {
       .min(0, "La commission doit être positive")
       .optional()
       .nullable(),
+    use_surface_posee_for_mo: z.boolean().optional().default(false),
     // Eclairage fields
     nb_luminaires: z.coerce
       .number({ invalid_type_error: "Nombre de luminaires invalide" })
@@ -487,6 +488,7 @@ export const defaultSiteFormValues: SiteFormValues = {
   cout_materiaux_par_m2: null,
   cout_total_materiaux: null,
   commission_commerciale_par_m2: null,
+  use_surface_posee_for_mo: false,
   // Eclairage fields
   nb_luminaires: null,
   cout_total_mo: null,
