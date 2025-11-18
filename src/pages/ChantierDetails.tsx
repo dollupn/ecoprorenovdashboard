@@ -488,8 +488,16 @@ const ChantierDetails = () => {
         ...dbPayload
       } = payload;
       
+      // Sanitize date fields: convert empty strings to null
+      const sanitizedDateDebut = dbPayload.date_debut === "" ? null : dbPayload.date_debut;
+      const sanitizedDateFinPrevue = dbPayload.date_fin_prevue === "" ? null : dbPayload.date_fin_prevue;
+      const sanitizedDateFin = dbPayload.date_fin === "" ? null : dbPayload.date_fin;
+      
       const updatePayload: Partial<Tables<"sites">> = {
         ...dbPayload,
+        date_debut: sanitizedDateDebut,
+        date_fin_prevue: sanitizedDateFinPrevue,
+        date_fin: sanitizedDateFin,
         team_members: dbPayload.team_members?.map(m => m.id) ?? [],
       };
       
