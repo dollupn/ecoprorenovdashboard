@@ -1,12 +1,13 @@
 import { Layout } from "@/components/layout/Layout";
 import { KPICard } from "@/components/dashboard/KPICard";
+import { CompactKPICard } from "@/components/dashboard/CompactKPICard";
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { KpiGoalsCard } from "@/app/(dashboard)/_components/KpiGoalsCard";
 import { PeriodFilter, type PeriodType, type DateRange } from "@/components/dashboard/PeriodFilter";
 import { ComparativeCharts } from "@/components/dashboard/ComparativeCharts";
 import { useAuth } from "@/hooks/useAuth";
-import { useDashboardMetrics, useRevenueData, useDashboardHistory } from "@/hooks/useDashboardData";
+import { useDashboardMetrics, useRevenueData, useDashboardHistory, calculateTrend } from "@/hooks/useDashboardData";
 import { useDashboardComparative } from "@/hooks/useDashboardComparative";
 import { useOrg } from "@/features/organizations/OrgContext";
 import {
@@ -22,8 +23,16 @@ import {
   Zap,
   Plus,
   ExternalLink,
+  DollarSign,
+  CalendarClock,
+  Lightbulb,
+  Percent,
+  ChevronDown,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, startOfWeek, endOfWeek } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -169,277 +178,136 @@ const DashboardPage = () => {
           periodLabel={comparativeQuery.data?.periodLabel || ""}
         />
 
-        {metricsQuery.error && (
-          <Alert variant="destructive" className="border-destructive/40 bg-destructive/10">
-            <AlertTitle>Erreur de chargement des indicateurs</AlertTitle>
-            <AlertDescription>
-              {metricsQuery.error.message}
-            </AlertDescription>
-          </Alert>
-        )}
+        {/* Main Content: Two-column layout */}
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_350px]">
+          <div className="space-y-6">
+            <ComparativeCharts
+              revenueData={comparativeQuery.data?.revenueData ?? []}
+              projectsData={comparativeQuery.data?.projectsData ?? []}
+              leadsData={comparativeQuery.data?.leadsData ?? []}
+              isLoading={comparativeQuery.isLoading}
+              periodLabel={comparativeQuery.data?.periodLabel ?? ""}
+            />
 
-        {/* KPI Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-          <KPICard
-            title="Leads Actifs"
-            value={numberFormatter.format(metricsQuery.data?.leadsActifs ?? 0)}
-            changeType="positive"
-            change={`${metricsQuery.data?.leadsActifs ?? 0} en suivi`}
-            icon={Users}
-            gradient="from-blue-500 to-blue-700"
-            isLoading={metricsQuery.isLoading || !queriesEnabled}
-            error={metricsQuery.error ? "Erreur" : undefined}
-            sparklineData={historyQuery.data?.leads}
-            onClick={() => navigate('/leads')}
-            actions={[
-              {
-                icon: Plus,
-                label: "Nouveau Lead",
-                onClick: () => navigate('/leads?action=create'),
-              },
-              {
-                icon: ExternalLink,
-                label: "Voir tous",
-                onClick: () => navigate('/leads'),
-              },
-            ]}
-            onRetry={() => metricsQuery.refetch()}
-          />
+            <RevenueChart orgId={currentOrgId} enabled={queriesEnabled} />
 
-          <KPICard
-            title="Projets en Cours"
-            value={numberFormatter.format(metricsQuery.data?.projetsEnCours ?? 0)}
-            change={`${metricsQuery.data?.projetsEnCours ?? 0} dans le pipe`}
-            changeType="positive"
-            icon={FolderOpen}
-            gradient="from-primary to-primary-glow"
-            isLoading={metricsQuery.isLoading || !queriesEnabled}
-            error={metricsQuery.error ? "Erreur" : undefined}
-            sparklineData={historyQuery.data?.projects}
-            onClick={() => navigate('/projects')}
-            actions={[
-              {
-                icon: Plus,
-                label: "Nouveau Projet",
-                onClick: () => navigate('/projects?action=create'),
-              },
-              {
-                icon: ExternalLink,
-                label: "Voir tous",
-                onClick: () => navigate('/projects'),
-              },
-            ]}
-            onRetry={() => metricsQuery.refetch()}
-          />
+            <ActivityFeed orgId={currentOrgId} enabled={queriesEnabled} />
+          </div>
 
-          <KPICard
-            title="Devis en Attente"
-            value={numberFormatter.format(metricsQuery.data?.devisEnAttente ?? 0)}
-            change={
-              (metricsQuery.data?.devisExpirantSous7Jours ?? 0) > 0
-                ? `${metricsQuery.data?.devisExpirantSous7Jours ?? 0} à relancer`
-                : "Aucun devis urgent"
-            }
-            changeType={
-              (metricsQuery.data?.devisExpirantSous7Jours ?? 0) > 0 ? "negative" : "neutral"
-            }
-            icon={FileText}
-            gradient="from-orange-500 to-orange-600"
-            badgeLabel={`${metricsQuery.data?.devisExpirantSous7Jours ?? 0} expirent <7j`}
-            isLoading={metricsQuery.isLoading || !queriesEnabled}
-            error={metricsQuery.error ? "Erreur" : undefined}
-            onClick={() => navigate('/quotes')}
-            actions={[
-              {
-                icon: Plus,
-                label: "Nouveau Devis",
-                onClick: () => navigate('/quotes?action=create'),
-              },
-              {
-                icon: ExternalLink,
-                label: "À relancer",
-                onClick: () => navigate('/quotes?filter=expiring'),
-              },
-            ]}
-            onRetry={() => metricsQuery.refetch()}
-          />
-
-          <KPICard
-            title={`CA ${getPeriodLabel()}`}
-            value={currencyFormatter.format(metricsQuery.data?.caPeriode ?? 0)}
-            change="Chantiers terminés"
-            changeType="positive"
-            icon={Euro}
-            gradient="from-accent to-accent-hover"
-            isLoading={metricsQuery.isLoading || !queriesEnabled}
-            error={metricsQuery.error ? "Erreur" : undefined}
-            sparklineData={historyQuery.data?.revenue}
-            onClick={() => navigate('/accounting')}
-            actions={[
-              {
-                icon: ExternalLink,
-                label: "Voir détails",
-                onClick: () => navigate('/accounting'),
-              },
-            ]}
-            onRetry={() => metricsQuery.refetch()}
-          />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-          <KPICard
-            title="Chantiers Ouverts"
-            value={numberFormatter.format(metricsQuery.data?.chantiersOuverts ?? 0)}
-            change={`${metricsQuery.data?.chantiersFinSemaine ?? 0} se terminent cette semaine`}
-            changeType="neutral"
-            icon={Building2}
-            gradient="from-emerald-500 to-emerald-600"
-            isLoading={metricsQuery.isLoading || !queriesEnabled}
-            error={metricsQuery.error ? "Erreur" : undefined}
-            sparklineData={historyQuery.data?.sites}
-            onClick={() => navigate('/sites?status=open')}
-            actions={[
-              {
-                icon: Plus,
-                label: "Démarrer Chantier",
-                onClick: () => navigate('/projects'),
-              },
-              {
-                icon: Calendar,
-                label: "Planning",
-                onClick: () => navigate('/calendar'),
-              },
-            ]}
-            onRetry={() => metricsQuery.refetch()}
-          />
-
-          <KPICard
-            title="RDV Programmés"
-            value={numberFormatter.format(metricsQuery.data?.rdvProgrammesSemaine ?? 0)}
-            change={`Période ${getPeriodLabel().toLowerCase()}`}
-            changeType="neutral"
-            icon={Calendar}
-            gradient="from-indigo-500 to-indigo-600"
-            isLoading={metricsQuery.isLoading || !queriesEnabled}
-            error={metricsQuery.error ? "Erreur" : undefined}
-            onClick={() => navigate('/calendar')}
-            actions={[
-              {
-                icon: Plus,
-                label: "Planifier RDV",
-                onClick: () => navigate('/calendar?action=create'),
-              },
-              {
-                icon: Calendar,
-                label: "Calendrier",
-                onClick: () => navigate('/calendar'),
-              },
-            ]}
-            onRetry={() => metricsQuery.refetch()}
-          />
-
-          <KPICard
-            title={`Chantiers Terminés ${getPeriodLabel()}`}
-            value={numberFormatter.format(metricsQuery.data?.finishedSitesPeriod ?? 0)}
-            icon={Building2}
-            gradient="from-purple-500 to-purple-600"
-            isLoading={metricsQuery.isLoading || !queriesEnabled}
-            error={metricsQuery.error ? "Erreur" : undefined}
-            onClick={() => navigate('/sites?status=completed')}
-            onRetry={() => metricsQuery.refetch()}
-          />
-
-          <KPICard
-            title="Taux de Conversion"
-            value={formatPercentage(metricsQuery.data?.tauxConversion.rate ?? 0)}
-            change={
-              conversionDelta === null
-                ? "Sur les 90 derniers jours"
-                : `${conversionDelta > 0 ? "+" : ""}${conversionDelta.toFixed(1)} pts vs période précédente`
-            }
-            changeType={
-              conversionDelta === null
-                ? "neutral"
-                : conversionDelta >= 0
-                  ? "positive"
-                  : "negative"
-            }
-            icon={Target}
-            gradient="from-cyan-500 to-cyan-600"
-            isLoading={metricsQuery.isLoading || !queriesEnabled}
-            error={metricsQuery.error ? "Erreur" : undefined}
-            onClick={() => navigate('/reports')}
-            onRetry={() => metricsQuery.refetch()}
-          />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-          <KPICard
-            title={`Surface Isolée ${getPeriodLabel()}`}
-            value={`${surfaceFormatter.format(metricsQuery.data?.surfaceIsoleePeriode ?? 0)} m²`}
-            change={`Chantiers terminés ${getPeriodLabel().toLowerCase()}`}
-            changeType="neutral"
-            icon={Ruler}
-            gradient="from-teal-500 to-teal-600"
-            isLoading={metricsQuery.isLoading || !queriesEnabled}
-            error={metricsQuery.error ? "Erreur" : undefined}
-            onClick={() => navigate('/sites')}
-            onRetry={() => metricsQuery.refetch()}
-          />
-
-          <KPICard
-            title="Énergie Cumulée"
-            value={`${energyFormatter.format(metricsQuery.data?.totalMwh ?? 0)} MWh`}
-            change="Tous projets actifs"
-            changeType="neutral"
-            icon={Zap}
-            gradient="from-yellow-500 to-orange-500"
-            isLoading={metricsQuery.isLoading || !queriesEnabled}
-            error={metricsQuery.error ? "Erreur" : undefined}
-            details={energyDetails}
-            detailsWhileLoading={
-              <div className="space-y-1">
-                <Skeleton className="h-3 w-full" />
-                <Skeleton className="h-3 w-3/4" />
-                <Skeleton className="h-3 w-2/3" />
-              </div>
-            }
-            onClick={() => navigate('/reports')}
-            onRetry={() => metricsQuery.refetch()}
-          />
-
-          <KPICard
-            title={`Marge ${getPeriodLabel()}`}
-            value={currencyFormatter.format(metricsQuery.data?.margeTotalePeriode ?? 0)}
-            change={`Chantiers terminés ${getPeriodLabel().toLowerCase()}`}
-            changeType="positive"
-            icon={Target}
-            gradient="from-green-500 to-green-600"
-            isLoading={metricsQuery.isLoading || !queriesEnabled}
-            error={metricsQuery.error ? "Erreur" : undefined}
-            onClick={() => navigate('/accounting')}
-            onRetry={() => metricsQuery.refetch()}
-          />
-
-          <KPICard
-            title={`LEDs Installées ${getPeriodLabel()}`}
-            value={numberFormatter.format(metricsQuery.data?.ledInstalleesPeriode ?? 0)}
-            change={`Chantiers terminés ${getPeriodLabel().toLowerCase()}`}
-            changeType="neutral"
-            icon={Zap}
-            gradient="from-amber-500 to-amber-600"
-            isLoading={metricsQuery.isLoading || !queriesEnabled}
-            error={metricsQuery.error ? "Erreur" : undefined}
-            onClick={() => navigate('/sites')}
-            onRetry={() => metricsQuery.refetch()}
-          />
-        </div>
-
-        <div className="grid grid-cols-1 xl:grid-cols-[2fr_1fr] gap-6">
-          <RevenueChart orgId={currentOrgId} enabled={queriesEnabled} />
+          {/* Right Sidebar */}
           <div className="space-y-6">
             <KpiGoalsCard orgId={currentOrgId} enabled={queriesEnabled} />
-            <ActivityFeed orgId={currentOrgId} enabled={queriesEnabled} />
+
+            {/* Secondary Metrics - Collapsible */}
+            <Collapsible defaultOpen={false}>
+              <Card className="overflow-hidden">
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" className="w-full justify-between p-4 hover:bg-accent">
+                    <span className="text-sm font-medium">Autres métriques (6)</span>
+                    <ChevronDown className="h-4 w-4 transition-transform duration-200 data-[state=open]:rotate-180" />
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="grid gap-3 p-4 pt-0">
+                    <KPICard
+                      title="Leads Actifs"
+                      value={numberFormatter.format(metricsQuery.data?.leadsActifs ?? 0)}
+                      changeType="positive"
+                      change={`${metricsQuery.data?.leadsActifs ?? 0} en suivi`}
+                      icon={Users}
+                      gradient="from-blue-500 to-blue-700"
+                      isLoading={metricsQuery.isLoading || !queriesEnabled}
+                      error={metricsQuery.error ? "Erreur" : undefined}
+                      sparklineData={historyQuery.data?.leads}
+                      onClick={() => navigate("/leads")}
+                      onRetry={() => metricsQuery.refetch()}
+                    />
+
+                    <KPICard
+                      title="Projets en Cours"
+                      value={numberFormatter.format(metricsQuery.data?.projetsEnCours ?? 0)}
+                      change={`${metricsQuery.data?.projetsEnCours ?? 0} dans le pipe`}
+                      changeType="positive"
+                      icon={FolderOpen}
+                      gradient="from-primary to-primary-glow"
+                      isLoading={metricsQuery.isLoading || !queriesEnabled}
+                      error={metricsQuery.error ? "Erreur" : undefined}
+                      sparklineData={historyQuery.data?.projects}
+                      onClick={() => navigate("/projects")}
+                      onRetry={() => metricsQuery.refetch()}
+                    />
+
+                    <KPICard
+                      title="Devis en Attente"
+                      value={numberFormatter.format(metricsQuery.data?.devisEnAttente ?? 0)}
+                      change={
+                        (metricsQuery.data?.devisExpirantSous7Jours ?? 0) > 0
+                          ? `${metricsQuery.data?.devisExpirantSous7Jours ?? 0} à relancer`
+                          : "Aucun devis urgent"
+                      }
+                      changeType={
+                        (metricsQuery.data?.devisExpirantSous7Jours ?? 0) > 0 ? "negative" : "neutral"
+                      }
+                      icon={FileText}
+                      gradient="from-orange-500 to-orange-600"
+                      badgeLabel={`${metricsQuery.data?.devisExpirantSous7Jours ?? 0} expirent <7j`}
+                      isLoading={metricsQuery.isLoading || !queriesEnabled}
+                      error={metricsQuery.error ? "Erreur" : undefined}
+                      onClick={() => navigate("/quotes")}
+                      onRetry={() => metricsQuery.refetch()}
+                    />
+
+                    <KPICard
+                      title="Chantiers Ouverts"
+                      value={numberFormatter.format(metricsQuery.data?.chantiersOuverts ?? 0)}
+                      change={`${metricsQuery.data?.chantiersFinSemaine ?? 0} se terminent cette semaine`}
+                      changeType="neutral"
+                      icon={Building2}
+                      gradient="from-emerald-500 to-emerald-600"
+                      isLoading={metricsQuery.isLoading || !queriesEnabled}
+                      error={metricsQuery.error ? "Erreur" : undefined}
+                      sparklineData={historyQuery.data?.sites}
+                      onClick={() => navigate("/sites?status=open")}
+                      onRetry={() => metricsQuery.refetch()}
+                    />
+
+                    <KPICard
+                      title={`Chantiers Terminés`}
+                      value={numberFormatter.format(metricsQuery.data?.finishedSitesPeriod ?? 0)}
+                      icon={Building2}
+                      gradient="from-purple-500 to-purple-600"
+                      isLoading={metricsQuery.isLoading || !queriesEnabled}
+                      error={metricsQuery.error ? "Erreur" : undefined}
+                      onClick={() => navigate("/sites?status=completed")}
+                      onRetry={() => metricsQuery.refetch()}
+                    />
+
+                    <KPICard
+                      title="Taux de Conversion"
+                      value={formatPercentage(metricsQuery.data?.tauxConversion.rate ?? 0)}
+                      change={
+                        conversionDelta === null
+                          ? "Sur les 90 derniers jours"
+                          : `${conversionDelta > 0 ? "+" : ""}${conversionDelta.toFixed(1)} pts vs période précédente`
+                      }
+                      changeType={
+                        conversionDelta === null
+                          ? "neutral"
+                          : conversionDelta >= 0
+                            ? "positive"
+                            : "negative"
+                      }
+                      icon={Target}
+                      gradient="from-cyan-500 to-cyan-600"
+                      isLoading={metricsQuery.isLoading || !queriesEnabled}
+                      error={metricsQuery.error ? "Erreur" : undefined}
+                      onClick={() => navigate("/reports")}
+                      onRetry={() => metricsQuery.refetch()}
+                    />
+                  </div>
+                </CollapsibleContent>
+              </Card>
+            </Collapsible>
           </div>
         </div>
       </div>
