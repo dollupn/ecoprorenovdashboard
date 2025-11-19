@@ -122,32 +122,6 @@ const isStatusValue = <T extends string>(
   value: string | null | undefined
 ): value is T => (value ? (statuses as readonly string[]).includes(value) : false);
 
-// Helper to calculate trend between current and previous values
-export const calculateTrend = (
-  current: number,
-  previous: number
-): {
-  label: string;
-  type: "up" | "down" | "neutral";
-} => {
-  if (previous === 0) {
-    return { label: "Nouvelle donnée", type: "neutral" };
-  }
-
-  const diff = current - previous;
-  const percentChange = (diff / previous) * 100;
-
-  if (Math.abs(percentChange) < 1) {
-    return { label: "Stable", type: "neutral" };
-  }
-
-  const sign = percentChange > 0 ? "+" : "";
-  return {
-    label: `${sign}${percentChange.toFixed(1)}% vs période précédente`,
-    type: percentChange > 0 ? "up" : "down",
-  };
-};
-
 export interface DashboardMetrics {
   leadsActifs: number;
   projetsEnCours: number;
