@@ -128,81 +128,66 @@ export const KpiGoalsCard = ({ orgId, enabled, className }: KpiGoalsCardProps) =
   }, [orgId, isLoading, currentSurface, surfaceValue]);
 
   return (
-    <Card className={className}>
-      <CardHeader>
-        <CardTitle>Objectifs KPI</CardTitle>
-        <CardDescription>
-          {isLoading ? <Skeleton className="h-4 w-40" /> : surfaceDescription}
-        </CardDescription>
+    <Card className={cn("h-fit", className)}>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Objectifs KPI</CardTitle>
+        <CardDescription className="text-xs">{surfaceDescription}</CardDescription>
       </CardHeader>
-      <CardContent>
-        {error ? (
-          <p className="text-sm text-destructive">
-            Impossible de charger les objectifs : {error.message}
-          </p>
-        ) : isLoading ? (
-          <div className="space-y-4">
-            {Array.from({ length: 2 }).map((_, index) => (
-              <div key={index} className="space-y-2">
-                <Skeleton className="h-4 w-1/3" />
+      <CardContent className="space-y-3">
+        {isLoading && (
+          <div className="space-y-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="space-y-1">
                 <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-1.5 w-full" />
               </div>
             ))}
           </div>
-        ) : goals.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Aucun objectif actif pour le moment.
-          </p>
-        ) : (
-          <div className="space-y-6">
+        )}
+
+        {!isLoading && error && (
+          <div className="space-y-2 text-center py-4">
+            <p className="text-sm text-muted-foreground">
+              Impossible de charger les objectifs
+            </p>
+            <p className="text-xs text-destructive">{error.message}</p>
+          </div>
+        )}
+
+        {!isLoading && !error && goals.length === 0 && (
+          <div className="text-center py-6">
+            <p className="text-sm text-muted-foreground">
+              Aucun objectif KPI configuré
+            </p>
+          </div>
+        )}
+
+        {!isLoading && !error && goals.length > 0 && (
+          <div className="max-h-[400px] space-y-3 overflow-y-auto pr-2">
             {goals.map((goal) => {
-              const targetValue = goal.target_value ?? 0;
-              const currentValue = (() => {
-                if (goal.metric && goal.metric.includes("surface")) {
-                  return currentSurface;
-                }
-
-                return 0;
-              })();
-
-              const rawProgress = targetValue > 0 ? (currentValue / targetValue) * 100 : 0;
-              const clampedProgress = Math.min(Math.max(rawProgress, 0), 100);
-              const isOverTarget = rawProgress >= 100;
-              const progressLabel = `${percentageFormatter.format(Math.max(rawProgress, 0))}% atteint`;
+              const currentValue = goal.metric.includes("surface") ? currentSurface : 0;
+              const progressPercent = goal.target_value > 0 
+                ? Math.min((currentValue / goal.target_value) * 100, 100) 
+                : 0;
+              const unit = resolveGoalUnit(goal);
 
               return (
-                <div key={goal.id} className="space-y-2">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{resolveGoalTitle(goal)}</p>
-                      {goal.description ? (
-                        <p className="text-xs text-muted-foreground">{goal.description}</p>
-                      ) : null}
-                    </div>
-                    <div
-                      className={cn(
-                        "text-sm font-semibold",
-                        isOverTarget ? "text-emerald-600" : "text-foreground"
-                      )}
-                    >
-                      {formatValueWithUnit(currentValue, resolveGoalUnit(goal))} / {formatValueWithUnit(targetValue, resolveGoalUnit(goal))}
-                    </div>
+                <div key={goal.id} className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-medium truncate">{resolveGoalTitle(goal)}</span>
+                    <span className="text-muted-foreground whitespace-nowrap ml-2">
+                      {formatValueWithUnit(currentValue, unit)} / {formatValueWithUnit(goal.target_value, unit)}
+                    </span>
                   </div>
                   <Progress
-                    value={clampedProgress}
+                    value={progressPercent}
                     className={cn(
-                      "h-2",
-                      isOverTarget ? "bg-emerald-100 [&>*]:bg-emerald-500" : "bg-secondary"
+                      "h-1.5",
+                      progressPercent >= 100 && "[&>div]:bg-emerald-500",
+                      progressPercent >= 75 && progressPercent < 100 && "[&>div]:bg-primary",
+                      progressPercent < 75 && "[&>div]:bg-amber-500"
                     )}
                   />
-                  <p
-                    className={cn(
-                      "text-xs font-medium",
-                      isOverTarget ? "text-emerald-600" : "text-muted-foreground"
-                    )}
-                  >
-                    {isOverTarget ? "Objectif dépassé" : progressLabel}
-                  </p>
                 </div>
               );
             })}
