@@ -726,3 +726,93 @@ export const useActivityFeed = (
     },
   });
 };
+
+// Hook to fetch historical data for sparklines (last 7 days)
+export const useDashboardHistory = (
+  orgId: string | null,
+  dateRange: { from: Date; to: Date },
+  options?: { enabled?: boolean }
+) => {
+  return useQuery({
+    queryKey: ["dashboard-history", orgId, dateRange.from.toISOString(), dateRange.to.toISOString()],
+    enabled: options?.enabled ?? true,
+    queryFn: async () => {
+      if (!orgId) throw new Error("Organization ID required");
+
+      const days = 7;
+      const dates = Array.from({ length: days }, (_, i) => 
+        subDays(dateRange.to, days - 1 - i)
+      );
+
+      // Fetch leads count per day
+      const leadsPromises = dates.map(async (date) => {
+        const start = startOfDay(date).toISOString();
+        const end = endOfDay(date).toISOString();
+        const { count } = await supabase
+          .from("leads")
+          .select("*", { count: "exact", head: true })
+          .eq("org_id", orgId)
+          .in("status", ACTIVE_LEAD_STATUSES)
+          .gte("created_at", start)
+          .lte("created_at", end);
+        return count ?? 0;
+      });
+
+      // Fetch projects count per day
+      const projectsPromises = dates.map(async (date) => {
+        const start = startOfDay(date).toISOString();
+        const end = endOfDay(date).toISOString();
+        const { count } = await supabase
+          .from("projects")
+          .select("*", { count: "exact", head: true })
+          .eq("org_id", orgId)
+          .neq("status", "TERMINE")
+          .gte("created_at", start)
+          .lte("created_at", end);
+        return count ?? 0;
+      });
+
+      // Fetch revenue per day
+      const revenuePromises = dates.map(async (date) => {
+        const start = startOfDay(date).toISOString();
+        const end = endOfDay(date).toISOString();
+        const { data } = await supabase
+          .from("invoices")
+          .select("amount")
+          .eq("org_id", orgId)
+          .eq("status", "PAID")
+          .gte("paid_date", start)
+          .lte("paid_date", end);
+        return data?.reduce((sum, inv) => sum + inv.amount, 0) ?? 0;
+      });
+
+      // Fetch sites count per day
+      const sitesPromises = dates.map(async (date) => {
+        const start = startOfDay(date).toISOString();
+        const end = endOfDay(date).toISOString();
+        const { count } = await supabase
+          .from("sites")
+          .select("*", { count: "exact", head: true })
+          .eq("org_id", orgId)
+          .in("status", SITE_ACTIVE_STATUSES)
+          .gte("created_at", start)
+          .lte("created_at", end);
+        return count ?? 0;
+      });
+
+      const [leads, projects, revenue, sites] = await Promise.all([
+        Promise.all(leadsPromises),
+        Promise.all(projectsPromises),
+        Promise.all(revenuePromises),
+        Promise.all(sitesPromises),
+      ]);
+
+      return {
+        leads,
+        projects,
+        revenue,
+        sites,
+      };
+    },
+  });
+};

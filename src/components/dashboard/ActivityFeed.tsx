@@ -5,6 +5,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useActivityFeed, ActivityItem } from "@/hooks/useDashboardData";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
+import { EmptyState } from "./EmptyState";
+import { ErrorState } from "./ErrorState";
 
 interface ActivityFeedProps {
   orgId: string | null;
@@ -68,7 +70,7 @@ const getStatusBadgeClasses = (status?: string | null) => {
 };
 
 export function ActivityFeed({ orgId, enabled = true }: ActivityFeedProps) {
-  const { data, isLoading, error, isFetching } = useActivityFeed(orgId, { enabled });
+  const { data, isLoading, error, isFetching, refetch } = useActivityFeed(orgId, { enabled });
 
   return (
     <Card className="shadow-card bg-gradient-card border-0">
@@ -94,7 +96,11 @@ export function ActivityFeed({ orgId, enabled = true }: ActivityFeedProps) {
             </div>
           ))
         ) : error ? (
-          <p className="text-sm text-destructive">Impossible de charger l'activité récente.</p>
+          <ErrorState
+            title="Erreur de chargement"
+            message="Impossible de charger l'activité récente"
+            onRetry={() => refetch()}
+          />
         ) : data && data.length > 0 ? (
           data.map((activity) => {
             const Icon = getActivityIcon(activity.type);
@@ -148,10 +154,11 @@ export function ActivityFeed({ orgId, enabled = true }: ActivityFeedProps) {
             );
           })
         ) : (
-          <div className="text-sm text-muted-foreground p-6 text-center bg-background/40 rounded-lg">
-            <p className="font-medium text-foreground mb-1">Aucune activité récente</p>
-            <p>Vos interactions apparaîtront ici dès qu'elles seront disponibles.</p>
-          </div>
+          <EmptyState
+            icon={Clock}
+            title="Aucune activité récente"
+            description="Les nouvelles activités apparaîtront ici"
+          />
         )}
       </CardContent>
     </Card>
