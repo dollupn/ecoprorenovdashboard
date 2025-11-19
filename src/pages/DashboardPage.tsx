@@ -6,7 +6,7 @@ import { KpiGoalsCard } from "@/app/(dashboard)/_components/KpiGoalsCard";
 import { PeriodFilter, type PeriodType, type DateRange } from "@/components/dashboard/PeriodFilter";
 import { ComparativeCharts } from "@/components/dashboard/ComparativeCharts";
 import { useAuth } from "@/hooks/useAuth";
-import { useDashboardMetrics, useRevenueData } from "@/hooks/useDashboardData";
+import { useDashboardMetrics, useRevenueData, useDashboardHistory } from "@/hooks/useDashboardData";
 import { useDashboardComparative } from "@/hooks/useDashboardComparative";
 import { useOrg } from "@/features/organizations/OrgContext";
 import {
@@ -20,12 +20,15 @@ import {
   Target,
   Ruler,
   Zap,
+  Plus,
+  ExternalLink,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, startOfWeek, endOfWeek } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const currencyFormatter = new Intl.NumberFormat("fr-FR", {
   style: "currency",
@@ -51,6 +54,7 @@ const DashboardPage = () => {
   const { loading: authLoading } = useAuth();
   const { currentOrgId, isLoading: orgLoading } = useOrg();
   const queriesEnabled = !authLoading && !orgLoading && Boolean(currentOrgId);
+  const navigate = useNavigate();
 
   // Period filter state
   const [periodType, setPeriodType] = useState<PeriodType>("week");
@@ -66,6 +70,7 @@ const DashboardPage = () => {
     endDate: dateRange.to,
   });
   const comparativeQuery = useDashboardComparative(currentOrgId, periodType, dateRange, { enabled: queriesEnabled });
+  const historyQuery = useDashboardHistory(currentOrgId, dateRange, { enabled: queriesEnabled });
 
   const lastUpdatedIso = metricsQuery.data?.generatedAt ?? revenueData.data?.generatedAt;
   const lastUpdatedLabel = lastUpdatedIso
@@ -184,6 +189,21 @@ const DashboardPage = () => {
             gradient="from-blue-500 to-blue-700"
             isLoading={metricsQuery.isLoading || !queriesEnabled}
             error={metricsQuery.error ? "Erreur" : undefined}
+            sparklineData={historyQuery.data?.leads}
+            onClick={() => navigate('/leads')}
+            actions={[
+              {
+                icon: Plus,
+                label: "Nouveau Lead",
+                onClick: () => navigate('/leads?action=create'),
+              },
+              {
+                icon: ExternalLink,
+                label: "Voir tous",
+                onClick: () => navigate('/leads'),
+              },
+            ]}
+            onRetry={() => metricsQuery.refetch()}
           />
 
           <KPICard
@@ -195,6 +215,21 @@ const DashboardPage = () => {
             gradient="from-primary to-primary-glow"
             isLoading={metricsQuery.isLoading || !queriesEnabled}
             error={metricsQuery.error ? "Erreur" : undefined}
+            sparklineData={historyQuery.data?.projects}
+            onClick={() => navigate('/projects')}
+            actions={[
+              {
+                icon: Plus,
+                label: "Nouveau Projet",
+                onClick: () => navigate('/projects?action=create'),
+              },
+              {
+                icon: ExternalLink,
+                label: "Voir tous",
+                onClick: () => navigate('/projects'),
+              },
+            ]}
+            onRetry={() => metricsQuery.refetch()}
           />
 
           <KPICard
@@ -213,6 +248,20 @@ const DashboardPage = () => {
             badgeLabel={`${metricsQuery.data?.devisExpirantSous7Jours ?? 0} expirent <7j`}
             isLoading={metricsQuery.isLoading || !queriesEnabled}
             error={metricsQuery.error ? "Erreur" : undefined}
+            onClick={() => navigate('/quotes')}
+            actions={[
+              {
+                icon: Plus,
+                label: "Nouveau Devis",
+                onClick: () => navigate('/quotes?action=create'),
+              },
+              {
+                icon: ExternalLink,
+                label: "À relancer",
+                onClick: () => navigate('/quotes?filter=expiring'),
+              },
+            ]}
+            onRetry={() => metricsQuery.refetch()}
           />
 
           <KPICard
@@ -224,6 +273,16 @@ const DashboardPage = () => {
             gradient="from-accent to-accent-hover"
             isLoading={metricsQuery.isLoading || !queriesEnabled}
             error={metricsQuery.error ? "Erreur" : undefined}
+            sparklineData={historyQuery.data?.revenue}
+            onClick={() => navigate('/accounting')}
+            actions={[
+              {
+                icon: ExternalLink,
+                label: "Voir détails",
+                onClick: () => navigate('/accounting'),
+              },
+            ]}
+            onRetry={() => metricsQuery.refetch()}
           />
         </div>
 
@@ -237,6 +296,21 @@ const DashboardPage = () => {
             gradient="from-emerald-500 to-emerald-600"
             isLoading={metricsQuery.isLoading || !queriesEnabled}
             error={metricsQuery.error ? "Erreur" : undefined}
+            sparklineData={historyQuery.data?.sites}
+            onClick={() => navigate('/sites?status=open')}
+            actions={[
+              {
+                icon: Plus,
+                label: "Démarrer Chantier",
+                onClick: () => navigate('/projects'),
+              },
+              {
+                icon: Calendar,
+                label: "Planning",
+                onClick: () => navigate('/calendar'),
+              },
+            ]}
+            onRetry={() => metricsQuery.refetch()}
           />
 
           <KPICard
@@ -248,6 +322,20 @@ const DashboardPage = () => {
             gradient="from-indigo-500 to-indigo-600"
             isLoading={metricsQuery.isLoading || !queriesEnabled}
             error={metricsQuery.error ? "Erreur" : undefined}
+            onClick={() => navigate('/calendar')}
+            actions={[
+              {
+                icon: Plus,
+                label: "Planifier RDV",
+                onClick: () => navigate('/calendar?action=create'),
+              },
+              {
+                icon: Calendar,
+                label: "Calendrier",
+                onClick: () => navigate('/calendar'),
+              },
+            ]}
+            onRetry={() => metricsQuery.refetch()}
           />
 
           <KPICard
@@ -257,6 +345,8 @@ const DashboardPage = () => {
             gradient="from-purple-500 to-purple-600"
             isLoading={metricsQuery.isLoading || !queriesEnabled}
             error={metricsQuery.error ? "Erreur" : undefined}
+            onClick={() => navigate('/sites?status=completed')}
+            onRetry={() => metricsQuery.refetch()}
           />
 
           <KPICard
@@ -278,6 +368,8 @@ const DashboardPage = () => {
             gradient="from-cyan-500 to-cyan-600"
             isLoading={metricsQuery.isLoading || !queriesEnabled}
             error={metricsQuery.error ? "Erreur" : undefined}
+            onClick={() => navigate('/reports')}
+            onRetry={() => metricsQuery.refetch()}
           />
         </div>
 
@@ -291,6 +383,8 @@ const DashboardPage = () => {
             gradient="from-teal-500 to-teal-600"
             isLoading={metricsQuery.isLoading || !queriesEnabled}
             error={metricsQuery.error ? "Erreur" : undefined}
+            onClick={() => navigate('/sites')}
+            onRetry={() => metricsQuery.refetch()}
           />
 
           <KPICard
@@ -310,6 +404,8 @@ const DashboardPage = () => {
                 <Skeleton className="h-3 w-2/3" />
               </div>
             }
+            onClick={() => navigate('/reports')}
+            onRetry={() => metricsQuery.refetch()}
           />
 
           <KPICard
@@ -321,6 +417,8 @@ const DashboardPage = () => {
             gradient="from-green-500 to-green-600"
             isLoading={metricsQuery.isLoading || !queriesEnabled}
             error={metricsQuery.error ? "Erreur" : undefined}
+            onClick={() => navigate('/accounting')}
+            onRetry={() => metricsQuery.refetch()}
           />
 
           <KPICard
@@ -332,6 +430,8 @@ const DashboardPage = () => {
             gradient="from-amber-500 to-amber-600"
             isLoading={metricsQuery.isLoading || !queriesEnabled}
             error={metricsQuery.error ? "Erreur" : undefined}
+            onClick={() => navigate('/sites')}
+            onRetry={() => metricsQuery.refetch()}
           />
         </div>
 
