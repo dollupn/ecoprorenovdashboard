@@ -160,15 +160,6 @@ const DashboardPage = () => {
           />
         </div>
 
-        {/* Comparative Charts */}
-        <ComparativeCharts
-          revenueData={comparativeQuery.data?.revenueData || []}
-          projectsData={comparativeQuery.data?.projectsData || []}
-          leadsData={comparativeQuery.data?.leadsData || []}
-          isLoading={comparativeQuery.isLoading}
-          periodLabel={comparativeQuery.data?.periodLabel || ""}
-        />
-
         {metricsQuery.error && (
           <Alert variant="destructive" className="border-destructive/40 bg-destructive/10">
             <AlertTitle>Erreur de chargement des indicateurs</AlertTitle>
@@ -434,6 +425,15 @@ const DashboardPage = () => {
             onRetry={() => metricsQuery.refetch()}
           />
         </div>
+
+        {/* Comparative Charts */}
+        <ComparativeCharts
+          revenueData={comparativeQuery.data?.revenueData || []}
+          projectsData={comparativeQuery.data?.projectsData || []}
+          leadsData={comparativeQuery.data?.leadsData || []}
+          isLoading={comparativeQuery.isLoading}
+          periodLabel={comparativeQuery.data?.periodLabel || ""}
+        />
 
         <div className="grid grid-cols-1 xl:grid-cols-[2fr_1fr] gap-6">
           <RevenueChart orgId={currentOrgId} enabled={queriesEnabled} />
