@@ -4779,26 +4779,61 @@ const ProjectDetails = () => {
     [ceeEntryMap],
   );
 
+  // Nouvelle fonction pour afficher uniquement le résumé de la prime
+  const handleShowPrimeSummary = () => {
+    if (!project) return;
+    setQuoteSummaryOpen(true);
+  };
+
+  // Fonction modifiée pour ouvrir directement le dialogue de devis avec toutes les données pré-remplies
   const handleOpenQuote = () => {
     if (!project) return;
     const displayedProducts = getDisplayedProducts(project.project_products);
-    const firstProduct =
-      displayedProducts[0]?.product ?? project.project_products?.[0]?.product;
+    
+    // Créer les line items à partir des produits du projet
+    const lineItems: QuoteFormValues["line_items"] = displayedProducts.map(pp => {
+      const product = pp.product;
+      const dynamicParams = pp.dynamic_params || {};
+      
+      // Construire une description avec les paramètres dynamiques
+      let description = product?.name || '';
+      const paramEntries = getDynamicFieldEntries(product?.params_schema, dynamicParams);
+      if (paramEntries.length > 0) {
+        const paramLines = paramEntries
+          .map(entry => `${entry.label}: ${formatDynamicFieldValue(entry)}`)
+          .join('\n');
+        description += '\n\n' + paramLines;
+      }
+
+      return {
+        reference: product?.code || '',
+        description,
+        quantity: pp.quantity || 1,
+        unit_price: 0, // À remplir manuellement
+        tax_rate: 8.5, // TVA à 8.5% par défaut
+      };
+    });
 
     const clientName = getProjectClientName(project);
+    const firstProduct = displayedProducts[0]?.product;
 
     setQuoteInitialValues({
       client_name: clientName,
       project_id: project.id,
-      product_name:
-        firstProduct?.name ||
-        firstProduct?.code ||
-        (project as Project & { product_name?: string }).product_name ||
-        "",
-      amount: project.estimated_value ?? undefined,
+      product_name: firstProduct?.name || firstProduct?.code || project.product_name || '',
+      amount: project.estimated_value || 0,
       quote_ref: project.project_ref ? `${project.project_ref}-DEV` : undefined,
+      line_items: lineItems.length > 0 ? lineItems : [{ reference: '', description: '', quantity: 1, unit_price: 0, tax_rate: 8.5 }],
+      client_email: project.email || '',
+      client_phone: project.phone || '',
+      site_address: project.address || '',
+      site_city: project.city || '',
+      site_postal_code: project.postal_code || '',
+      valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // +30 jours
     });
-    setQuoteSummaryOpen(true);
+    
+    // Ouvrir directement le dialogue de devis
+    setQuoteDialogOpen(true);
   };
 
   const handleCancelQuoteSummary = useCallback(() => {
@@ -5472,6 +5507,14 @@ const ProjectDetails = () => {
             >
               <Hammer className="mr-2 h-4 w-4" />
               Démarrer un chantier
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={handleShowPrimeSummary}
+              disabled={!project || totalPrimeAmount === null}
+            >
+              <HandCoins className="w-4 h-4 mr-2" />
+              Résumé de la prime
             </Button>
             <Button variant="outline" onClick={handleOpenQuote}>
               <FileText className="w-4 h-4 mr-2" />
@@ -6171,16 +6214,16 @@ const ProjectDetails = () => {
           open={quoteSummaryOpen}
           onOpenChange={(open) => {
             setQuoteSummaryOpen(open);
-            if (!open && !quoteDialogOpen) {
+            if (!open) {
               setQuoteInitialValues({});
             }
           }}
         >
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>Résumé de la prime</DialogTitle>
+              <DialogTitle>Résumé de la prime CEE</DialogTitle>
               <DialogDescription>
-                Vérifiez la répartition de la prime avant de créer le devis.
+                Répartition détaillée de la prime pour ce projet.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 text-sm">
@@ -6237,13 +6280,7 @@ const ProjectDetails = () => {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={handleCancelQuoteSummary}>
-                Cancel
-              </Button>
-              <Button
-                onClick={handleConfirmQuoteSummary}
-                disabled={totalPrimeAmount === null}
-              >
-                Confirmer
+                Fermer
               </Button>
             </DialogFooter>
           </DialogContent>
