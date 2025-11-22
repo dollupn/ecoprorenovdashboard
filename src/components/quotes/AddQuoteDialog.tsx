@@ -94,6 +94,7 @@ const quoteSchema = z.object({
   notes: z.string().optional(),
   client_email: z.string().email("Email invalide").optional().or(z.literal("")),
   client_phone: z.string().optional(),
+  client_siren: z.string().optional(),
   site_address: z.string().optional(),
   site_city: z.string().optional(),
   site_postal_code: z.string().optional(),
@@ -301,6 +302,7 @@ const baseDefaultValues: QuoteFormValues = {
   notes: "",
   client_email: "",
   client_phone: "",
+  client_siren: "",
   site_address: "",
   site_city: "",
   site_postal_code: "",
@@ -496,6 +498,7 @@ export const AddQuoteDialog = ({
 
     values.client_email = pickValue(initialValues?.client_email ?? undefined, parsedMetadata.clientEmail);
     values.client_phone = pickValue(initialValues?.client_phone ?? undefined, parsedMetadata.clientPhone);
+    values.client_siren = pickValue(initialValues?.client_siren ?? undefined, parsedMetadata.clientSiren);
     values.site_address = pickValue(initialValues?.site_address ?? undefined, parsedMetadata.siteAddress);
     values.site_city = pickValue(initialValues?.site_city ?? undefined, parsedMetadata.siteCity);
     values.site_postal_code = pickValue(
@@ -549,6 +552,7 @@ export const AddQuoteDialog = ({
     metadataLineItems,
     parsedMetadata.clientEmail,
     parsedMetadata.clientPhone,
+    parsedMetadata.clientSiren,
     parsedMetadata.driveFolderUrl,
     parsedMetadata.emailMessage,
     parsedMetadata.internalNotes,
@@ -597,6 +601,7 @@ export const AddQuoteDialog = ({
       const metadata: QuoteMetadata = {
         clientEmail: toOptionalString(data.client_email),
         clientPhone: toOptionalString(data.client_phone),
+        clientSiren: toOptionalString(data.client_siren),
         siteAddress: toOptionalString(data.site_address),
         siteCity: toOptionalString(data.site_city),
         sitePostalCode: toOptionalString(data.site_postal_code),
@@ -840,6 +845,20 @@ export const AddQuoteDialog = ({
                   )}
                 />
               </div>
+
+              <FormField
+                control={form.control}
+                name="client_siren"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>SIRET/SIREN</FormLabel>
+                    <FormControl>
+                      <Input placeholder="123 456 789 00012" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <FormField
                 control={form.control}

@@ -27,6 +27,10 @@ export const parseQuoteMetadata = (quote: Pick<QuoteRecord, "notes">): QuoteMeta
       metadata.clientPhone = parsed.clientPhone.trim();
     }
 
+    if (typeof parsed.clientSiren === "string" && parsed.clientSiren.trim()) {
+      metadata.clientSiren = parsed.clientSiren.trim();
+    }
+
     if (typeof parsed.siteAddress === "string" && parsed.siteAddress.trim()) {
       metadata.siteAddress = parsed.siteAddress.trim();
     }

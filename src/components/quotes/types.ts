@@ -30,6 +30,7 @@ export interface QuoteLineItem {
 export interface QuoteMetadata {
   clientEmail?: string;
   clientPhone?: string;
+  clientSiren?: string;
   siteAddress?: string;
   siteCity?: string;
   sitePostalCode?: string;
