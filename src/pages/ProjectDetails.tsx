@@ -3484,7 +3484,7 @@ const ProjectDetails = () => {
         throw new Error("Session expirée. Veuillez vous reconnecter.");
       }
 
-      const response = await fetch(`/api/projects/${project.id}/invoices/generate`, {
+      const response = await fetch(`/api/invoices/${project.id}/generate`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${session.access_token}`,
