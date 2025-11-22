@@ -236,6 +236,8 @@ type UpcomingAppointmentDetail = {
   notes: string | null;
 };
 
+type ProjectInvoice = Tables<"invoices">;
+
 type ProjectWithRelations = ProjectWithRelationsForForm & {
   project_products: ProjectProduct[];
   delegate?: DelegateSummary | null;
@@ -3037,6 +3039,31 @@ const ProjectDetails = () => {
   const projectRefFilter = project?.project_ref?.trim() ?? "";
 
   const {
+    data: projectInvoices = [],
+    isLoading: projectInvoicesLoading,
+    refetch: refetchProjectInvoices,
+  } = useQuery<ProjectInvoice[]>({
+    queryKey: ["project-invoices", project?.id, currentOrgId],
+    queryFn: async () => {
+      if (!project?.id || !currentOrgId) {
+        return [] as ProjectInvoice[];
+      }
+
+      const { data, error } = await supabase
+        .from("invoices")
+        .select("*")
+        .eq("project_id", project.id)
+        .eq("org_id", currentOrgId)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      return (data ?? []) as ProjectInvoice[];
+    },
+    enabled: Boolean(project?.id && currentOrgId),
+  });
+
+  const {
     data: projectSitesData = [],
     isLoading: projectSitesLoading,
     refetch: refetchProjectSites,
@@ -3441,6 +3468,118 @@ const ProjectDetails = () => {
   const handleAddNote = useCallback(
     (content: string) => addNoteMutation.mutateAsync(content),
     [addNoteMutation],
+  );
+
+  const [generatingInvoice, setGeneratingInvoice] = useState(false);
+  const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<string | null>(null);
+
+  const generateInvoiceMutation = useMutation({
+    mutationKey: ["project-generate-invoice", project?.id],
+    mutationFn: async () => {
+      if (!project?.id || !currentOrgId) {
+        throw new Error("Projet ou organisation introuvable.");
+      }
+
+      if (!session?.access_token) {
+        throw new Error("Session expirée. Veuillez vous reconnecter.");
+      }
+
+      const response = await fetch(`/api/invoices/${project.id}/generate`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "x-organization-id": currentOrgId,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: "Erreur inconnue" }));
+        throw new Error(errorData.message || "Impossible de générer la facture");
+      }
+
+      return await response.json();
+    },
+    onSuccess: async () => {
+      toast({
+        title: "Facture générée",
+        description: "La facture a été créée avec succès.",
+      });
+      await refetchProjectInvoices();
+    },
+    onError: (error) => {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Impossible de générer la facture.";
+      toast({
+        title: "Erreur lors de la génération",
+        description: message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleGenerateInvoice = useCallback(async () => {
+    setGeneratingInvoice(true);
+    try {
+      await generateInvoiceMutation.mutateAsync();
+    } finally {
+      setGeneratingInvoice(false);
+    }
+  }, [generateInvoiceMutation]);
+
+  const handleDownloadInvoicePdf = useCallback(
+    async (invoiceId: string, invoiceRef: string) => {
+      if (!session?.access_token) {
+        toast({
+          title: "Session expirée",
+          description: "Veuillez vous reconnecter.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setDownloadingInvoiceId(invoiceId);
+      try {
+        const response = await fetch(`/api/invoices/${invoiceId}/pdf`, {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error("Erreur lors de la génération du PDF");
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `Facture-${invoiceRef}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+
+        toast({
+          title: "PDF téléchargé",
+          description: "Le PDF de la facture a été téléchargé avec succès.",
+        });
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Impossible de télécharger le PDF.";
+        toast({
+          title: "Erreur lors du téléchargement",
+          description: message,
+          variant: "destructive",
+        });
+      } finally {
+        setDownloadingInvoiceId(null);
+      }
+    },
+    [session?.access_token, toast],
   );
 
   const handleEditProject = useCallback(() => {
@@ -5775,6 +5914,122 @@ const ProjectDetails = () => {
                 {renderProductsTable(
                   projectProducts,
                   "Aucun produit (hors ECO) n'est associé à ce projet.",
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-card bg-gradient-card border-0">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                <div className="space-y-1">
+                  <CardTitle>Factures</CardTitle>
+                  <CardDescription>
+                    Générez et téléchargez les factures du projet
+                  </CardDescription>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={handleGenerateInvoice}
+                  disabled={generatingInvoice || !project?.id}
+                  className="gap-2"
+                >
+                  {generatingInvoice ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Génération...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="h-4 w-4" />
+                      Générer une facture
+                    </>
+                  )}
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {projectInvoicesLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : projectInvoices.length === 0 ? (
+                  <div className="text-center py-8">
+                    <FileText className="h-12 w-12 mx-auto mb-3 text-muted-foreground opacity-50" />
+                    <p className="text-sm text-muted-foreground">
+                      Aucune facture générée pour ce projet
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {projectInvoices.map((invoice) => (
+                      <div
+                        key={invoice.id}
+                        className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/5 transition-colors"
+                      >
+                        <div className="flex items-center gap-4 flex-1">
+                          <FileText className="h-5 w-5 text-primary" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className="font-medium text-sm">
+                                {invoice.invoice_ref}
+                              </p>
+                              <Badge
+                                variant={
+                                  invoice.status === "paid"
+                                    ? "default"
+                                    : invoice.status === "pending"
+                                      ? "secondary"
+                                      : "outline"
+                                }
+                                className="text-xs"
+                              >
+                                {invoice.status === "paid"
+                                  ? "Payée"
+                                  : invoice.status === "pending"
+                                    ? "En attente"
+                                    : invoice.status}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                              <span>{formatCurrency(invoice.amount)}</span>
+                              <span>•</span>
+                              <span>
+                                {new Date(invoice.created_at).toLocaleDateString("fr-FR")}
+                              </span>
+                              {invoice.due_date && (
+                                <>
+                                  <span>•</span>
+                                  <span>
+                                    Échéance:{" "}
+                                    {new Date(invoice.due_date).toLocaleDateString("fr-FR")}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            handleDownloadInvoicePdf(invoice.id, invoice.invoice_ref)
+                          }
+                          disabled={downloadingInvoiceId === invoice.id}
+                          className="gap-2 shrink-0"
+                        >
+                          {downloadingInvoiceId === invoice.id ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Téléchargement...
+                            </>
+                          ) : (
+                            <>
+                              <Download className="h-4 w-4" />
+                              PDF
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </CardContent>
             </Card>
