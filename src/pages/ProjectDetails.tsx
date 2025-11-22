@@ -4812,7 +4812,11 @@ const ProjectDetails = () => {
 
         // Utiliser les données CEE si disponibles
         const quantity = ceeEntry?.multiplierValue ?? pp.quantity ?? 1;
-        const unitPrice = ceeEntry?.result?.valorisationPerUnitEur ?? 0;
+        
+        // Convertir de TTC à HT (valorisationPerUnitEur est déjà TTC)
+        const unitPriceTTC = ceeEntry?.result?.valorisationPerUnitEur ?? 0;
+        const unitPriceHT = unitPriceTTC / 1.085; // Conversion TTC → HT
+        const unitPrice = Math.round(unitPriceHT * 100) / 100; // Arrondi à 2 décimales
 
         return {
           reference: product?.code || '',
@@ -4831,25 +4835,25 @@ const ProjectDetails = () => {
     const adminLineItems: QuoteFormValues["line_items"] = [];
     
     if (totalPrime > 0) {
-      // ECO-ADMN (15%)
+      // ECO-ADMN (15%) - Convertir TTC → HT
       adminLineItems.push({
         reference: 'ECO-ADMN',
         description: 'Frais administratifs CEE (15%)',
         quantity: 1,
-        unit_price: totalPrime * 0.15,
+        unit_price: Math.round((totalPrime * 0.15 / 1.085) * 100) / 100,
         tax_rate: 8.5,
       });
       
-      // ECO-FURN (5%)
+      // ECO-FURN (5%) - Convertir TTC → HT
       adminLineItems.push({
         reference: 'ECO-FURN',
         description: 'Frais de fourniture CEE (5%)',
         quantity: 1,
-        unit_price: totalPrime * 0.05,
+        unit_price: Math.round((totalPrime * 0.05 / 1.085) * 100) / 100,
         tax_rate: 8.5,
       });
       
-      // ECO-LOG (0%)
+      // ECO-LOG (0%) - optionnel
       adminLineItems.push({
         reference: 'ECO-LOG',
         description: 'Frais logistiques CEE (0%)',
