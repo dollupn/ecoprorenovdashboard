@@ -4874,14 +4874,9 @@ const ProjectDetails = () => {
     const clientName = getProjectClientName(project);
     const firstProduct = displayedProducts[0]?.product;
 
-    // Préparer les notes avec SIREN si disponible
-    let notesContent = '';
-    if (project.siren) {
-      notesContent += `SIRET/SIREN: ${project.siren}\n\n`;
-    }
-
     setQuoteInitialValues({
       client_name: clientName,
+      client_siren: project.siren || "",
       project_id: project.id,
       product_name: firstProduct?.name || firstProduct?.code || project.product_name || '',
       amount: totalHT,
@@ -4898,7 +4893,7 @@ const ProjectDetails = () => {
       site_address: project.address || '',
       site_city: project.city || '',
       site_postal_code: project.postal_code || '',
-      notes: notesContent,
+      notes: "",
       valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     });
     
