@@ -4790,46 +4790,112 @@ const ProjectDetails = () => {
     if (!project) return;
     const displayedProducts = getDisplayedProducts(project.project_products);
     
-    // Créer les line items à partir des produits du projet
-    const lineItems: QuoteFormValues["line_items"] = displayedProducts.map(pp => {
-      const product = pp.product;
-      const dynamicParams = pp.dynamic_params || {};
-      
-      // Construire une description avec les paramètres dynamiques
-      let description = product?.name || '';
-      const paramEntries = getDynamicFieldEntries(product?.params_schema, dynamicParams);
-      if (paramEntries.length > 0) {
-        const paramLines = paramEntries
-          .map(entry => `${entry.label}: ${formatDynamicFieldValue(entry)}`)
-          .join('\n');
-        description += '\n\n' + paramLines;
-      }
+    // Créer les line items à partir des produits du projet avec les données CEE
+    const productLineItems: QuoteFormValues["line_items"] = displayedProducts
+      .map(pp => {
+        const product = pp.product;
+        const dynamicParams = pp.dynamic_params || {};
+        const entryId = String(pp.id ?? pp.product_id);
+        
+        // Récupérer les données CEE calculées pour ce produit
+        const ceeEntry = ceeEntryMap[entryId];
+        
+        // Construire une description détaillée avec les paramètres dynamiques
+        let description = product?.name || '';
+        const paramEntries = getDynamicFieldEntries(product?.params_schema, dynamicParams);
+        if (paramEntries.length > 0) {
+          const paramLines = paramEntries
+            .map(entry => `${entry.label}: ${formatDynamicFieldValue(entry)}`)
+            .join('\n');
+          description += '\n\n' + paramLines;
+        }
 
-      return {
-        reference: product?.code || '',
-        description,
-        quantity: pp.quantity || 1,
-        unit_price: 0, // À remplir manuellement
-        tax_rate: 8.5, // TVA à 8.5% par défaut
-      };
-    });
+        // Utiliser les données CEE si disponibles
+        const quantity = ceeEntry?.multiplierValue ?? pp.quantity ?? 1;
+        const unitPrice = ceeEntry?.result?.valorisationPerUnitEur ?? 0;
+
+        return {
+          reference: product?.code || '',
+          description,
+          quantity,
+          unit_price: unitPrice,
+          tax_rate: 8.5, // TVA à 8.5% par défaut
+        };
+      })
+      .filter(item => item.unit_price > 0); // Exclure les produits sans valorisation
+
+    // Calculer le total des primes pour les produits EQ/EN
+    const totalPrime = totalPrimeAmount ?? 0;
+    
+    // Ajouter les 3 lignes de produits admin
+    const adminLineItems: QuoteFormValues["line_items"] = [];
+    
+    if (totalPrime > 0) {
+      // ECO-ADMN (15%)
+      adminLineItems.push({
+        reference: 'ECO-ADMN',
+        description: 'Frais administratifs CEE (15%)',
+        quantity: 1,
+        unit_price: totalPrime * 0.15,
+        tax_rate: 8.5,
+      });
+      
+      // ECO-FURN (5%)
+      adminLineItems.push({
+        reference: 'ECO-FURN',
+        description: 'Frais de fourniture CEE (5%)',
+        quantity: 1,
+        unit_price: totalPrime * 0.05,
+        tax_rate: 8.5,
+      });
+      
+      // ECO-LOG (0%)
+      adminLineItems.push({
+        reference: 'ECO-LOG',
+        description: 'Frais logistiques CEE (0%)',
+        quantity: 1,
+        unit_price: 0,
+        tax_rate: 8.5,
+      });
+    }
+
+    // Combiner tous les line items
+    const allLineItems = [...productLineItems, ...adminLineItems];
+    
+    // Calculer le montant total HT
+    const totalHT = allLineItems.reduce((sum, item) => 
+      sum + (item.quantity * item.unit_price), 0
+    );
 
     const clientName = getProjectClientName(project);
     const firstProduct = displayedProducts[0]?.product;
+
+    // Préparer les notes avec SIREN si disponible
+    let notesContent = '';
+    if (project.siren) {
+      notesContent += `SIRET/SIREN: ${project.siren}\n\n`;
+    }
 
     setQuoteInitialValues({
       client_name: clientName,
       project_id: project.id,
       product_name: firstProduct?.name || firstProduct?.code || project.product_name || '',
-      amount: project.estimated_value || 0,
+      amount: totalHT,
       quote_ref: project.project_ref ? `${project.project_ref}-DEV` : undefined,
-      line_items: lineItems.length > 0 ? lineItems : [{ reference: '', description: '', quantity: 1, unit_price: 0, tax_rate: 8.5 }],
+      line_items: allLineItems.length > 0 ? allLineItems : [{ 
+        reference: '', 
+        description: '', 
+        quantity: 1, 
+        unit_price: 0, 
+        tax_rate: 8.5 
+      }],
       client_email: project.email || '',
       client_phone: project.phone || '',
       site_address: project.address || '',
       site_city: project.city || '',
       site_postal_code: project.postal_code || '',
-      valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // +30 jours
+      notes: notesContent,
+      valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     });
     
     // Ouvrir directement le dialogue de devis
