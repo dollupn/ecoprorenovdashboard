@@ -3,7 +3,6 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 import quotesPdfRoute from "./routes/quotesPdfRoute.js";
-import invoicesPdfRoute from "./routes/invoicesPdfRoute.js";
 import googleDriveRoute from "./routes/googleDriveRoute.js";
 import projectsRoute from "./routes/projects.js";
 import chantierRoute from "./routes/chantier.js";
@@ -16,7 +15,6 @@ export const createServer = () => {
 
   // --- API routes
   app.use("/api/quotes", quotesPdfRoute);
-  app.use("/api/invoices", invoicesPdfRoute);
   app.use("/api/google-drive", googleDriveRoute);
   app.use("/api/projects", projectsRoute);
   app.use("/api/chantiers", chantierRoute);
