@@ -39,6 +39,75 @@ const buildInvoiceReference = (projectRef: string | null): string => {
   return `${base}-INV-${timestamp}`;
 };
 
+const buildDetailedDescription = (chantier: any, project: any): string => {
+  const parts: string[] = [];
+
+  if (chantier.product_name) {
+    parts.push(`Mise en place d'un système conforme ${chantier.product_name}`);
+  }
+
+  if (chantier.surface_facturee_m2) {
+    parts.push(`Surface isolée : ${chantier.surface_facturee_m2} m²`);
+  }
+
+  if (chantier.date_debut) {
+    const formatted = new Intl.DateTimeFormat("fr-FR", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    }).format(new Date(chantier.date_debut));
+    parts.push(`Début travaux : ${formatted}`);
+  }
+
+  if (project.building_type) {
+    parts.push(`Type de bâtiment : ${project.building_type}`);
+  }
+
+  if (project.usage) {
+    parts.push(`Usage : ${project.usage}`);
+  }
+
+  if (chantier.subcontractor_id) {
+    parts.push(
+      "\nLes travaux objets de la présente facture sont réalisés en sous-traitance conformément aux dispositions de la loi n°75-1334 du 31 décembre 1975.",
+    );
+  }
+
+  return parts.join("\n");
+};
+
+const buildInvoiceItems = (chantier: any, project: any) => {
+  const items = [];
+
+  if (chantier && chantier.product_name) {
+    const unitPrice =
+      (chantier.cout_mo_par_m2 || 0) +
+      (chantier.cout_materiaux_par_m2 || chantier.cout_isolant_par_m2 || 0);
+
+    items.push({
+      code: chantier.site_ref,
+      title: chantier.product_name,
+      long_description: buildDetailedDescription(chantier, project),
+      unit_price_ht: unitPrice,
+      quantity: chantier.surface_facturee_m2 || 1,
+    });
+  }
+
+  return items;
+};
+
+const buildCeePrimeText = (chantier: any): string | undefined => {
+  if (!chantier?.valorisation_cee || chantier.valorisation_cee === 0) {
+    return undefined;
+  }
+
+  const primeAmount = Math.abs(chantier.valorisation_cee).toFixed(2);
+
+  return `Tout ou partie des travaux relatifs à cette facture sont éligibles à une prime d'un montant de ${primeAmount} euros net de taxe dont [DÉLÉGATAIRE] est à l'origine dans le cadre de son rôle actif et incitatif pour le dispositif des Certificats d'Économies d'Énergie.
+
+Le montant de cette prime ne pourra être révisé à la baisse qu'en cas de modification du volume des Certificats d'Économies d'Énergie attaché à l'opération et ce de manière proportionnelle.`;
+};
+
 const formatNotes = (args: {
   quoteRef?: string | null;
   quoteAmount?: number | null;
@@ -142,6 +211,29 @@ export const generateInvoiceForProject = async (orgId: string, projectId: string
   const dueDate = new Date();
   dueDate.setDate(dueDate.getDate() + 30);
 
+  // Build PDF data structure
+  const pdfData = {
+    items: buildInvoiceItems(latestChantier, project),
+    amounts: {
+      discount_amount: 0,
+      cee_prime_amount: -(latestChantier?.valorisation_cee || 0),
+      vat_rate: latestChantier?.tva_rate || 0.085,
+    },
+    notes: {
+      cee_prime_text: buildCeePrimeText(latestChantier),
+      payment_terms: "Par prélèvement ou par virement bancaire",
+      consultation_link: null,
+    },
+    _legacy: formatNotes({
+      quoteRef: latestQuote.quote_ref,
+      quoteAmount,
+      chantierRef: latestChantier?.site_ref,
+      chantierStatus: latestChantier?.status,
+      surfaceFacturee: latestChantier?.surface_facturee ?? null,
+      valorisationCee: latestChantier?.valorisation_cee ?? null,
+    }),
+  };
+
   const invoice = await createInvoice({
     project_id: project.id,
     org_id: project.org_id,
@@ -154,14 +246,7 @@ export const generateInvoiceForProject = async (orgId: string, projectId: string
     amount: invoiceAmount,
     status: "PENDING_VALIDATION",
     due_date: dueDate.toISOString(),
-    notes: formatNotes({
-      quoteRef: latestQuote.quote_ref,
-      quoteAmount,
-      chantierRef: latestChantier?.site_ref,
-      chantierStatus: latestChantier?.status,
-      surfaceFacturee: latestChantier?.surface_facturee ?? null,
-      valorisationCee: latestChantier?.valorisation_cee ?? null,
-    }) || null,
+    notes: JSON.stringify(pdfData),
   });
 
   return { invoice };

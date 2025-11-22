@@ -53,3 +53,31 @@ export class ForbiddenError extends ApiError {
     this.name = "ForbiddenError";
   }
 }
+
+export class InvoicePdfError extends Error {
+  constructor(message: string, public readonly cause?: unknown) {
+    super(message);
+    this.name = "InvoicePdfError";
+  }
+}
+
+export class InvoicePdfNotFoundError extends InvoicePdfError {
+  constructor(public readonly invoiceId: string) {
+    super(`Aucune facture trouvée pour l'identifiant ${invoiceId}`);
+    this.name = "InvoicePdfNotFoundError";
+  }
+}
+
+export class InvoicePdfConfigurationError extends InvoicePdfError {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvoicePdfConfigurationError";
+  }
+}
+
+export class InvoicePdfValidationError extends InvoicePdfError {
+  constructor(message: string, cause?: unknown) {
+    super(message, cause);
+    this.name = "InvoicePdfValidationError";
+  }
+}

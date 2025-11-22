@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Facture <%= invoice.number %></title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 10pt;
+      line-height: 1.4;
+      color: #000000;
+      padding: 18mm 15mm;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 30px;
+      border-bottom: 2px solid #000000;
+      padding-bottom: 15px;
+    }
+
+    .company-info h1 {
+      font-size: 20pt;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #000000;
+    }
+
+    .company-info p {
+      font-size: 9pt;
+      color: #4d535f;
+      margin: 2px 0;
+    }
+
+    .invoice-meta {
+      text-align: right;
+    }
+
+    .invoice-meta h2 {
+      font-size: 16pt;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .invoice-meta p {
+      font-size: 9pt;
+      margin: 2px 0;
+    }
+
+    .parties {
+      display: flex;
+      justify-content: space-between;
+      margin: 30px 0;
+      gap: 40px;
+    }
+
+    .party-block {
+      flex: 1;
+    }
+
+    .party-block h3 {
+      font-size: 10pt;
+      font-weight: 700;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      color: #4d535f;
+      border-bottom: 1px solid #d4d7dd;
+      padding-bottom: 5px;
+    }
+
+    .party-block p {
+      margin: 4px 0;
+      font-size: 9.5pt;
+    }
+
+    .party-block .company-name {
+      font-weight: 700;
+      font-size: 10.5pt;
+      margin-bottom: 6px;
+    }
+
+    .project-info {
+      background: #f8f9fa;
+      padding: 12px 15px;
+      margin: 20px 0;
+      border-left: 3px solid #000000;
+    }
+
+    .project-info p {
+      margin: 3px 0;
+      font-size: 9.5pt;
+    }
+
+    .project-info strong {
+      font-weight: 600;
+    }
+
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 25px 0;
+    }
+
+    .items-table thead {
+      background: #000000;
+      color: #ffffff;
+    }
+
+    .items-table th {
+      padding: 10px 8px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 9.5pt;
+    }
+
+    .items-table th.text-right {
+      text-align: right;
+    }
+
+    .items-table td {
+      padding: 12px 8px;
+      border-bottom: 1px solid #d4d7dd;
+      font-size: 9.5pt;
+    }
+
+    .items-table td.text-right {
+      text-align: right;
+      font-weight: 600;
+    }
+
+    .items-table .item-description {
+      white-space: pre-wrap;
+      color: #4d535f;
+      font-size: 8.5pt;
+      padding-top: 4px;
+    }
+
+    .totals-section {
+      margin-top: 30px;
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .totals-table {
+      width: 350px;
+    }
+
+    .totals-table tr {
+      border-bottom: 1px solid #d4d7dd;
+    }
+
+    .totals-table td {
+      padding: 8px 12px;
+      font-size: 10pt;
+    }
+
+    .totals-table td:first-child {
+      text-align: left;
+      color: #4d535f;
+    }
+
+    .totals-table td:last-child {
+      text-align: right;
+      font-weight: 600;
+    }
+
+    .totals-table .subtotal-row {
+      background: #f8f9fa;
+    }
+
+    .totals-table .discount-row td {
+      color: #dc2626;
+    }
+
+    .totals-table .cee-row td {
+      color: #059669;
+    }
+
+    .totals-table .total-row {
+      background: #000000;
+      color: #ffffff;
+      font-weight: 700;
+      font-size: 12pt;
+    }
+
+    .totals-table .total-row td {
+      color: #ffffff;
+      padding: 12px;
+    }
+
+    .notes-section {
+      margin-top: 40px;
+      padding: 15px;
+      background: #fffbeb;
+      border-left: 3px solid #f59e0b;
+    }
+
+    .notes-section h4 {
+      font-size: 10pt;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #92400e;
+    }
+
+    .notes-section p {
+      font-size: 8.5pt;
+      line-height: 1.6;
+      color: #78350f;
+      margin: 5px 0;
+    }
+
+    .payment-section {
+      margin-top: 30px;
+      padding: 15px;
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+    }
+
+    .payment-section h4 {
+      font-size: 10pt;
+      font-weight: 700;
+      margin-bottom: 10px;
+      color: #0c4a6e;
+    }
+
+    .payment-section p {
+      font-size: 9pt;
+      margin: 4px 0;
+    }
+
+    .bank-details {
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .bank-details span:first-child {
+      font-weight: 600;
+      color: #0c4a6e;
+    }
+
+    .footer {
+      margin-top: 40px;
+      padding-top: 15px;
+      border-top: 2px solid #000000;
+      text-align: center;
+      font-size: 7.5pt;
+      color: #6b7280;
+      line-height: 1.6;
+    }
+
+    .footer p {
+      margin: 3px 0;
+    }
+
+    @media print {
+      body {
+        padding: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <div class="header">
+    <div class="company-info">
+      <h1><%= company.label %></h1>
+      <p><%= company.address1 %></p>
+      <% if (company.address2) { %><p><%= company.address2 %></p><% } %>
+      <p><%= company.postcode_city %></p>
+      <p>☎ <%= company.phone %> • ✉ <%= company.email %></p>
+      <% if (company.website) { %><p>🌐 <%= company.website %></p><% } %>
+    </div>
+    <div class="invoice-meta">
+      <h2>FACTURE</h2>
+      <p><strong>N° <%= invoice.number %></strong></p>
+      <p><%= invoice.city %>, le <%= invoice.date %></p>
+      <p>Échéance : <%= invoice.due_date %></p>
+    </div>
+  </div>
+
+  <!-- Parties -->
+  <div class="parties">
+    <div class="party-block">
+      <h3>Facturé à</h3>
+      <p class="company-name"><%= client.company_name %></p>
+      <% if (client.contact_name) { %>
+        <p><%= client.contact_name %><% if (client.contact_role) { %> - <%= client.contact_role %><% } %></p>
+      <% } %>
+      <p><%= client.address_line1 %></p>
+      <% if (client.address_line2) { %><p><%= client.address_line2 %></p><% } %>
+      <p><%= client.city_postcode %></p>
+      <% if (client.phone) { %><p>☎ <%= client.phone %></p><% } %>
+      <% if (client.email) { %><p>✉ <%= client.email %></p><% } %>
+      <% if (client.siret) { %><p>SIRET : <%= client.siret %></p><% } %>
+    </div>
+
+    <% if (subcontractor) { %>
+    <div class="party-block">
+      <h3>Travaux réalisés par</h3>
+      <p class="company-name"><%= subcontractor.name %></p>
+      <p>SIRET : <%= subcontractor.siret %></p>
+      <% if (subcontractor.insurance_policy) { %>
+        <p>Assurance : <%= subcontractor.insurance_policy %></p>
+      <% } %>
+      <% if (subcontractor.qualifications) { %>
+        <p>Qualifications : <%= subcontractor.qualifications %></p>
+      <% } %>
+    </div>
+    <% } %>
+  </div>
+
+  <!-- Project Info -->
+  <div class="project-info">
+    <p><strong>Référence projet :</strong> <%= project.ref %></p>
+    <% if (project.site_ref) { %><p><strong>Référence chantier :</strong> <%= project.site_ref %></p><% } %>
+    <% if (project.work_start_date) { %><p><strong>Date début travaux :</strong> <%= project.work_start_date %></p><% } %>
+    <% if (project.surface_m2) { %><p><strong>Surface :</strong> <%= project.surface_m2 %> m²</p><% } %>
+    <% if (project.building_type) { %><p><strong>Type de bâtiment :</strong> <%= project.building_type %></p><% } %>
+    <% if (project.building_usage) { %><p><strong>Usage :</strong> <%= project.building_usage %></p><% } %>
+  </div>
+
+  <!-- Items Table -->
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th style="width: 15%;">Référence</th>
+        <th style="width: 45%;">Description</th>
+        <th class="text-right" style="width: 12%;">Prix unitaire</th>
+        <th class="text-right" style="width: 10%;">Quantité</th>
+        <th class="text-right" style="width: 18%;">Montant HT</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% items.forEach(function(item) { %>
+      <tr>
+        <td><%= item.code %></td>
+        <td>
+          <strong><%= item.title %></strong>
+          <% if (item.long_description_html) { %>
+            <div class="item-description"><%- item.long_description_html %></div>
+          <% } %>
+        </td>
+        <td class="text-right"><%= item.unit_price %></td>
+        <td class="text-right"><%= item.quantity %></td>
+        <td class="text-right"><%= item.amount %></td>
+      </tr>
+      <% }); %>
+    </tbody>
+  </table>
+
+  <!-- Totals -->
+  <div class="totals-section">
+    <table class="totals-table">
+      <tr class="subtotal-row">
+        <td>Total HT</td>
+        <td><%= totals.total_ht %></td>
+      </tr>
+      <tr>
+        <td>TVA <%= totals.vat_rate_label %></td>
+        <td><%= totals.vat_amount %></td>
+      </tr>
+      <tr class="subtotal-row">
+        <td>Total TTC</td>
+        <td><%= totals.total_ttc %></td>
+      </tr>
+      <% if (parseFloat(totals.cee_prime_amount.replace(/[^0-9.-]/g, '')) !== 0) { %>
+      <tr class="cee-row">
+        <td>Prime CEE</td>
+        <td><%= totals.cee_prime_amount %></td>
+      </tr>
+      <% } %>
+      <% if (parseFloat(totals.discount_amount.replace(/[^0-9.-]/g, '')) !== 0) { %>
+      <tr class="discount-row">
+        <td>Remise</td>
+        <td><%= totals.discount_amount %></td>
+      </tr>
+      <% } %>
+      <tr class="total-row">
+        <td>Net à payer</td>
+        <td><%= totals.net_to_pay %></td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- CEE Prime Notes -->
+  <% if (notes.cee_prime) { %>
+  <div class="notes-section">
+    <h4>⚡ Prime Certificats d'Économies d'Énergie (CEE)</h4>
+    <p><%= notes.cee_prime %></p>
+  </div>
+  <% } %>
+
+  <!-- Payment Terms -->
+  <div class="payment-section">
+    <h4>💳 Conditions de règlement</h4>
+    <p><%= notes.payment_terms || 'Par prélèvement ou par virement bancaire' %></p>
+    <div class="bank-details">
+      <span>BIC :</span>
+      <span><%= company.bank_bic %></span>
+      <span>IBAN :</span>
+      <span><%= company.bank_iban %></span>
+      <% if (company.bank_name) { %>
+        <span>Banque :</span>
+        <span><%= company.bank_name %></span>
+      <% } %>
+    </div>
+    <% if (notes.consultation_link) { %>
+      <p style="margin-top: 10px;">
+        📄 Consultation en ligne : <a href="<%= notes.consultation_link %>"><%= notes.consultation_link %></a>
+      </p>
+    <% } %>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <p><%= company.legal_footer %></p>
+    <p>SIRET : <%= company.siret %> • TVA Intracommunautaire : <%= company.tva_intracommunautaire %></p>
+    <p><%= company.address1 %><% if (company.address2) { %>, <%= company.address2 %><% } %> • <%= company.postcode_city %></p>
+    <p>☎ <%= company.phone %> • ✉ <%= company.email %><% if (company.website) { %> • 🌐 <%= company.website %><% } %></p>
+  </div>
+</body>
+</html>
