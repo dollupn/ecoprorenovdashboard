@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +23,7 @@ import { AddInvoiceDialog } from "@/components/invoices/AddInvoiceDialog";
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
+import { useAuth } from "@/hooks/useAuth";
 
 import {
   Search,
@@ -114,6 +116,9 @@ const fetchInvoices = async (): Promise<InvoiceRecord[]> => {
 };
 
 const Invoices = () => {
+  const { session } = useAuth();
+  const [generatingPdf, setGeneratingPdf] = useState<string | null>(null);
+
   const {
     data: invoices = [],
     isLoading,
@@ -124,6 +129,40 @@ const Invoices = () => {
     queryKey: ["invoices"],
     queryFn: fetchInvoices,
   });
+
+  const handleDownloadPdf = async (invoiceId: string, invoiceRef: string) => {
+    try {
+      setGeneratingPdf(invoiceId);
+
+      const response = await fetch(`/api/invoices/${invoiceId}/pdf`, {
+        headers: {
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Erreur lors de la génération du PDF");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Facture-${invoiceRef}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      toast.success("PDF téléchargé avec succès");
+    } catch (error) {
+      console.error("PDF download error:", error);
+      toast.error(error instanceof Error ? error.message : "Erreur lors de la génération du PDF");
+    } finally {
+      setGeneratingPdf(null);
+    }
+  };
 
   const metrics = useMemo(() => {
     const totalPaid = invoices
@@ -315,6 +354,7 @@ const Invoices = () => {
                           <TableHead>Statut</TableHead>
                           <TableHead>Échéance</TableHead>
                           <TableHead>Paiement</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -332,6 +372,26 @@ const Invoices = () => {
                             </TableCell>
                             <TableCell>{formatDate(invoice.due_date)}</TableCell>
                             <TableCell>{formatDate(invoice.paid_date)}</TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleDownloadPdf(invoice.id, invoice.invoice_ref)}
+                                disabled={generatingPdf === invoice.id}
+                              >
+                                {generatingPdf === invoice.id ? (
+                                  <>
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    Génération...
+                                  </>
+                                ) : (
+                                  <>
+                                    <FileDown className="w-4 h-4 mr-2" />
+                                    PDF
+                                  </>
+                                )}
+                              </Button>
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
