@@ -7,6 +7,7 @@ import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -17,6 +18,7 @@ import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrg } from "@/features/organizations/OrgContext";
 import { getProjectClientName } from "@/lib/projects";
+import { AddProjectDialog, type ProjectFormValues } from "@/components/projects/AddProjectDialog";
 
 import {
   Activity,
@@ -27,6 +29,7 @@ import {
   Mail,
   MapPin,
   Phone,
+  Plus,
   Receipt,
   Search,
   Users,
@@ -86,6 +89,7 @@ interface ClientOverview {
   sitesCount: number;
   invoicesCount: number;
   paidRevenue: number;
+  siteRevenue: number;
   outstandingInvoices: number;
   openQuotesValue: number;
   lastActivity: string | null;
@@ -317,7 +321,7 @@ const fetchClients = async (
     .select("id, client_name, status, amount, created_at, updated_at, valid_until, org_id");
   const sitesQuery = supabase
     .from("sites")
-    .select("id, client_name, status, created_at, updated_at, org_id");
+    .select("id, client_name, status, revenue, created_at, updated_at, org_id");
   const invoicesQuery = supabase
     .from("invoices")
     .select("id, client_name, status, amount, created_at, updated_at, org_id");
@@ -470,6 +474,10 @@ const fetchClients = async (
         .filter((invoice) => PAID_INVOICE_STATUSES.has((invoice.status ?? "").toUpperCase()))
         .reduce((sum, invoice) => sum + Number(invoice.amount ?? 0), 0);
 
+      const siteRevenue = aggregate.sites
+        .filter((site) => ["TERMINE", "CLOTURE"].includes((site.status ?? "").toUpperCase()))
+        .reduce((sum, site) => sum + Number(site.revenue ?? 0), 0);
+
       const outstandingInvoices = aggregate.invoices
         .filter((invoice) => OUTSTANDING_INVOICE_STATUSES.has((invoice.status ?? "").toUpperCase()))
         .reduce((sum, invoice) => sum + Number(invoice.amount ?? 0), 0);
@@ -526,6 +534,7 @@ const fetchClients = async (
         sitesCount: aggregate.sites.length,
         invoicesCount: aggregate.invoices.length,
         paidRevenue,
+        siteRevenue,
         outstandingInvoices,
         openQuotesValue,
         lastActivity: aggregate.lastActivity,
@@ -625,11 +634,22 @@ const ClientsTableSkeleton = () => (
   </div>
 );
 
+const parseClientName = (fullName: string): { first: string; last: string } => {
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length === 0) return { first: "", last: "" };
+  if (parts.length === 1) return { first: parts[0], last: "" };
+  return {
+    first: parts[0],
+    last: parts.slice(1).join(" "),
+  };
+};
+
 const Clients = () => {
   const { user } = useAuth();
   const { currentOrgId, isLoading: orgLoading } = useOrg();
   const [searchTerm, setSearchTerm] = useState("");
   const [stageFilter, setStageFilter] = useState<StageFilter>("all");
+  const [createProjectClient, setCreateProjectClient] = useState<ClientOverview | null>(null);
 
   const {
     data: clients = [],
@@ -801,7 +821,13 @@ const Clients = () => {
 
   const topClients = useMemo(() => {
     return [...clients]
-      .sort((a, b) => b.paidRevenue + b.outstandingInvoices - (a.paidRevenue + a.outstandingInvoices))
+      .sort(
+        (a, b) =>
+          b.paidRevenue +
+          b.siteRevenue +
+          b.outstandingInvoices -
+          (a.paidRevenue + a.siteRevenue + a.outstandingInvoices)
+      )
       .slice(0, 5);
   }, [clients]);
 
@@ -973,13 +999,21 @@ const Clients = () => {
                         key={client.key}
                         className="grid gap-4 rounded-lg border p-4 transition hover:border-primary/40 lg:grid-cols-[1.5fr,1fr,1fr,1fr,1fr]"
                       >
-                        <div className="flex items-start gap-3">
+                         <div className="flex items-start gap-3 flex-1">
                           <Avatar className="h-11 w-11">
                             <AvatarFallback>{getInitials(client.name)}</AvatarFallback>
                           </Avatar>
-                          <div className="space-y-1">
-                            <div className="font-semibold text-foreground">
-                              {client.name}
+                          <div className="space-y-1 flex-1">
+                            <div className="flex items-center gap-2">
+                              <div className="font-semibold text-foreground">{client.name}</div>
+                              {client.projectsCount > 0 && (
+                                <Badge
+                                  variant="secondary"
+                                  className="rounded-full bg-primary/10 text-primary px-2 py-0 text-[10px] font-medium"
+                                >
+                                  {client.projectsCount} projet{client.projectsCount > 1 ? "s" : ""}
+                                </Badge>
+                              )}
                             </div>
                             <div className="text-xs text-muted-foreground space-x-2">
                               {client.company && <span>{client.company}</span>}
@@ -1000,6 +1034,15 @@ const Clients = () => {
                               </div>
                             )}
                           </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCreateProjectClient(client)}
+                            className="shrink-0"
+                          >
+                            <Plus className="h-4 w-4 mr-1" />
+                            Projet
+                          </Button>
                         </div>
 
                         <div className="flex flex-col gap-2 text-sm text-muted-foreground">
@@ -1063,6 +1106,12 @@ const Clients = () => {
                             </span>
                           </div>
                           <div className="flex items-center justify-between text-xs">
+                            <span>Chantiers</span>
+                            <span className="font-medium text-cyan-600">
+                              {formatCurrency(client.siteRevenue)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-xs">
                             <span>En attente</span>
                             <span className="font-medium text-amber-600">
                               {formatCurrency(client.outstandingInvoices)}
@@ -1073,9 +1122,6 @@ const Clients = () => {
                             <span className="font-medium text-muted-foreground">
                               {formatCurrency(client.openQuotesValue)}
                             </span>
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            <span className="font-medium text-foreground">{client.invoicesCount}</span> facture(s)
                           </div>
                         </div>
 
@@ -1159,6 +1205,12 @@ const Clients = () => {
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>Chantiers</span>
+                        <span className="font-medium text-cyan-600">
+                          {formatCurrency(client.siteRevenue)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span>En attente</span>
                         <span className="font-medium text-amber-600">
                           {formatCurrency(client.outstandingInvoices)}
@@ -1178,6 +1230,30 @@ const Clients = () => {
           </div>
         </div>
       </div>
+
+      <AddProjectDialog
+        open={!!createProjectClient}
+        onOpenChange={(open) => {
+          if (!open) setCreateProjectClient(null);
+        }}
+        onProjectAdded={() => {
+          setCreateProjectClient(null);
+          refetch();
+        }}
+        initialValues={
+          createProjectClient
+            ? {
+                client_first_name: parseClientName(createProjectClient.name).first,
+                client_last_name: parseClientName(createProjectClient.name).last,
+                company: createProjectClient.company || "",
+                phone: createProjectClient.phone || "",
+                email: createProjectClient.email || "",
+                city: createProjectClient.city || "",
+                postal_code: createProjectClient.postalCode || "",
+              }
+            : undefined
+        }
+      />
     </Layout>
   );
 };
