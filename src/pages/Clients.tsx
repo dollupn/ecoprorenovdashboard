@@ -174,26 +174,22 @@ const getClientKey = (info: {
   fallbackId: string;
 }) => {
   const normalizedEmail = info.email?.trim().toLowerCase();
-  if (normalizedEmail) return `email:${normalizedEmail}`;
-
   const normalizedPhone = normalizePhone(info.phone);
-  if (normalizedPhone) return `phone:${normalizedPhone}`;
-
   const normalizedName = info.name?.trim().toLowerCase();
   const normalizedCompany = info.company?.trim().toLowerCase();
 
-  if (normalizedName && normalizedCompany) {
-    return `name:${normalizedName}|company:${normalizedCompany}`;
+  // Build a composite key using all available identifiers
+  const parts: string[] = [];
+  
+  if (normalizedEmail) parts.push(`e:${normalizedEmail}`);
+  if (normalizedPhone) parts.push(`p:${normalizedPhone}`);
+  if (normalizedName) parts.push(`n:${normalizedName}`);
+  if (normalizedCompany) parts.push(`c:${normalizedCompany}`);
+  
+  if (parts.length > 0) {
+    return parts.join('|');
   }
-
-  if (normalizedName) {
-    return `name:${normalizedName}`;
-  }
-
-  if (normalizedCompany) {
-    return `company:${normalizedCompany}`;
-  }
-
+  
   return `id:${info.fallbackId}`;
 };
 
@@ -299,6 +295,135 @@ const formatCurrency = (value: number) =>
     currency: "EUR",
     maximumFractionDigits: value >= 1000 ? 0 : 2,
   }).format(value);
+
+// Merge client aggregates that share any identifier (email, phone, or name+company)
+const mergeClientAggregates = (aggregates: Map<string, ClientAggregate>): Map<string, ClientAggregate> => {
+  // Build reverse indexes: identifier → set of aggregate keys
+  const emailIndex = new Map<string, Set<string>>();
+  const phoneIndex = new Map<string, Set<string>>();
+  const nameCompanyIndex = new Map<string, Set<string>>();
+  
+  // Populate indexes
+  aggregates.forEach((agg, key) => {
+    if (agg.email) {
+      const email = agg.email.toLowerCase();
+      if (!emailIndex.has(email)) emailIndex.set(email, new Set());
+      emailIndex.get(email)!.add(key);
+    }
+    if (agg.phone) {
+      const phone = normalizePhone(agg.phone);
+      if (phone) {
+        if (!phoneIndex.has(phone)) phoneIndex.set(phone, new Set());
+        phoneIndex.get(phone)!.add(key);
+      }
+    }
+    if (agg.name && agg.company) {
+      const nameCompany = `${agg.name.toLowerCase()}|${agg.company.toLowerCase()}`;
+      if (!nameCompanyIndex.has(nameCompany)) nameCompanyIndex.set(nameCompany, new Set());
+      nameCompanyIndex.get(nameCompany)!.add(key);
+    }
+  });
+  
+  // Find connected components (groups that should be merged)
+  const visited = new Set<string>();
+  const groups: Set<string>[] = [];
+  
+  aggregates.forEach((agg, key) => {
+    if (visited.has(key)) return;
+    
+    const group = new Set<string>();
+    const queue = [key];
+    
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      if (visited.has(current)) continue;
+      
+      visited.add(current);
+      group.add(current);
+      
+      const currentAgg = aggregates.get(current)!;
+      
+      // Find all connected aggregates via shared identifiers
+      if (currentAgg.email) {
+        emailIndex.get(currentAgg.email.toLowerCase())?.forEach(k => {
+          if (!visited.has(k)) queue.push(k);
+        });
+      }
+      if (currentAgg.phone) {
+        const phone = normalizePhone(currentAgg.phone);
+        if (phone) {
+          phoneIndex.get(phone)?.forEach(k => {
+            if (!visited.has(k)) queue.push(k);
+          });
+        }
+      }
+      if (currentAgg.name && currentAgg.company) {
+        const nameCompany = `${currentAgg.name.toLowerCase()}|${currentAgg.company.toLowerCase()}`;
+        nameCompanyIndex.get(nameCompany)?.forEach(k => {
+          if (!visited.has(k)) queue.push(k);
+        });
+      }
+    }
+    
+    if (group.size > 0) {
+      groups.push(group);
+    }
+  });
+  
+  // Merge each group into single aggregate
+  const merged = new Map<string, ClientAggregate>();
+  
+  groups.forEach(group => {
+    const keys = Array.from(group);
+    const primaryKey = keys[0]; // Use first key as primary
+    const primaryAgg = { ...aggregates.get(primaryKey)! };
+    
+    // Deep copy arrays and sets
+    primaryAgg.leads = [...primaryAgg.leads];
+    primaryAgg.quotes = [...primaryAgg.quotes];
+    primaryAgg.projects = [...primaryAgg.projects];
+    primaryAgg.sites = [...primaryAgg.sites];
+    primaryAgg.invoices = [...primaryAgg.invoices];
+    primaryAgg.utmSources = new Set(primaryAgg.utmSources);
+    primaryAgg.rawStatuses = new Set(primaryAgg.rawStatuses);
+    
+    // Merge all aggregates in the group
+    keys.slice(1).forEach(k => {
+      const agg = aggregates.get(k)!;
+      
+      // Merge contact info (prefer non-empty values)
+      primaryAgg.name = primaryAgg.name || agg.name;
+      primaryAgg.company = primaryAgg.company || agg.company;
+      primaryAgg.email = primaryAgg.email || agg.email;
+      primaryAgg.phone = primaryAgg.phone || agg.phone;
+      primaryAgg.city = primaryAgg.city || agg.city;
+      primaryAgg.postalCode = primaryAgg.postalCode || agg.postalCode;
+      
+      // Merge arrays
+      primaryAgg.leads.push(...agg.leads);
+      primaryAgg.quotes.push(...agg.quotes);
+      primaryAgg.projects.push(...agg.projects);
+      primaryAgg.sites.push(...agg.sites);
+      primaryAgg.invoices.push(...agg.invoices);
+      
+      // Merge sets
+      agg.utmSources.forEach(s => primaryAgg.utmSources.add(s));
+      agg.rawStatuses.forEach(s => primaryAgg.rawStatuses.add(s));
+      
+      // Update last activity if more recent
+      if (agg.lastActivityTimestamp && 
+          (!primaryAgg.lastActivityTimestamp || 
+           agg.lastActivityTimestamp > primaryAgg.lastActivityTimestamp)) {
+        primaryAgg.lastActivityTimestamp = agg.lastActivityTimestamp;
+        primaryAgg.lastActivity = agg.lastActivity;
+      }
+    });
+    
+    merged.set(primaryKey, primaryAgg);
+  });
+  
+  return merged;
+};
 
 const fetchClients = async (
   orgId: string | null,
@@ -466,7 +591,10 @@ const fetchClients = async (
 
   const recentThreshold = subDays(new Date(), DAYS_FOR_RECENT_REVENUE).getTime();
 
-  return Array.from(aggregates.values())
+  // Merge duplicate clients that share identifiers
+  const mergedAggregates = mergeClientAggregates(aggregates);
+
+  return Array.from(mergedAggregates.values())
     .map<ClientOverview>((aggregate) => {
       const stage = determineStage(aggregate);
 
