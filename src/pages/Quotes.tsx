@@ -48,6 +48,16 @@ import {
   Receipt,
   ArrowRight,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 /** ---- Status & Types ---- */
 const QUOTE_STATUSES = ["DRAFT", "SENT", "ACCEPTED", "REJECTED", "EXPIRED"] as const;
@@ -215,6 +225,8 @@ const Quotes = () => {
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
   const [quoteInitialValues, setQuoteInitialValues] = useState<Partial<QuoteFormValues>>({});
   const [quoteIdToEdit, setQuoteIdToEdit] = useState<string | null>(null);
+  const [quoteToDelete, setQuoteToDelete] = useState<QuoteRecord | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const openEditDialog = useCallback(
     (quote: QuoteRecord) => {
       const metadata = parseQuoteMetadata(quote);
@@ -455,6 +467,41 @@ const Quotes = () => {
     }
   };
 
+  const handleDeleteQuote = (quote: QuoteRecord) => {
+    setQuoteToDelete(quote);
+  };
+
+  const confirmDeleteQuote = async () => {
+    if (!quoteToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('quotes')
+        .delete()
+        .eq('id', quoteToDelete.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Devis supprimé",
+        description: `Le devis ${quoteToDelete.quote_ref} a été supprimé avec succès.`,
+      });
+
+      await refetch();
+      setQuoteToDelete(null);
+    } catch (error) {
+      console.error('Error deleting quote:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de supprimer le devis.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -681,19 +728,20 @@ const Quotes = () => {
                                   if (typeof window !== "undefined") {
                                     window.open(`mailto:${metadata.clientEmail}?subject=${subject}&body=${body}`);
                                   }
-                                }}
-                                onEdit={openEditDialog}
-                              />
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                                 }}
+                                 onEdit={openEditDialog}
+                                 onDelete={handleDeleteQuote}
+                               />
+                             </TableCell>
+                           </TableRow>
+                         );
+                       })}
+                     </TableBody>
+                   </Table>
+                 </div>
+               )}
+             </CardContent>
+           </Card>
 
         </div>
       </div>
@@ -728,6 +776,42 @@ const Quotes = () => {
           await refetch();
         }}
       />
+
+      <AlertDialog 
+        open={Boolean(quoteToDelete)} 
+        onOpenChange={(open) => !open && setQuoteToDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+            <AlertDialogDescription>
+              Êtes-vous sûr de vouloir supprimer le devis{" "}
+              <span className="font-semibold">{quoteToDelete?.quote_ref}</span> ?
+              <br />
+              Cette action est irréversible et supprimera définitivement ce devis.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>
+              Annuler
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteQuote}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Suppression...
+                </>
+              ) : (
+                "Supprimer"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Layout>
   );
 };

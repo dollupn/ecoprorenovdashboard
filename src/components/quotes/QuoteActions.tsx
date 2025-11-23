@@ -20,6 +20,7 @@ import {
   FileText,
   ListChecks,
   Pencil,
+  Trash2,
 } from "lucide-react";
 
 interface QuoteActionsProps {
@@ -29,6 +30,7 @@ interface QuoteActionsProps {
   onOpenDrive: (quote: QuoteRecord) => void;
   onSendEmail: (quote: QuoteRecord) => void;
   onEdit: (quote: QuoteRecord) => void;
+  onDelete: (quote: QuoteRecord) => void;
 }
 
 export const QuoteActions = ({
@@ -38,6 +40,7 @@ export const QuoteActions = ({
   onOpenDrive,
   onSendEmail,
   onEdit,
+  onDelete,
 }: QuoteActionsProps) => {
   const metadata = useMemo(() => parseQuoteMetadata(quote), [quote]);
 
@@ -112,6 +115,14 @@ export const QuoteActions = ({
           <DropdownMenuItem disabled={!hasLineItems}>
             <ListChecks className="mr-2 h-4 w-4" />
             {hasLineItems ? `${metadata.lineItems?.length ?? 0} lignes` : "Lignes non définies"}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem 
+            onClick={() => onDelete(quote)}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            Supprimer
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
