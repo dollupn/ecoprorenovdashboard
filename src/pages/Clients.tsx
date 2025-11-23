@@ -296,12 +296,13 @@ const formatCurrency = (value: number) =>
     maximumFractionDigits: value >= 1000 ? 0 : 2,
   }).format(value);
 
-// Merge client aggregates that share any identifier (email, phone, or name+company)
+// Merge client aggregates that share any identifier (email, phone, name+company, or name-only)
 const mergeClientAggregates = (aggregates: Map<string, ClientAggregate>): Map<string, ClientAggregate> => {
   // Build reverse indexes: identifier → set of aggregate keys
   const emailIndex = new Map<string, Set<string>>();
   const phoneIndex = new Map<string, Set<string>>();
   const nameCompanyIndex = new Map<string, Set<string>>();
+  const nameIndex = new Map<string, Set<string>>();
   
   // Populate indexes
   aggregates.forEach((agg, key) => {
@@ -321,6 +322,11 @@ const mergeClientAggregates = (aggregates: Map<string, ClientAggregate>): Map<st
       const nameCompany = `${agg.name.toLowerCase()}|${agg.company.toLowerCase()}`;
       if (!nameCompanyIndex.has(nameCompany)) nameCompanyIndex.set(nameCompany, new Set());
       nameCompanyIndex.get(nameCompany)!.add(key);
+    }
+    if (agg.name) {
+      const name = agg.name.toLowerCase().trim();
+      if (!nameIndex.has(name)) nameIndex.set(name, new Set());
+      nameIndex.get(name)!.add(key);
     }
   });
   
@@ -360,6 +366,12 @@ const mergeClientAggregates = (aggregates: Map<string, ClientAggregate>): Map<st
       if (currentAgg.name && currentAgg.company) {
         const nameCompany = `${currentAgg.name.toLowerCase()}|${currentAgg.company.toLowerCase()}`;
         nameCompanyIndex.get(nameCompany)?.forEach(k => {
+          if (!visited.has(k)) queue.push(k);
+        });
+      }
+      if (currentAgg.name) {
+        const name = currentAgg.name.toLowerCase().trim();
+        nameIndex.get(name)?.forEach(k => {
           if (!visited.has(k)) queue.push(k);
         });
       }
