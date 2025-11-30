@@ -128,6 +128,7 @@ type ProjectWithRelations = ProjectWithRelationsForForm & {
   lead?: Pick<Tables<"leads">, "email"> | null;
   delegate?: Pick<Tables<"delegates">, "id" | "name" | "price_eur_per_mwh"> | null;
   hasChantiers: boolean;
+  building_state: string;
 };
 
 type ProjectsProps = {
@@ -337,7 +338,7 @@ const Projects = ({
       let query = supabase
         .from("projects")
         .select(
-          "*, delegate:delegates(id, name, price_eur_per_mwh), lead:leads(email), project_products(id, product_id, quantity, dynamic_params, product:product_catalog(id, code, name, category, params_schema, cee_config, is_active, default_params, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac_existant_lt_400, kwh_cumac_existant_gte_400, kwh_cumac_neuf_lt_400, kwh_cumac_neuf_gte_400))), sites(id)"
+          "*, building_state, delegate:delegates(id, name, price_eur_per_mwh), lead:leads(email), project_products(id, product_id, quantity, dynamic_params, product:product_catalog(id, code, name, category, params_schema, cee_config, is_active, default_params, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac_existant_lt_400, kwh_cumac_existant_gte_400, kwh_cumac_neuf_lt_400, kwh_cumac_neuf_gte_400))), sites(id)"
         )
         .order("created_at", { ascending: false });
 
