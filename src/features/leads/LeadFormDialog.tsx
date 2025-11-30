@@ -107,6 +107,7 @@ const leadSchema = z.object({
     .min(1, "Ajoutez au moins un bâtiment")
     .max(3, "Vous pouvez ajouter jusqu'à 3 bâtiments"),
   assigned_to: z.string().optional(),
+  building_state: z.enum(["neuf", "existant"]).default("existant"),
   extra_fields: z.record(z.any()).default({}),
 });
 
@@ -160,6 +161,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
       remarks: "",
       buildings: [{ ...DEFAULT_BUILDING }],
       assigned_to: user?.id ?? "",
+      building_state: "existant",
       extra_fields: {},
     },
   });
@@ -354,6 +356,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         company: values.company?.trim() ? values.company : null,
         siren: normalizedSiren,
         product_name: selectedProductType,
+        building_state: values.building_state,
         utm_source: values.utm_source?.trim() ? values.utm_source : null,
         commentaire: values.commentaire?.trim() ? values.commentaire : null,
         photo_previsite_url: drivePhotoMetadata?.webViewLink ?? drivePhotoMetadata?.webContentLink ?? null,
@@ -390,6 +393,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         remarks: "",
         buildings: [{ ...DEFAULT_BUILDING }],
         assigned_to: user.id,
+        building_state: "existant",
         extra_fields: {},
       });
       setDrivePhoto(null);
@@ -451,6 +455,7 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
         remarks: "",
         buildings: [{ ...DEFAULT_BUILDING }],
         assigned_to: user?.id ?? "",
+        building_state: "existant",
         extra_fields: {},
       });
       setDrivePhoto(null);
@@ -673,6 +678,30 @@ export const LeadFormDialog = ({ onCreated }: LeadFormDialogProps) => {
                 )}
               />
 
+              <FormField
+                control={form.control}
+                name="building_state"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>État du bâtiment *</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value} disabled={isSubmitting}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionnez l'état" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="existant">Existant</SelectItem>
+                        <SelectItem value="neuf">Neuf</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
               <FormField
                 control={form.control}
                 name="assigned_to"

@@ -49,6 +49,9 @@ export const buildProjectFormInitialValues = (
     external_reference: project.external_reference ?? "",
     products: projectProductsForForm.length > 0 ? projectProductsForForm : undefined,
     building_type: project.building_type ?? "",
+    building_state: (project.building_state === "neuf" || project.building_state === "existant") 
+      ? project.building_state 
+      : "existant",
     usage: project.usage ?? "",
     delegate_id: project.delegate_id ?? project.delegate?.id ?? undefined,
     signatory_name: project.signatory_name ?? "",

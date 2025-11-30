@@ -363,6 +363,7 @@ const createProjectSchema = (
     city: z.string().min(2, "La ville du chantier est requise"),
     postal_code: z.string().min(5, "Code postal du chantier invalide"),
     building_type: buildingTypeSchema,
+    building_state: z.enum(["neuf", "existant"]).default("existant"),
     usage: usageSchema,
     delegate_id: z
       .string({ required_error: "Sélectionnez un délégataire" })
@@ -413,6 +414,7 @@ const baseDefaultValues: Partial<ProjectFormValues> = {
   external_reference: "",
   products: [{ product_id: "", quantity: 1, dynamic_params: {} }],
   building_type: "",
+  building_state: "existant",
   usage: "",
   delegate_id: "",
   signatory_name: "",
@@ -1437,6 +1439,7 @@ export const AddProjectDialog = ({
         products: validProducts,
         buildingType: data.building_type,
         buildingSurface: data.surface_batiment_m2,
+        buildingState: data.building_state,
         delegate: delegateRecord,
         primeBonification,
         productMap,
@@ -1469,6 +1472,7 @@ export const AddProjectDialog = ({
         email: data.email || undefined,
         siren: normalizedSiren && normalizedSiren.length > 0 ? normalizedSiren : null,
         building_type: data.building_type || undefined,
+        building_state: data.building_state,
         usage: data.usage || undefined,
         prime_cee: primeCeeEuro,
         delegate_id: data.delegate_id,
@@ -1584,6 +1588,7 @@ export const AddProjectDialog = ({
             phone: data.phone || undefined,
             siren: normalizedSiren && normalizedSiren.length > 0 ? normalizedSiren : null,
             building_type: data.building_type || undefined,
+            building_state: data.building_state,
             usage: data.usage || undefined,
             prime_cee: primeCeeEuro,
             delegate_id: data.delegate_id,
@@ -2097,6 +2102,29 @@ export const AddProjectDialog = ({
                   </FormItem>
                 )}
               />
+              <FormField
+                control={form.control}
+                name="building_state"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>État du bâtiment *</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionnez l'état" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="existant">Existant</SelectItem>
+                        <SelectItem value="neuf">Neuf</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <div className="grid grid-cols-1 gap-4">
               <FormField
                 control={form.control}
                 name="usage"
