@@ -214,8 +214,10 @@ const kwhNumberSchema = z
   .nullable();
 
 const kwhRangeSchema = z.object({
-  lt400: kwhNumberSchema,
-  gte400: kwhNumberSchema,
+  existant_lt400: kwhNumberSchema,
+  existant_gte400: kwhNumberSchema,
+  neuf_lt400: kwhNumberSchema,
+  neuf_gte400: kwhNumberSchema,
 });
 
 const ceeCategoryValues = PRODUCT_CEE_CATEGORIES.map((item) => item.value) as [
@@ -404,12 +406,14 @@ export const ProductFormDialog = ({
       params_schema: productDynamicFields.schema,
       default_params: productDynamicFields.defaults,
       kwh_cumac: allBuildingTypes.reduce<
-        Record<string, { lt400: number | null; gte400: number | null }>
+        Record<string, { existant_lt400: number | null; existant_gte400: number | null; neuf_lt400: number | null; neuf_gte400: number | null }>
       >((acc, type) => {
         const match = product?.kwh_cumac_values?.find((entry) => entry.building_type?.trim() === type);
         acc[type] = {
-          lt400: match?.kwh_cumac_lt_400 ?? null,
-          gte400: match?.kwh_cumac_gte_400 ?? null,
+          existant_lt400: match?.kwh_cumac_existant_lt_400 ?? null,
+          existant_gte400: match?.kwh_cumac_existant_gte_400 ?? null,
+          neuf_lt400: match?.kwh_cumac_neuf_lt_400 ?? null,
+          neuf_gte400: match?.kwh_cumac_neuf_gte_400 ?? null,
         };
         return acc;
       }, {}),
@@ -516,11 +520,13 @@ export const ProductFormDialog = ({
     const kwhEntries: ProductKwhCumacInput[] = Array.from(
       new Set([...allBuildingTypes, ...Object.keys(kwhValues)].map((type) => type.trim()).filter((type) => type.length > 0)),
     ).map((type) => {
-      const range = kwhValues[type] ?? { lt400: null, gte400: null };
+      const range = kwhValues[type] ?? { existant_lt400: null, existant_gte400: null, neuf_lt400: null, neuf_gte400: null };
       return {
         building_type: type,
-        kwh_cumac_lt_400: range?.lt400 ?? null,
-        kwh_cumac_gte_400: range?.gte400 ?? null,
+        kwh_cumac_existant_lt_400: range?.existant_lt400 ?? null,
+        kwh_cumac_existant_gte_400: range?.existant_gte400 ?? null,
+        kwh_cumac_neuf_lt_400: range?.neuf_lt400 ?? null,
+        kwh_cumac_neuf_gte_400: range?.neuf_gte400 ?? null,
       } satisfies ProductKwhCumacInput;
     });
 
@@ -1166,73 +1172,151 @@ export const ProductFormDialog = ({
                     {allBuildingTypes.map((type) => (
                       <div key={type} className="space-y-3 rounded-lg border p-4">
                         <p className="text-sm font-medium">{type}</p>
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <FormField
-                            control={form.control}
-                            name={`kwh_cumac.${type}.lt400` as any}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel className="text-xs font-medium text-muted-foreground">
-                                  {"< 400 m²"}
-                                </FormLabel>
-                                <FormControl>
-                                  <Input
-                                    type="number"
-                                    min={0}
-                                    step="any"
-                                    value={field.value ?? ""}
-                                    onChange={(event) => {
-                                      const value = event.target.value;
-                                      if (value === "") {
-                                        field.onChange(null);
-                                        return;
-                                      }
-                                      const parsed = Number(value);
-                                      if (Number.isNaN(parsed)) return;
-                                      field.onChange(parsed);
-                                    }}
-                                    onBlur={field.onBlur}
-                                    disabled={isSubmitting}
-                                    inputMode="decimal"
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={form.control}
-                            name={`kwh_cumac.${type}.gte400` as any}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel className="text-xs font-medium text-muted-foreground">
-                                  {"≥ 400 m²"}
-                                </FormLabel>
-                                <FormControl>
-                                  <Input
-                                    type="number"
-                                    min={0}
-                                    step="any"
-                                    value={field.value ?? ""}
-                                    onChange={(event) => {
-                                      const value = event.target.value;
-                                      if (value === "") {
-                                        field.onChange(null);
-                                        return;
-                                      }
-                                      const parsed = Number(value);
-                                      if (Number.isNaN(parsed)) return;
-                                      field.onChange(parsed);
-                                    }}
-                                    onBlur={field.onBlur}
-                                    disabled={isSubmitting}
-                                    inputMode="decimal"
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
+                        
+                        {/* Existant Section */}
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold text-muted-foreground">Existant</p>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <FormField
+                              control={form.control}
+                              name={`kwh_cumac.${type}.existant_lt400` as any}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel className="text-xs font-medium text-muted-foreground">
+                                    {"< 400 m²"}
+                                  </FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      step="any"
+                                      value={field.value ?? ""}
+                                      onChange={(event) => {
+                                        const value = event.target.value;
+                                        if (value === "") {
+                                          field.onChange(null);
+                                          return;
+                                        }
+                                        const parsed = Number(value);
+                                        if (Number.isNaN(parsed)) return;
+                                        field.onChange(parsed);
+                                      }}
+                                      onBlur={field.onBlur}
+                                      disabled={isSubmitting}
+                                      inputMode="decimal"
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name={`kwh_cumac.${type}.existant_gte400` as any}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel className="text-xs font-medium text-muted-foreground">
+                                    {"≥ 400 m²"}
+                                  </FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      step="any"
+                                      value={field.value ?? ""}
+                                      onChange={(event) => {
+                                        const value = event.target.value;
+                                        if (value === "") {
+                                          field.onChange(null);
+                                          return;
+                                        }
+                                        const parsed = Number(value);
+                                        if (Number.isNaN(parsed)) return;
+                                        field.onChange(parsed);
+                                      }}
+                                      onBlur={field.onBlur}
+                                      disabled={isSubmitting}
+                                      inputMode="decimal"
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Neuf Section */}
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold text-muted-foreground">Neuf</p>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <FormField
+                              control={form.control}
+                              name={`kwh_cumac.${type}.neuf_lt400` as any}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel className="text-xs font-medium text-muted-foreground">
+                                    {"< 400 m²"}
+                                  </FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      step="any"
+                                      value={field.value ?? ""}
+                                      onChange={(event) => {
+                                        const value = event.target.value;
+                                        if (value === "") {
+                                          field.onChange(null);
+                                          return;
+                                        }
+                                        const parsed = Number(value);
+                                        if (Number.isNaN(parsed)) return;
+                                        field.onChange(parsed);
+                                      }}
+                                      onBlur={field.onBlur}
+                                      disabled={isSubmitting}
+                                      inputMode="decimal"
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name={`kwh_cumac.${type}.neuf_gte400` as any}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel className="text-xs font-medium text-muted-foreground">
+                                    {"≥ 400 m²"}
+                                  </FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      step="any"
+                                      value={field.value ?? ""}
+                                      onChange={(event) => {
+                                        const value = event.target.value;
+                                        if (value === "") {
+                                          field.onChange(null);
+                                          return;
+                                        }
+                                        const parsed = Number(value);
+                                        if (Number.isNaN(parsed)) return;
+                                        field.onChange(parsed);
+                                      }}
+                                      onBlur={field.onBlur}
+                                      disabled={isSubmitting}
+                                      inputMode="decimal"
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
                         </div>
                       </div>
                     ))}

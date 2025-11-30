@@ -26,7 +26,7 @@ export { DEFAULT_PRODUCT_CEE_CONFIG, formatProductCeeMultiplierLabel, normalizeP
 type ProductCatalog = Tables<"product_catalog">;
 export type ProductKwhValue = Pick<
   Tables<"product_kwh_cumac">,
-  "building_type" | "kwh_cumac_lt_400" | "kwh_cumac_gte_400"
+  "building_type" | "kwh_cumac_existant_lt_400" | "kwh_cumac_existant_gte_400" | "kwh_cumac_neuf_lt_400" | "kwh_cumac_neuf_gte_400"
 >;
 type Delegate = Pick<Tables<"delegates">, "price_eur_per_mwh">;
 type ProjectProduct = Pick<
@@ -446,6 +446,7 @@ export const computePrimeCee = ({
   productMap,
   buildingType,
   buildingSurface,
+  buildingState,
   delegate,
   primeBonification,
 }: {
@@ -453,6 +454,7 @@ export const computePrimeCee = ({
   productMap: Record<string, PrimeCeeProductCatalogEntry>;
   buildingType?: string | null;
   buildingSurface?: number | null;
+  buildingState?: 'neuf' | 'existant' | null;
   delegate?: Delegate | null;
   primeBonification?: number | null;
 }): PrimeCeeComputation | null => {
@@ -533,6 +535,7 @@ export const computePrimeCee = ({
       product.kwh_cumac_values ?? [],
       buildingType,
       buildingSurface,
+      buildingState,
     );
 
     if (typeof baseKwh !== "number" || !Number.isFinite(baseKwh) || baseKwh <= 0) {

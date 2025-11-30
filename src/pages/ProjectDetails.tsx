@@ -207,7 +207,7 @@ type ProductSummary = Pick<
   cee_config: ProductCeeConfig;
   kwh_cumac_values?: Pick<
     Tables<"product_kwh_cumac">,
-    "id" | "building_type" | "kwh_cumac_lt_400" | "kwh_cumac_gte_400"
+    "id" | "building_type" | "kwh_cumac_existant_lt_400" | "kwh_cumac_existant_gte_400" | "kwh_cumac_neuf_lt_400" | "kwh_cumac_neuf_gte_400"
   >[];
 };
 
@@ -2416,7 +2416,7 @@ const ProjectDetails = () => {
       let query = supabase
         .from("projects")
         .select(
-          "*, delegate:delegates(id, name, price_eur_per_mwh), lead:leads(email), project_products(id, product_id, quantity, dynamic_params, product:product_catalog(id, code, name, category, params_schema, cee_config, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac_lt_400, kwh_cumac_gte_400))), project_appointments(id, project_id, org_id, appointment_date, appointment_time, appointment_type_id, assignee_id, notes, created_at, updated_at, appointment_type:appointment_types(id, name))",
+          "*, delegate:delegates(id, name, price_eur_per_mwh), lead:leads(email), project_products(id, product_id, quantity, dynamic_params, product:product_catalog(id, code, name, category, params_schema, cee_config, is_active, default_params, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac_existant_lt_400, kwh_cumac_existant_gte_400, kwh_cumac_neuf_lt_400, kwh_cumac_neuf_gte_400))), project_appointments(id, project_id, org_id, appointment_date, appointment_time, appointment_type_id, assignee_id, notes, created_at, updated_at, appointment_type:appointment_types(id, name))",
         )
         .eq("id", id);
 
@@ -3878,6 +3878,7 @@ const ProjectDetails = () => {
       productMap: productCatalogMap,
       buildingType,
       buildingSurface: buildingSurfaceValue ?? null,
+      buildingState: (project.building_state as 'neuf' | 'existant') ?? 'existant',
       delegate: project.delegate ?? null,
       primeBonification,
     });
