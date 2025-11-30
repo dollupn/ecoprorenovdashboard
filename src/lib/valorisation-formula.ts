@@ -261,8 +261,10 @@ export const formatFormulaCoefficient = (value: number): string => {
 
 type ProductKwhCumacEntry = {
   building_type?: string | null;
-  kwh_cumac_lt_400?: number | null;
-  kwh_cumac_gte_400?: number | null;
+  kwh_cumac_existant_lt_400?: number | null;
+  kwh_cumac_existant_gte_400?: number | null;
+  kwh_cumac_neuf_lt_400?: number | null;
+  kwh_cumac_neuf_gte_400?: number | null;
 };
 
 const normalizeBuildingType = (value: string | null | undefined) =>
@@ -278,24 +280,43 @@ const normalizeKwhValue = (value: unknown): number | null => {
 const resolveKwhForSurface = (
   entry: ProductKwhCumacEntry,
   buildingSurface: number | null,
+  buildingState: 'neuf' | 'existant' = 'existant',
 ): number | null => {
-  const lt400 = normalizeKwhValue(entry.kwh_cumac_lt_400);
-  const gte400 = normalizeKwhValue(entry.kwh_cumac_gte_400);
+  // Get values based on building state
+  const existantLt400 = normalizeKwhValue(entry.kwh_cumac_existant_lt_400);
+  const existantGte400 = normalizeKwhValue(entry.kwh_cumac_existant_gte_400);
+  const neufLt400 = normalizeKwhValue(entry.kwh_cumac_neuf_lt_400);
+  const neufGte400 = normalizeKwhValue(entry.kwh_cumac_neuf_gte_400);
+
+  // Select values based on building state
+  const lt400 = buildingState === 'neuf' ? neufLt400 : existantLt400;
+  const gte400 = buildingState === 'neuf' ? neufGte400 : existantGte400;
+
+  // Fallback to any available value if state-specific value is missing
+  const fallbackLt400 = existantLt400 ?? neufLt400 ?? null;
+  const fallbackGte400 = existantGte400 ?? neufGte400 ?? null;
 
   if (buildingSurface === null || buildingSurface === undefined) {
-    return lt400 ?? gte400 ?? null;
+    return lt400 ?? gte400 ?? fallbackLt400 ?? fallbackGte400 ?? null;
   }
 
   if (!Number.isFinite(buildingSurface)) {
-    return lt400 ?? gte400 ?? null;
+    return lt400 ?? gte400 ?? fallbackLt400 ?? fallbackGte400 ?? null;
   }
 
-  const selected = buildingSurface >= 400 ? (gte400 ?? lt400) : (lt400 ?? gte400);
+  const selected = buildingSurface >= 400 
+    ? (gte400 ?? lt400 ?? fallbackGte400 ?? fallbackLt400)
+    : (lt400 ?? gte400 ?? fallbackLt400 ?? fallbackGte400);
 
   if (process.env.NODE_ENV !== "production") {
     console.log('[resolveKwhForSurface]', {
       buildingSurface,
+      buildingState,
       isGte400: buildingSurface >= 400,
+      existantLt400,
+      existantGte400,
+      neufLt400,
+      neufGte400,
       lt400,
       gte400,
       selected
@@ -309,6 +330,7 @@ export const getKwhCumacBasePerBuilding = (
   entries: ProductKwhCumacEntry[] | null | undefined,
   buildingType: string | null | undefined,
   buildingSurface?: number | null,
+  buildingState?: 'neuf' | 'existant' | null,
 ): number | null => {
   if (!entries || entries.length === 0) {
     return null;
@@ -332,13 +354,17 @@ export const getKwhCumacBasePerBuilding = (
       ? buildingSurface
       : null;
 
-  const result = resolveKwhForSurface(match, normalizedSurface);
+  const normalizedState = buildingState === 'neuf' ? 'neuf' : 'existant';
+
+  const result = resolveKwhForSurface(match, normalizedSurface, normalizedState);
 
   if (process.env.NODE_ENV !== "production") {
     console.log('[getKwhCumacBasePerBuilding]', {
       buildingType,
       buildingSurface,
+      buildingState,
       normalizedSurface,
+      normalizedState,
       matchFound: !!match,
       result
     });

@@ -417,6 +417,7 @@ export type Database = {
           address: string
           appointment_type_id: string | null
           assigned_to: string | null
+          building_state: string | null
           city: string
           commentaire: string | null
           company: string | null
@@ -446,6 +447,7 @@ export type Database = {
           address?: string
           appointment_type_id?: string | null
           assigned_to?: string | null
+          building_state?: string | null
           city: string
           commentaire?: string | null
           company?: string | null
@@ -475,6 +477,7 @@ export type Database = {
           address?: string
           appointment_type_id?: string | null
           assigned_to?: string | null
+          building_state?: string | null
           city?: string
           commentaire?: string | null
           company?: string | null
@@ -748,8 +751,10 @@ export type Database = {
           building_type: string
           created_at: string
           id: string
-          kwh_cumac_gte_400: number
-          kwh_cumac_lt_400: number
+          kwh_cumac_existant_gte_400: number
+          kwh_cumac_existant_lt_400: number
+          kwh_cumac_neuf_gte_400: number | null
+          kwh_cumac_neuf_lt_400: number | null
           product_id: string
           updated_at: string
         }
@@ -757,8 +762,10 @@ export type Database = {
           building_type: string
           created_at?: string
           id?: string
-          kwh_cumac_gte_400: number
-          kwh_cumac_lt_400: number
+          kwh_cumac_existant_gte_400: number
+          kwh_cumac_existant_lt_400: number
+          kwh_cumac_neuf_gte_400?: number | null
+          kwh_cumac_neuf_lt_400?: number | null
           product_id: string
           updated_at?: string
         }
@@ -766,8 +773,10 @@ export type Database = {
           building_type?: string
           created_at?: string
           id?: string
-          kwh_cumac_gte_400?: number
-          kwh_cumac_lt_400?: number
+          kwh_cumac_existant_gte_400?: number
+          kwh_cumac_existant_lt_400?: number
+          kwh_cumac_neuf_gte_400?: number | null
+          kwh_cumac_neuf_lt_400?: number | null
           product_id?: string
           updated_at?: string
         }
@@ -1136,6 +1145,7 @@ export type Database = {
         Row: {
           address: string | null
           assigned_to: string
+          building_state: string
           building_type: string | null
           city: string
           client_first_name: string | null
@@ -1179,6 +1189,7 @@ export type Database = {
         Insert: {
           address?: string | null
           assigned_to: string
+          building_state?: string
           building_type?: string | null
           city: string
           client_first_name?: string | null
@@ -1222,6 +1233,7 @@ export type Database = {
         Update: {
           address?: string | null
           assigned_to?: string
+          building_state?: string
           building_type?: string | null
           city?: string
           client_first_name?: string | null

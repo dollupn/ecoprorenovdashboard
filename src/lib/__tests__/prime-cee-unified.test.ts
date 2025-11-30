@@ -127,8 +127,10 @@ describe("computePrimeCee", () => {
     kwh_cumac_values: [
       {
         building_type: buildingType,
-        kwh_cumac_lt_400: lt400 ?? kwh_cumac ?? null,
-        kwh_cumac_gte_400: gte400 ?? kwh_cumac ?? null,
+        kwh_cumac_existant_lt_400: lt400 ?? kwh_cumac ?? null,
+        kwh_cumac_existant_gte_400: gte400 ?? kwh_cumac ?? null,
+        kwh_cumac_neuf_lt_400: lt400 ?? kwh_cumac ?? null,
+        kwh_cumac_neuf_gte_400: gte400 ?? kwh_cumac ?? null,
       },
     ],
   });
@@ -162,8 +164,10 @@ describe("computePrimeCee", () => {
         ? ([
             {
               building_type: buildingType,
-              kwh_cumac_lt_400: lt400 ?? kwh_cumac ?? 0,
-              kwh_cumac_gte_400: gte400 ?? kwh_cumac ?? 0,
+              kwh_cumac_existant_lt_400: lt400 ?? kwh_cumac ?? 0,
+              kwh_cumac_existant_gte_400: gte400 ?? kwh_cumac ?? 0,
+              kwh_cumac_neuf_lt_400: lt400 ?? kwh_cumac ?? 0,
+              kwh_cumac_neuf_gte_400: gte400 ?? kwh_cumac ?? 0,
             },
           ] as ProductKwhValue[])
         : []),
@@ -275,13 +279,17 @@ describe("computePrimeCee", () => {
         entries: [
           {
             building_type: "tertiaire",
-            kwh_cumac_lt_400: 400,
-            kwh_cumac_gte_400: 400,
+            kwh_cumac_existant_lt_400: 400,
+            kwh_cumac_existant_gte_400: 400,
+            kwh_cumac_neuf_lt_400: 400,
+            kwh_cumac_neuf_gte_400: 400,
           },
           {
             building_type: "industrial",
-            kwh_cumac_lt_400: 300,
-            kwh_cumac_gte_400: 300,
+            kwh_cumac_existant_lt_400: 300,
+            kwh_cumac_existant_gte_400: 300,
+            kwh_cumac_neuf_lt_400: 300,
+            kwh_cumac_neuf_gte_400: 300,
           },
         ],
       }),

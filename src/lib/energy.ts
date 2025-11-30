@@ -18,7 +18,7 @@ export type ProjectProductWithEnergy =
           kwh_cumac_values?:
             | (Pick<
                 Tables<"product_kwh_cumac">,
-                "building_type" | "kwh_cumac_lt_400" | "kwh_cumac_gte_400"
+                "building_type" | "kwh_cumac_existant_lt_400" | "kwh_cumac_existant_gte_400" | "kwh_cumac_neuf_lt_400" | "kwh_cumac_neuf_gte_400"
               > | null)[]
             | null;
         })

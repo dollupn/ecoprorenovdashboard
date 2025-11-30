@@ -621,7 +621,7 @@ export const AddProjectDialog = ({
       const { data, error } = await supabase
         .from("product_catalog")
         .select(
-          "id, name, code, category, is_active, params_schema, default_params, cee_config, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac_lt_400, kwh_cumac_gte_400)"
+          "id, name, code, category, is_active, params_schema, default_params, cee_config, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac_existant_lt_400, kwh_cumac_existant_gte_400, kwh_cumac_neuf_lt_400, kwh_cumac_neuf_gte_400)"
         )
         .eq("org_id", currentOrgId)
         .eq("is_active", true)

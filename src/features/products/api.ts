@@ -18,8 +18,10 @@ export type ProductCatalogRecord = Omit<ProductRecord, "cee_config"> & {
 
 export type ProductKwhCumacInput = {
   building_type: string;
-  kwh_cumac_lt_400: number | null;
-  kwh_cumac_gte_400: number | null;
+  kwh_cumac_existant_lt_400: number | null;
+  kwh_cumac_existant_gte_400: number | null;
+  kwh_cumac_neuf_lt_400: number | null;
+  kwh_cumac_neuf_gte_400: number | null;
 };
 
 export type ProductFilters = {
@@ -103,7 +105,7 @@ export const useProductCatalog = (
       let query = supabase
         .from("product_catalog")
         .select(
-          "*, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac_lt_400, kwh_cumac_gte_400)",
+          "*, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac_existant_lt_400, kwh_cumac_existant_gte_400, kwh_cumac_neuf_lt_400, kwh_cumac_neuf_gte_400)",
           {
             count: "exact",
           },
@@ -156,8 +158,10 @@ const syncProductKwhCumac = async (productId: string, entries: ProductKwhCumacIn
   const sanitized = entries
     .map((entry) => ({
       building_type: entry.building_type.trim(),
-      kwh_cumac_lt_400: entry.kwh_cumac_lt_400 ?? null,
-      kwh_cumac_gte_400: entry.kwh_cumac_gte_400 ?? null,
+      kwh_cumac_existant_lt_400: entry.kwh_cumac_existant_lt_400 ?? null,
+      kwh_cumac_existant_gte_400: entry.kwh_cumac_existant_gte_400 ?? null,
+      kwh_cumac_neuf_lt_400: entry.kwh_cumac_neuf_lt_400 ?? null,
+      kwh_cumac_neuf_gte_400: entry.kwh_cumac_neuf_gte_400 ?? null,
     }))
     .filter((entry) => entry.building_type.length > 0);
 
@@ -171,10 +175,15 @@ const syncProductKwhCumac = async (productId: string, entries: ProductKwhCumacIn
   const toInsert = sanitized.filter(
     (entry): entry is {
       building_type: string;
-      kwh_cumac_lt_400: number | null;
-      kwh_cumac_gte_400: number | null;
+      kwh_cumac_existant_lt_400: number | null;
+      kwh_cumac_existant_gte_400: number | null;
+      kwh_cumac_neuf_lt_400: number | null;
+      kwh_cumac_neuf_gte_400: number | null;
     } =>
-      entry.kwh_cumac_lt_400 !== null || entry.kwh_cumac_gte_400 !== null,
+      entry.kwh_cumac_existant_lt_400 !== null || 
+      entry.kwh_cumac_existant_gte_400 !== null ||
+      entry.kwh_cumac_neuf_lt_400 !== null ||
+      entry.kwh_cumac_neuf_gte_400 !== null,
   );
 
   if (toInsert.length === 0) {
@@ -185,8 +194,10 @@ const syncProductKwhCumac = async (productId: string, entries: ProductKwhCumacIn
     toInsert.map((entry) => ({
       product_id: productId,
       building_type: entry.building_type,
-      kwh_cumac_lt_400: entry.kwh_cumac_lt_400,
-      kwh_cumac_gte_400: entry.kwh_cumac_gte_400,
+      kwh_cumac_existant_lt_400: entry.kwh_cumac_existant_lt_400,
+      kwh_cumac_existant_gte_400: entry.kwh_cumac_existant_gte_400,
+      kwh_cumac_neuf_lt_400: entry.kwh_cumac_neuf_lt_400,
+      kwh_cumac_neuf_gte_400: entry.kwh_cumac_neuf_gte_400,
     })),
   );
 
@@ -197,7 +208,7 @@ const fetchProductWithRelations = async (id: string): Promise<ProductCatalogReco
   const { data, error } = await supabase
     .from("product_catalog")
     .select(
-      "*, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac_lt_400, kwh_cumac_gte_400)",
+      "*, kwh_cumac_values:product_kwh_cumac(id, building_type, kwh_cumac_existant_lt_400, kwh_cumac_existant_gte_400, kwh_cumac_neuf_lt_400, kwh_cumac_neuf_gte_400)",
     )
     .eq("id", id)
     .single();
